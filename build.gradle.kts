@@ -73,6 +73,7 @@ dependencies {
     testAnnotationProcessor("org.projectlombok:lombok:1.18.46")
     testImplementation(platform("org.junit:junit-bom:5.14.1"))
     testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
     // Optional integrations. These remain compile-only and are never bundled.
     compileOnly("com.github.SlimefunGuguProject:InfinityExpansion:3c5db3650a")
