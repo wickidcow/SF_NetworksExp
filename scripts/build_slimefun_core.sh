@@ -11,10 +11,21 @@ fi
 
 if [[ -x ./gradlew || -f ./gradlew ]]; then
   chmod +x ./gradlew
-  if [[ "$core_key" == "legacy" ]]; then
-    ./gradlew spotlessApply --no-daemon
-  fi
-  ./gradlew clean build --no-daemon
+
+  case "$core_key" in
+    legacy)
+      ./gradlew spotlessApply --no-daemon
+      ./gradlew clean build --no-daemon
+      ;;
+    gugu)
+      # Networks only needs the exact Gugu plugin JAR for compilation.
+      # Do not make Networks compatibility depend on Gugu's separate test suite.
+      ./gradlew clean shadowJar -x test --no-daemon
+      ;;
+    *)
+      ./gradlew clean build -x test --no-daemon
+      ;;
+  esac
 elif [[ -x ./mvnw || -f ./mvnw ]]; then
   chmod +x ./mvnw
   ./mvnw --batch-mode --no-transfer-progress -DskipTests clean package
