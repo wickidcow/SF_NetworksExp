@@ -98,7 +98,7 @@ public class ParticleUtil {
                     final List<Runnable> finalRunnableList = runnableList;
                     plugin.getServer()
                         .getScheduler()
-                        .runTaskLaterAsynchronously(plugin, () -> finalRunnableList.forEach(Runnable::run), tick);
+                        .runTaskLater(plugin, () -> finalRunnableList.forEach(Runnable::run), tick);
                     tick = lastTick;
                     runnableList = new ArrayList<>();
                 }
@@ -107,7 +107,7 @@ public class ParticleUtil {
                 final List<Runnable> finalRunnableList = runnableList;
                 plugin.getServer()
                     .getScheduler()
-                    .runTaskLaterAsynchronously(plugin, () -> finalRunnableList.forEach(Runnable::run), tick);
+                    .runTaskLater(plugin, () -> finalRunnableList.forEach(Runnable::run), tick);
             }
 
             time += (int) interval;
@@ -154,7 +154,7 @@ public class ParticleUtil {
             } else {
                 plugin.getServer()
                     .getScheduler()
-                    .runTaskLaterAsynchronously(
+                    .runTaskLater(
                         plugin,
                         () -> {
                             for (int i = 0; i < BLOCK_CUBE_OFFSET_X.length; i++) {
@@ -264,7 +264,7 @@ public class ParticleUtil {
             } else {
                 plugin.getServer()
                     .getScheduler()
-                    .runTaskLaterAsynchronously(
+                    .runTaskLater(
                         plugin,
                         () -> {
                             for (int i = 0; i < BLOCK_CUBE_OFFSET_X.length; i++) {
@@ -312,7 +312,7 @@ public class ParticleUtil {
 
     public static void highlightBlock(@NotNull Player player, @NotNull Location location, int shrinkTimes) {
         for (int i = 0; i < shrinkTimes; i++) {
-            Bukkit.getScheduler().runTaskLaterAsynchronously(
+            Bukkit.getScheduler().runTaskLater(
                     Networks.getInstance(), () -> {
                 drawLineFrom(player.getEyeLocation().clone().add(0D, -0.5D, 0D), location);
                 highlightBlock(location);

@@ -1,5 +1,8 @@
 package io.github.sefiraat.networks.slimefun.network.grid;
 
+import io.github.sefiraat.networks.NetworkStorage;
+import io.github.sefiraat.networks.network.NodeDefinition;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.sefiraat.networks.slimefun.NetworkSlimefunItems;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
@@ -123,8 +126,13 @@ public class NetworkGrid extends AbstractGrid {
                         return true;
                     }
 
-                    // Shift+Left-click
-                    receiveItem(p, i, a, menu);
+                    // Shift+Left-click: commit from the exact player inventory slot.
+                    NodeDefinition definition = NetworkStorage.getNode(menu.getLocation());
+                    if (definition == null || definition.getNode() == null) {
+                        return false;
+                    }
+                    NetworkTransferUtils.moveInventorySlotIntoNetwork(
+                        definition.getNode().getRoot(), menu.getLocation(), p.getInventory(), s);
                     return false;
                 });
             }

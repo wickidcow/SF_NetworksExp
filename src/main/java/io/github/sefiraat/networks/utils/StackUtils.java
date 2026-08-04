@@ -543,7 +543,7 @@ public class StackUtils {
                 return true;
             }
             if (!Networks.getConfigManager().isDisableProfileCheck()) {
-                if (!Objects.equals(instanceOne.getOwningPlayer(), instanceTwo.getOwningPlayer())) {
+                if (!Objects.equals(instanceOne.getOwnerProfile(), instanceTwo.getOwnerProfile())) {
                     return true;
                 }
             }

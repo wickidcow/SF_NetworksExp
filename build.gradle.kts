@@ -4,18 +4,22 @@ plugins {
 }
 
 group = "com.wickidcow.networks"
-version = "2.1.112-Legacy-Alpha1"
+version = "2.1.112-Legacy-Alpha2"
 
-val slimefunLegacyJarPath = providers.gradleProperty("slimefunLegacyJar")
+val slimefunCoreJarPath = providers.gradleProperty("slimefunCoreJar")
+    .orElse(providers.environmentVariable("SLIMEFUN_CORE_JAR"))
+    // Backward-compatible aliases used by Slimefun Legacy's addon compatibility harness.
+    .orElse(providers.gradleProperty("slimefunLegacyJar"))
     .orElse(providers.environmentVariable("SLIMEFUN_LEGACY_JAR"))
     .orElse(providers.environmentVariable("SLIMEFUN_COMPATIBILITY_JAR"))
-    .orElse(layout.projectDirectory.file("lib/Slimefun-Legacy.jar").asFile.absolutePath)
-val slimefunLegacyJar = file(slimefunLegacyJarPath.get())
+    .orElse(layout.projectDirectory.file("lib/Slimefun-Core.jar").asFile.absolutePath)
+val slimefunCoreJar = file(slimefunCoreJarPath.get())
 
-if (!slimefunLegacyJar.isFile) {
+if (!slimefunCoreJar.isFile) {
     throw GradleException(
-        "Slimefun Legacy JAR not found at '${slimefunLegacyJar.absolutePath}'. " +
-            "Pass -PslimefunLegacyJar=/path/to/Slimefun-*.jar or set SLIMEFUN_LEGACY_JAR."
+        "Slimefun core JAR not found at '${slimefunCoreJar.absolutePath}'. " +
+            "Pass -PslimefunCoreJar=/path/to/Slimefun-*.jar or set SLIMEFUN_CORE_JAR. " +
+            "The older slimefunLegacyJar/SLIMEFUN_LEGACY_JAR aliases remain supported."
     )
 }
 
@@ -51,9 +55,9 @@ repositories {
 }
 
 dependencies {
-    // Core server APIs. The exact Slimefun Legacy JAR is supplied by CI or the developer.
+    // Core server APIs. CI compiles the same source against exact Legacy, United, and Gugu JARs.
     compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
-    compileOnly(files(slimefunLegacyJar))
+    compileOnly(files(slimefunCoreJar))
 
     implementation("org.bstats:bstats-bukkit:3.2.1")
     implementation("com.jeff-media:MorePersistentDataTypes:2.4.0")
@@ -67,6 +71,8 @@ dependencies {
     annotationProcessor("org.projectlombok:lombok:1.18.46")
     testCompileOnly("org.projectlombok:lombok:1.18.46")
     testAnnotationProcessor("org.projectlombok:lombok:1.18.46")
+    testImplementation(platform("org.junit:junit-bom:5.14.1"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
 
     // Optional integrations. These remain compile-only and are never bundled.
     compileOnly("com.github.SlimefunGuguProject:InfinityExpansion:3c5db3650a")
@@ -98,6 +104,10 @@ tasks {
         filesMatching("plugin.yml") {
             expand(project.properties)
         }
+    }
+
+    test {
+        useJUnitPlatform()
     }
 
     shadowJar {

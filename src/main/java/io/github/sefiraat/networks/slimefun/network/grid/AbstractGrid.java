@@ -15,6 +15,7 @@ import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.sefiraat.networks.utils.StackUtils;
 import io.github.sefiraat.networks.utils.Theme;
 import io.github.thebusybiscuit.slimefun4.api.exceptions.IncompatibleItemHandlerException;
@@ -94,7 +95,7 @@ public abstract class AbstractGrid extends NetworkObject {
 
             @Override
             public boolean isSynchronized() {
-                return false;
+                return io.github.sefiraat.networks.Networks.getConfigManager().useSynchronizedMachineTickers();
             }
 
             @Override
@@ -151,7 +152,8 @@ public abstract class AbstractGrid extends NetworkObject {
             return;
         }
 
-        definition.getNode().getRoot().addItemStack(itemStack);
+        NetworkTransferUtils.moveMenuSlotIntoNetwork(
+            definition.getNode().getRoot(), blockMenu.getLocation(), blockMenu, getInputSlot());
     }
 
     public ItemStack getFilterStack(@Nullable String filter) {
@@ -187,7 +189,7 @@ public abstract class AbstractGrid extends NetworkObject {
         }
 
         // Update Screen
-        Bukkit.getScheduler().runTaskAsynchronously(Networks.getInstance(), () -> {
+        Bukkit.getScheduler().runTask(Networks.getInstance(), () -> {
 
         final BlockMenu blockMenu = StorageCacheUtils.getMenu(location);
         if (blockMenu == null) {
@@ -391,7 +393,7 @@ public abstract class AbstractGrid extends NetworkObject {
         final ItemStack cursor = player.getItemOnCursor();
         if (cursor.getType() != Material.AIR
             && !StackUtils.itemsMatch(clone, StackUtils.getAsQuantity(player.getItemOnCursor(), 1))) {
-            root.addItemStack(player.getItemOnCursor());
+            NetworkTransferUtils.movePlayerCursorIntoNetwork(root, blockMenu.getLocation(), player);
             return;
         }
 
@@ -425,7 +427,7 @@ public abstract class AbstractGrid extends NetworkObject {
         HashMap<Integer, ItemStack> remnant = InventoryUtil.addItem(player, requestingStack);
         requestingStack = remnant.values().stream().findFirst().orElse(null);
         if (requestingStack != null) {
-            definition.getNode().getRoot().addItemStack(requestingStack);
+            definition.getNode().getRoot().addItemStack0(menu.getLocation(), requestingStack);
         }
     }
 
@@ -527,8 +529,8 @@ public abstract class AbstractGrid extends NetworkObject {
             return;
         }
 
-        ItemStack cursor = player.getItemOnCursor();
-        receiveItem(definition.getNode().getRoot(), player, cursor, action, blockMenu);
+        NetworkTransferUtils.movePlayerCursorIntoNetwork(
+            definition.getNode().getRoot(), blockMenu.getLocation(), player);
     }
 
     @SuppressWarnings("deprecation")
@@ -558,7 +560,7 @@ public abstract class AbstractGrid extends NetworkObject {
         ClickAction action,
         @NotNull BlockMenu blockMenu) {
         if (itemStack != null && itemStack.getType() != Material.AIR && !StackUtils.isBlacklisted(itemStack)) {
-            root.addItemStack(itemStack);
+            NetworkTransferUtils.moveStackReferenceIntoNetwork(root, blockMenu.getLocation(), itemStack);
         }
     }
 

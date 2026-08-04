@@ -1,11 +1,14 @@
 package com.ytdd9527.networksexpansion.utils.databases;
 
-public class DataTables {
+/** SQLite schema names used by the Networks drawer database. */
+public final class DataTables {
 
     public static final String CONTAINER = "Container";
     public static final String ITEM_STACK = "ItemStack";
     public static final String ITEM_STORED = "ItemStored";
     public static final String ENVIRONMENT = "Environment";
+    public static final String ITEM_STORED_UNIQUE_INDEX = "idx_networks_item_stored_unique";
+    public static final String CONTAINER_LOCATION_INDEX = "idx_networks_container_location";
 
     public static final String CONTAINER_CREATION =
         "CREATE TABLE IF NOT EXISTS Container (" + "ContainerID CHAR(8) PRIMARY KEY NOT NULL,"
@@ -23,5 +26,8 @@ public class DataTables {
             + "Amount CHAR(8) NOT NULL);";
 
     public static final String ENVIRONMENT_CREATION = "CREATE TABLE IF NOT EXISTS Environment ("
-        + "VarName CHAR(8) PRIMARY KEY NOT NULL," + "VarValue CHAR(128) NOT NULL);";
+        + "VarName CHAR(32) PRIMARY KEY NOT NULL," + "VarValue CHAR(128) NOT NULL);";
+
+    private DataTables() {
+    }
 }

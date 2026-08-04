@@ -2,88 +2,218 @@ package com.ytdd9527.networksexpansion.utils.databases;
 
 import com.balugaq.netex.utils.Debug;
 import com.balugaq.netex.utils.Lang;
-import io.github.sefiraat.networks.Networks;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
-public class QueryQueue {
+/**
+ * Serial database task queue.
+ *
+ * <p>Networks stores drawer data in one SQLite connection. Every query and update is deliberately
+ * ordered through one worker so reads cannot overtake writes and shutdown never closes the
+ * connection while a queued statement is still expected to run.</p>
+ */
+public final class QueryQueue {
 
-    private final @NotNull BlockingQueue<QueuedTask> updateTasks;
-    private final @NotNull BlockingQueue<QueuedTask> queryTasks;
-    private boolean threadStarted;
+    private static final QueuedTask STOP_TASK = () -> true;
 
-    public QueryQueue() {
-        // Create database query processing thread
-        updateTasks = new LinkedBlockingDeque<>();
-        queryTasks = new LinkedBlockingDeque<>();
+    private final @NotNull BlockingQueue<QueuedTask> tasks = new LinkedBlockingQueue<>();
+    private final @NotNull AtomicBoolean started = new AtomicBoolean();
+    private final @NotNull AtomicBoolean accepting = new AtomicBoolean(true);
+    private final @NotNull AtomicInteger inFlight = new AtomicInteger();
+    private final @NotNull Object lifecycleMonitor = new Object();
+    private final @NotNull Object drainMonitor = new Object();
+    private volatile Thread worker;
 
-        threadStarted = false;
+    public void scheduleUpdate(@NotNull QueuedTask task) {
+        schedule(task);
     }
 
-    public synchronized void scheduleUpdate(@NotNull QueuedTask task) {
-        if (!updateTasks.offer(task)) {
-            throw new IllegalStateException(
-                Lang.getString("messages.unsupported-operation.comprehensive.invalid_queue"));
+    public void scheduleQuery(@NotNull QueuedTask task) {
+        schedule(task);
+    }
+
+    private void schedule(@NotNull QueuedTask task) {
+        synchronized (lifecycleMonitor) {
+            if (!accepting.get()) {
+                throw new IllegalStateException("Networks database queue is shutting down");
+            }
+            if (!tasks.offer(task)) {
+                throw new IllegalStateException(
+                    Lang.getString("messages.unsupported-operation.comprehensive.invalid_queue"));
+            }
         }
+        signalStateChanged();
     }
 
-    public synchronized void scheduleQuery(@NotNull QueuedTask task) {
-        if (!queryTasks.offer(task)) {
-            throw new IllegalStateException(
-                Lang.getString("messages.unsupported-operation.comprehensive.invalid_queue"));
+    public synchronized void startThread() {
+        if (!started.compareAndSet(false, true)) {
+            return;
         }
+
+        accepting.set(true);
+        worker = new Thread(this::processTasks, "Networks-Database-Worker");
+        worker.setDaemon(true);
+        worker.setUncaughtExceptionHandler((thread, throwable) -> Debug.trace(throwable));
+        worker.start();
     }
 
-    public void startThread() {
-        if (!threadStarted) {
-            getProcessor(queryTasks).runTaskAsynchronously(Networks.getInstance());
-            getProcessor(updateTasks).runTaskAsynchronously(Networks.getInstance());
-            threadStarted = true;
+    private void processTasks() {
+        try {
+            while (!Thread.currentThread().isInterrupted()) {
+                QueuedTask task = tasks.take();
+                if (task == STOP_TASK) {
+                    break;
+                }
+
+                inFlight.incrementAndGet();
+                try {
+                    boolean callbackRequested = task.execute();
+                    if (callbackRequested && task.callback()) {
+                        accepting.set(false);
+                        break;
+                    }
+                } catch (Throwable throwable) {
+                    Debug.trace(throwable);
+                } finally {
+                    inFlight.decrementAndGet();
+                    signalStateChanged();
+                }
+            }
+        } catch (InterruptedException interruptedException) {
+            Thread.currentThread().interrupt();
+        } finally {
+            accepting.set(false);
+            started.set(false);
+            tasks.remove(STOP_TASK);
+            signalStateChanged();
         }
     }
 
     public int getTaskAmount() {
-        return updateTasks.size() + queryTasks.size();
+        int queued = tasks.size();
+        if (tasks.contains(STOP_TASK)) {
+            queued--;
+        }
+        return Math.max(0, queued) + inFlight.get();
+    }
+
+    public int getQueuedTaskAmount() {
+        return Math.max(0, getTaskAmount() - inFlight.get());
+    }
+
+    public int getInFlightTaskAmount() {
+        return inFlight.get();
+    }
+
+    public boolean isAcceptingTasks() {
+        return accepting.get();
+    }
+
+    public boolean isWorkerRunning() {
+        Thread currentWorker = worker;
+        return currentWorker != null && currentWorker.isAlive();
     }
 
     public boolean isAllDone() {
-        return !threadStarted || getTaskAmount() == 0;
+        return getTaskAmount() == 0;
     }
 
-    public void scheduleAbort() {
-        QueuedTask abortTask = new QueuedTask() {
-            @Override
-            public boolean execute() {
-                return true;
-            }
+    /**
+     * Waits for all work queued before and during the wait to finish.
+     *
+     * @param timeoutMillis maximum wait; zero means do not wait
+     * @return whether the queue drained
+     */
+    public boolean awaitDrained(long timeoutMillis) {
+        long remainingNanos = TimeUnit.MILLISECONDS.toNanos(Math.max(0L, timeoutMillis));
+        long deadline = System.nanoTime() + remainingNanos;
 
-            @Override
-            public boolean callback() {
-                return true;
-            }
-        };
-        queryTasks.offer(abortTask);
-        updateTasks.offer(abortTask);
-    }
-
-    private @NotNull BukkitRunnable getProcessor(@NotNull BlockingQueue<QueuedTask> queue) {
-        return new BukkitRunnable() {
-            @Override
-            public void run() {
-                while (true) {
-                    try {
-                        QueuedTask task = queue.take();
-                        if (task.execute() && task.callback()) {
-                            break;
-                        }
-                    } catch (Exception e) {
-                        Debug.trace(e);
-                    }
+        synchronized (drainMonitor) {
+            while (!isAllDone()) {
+                if (remainingNanos <= 0L) {
+                    return false;
                 }
+                try {
+                    TimeUnit.NANOSECONDS.timedWait(drainMonitor, remainingNanos);
+                } catch (InterruptedException interruptedException) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+                remainingNanos = deadline - System.nanoTime();
             }
-        };
+        }
+        return true;
+    }
+
+    /**
+     * Stops accepting work, drains within the configured deadline, and terminates the worker.
+     *
+     * <p>If the deadline expires, work which has not started is discarded and the worker is
+     * interrupted. The return value is only {@code true} when all scheduled work completed and the
+     * worker fully stopped, making it safe for the caller to close the SQLite connection.</p>
+     */
+    public boolean shutdown(long timeoutMillis) {
+        long safeTimeoutMillis = Math.max(0L, timeoutMillis);
+        long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(safeTimeoutMillis);
+
+        synchronized (lifecycleMonitor) {
+            accepting.set(false);
+        }
+
+        boolean drained = awaitDrained(safeTimeoutMillis);
+        if (!drained) {
+            tasks.clear();
+            signalStateChanged();
+        }
+
+        tasks.offer(STOP_TASK);
+        signalStateChanged();
+
+        Thread currentWorker = worker;
+        if (currentWorker == null || currentWorker == Thread.currentThread()) {
+            return drained && !isWorkerRunning();
+        }
+
+        joinUntil(currentWorker, deadlineNanos);
+        if (currentWorker.isAlive()) {
+            currentWorker.interrupt();
+            tasks.clear();
+            tasks.offer(STOP_TASK);
+            joinFor(currentWorker, 2000L);
+        }
+
+        return drained && !currentWorker.isAlive();
+    }
+
+    /** Compatibility bridge for older shutdown code. */
+    public void scheduleAbort() {
+        shutdown(0L);
+    }
+
+    private static void joinUntil(@NotNull Thread thread, long deadlineNanos) {
+        long remainingNanos = deadlineNanos - System.nanoTime();
+        if (remainingNanos <= 0L) {
+            return;
+        }
+        joinFor(thread, Math.max(1L, TimeUnit.NANOSECONDS.toMillis(remainingNanos)));
+    }
+
+    private static void joinFor(@NotNull Thread thread, long millis) {
+        try {
+            thread.join(millis);
+        } catch (InterruptedException interruptedException) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void signalStateChanged() {
+        synchronized (drainMonitor) {
+            drainMonitor.notifyAll();
+        }
     }
 }

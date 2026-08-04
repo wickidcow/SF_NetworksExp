@@ -7,6 +7,7 @@ import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.sefiraat.networks.utils.StackUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetComponent;
@@ -213,92 +214,49 @@ public class LineOperationUtil {
         int limit = limitQuantity;
         switch (transportMode) {
             case NONE, NONNULL_ONLY -> {
-                /*
-                 * Grab all the items.
-                 */
+                /* Grab all available items up to the configured limit. */
                 for (int slot : slots) {
-                    final ItemStack item = blockMenu.getItemInSlot(slot);
-                    if (item != null && item.getType() != Material.AIR) {
-                        final int exceptedReceive = Math.min(item.getAmount(), limit);
-                        final ItemStack clone = StackUtils.getAsQuantity(item, exceptedReceive);
-                        root.addItemStack0(accessor, clone);
-                        item.setAmount(item.getAmount() - (exceptedReceive - clone.getAmount()));
-                        limit -= exceptedReceive - clone.getAmount();
-                        if (limit <= 0) {
-                            break;
-                        }
+                    final int moved = NetworkTransferUtils.moveMenuSlotIntoNetwork(
+                        root, accessor, blockMenu, slot, limit);
+                    limit -= moved;
+                    if (limit <= 0) {
+                        break;
                     }
                 }
             }
             case NULL_ONLY, P2P -> {
-                /*
-                 * Nothing to do.
-                 */
+                // Nothing to do.
             }
             case FIRST_ONLY -> {
-                /*
-                 * Grab the first item only.
-                 */
                 if (slots.length > 0) {
-                    final ItemStack item = blockMenu.getItemInSlot(slots[0]);
-                    if (item != null && item.getType() != Material.AIR) {
-                        final int exceptedReceive = Math.min(item.getAmount(), limit);
-                        final ItemStack clone = StackUtils.getAsQuantity(item, exceptedReceive);
-                        root.addItemStack0(accessor, clone);
-                        item.setAmount(item.getAmount() - (exceptedReceive - clone.getAmount()));
-                        clone.getAmount();
-                    }
+                    NetworkTransferUtils.moveMenuSlotIntoNetwork(root, accessor, blockMenu, slots[0], limit);
                 }
             }
             case LAST_ONLY -> {
-                /*
-                 * Grab the last item only.
-                 */
                 if (slots.length > 0) {
-                    final ItemStack item = blockMenu.getItemInSlot(slots[slots.length - 1]);
-                    if (item != null && item.getType() != Material.AIR) {
-                        final int exceptedReceive = Math.min(item.getAmount(), limit);
-                        final ItemStack clone = StackUtils.getAsQuantity(item, exceptedReceive);
-                        root.addItemStack0(accessor, clone);
-                        item.setAmount(item.getAmount() - (exceptedReceive - clone.getAmount()));
-                        clone.getAmount();
-                    }
+                    NetworkTransferUtils.moveMenuSlotIntoNetwork(
+                        root, accessor, blockMenu, slots[slots.length - 1], limit);
                 }
             }
             case FIRST_STOP -> {
-                /*
-                 * Grab the first non-null item only.
-                 */
                 for (int slot : slots) {
                     final ItemStack item = blockMenu.getItemInSlot(slot);
                     if (item != null && item.getType() != Material.AIR) {
-                        final int exceptedReceive = Math.min(item.getAmount(), limit);
-                        final ItemStack clone = StackUtils.getAsQuantity(item, exceptedReceive);
-                        root.addItemStack0(accessor, clone);
-                        item.setAmount(item.getAmount() - (exceptedReceive - clone.getAmount()));
-                        clone.getAmount();
+                        NetworkTransferUtils.moveMenuSlotIntoNetwork(root, accessor, blockMenu, slot, limit);
                         break;
                     }
                 }
             }
             case LAZY -> {
-                /*
-                 * When it's first item is non-null, we will grab all the items.
-                 */
                 if (slots.length > 0) {
-                    final ItemStack delta = blockMenu.getItemInSlot(slots[0]);
-                    if (delta != null && delta.getType() != Material.AIR) {
+                    final ItemStack first = blockMenu.getItemInSlot(slots[0]);
+                    if (first != null && first.getType() != Material.AIR) {
                         for (int slot : slots) {
-                            ItemStack item = blockMenu.getItemInSlot(slot);
-                            if (item != null && item.getType() != Material.AIR) {
-                                final int exceptedReceive = Math.min(item.getAmount(), limit);
-                                final ItemStack clone = StackUtils.getAsQuantity(item, exceptedReceive);
-                                root.addItemStack0(accessor, clone);
-                                item.setAmount(item.getAmount() - (exceptedReceive - clone.getAmount()));
-                                limit -= exceptedReceive - clone.getAmount();
-                                if (limit <= 0) {
-                                    break;
-                                }
+                            final int moved = NetworkTransferUtils.moveMenuSlotIntoNetwork(
+                                root, accessor, blockMenu, slot, limit);
+                            limit -= moved;
+                            if (limit <= 0) {
+                                break;
                             }
                         }
                     }
@@ -306,16 +264,17 @@ public class LineOperationUtil {
             }
             case VOID -> {
                 /*
-                 * Grab all the items or trash it
+                 * Attempt to store up to the transfer limit, then intentionally discard the source stack.
+                 * This preserves the historical VOID mode while committing the inventory mutation explicitly.
                  */
                 for (int slot : slots) {
                     final ItemStack item = blockMenu.getItemInSlot(slot);
                     if (item != null && item.getType() != Material.AIR) {
-                        final int exceptedReceive = Math.min(item.getAmount(), limit);
-                        final ItemStack clone = StackUtils.getAsQuantity(item, exceptedReceive);
-                        root.addItemStack0(accessor, clone);
-                        limit -= exceptedReceive - clone.getAmount();
-                        item.setAmount(0);
+                        final int moved = NetworkTransferUtils.moveMenuSlotIntoNetwork(
+                            root, accessor, blockMenu, slot, limit);
+                        limit -= moved;
+                        blockMenu.replaceExistingItem(slot, null);
+                        blockMenu.markDirty();
                         if (limit <= 0) {
                             break;
                         }
@@ -352,21 +311,15 @@ public class LineOperationUtil {
                     }
                     int toRemove = total - limitQuantity;
                     for (int i = slots.length - 1; i >= 0 && toRemove > 0; i--) {
-                        final ItemStack item = blockMenu.getItemInSlot(slots[i]);
-                        if (item == null || item.getType() == Material.AIR) {
+                        final int slot = slots[i];
+                        final ItemStack item = blockMenu.getItemInSlot(slot);
+                        if (item == null || item.getType() == Material.AIR
+                            || !StackUtils.itemsMatch(entry.getValue(), item)) {
                             continue;
                         }
-                        if (!StackUtils.itemsMatch(entry.getValue(), item)) {
-                            continue;
-                        }
-                        final int grabFromSlot = Math.min(item.getAmount(), toRemove);
-                        final int beforeAmount = item.getAmount();
-                        item.setAmount(grabFromSlot);
-                        root.addItemStack0(accessor, item);
-                        final int afterAmount = item.getAmount();
-                        final int actualGrabbed = grabFromSlot - afterAmount;
-                        item.setAmount(beforeAmount - actualGrabbed);
-                        toRemove -= actualGrabbed;
+                        final int moved = NetworkTransferUtils.moveMenuSlotIntoNetwork(
+                            root, accessor, blockMenu, slot, Math.min(item.getAmount(), toRemove));
+                        toRemove -= moved;
                     }
                 }
             }

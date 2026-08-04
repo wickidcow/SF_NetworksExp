@@ -72,32 +72,176 @@ workflow = read(".github/workflows/build.yml")
 simple_recipe_choice = read("src/main/java/com/balugaq/netex/api/data/SimpleRecipeChoice.java")
 wrapper = read("gradle/wrapper/gradle-wrapper.properties")
 networks_java = read("src/main/java/io/github/sefiraat/networks/Networks.java")
-java_sources = ''.join(p.read_text(encoding="utf-8") for p in (ROOT / "src/main/java").rglob("*.java"))
+network_storage = read("src/main/java/io/github/sefiraat/networks/NetworkStorage.java")
+query_queue = read("src/main/java/com/ytdd9527/networksexpansion/utils/databases/QueryQueue.java")
+data_source = read("src/main/java/com/ytdd9527/networksexpansion/utils/databases/DataSource.java")
+blueprint_type = read("src/main/java/io/github/sefiraat/networks/utils/datatypes/PersistentCraftingBlueprintType.java")
+stack_utils = read("src/main/java/io/github/sefiraat/networks/utils/StackUtils.java")
+doctor = read("src/main/java/io/github/sefiraat/networks/diagnostics/NetworksDoctor.java")
+doctor_bridge = read("src/main/java/io/github/sefiraat/networks/diagnostics/LegacyDoctorBridge.java")
+runtime_compatibility = read("src/main/java/io/github/sefiraat/networks/compatibility/RuntimeCompatibility.java")
+transfer_utils = read("src/main/java/io/github/sefiraat/networks/utils/NetworkTransferUtils.java")
+control_x = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkControlX.java")
+quantum_storage = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkQuantumStorage.java")
+auto_crafter = read("src/main/java/com/ytdd9527/networksexpansion/core/items/machines/AutoCrafter.java")
+smart_crafting = read("src/main/java/com/ytdd9527/networksexpansion/implementation/machines/networks/advanced/SmartNetworkCraftingGridNewStyle.java")
+crafting_grid = read("src/main/java/io/github/sefiraat/networks/slimefun/network/grid/NetworkCraftingGrid.java")
+crafting_grid_new = read("src/main/java/com/ytdd9527/networksexpansion/implementation/machines/networks/advanced/NetworkCraftingGridNewStyle.java")
+recipe_registry = read("src/main/java/com/balugaq/netex/api/helpers/SupportedCraftingTableRecipes.java")
+java_sources = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "src/main/java").rglob("*.java"))
 
+# Stable world/plugin identity.
 require(plugin.get("name") == "Networks", "plugin name must remain Networks")
 require(plugin.get("main") == "io.github.sefiraat.networks.Networks", "main class changed")
 require(plugin.get("depend") == ["Slimefun"], "plugin must depend on Slimefun by its stable plugin name")
 require(str(plugin.get("api-version")) == "1.21", "api-version must remain 1.21")
+require("networks.commands.doctor" in (plugin.get("permissions") or {}), "Networks Doctor permission is missing")
 require(config.get("language") == "en-US", "default language must be en-US")
 require(config.get("auto-update") is False, "automatic JAR replacement must remain disabled")
-require('version = "2.1.112-Legacy-Alpha1"' in build, "project version is not Alpha1")
-require('options.release.set(21)' in build, "Java 21 release target is missing")
-require('languageVersion.set(JavaLanguageVersion.of(21))' in build, "Java 21 Gradle toolchain is missing")
-require('org.projectlombok:lombok:1.18.46' in build, "Lombok 1.18.46 compatibility processor is missing")
-require('paper-api:1.21.11-R0.1-SNAPSHOT' in build, "Paper 1.21.11 API baseline is missing")
-require('compileOnly(files(slimefunLegacyJar))' in build, "exact local Slimefun Legacy dependency is missing")
-require('com.github.SlimefunGuguProject:Slimefun4:' not in build, "Gugu Slimefun core dependency is still present")
-require('GuizhanLibPlugin' not in build, "GuizhanLibPlugin build dependency is still present")
-require('DEFAULT_LANGUAGE = "en-US"' in networks_java, "Networks default language is not en-US")
-require('GuizhanUpdater' not in networks_java, "automatic Guizhan updater code is still present")
-require('PinyinHelper' not in java_sources, "Pinyin runtime search remains in Java sources")
-require('net.guizhanss.guizhanlib' not in java_sources, "GuizhanLib runtime imports remain in Java sources")
-require('DisplayNameUtils.getDisplayName(' in java_sources, "Networks-owned item display-name bridge is not in use")
-require('DisplayNameUtils.getMaterialName(' in java_sources, "Networks-owned material-name bridge is not in use")
-require('services.gradle.org/distributions/gradle-9.4.1-bin.zip' in wrapper, "official Gradle wrapper URL is missing")
-require('extends RecipeChoice.ExactChoice' not in simple_recipe_choice, "SimpleRecipeChoice still extends final RecipeChoice.ExactChoice")
-require('implements RecipeChoice' in simple_recipe_choice, "SimpleRecipeChoice no longer implements RecipeChoice")
+require(config.get("compatibility", {}).get("synchronized-machine-tickers") is True,
+        "synchronized machine tickers must be the safe default")
+require(config.get("compatibility", {}).get("allow-unknown-slimefun-core") is False,
+        "unknown Slimefun cores must fail closed by default")
 
+# Java/Paper/exact-core build contract.
+require('version = "2.1.112-Legacy-Alpha2"' in build, "project version is not Alpha2")
+require("options.release.set(21)" in build, "Java 21 release target is missing")
+require("languageVersion.set(JavaLanguageVersion.of(21))" in build, "Java 21 Gradle toolchain is missing")
+require("paper-api:1.21.11-R0.1-SNAPSHOT" in build, "Paper 1.21.11 API baseline is missing")
+require("compileOnly(files(slimefunCoreJar))" in build, "exact local Slimefun core dependency is missing")
+for alias in ["slimefunCoreJar", "SLIMEFUN_CORE_JAR", "slimefunLegacyJar", "SLIMEFUN_LEGACY_JAR", "SLIMEFUN_COMPATIBILITY_JAR"]:
+    require(alias in build, f"exact-core dependency alias missing: {alias}")
+require("com.github.SlimefunGuguProject:Slimefun4:" not in build, "a remote Gugu core dependency is still present")
+require("io.github.thebusybiscuit:Slimefun4:" not in build, "a remote official core dependency is still present")
+require("GuizhanLibPlugin" not in build, "GuizhanLibPlugin build dependency is still present")
+require("services.gradle.org/distributions/gradle-9.4.1-bin.zip" in wrapper, "official Gradle wrapper URL is missing")
+require("extends RecipeChoice.ExactChoice" not in simple_recipe_choice,
+        "SimpleRecipeChoice still extends final RecipeChoice.ExactChoice")
+require("implements RecipeChoice" in simple_recipe_choice, "SimpleRecipeChoice no longer implements RecipeChoice")
+
+# Three exact Slimefun families.
+workflow_invariants = [
+    "repository: wickidcow/Slimefun-Legacy",
+    "ref: master",
+    "repository: Slimefun-United/Slimefun-United",
+    "ref: dev",
+    "repository: SlimefunGuguProject/Slimefun4",
+    'core_java: "25"',
+    'core_java: "21"',
+    "cache: maven",
+    "cache: gradle",
+    'name: Set up Java 21 for Networks',
+    'java-version: "21"',
+    '-PslimefunCoreJar=',
+    "verify_legacy_compatibility.py",
+    "verify_java21_bytecode.py",
+]
+for required in workflow_invariants:
+    require(required in workflow, f"workflow invariant missing: {required}")
+
+# Runtime compatibility and thread ownership.
+require('MINIMUM_MINECRAFT = "1.21.11"' in runtime_compatibility, "Minecraft runtime floor is missing")
+require("MINIMUM_JAVA = 21" in runtime_compatibility, "Java runtime floor is missing")
+require("SLIMEFUN_LEGACY" in runtime_compatibility, "Legacy runtime detection is missing")
+require("SLIMEFUN_UNITED" in runtime_compatibility, "United runtime detection is missing")
+require("SLIMEFUN_GUGU" in runtime_compatibility, "Gugu runtime detection is missing")
+require('city.norain.slimefun4.api.menu.UniversalMenu' in runtime_compatibility,
+        "Gugu runtime marker class is missing")
+require('plugin.getClass().getClassLoader()' in runtime_compatibility,
+        "runtime core detection must use the Slimefun plugin classloader")
+for forbidden in [
+    "runTaskAsynchronously",
+    "runTaskLaterAsynchronously",
+    "runTaskTimerAsynchronously",
+    "scheduleAsyncDelayedTask",
+    "scheduleAsyncRepeatingTask",
+]:
+    require(forbidden not in java_sources, f"unsafe Bukkit asynchronous scheduling remains: {forbidden}")
+require("useSynchronizedMachineTickers()" in java_sources, "machine ticker synchronization bridge is missing")
+require("DEFAULT_LANGUAGE = \"en-US\"" in networks_java, "Networks default language is not en-US")
+require("GuizhanUpdater" not in networks_java, "automatic Guizhan updater code is still present")
+require("PinyinHelper" not in java_sources, "Pinyin runtime search remains in Java sources")
+require("net.guizhanss.guizhanlib" not in java_sources, "GuizhanLib runtime imports remain in Java sources")
+
+# Runtime registry/database/blueprint hardening.
+require("ConcurrentHashMap" in network_storage and "unregisterChunk" in network_storage,
+        "thread-safe per-chunk network registry is missing")
+require("removeRuntimeState" in java_sources, "controller runtime-state cleanup is missing")
+require("Networks-Database-Worker" in query_queue, "single database worker is missing")
+require("isWorkerRunning" in query_queue and "shutdown(long timeoutMillis)" in query_queue,
+        "bounded database shutdown diagnostics are missing")
+require("CREATE UNIQUE INDEX IF NOT EXISTS" in data_source, "drawer uniqueness migration is missing")
+require("GROUP BY ContainerID, ItemID" in data_source, "duplicate drawer row merge is missing")
+require("ON CONFLICT(ContainerID, ItemID) DO UPDATE" in data_source, "atomic drawer UPSERT is missing")
+require("highestUsedId" in data_source, "database counter recovery is missing")
+require("readLegacyRecipe" in blueprint_type and "readCurrentRecipe" in blueprint_type,
+        "version-tolerant blueprint decoder is missing")
+require("BlueprintInstance.INVALID" in blueprint_type, "malformed blueprint fail-closed result is missing")
+require("getOwnerProfile()" in stack_utils, "local-only skull profile comparison is missing")
+require("getOwningPlayer()" not in stack_utils, "remote OfflinePlayer skull comparison remains")
+require("source.clone()" in transfer_utils and "root.addItemStack0(accessor, offered)" in transfer_utils,
+        "clone-and-commit network transfer helper is missing")
+for method in [
+    "moveMenuSlotIntoNetwork",
+    "moveInventorySlotIntoNetwork",
+    "movePlayerCursorIntoNetwork",
+    "movePlayerMainHandIntoNetwork",
+]:
+    require(method in transfer_utils, f"explicit transfer helper missing: {method}")
+require("replaceExistingItem(slot, result.remainingStack())" in transfer_utils,
+        "menu source-slot commit is missing")
+require("sourceInventory.setItem(slot, result.remainingStack())" in transfer_utils,
+        "inventory source-slot commit is missing")
+require("player.setItemOnCursor" in transfer_utils, "cursor source commit is missing")
+require("instanceof InventoryHolder" in control_x,
+        "Control X inventory-container rejection is missing")
+require(control_x.find("instanceof InventoryHolder") < control_x.find("addItemStack0"),
+        "Control X must reject inventory containers before network insertion")
+require("invalidateStaleNode" in network_storage and "StorageCacheUtils.getSfItem" in network_storage,
+        "lazy stale physical-node invalidation is missing")
+
+quantum_get_start = quantum_storage.find("public static ItemStack getItemStack")
+quantum_get_end = quantum_storage.find("public void", quantum_get_start + 1)
+quantum_get = quantum_storage[quantum_get_start:quantum_get_end if quantum_get_end > quantum_get_start else None]
+require(quantum_get_start >= 0, "Quantum Storage extraction method is missing")
+require("withdrawItem" in quantum_get and "syncBlock" in quantum_get,
+        "Quantum Storage withdrawal persistence calls are missing")
+require(quantum_get.find("withdrawItem") < quantum_get.find("syncBlock"),
+        "Quantum Storage must withdraw before synchronizing persistent data")
+
+require("SupportedCraftingTableRecipes.findRecipe" in smart_crafting,
+        "Smart Crafting Grid exact recipe binding is missing")
+require("restoreFetchedItems(root, menu, player, got)" in smart_crafting,
+        "Smart Crafting Grid ingredient rollback is missing")
+require("root.addItemStack(crafted)" not in smart_crafting,
+        "Smart Crafting Grid failed-fetch output duplication path remains")
+require("size() >= THRESHOLD" in smart_crafting,
+        "Smart Crafting Grid entity threshold comparison is reversed")
+require("findRecipe" in recipe_registry and "Math.max(input.length, recipe.length)" in recipe_registry,
+        "exact full-matrix recipe matching is missing")
+require("Consume every exact ingredient before creating the output" in crafting_grid,
+        "classic Crafting Grid atomic consume-before-output path is missing")
+require("Consume the complete exact matrix before adding the result" in crafting_grid_new,
+        "new Crafting Grid atomic multi-craft path is missing")
+require("returnItems(root, fetcheds, blockMenu)" in auto_crafter,
+        "Auto Crafter ingredient rollback is missing")
+require("instance.getItemStack()" in auto_crafter,
+        "Auto Crafter output is not bound to its blueprint instance")
+
+# Doctor integration.
+require("class NetworksDoctor" in doctor, "Networks Doctor scanner is missing")
+require("isChunkLoaded" in doctor and "loadChunk" not in doctor, "Networks Doctor must not force-load chunks")
+require("Proxy.newProxyInstance" in doctor_bridge, "reflective Legacy Doctor bridge is missing")
+require("io.github.thebusybiscuit.slimefun4.api.diagnostics.AddonDoctor" in doctor_bridge,
+        "Legacy Addon Doctor class name is missing")
+require("io.github.thebusybiscuit.slimefun4.api.diagnostics" not in "\n".join(
+    p.read_text(encoding="utf-8") for p in (ROOT / "src/main/java").rglob("*.java")
+    if p.name != "LegacyDoctorBridge.java"
+), "Legacy-only Doctor API is directly linked outside the reflective bridge")
+
+# English locale and item-ID invariants.
+require("DisplayNameUtils.getDisplayName(" in java_sources, "Networks-owned item display-name bridge is not in use")
+require("DisplayNameUtils.getMaterialName(" in java_sources, "Networks-owned material-name bridge is not in use")
 runtime_langs = sorted(p.name for p in (ROOT / "src/main/resources/lang").glob("*.yml"))
 require(runtime_langs == ["en-US.yml"], f"unexpected runtime language files: {runtime_langs}")
 require(not CJK.search(locale_text), "en-US.yml contains CJK characters")
@@ -105,7 +249,6 @@ require(not CJK.search(locale_text), "en-US.yml contains CJK characters")
 current_ids = sorted((locale.get("items") or {}).keys())
 require(current_ids == baseline_ids, f"item-ID drift detected: expected {len(baseline_ids)}, found {len(current_ids)}")
 require(len(current_ids) == 288, f"expected 288 item IDs, found {len(current_ids)}")
-
 verify_locale_structure(source_locale, locale)
 
 allowed_cjk = {ROOT / "scripts/localization/zh-CN-source.yml"}
@@ -121,21 +264,13 @@ for base in [ROOT / "src", ROOT / ".github", ROOT / "README.md", ROOT / "LEGACY_
         if CJK.search(text):
             ERRORS.append(f"player-facing CJK text remains in {path.relative_to(ROOT)}")
 
-for required in [
-    'repository: wickidcow/Slimefun-Legacy',
-    'java-version: "25"',
-    'name: Set up Java 21 for Networks',
-    'java-version: "21"',
-    '-PslimefunLegacyJar=',
-    'verify_legacy_compatibility.py',
-    'verify_java21_bytecode.py',
-]:
-    require(required in workflow, f"workflow invariant missing: {required}")
-
 if ERRORS:
-    print("Networks Legacy compatibility verification failed:")
+    print("Networks compatibility verification failed:")
     for error in ERRORS:
         print(" -", error)
     sys.exit(1)
 
-print(f"Networks Legacy verification passed: {len(current_ids)} item IDs, English runtime locale, Java 21 bytecode contract.")
+print(
+    f"Networks Alpha2 verification passed: {len(current_ids)} item IDs, three-core matrix, "
+    "Java 21, Paper 1.21.11, database/runtime/blueprint/transfer/crafting/doctor hardening."
+)

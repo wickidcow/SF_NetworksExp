@@ -12,6 +12,10 @@ import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import com.ytdd9527.networksexpansion.core.items.unusable.Blueprint;
 import com.ytdd9527.networksexpansion.implementation.machines.unit.NetworksDrawer;
 import io.github.bakedlibs.dough.collections.Pair;
+import io.github.sefiraat.networks.Networks;
+import io.github.sefiraat.networks.compatibility.CompatibilityReport;
+import io.github.sefiraat.networks.diagnostics.NetworksDoctor;
+import io.github.sefiraat.networks.diagnostics.NetworksDoctorReport;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.stackcaches.BlueprintInstance;
 import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
@@ -444,6 +448,10 @@ public class NetworksMain implements TabExecutor {
         }
 
         // Player or console
+        if (args[0].equalsIgnoreCase("doctor")) {
+            return runDoctor(sender, args);
+        }
+
         if (args[0].toLowerCase(Locale.ROOT).equals("help")) {
             if (sender.isOp()) {
                 if (args.length >= 2) {
@@ -758,6 +766,55 @@ public class NetworksMain implements TabExecutor {
         return true;
     }
 
+    private boolean runDoctor(@NotNull CommandSender sender, @NotNull String[] args) {
+        if (!sender.hasPermission("networks.admin") && !sender.hasPermission("networks.commands.doctor")) {
+            sender.sendMessage(getErrorMessage(ErrorType.NO_PERMISSION));
+            return true;
+        }
+
+        String action = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "status";
+        if (action.equals("status")) {
+            CompatibilityReport compatibility = Networks.getCompatibilityReport();
+            sender.sendMessage(ChatColor.GOLD + "Networks Doctor");
+            if (compatibility != null) {
+                sender.sendMessage(ChatColor.GRAY + "Core: " + ChatColor.YELLOW
+                    + compatibility.getCoreVariant().getDisplayName() + ' ' + compatibility.getCoreVersion());
+                sender.sendMessage(ChatColor.GRAY + "Runtime: " + ChatColor.YELLOW + "Minecraft "
+                    + compatibility.getMinecraftVersion() + ", Java " + compatibility.getJavaFeature());
+            }
+            sender.sendMessage(ChatColor.GRAY + "Use " + ChatColor.YELLOW + "/networks doctor scan"
+                + ChatColor.GRAY + " or " + ChatColor.YELLOW + "/networks doctor repair confirm");
+            return true;
+        }
+
+        boolean repair;
+        if (action.equals("scan")) {
+            repair = false;
+        } else if (action.equals("repair") || action.equals("fix")) {
+            if (args.length < 3 || !args[2].equalsIgnoreCase("confirm")) {
+                sender.sendMessage(ChatColor.YELLOW + "Back up the server first, then run:");
+                sender.sendMessage(ChatColor.GOLD + "/networks doctor repair confirm");
+                return true;
+            }
+            repair = true;
+        } else {
+            sender.sendMessage(ChatColor.YELLOW + "Usage: /networks doctor [status|scan|repair confirm]");
+            return true;
+        }
+
+        NetworksDoctorReport report = NetworksDoctor.run(repair);
+        sender.sendMessage(ChatColor.GOLD + "Networks Doctor " + (repair ? "repair" : "scan") + " complete");
+        sender.sendMessage(ChatColor.GRAY + "Scanned: " + ChatColor.YELLOW + report.getScannedEntries()
+            + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "Issues: " + ChatColor.YELLOW + report.getIssuesFound()
+            + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "Repaired: " + ChatColor.GREEN
+            + report.getRepairedEntries()
+            + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "Failures: " + ChatColor.RED + report.getFailures());
+        for (String detail : report.getDetails()) {
+            sender.sendMessage(ChatColor.DARK_GRAY + " - " + ChatColor.GRAY + detail);
+        }
+        return true;
+    }
+
     public void fillQuantum(@NotNull Player player, long amount) {
         final ItemStack itemStack = player.getInventory().getItemInMainHand();
         if (itemStack.getType() == Material.AIR) {
@@ -836,6 +893,7 @@ public class NetworksMain implements TabExecutor {
             case 1 -> {
                 return List.of(
                     "addStorageItem",
+                    "doctor",
                     "fillQuantum",
                     "fixBlueprint",
                     "getStorageItem",
@@ -850,6 +908,7 @@ public class NetworksMain implements TabExecutor {
             case 2 -> {
                 return switch (args[0].toLowerCase(Locale.ROOT)) {
                     // case "help", "updateitem" -> List.of();
+                    case "doctor" -> List.of("status", "scan", "repair");
                     case "getstorageitem" -> List.of("<slot>");
                     case "fillquantum", "addstorageitem", "reducestorageitem", "setquantum" -> List.of("<amount>");
                     case "fixblueprint" -> List.of("<keyInMeta>");
@@ -868,6 +927,9 @@ public class NetworksMain implements TabExecutor {
                 };
             }
             case 3 -> {
+                if (args[0].equalsIgnoreCase("doctor") && args[1].equalsIgnoreCase("repair")) {
+                    return List.of("confirm");
+                }
                 if (args[0].equalsIgnoreCase("worldedit")) {
                     return switch (args[1]) {
                         // case "pos1", "pos2" -> List.of();

@@ -155,24 +155,44 @@ public class NetworkControlX extends NetworkDirectional implements SoftCellBanna
 
              */
 
-            final ItemStack resultStack = new ItemStack(material, 1);
+            // The task executes on the following tick. Revalidate every piece of state before committing the cut.
+            if (targetBlock.getType() != material || this.blockCache.contains(targetPosition)) {
+                return;
+            }
 
-            definition.getNode().getRoot().addItemStack0(blockMenu.getLocation(), resultStack);
+            final NodeDefinition currentDefinition = NetworkStorage.getNode(blockMenu.getLocation());
+            if (currentDefinition == null || currentDefinition.getNode() == null) {
+                sendFeedback(blockMenu.getLocation(), FeedbackType.NO_NETWORK_FOUND);
+                return;
+            }
+
+            if (currentDefinition.getNode().getRoot().getRootPower() < REQUIRED_POWER) {
+                sendFeedback(blockMenu.getLocation(), FeedbackType.NOT_ENOUGH_POWER);
+                return;
+            }
+
+            if (StorageCacheUtils.getSfItem(targetBlock.getLocation()) != null) {
+                sendFeedback(blockMenu.getLocation(), FeedbackType.BLOCK_CANNOT_BE_CUT);
+                return;
+            }
+
+            // Inventory holders must be rejected before adding the corresponding block item to the network.
+            // The old order inserted a shulker-box item and then returned without removing the placed box.
+            final BlockStateSnapshotResult blockState = PaperLib.getBlockState(targetBlock, true);
+            if (blockState.getState() instanceof InventoryHolder) {
+                sendFeedback(blockMenu.getLocation(), FeedbackType.BLOCK_CANNOT_BE_CUT);
+                return;
+            }
+
+            final ItemStack resultStack = new ItemStack(material, 1);
+            currentDefinition.getNode().getRoot().addItemStack0(blockMenu.getLocation(), resultStack);
 
             if (resultStack.getAmount() == 0) {
-                this.blockCache.add(targetPosition);
-
-                final BlockStateSnapshotResult blockState = PaperLib.getBlockState(targetBlock, true);
-
-                if (blockState.getState() instanceof InventoryHolder) {
-                    sendFeedback(blockMenu.getLocation(), FeedbackType.BLOCK_CANNOT_BE_CUT);
-                    return;
-                }
-
                 targetBlock.setType(Material.AIR, true);
+                this.blockCache.add(targetPosition);
                 ParticleUtils.displayParticleRandomly(
                     LocationUtils.centre(targetBlock.getLocation()), 1, 5, DUST_OPTIONS);
-                definition.getNode().getRoot().removeRootPower(REQUIRED_POWER);
+                currentDefinition.getNode().getRoot().removeRootPower(REQUIRED_POWER);
                 sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
             }
         });

@@ -13,6 +13,7 @@ import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.managers.SupportedPluginManager;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.sefiraat.networks.slimefun.NetworkSlimefunItems;
 import io.github.sefiraat.networks.slimefun.network.NetworkDirectional;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
@@ -101,7 +102,7 @@ public class AdvancedVacuum extends NetworkObject {
 
             @Override
             public boolean isSynchronized() {
-                return false;
+                return io.github.sefiraat.networks.Networks.getConfigManager().useSynchronizedMachineTickers();
             }
 
             @Override
@@ -391,7 +392,7 @@ public class AdvancedVacuum extends NetworkObject {
     private void tryAddItem(@NotNull BlockMenu blockMenu) {
         final NodeDefinition definition = NetworkStorage.getNode(blockMenu.getLocation());
 
-        if (definition.getNode() == null) {
+        if (definition == null || definition.getNode() == null) {
             sendFeedback(blockMenu.getLocation(), FeedbackType.NO_NETWORK_FOUND);
             return;
         }
@@ -402,9 +403,11 @@ public class AdvancedVacuum extends NetworkObject {
             if (itemStack == null || itemStack.getType() == Material.AIR) {
                 continue;
             }
-            definition.getNode().getRoot().addItemStack0(blockMenu.getLocation(), itemStack);
+            if (NetworkTransferUtils.moveMenuSlotIntoNetwork(
+                definition.getNode().getRoot(), blockMenu.getLocation(), blockMenu, inputSlot) > 0) {
+                sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
+            }
         }
-        sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
     }
 
     @Override

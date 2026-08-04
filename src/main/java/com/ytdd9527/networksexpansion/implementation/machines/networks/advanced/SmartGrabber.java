@@ -9,7 +9,7 @@ import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.slimefun.network.AdminDebuggable;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
-import io.github.sefiraat.networks.utils.StackUtils;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
@@ -75,7 +75,7 @@ public class SmartGrabber extends SpecialSlimefunItem implements AdminDebuggable
             new BlockTicker() {
                 @Override
                 public boolean isSynchronized() {
-                    return false;
+                    return io.github.sefiraat.networks.Networks.getConfigManager().useSynchronizedMachineTickers();
                 }
 
                 @Override
@@ -136,11 +136,9 @@ public class SmartGrabber extends SpecialSlimefunItem implements AdminDebuggable
                         for (int slot : slots) {
                             ItemStack item = targetMenu.getItemInSlot(slot);
                             if (item != null && item.getType() != Material.AIR) {
-                                final int exceptedReceive = Math.min(item.getAmount(), limit);
-                                final ItemStack clone = StackUtils.getAsQuantity(item, exceptedReceive);
-                                root.addItemStack0(thisBlock.getLocation(), clone);
-                                item.setAmount(item.getAmount() - (exceptedReceive - clone.getAmount()));
-                                limit -= exceptedReceive - clone.getAmount();
+                                final int moved = NetworkTransferUtils.moveMenuSlotIntoNetwork(
+                                    root, thisBlock.getLocation(), targetMenu, slot, limit);
+                                limit -= moved;
                                 if (limit <= 0) {
                                     break;
                                 }

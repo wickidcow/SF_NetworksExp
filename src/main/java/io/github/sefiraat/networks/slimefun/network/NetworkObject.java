@@ -24,23 +24,26 @@ import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Range;
 
 import javax.annotation.OverridingMethodsMustInvokeSuper;
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Getter
 public abstract class NetworkObject extends SpecialSlimefunItem implements AdminDebuggable {
@@ -48,24 +51,43 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
     protected static final Set<BlockFace> CHECK_FACES =
         Set.of(BlockFace.UP, BlockFace.DOWN, BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST);
 
-    static {
-        Bukkit.getScheduler()
-            .runTaskTimer(
-                Networks.getInstance(),
-                () -> {
-                    while (!scheduledHangingTick.isEmpty()) {
-                        final Location location = scheduledHangingTick.poll();
-                        final Block block = location.getBlock();
-                        HangingBlock.tickHangingBlocks(block);
-                    }
-                },
-                1L,
-                Slimefun.getTickerTask().getTickRate());
-    }
+    private static final AtomicBoolean SHARED_TICKER_STARTED = new AtomicBoolean();
+    private static volatile BukkitTask sharedTickerTask;
 
     private final NodeType nodeType;
     private final List<Integer> slotsToDrop = new ArrayList<>();
-    private final Set<Location> firstTickLocations = new HashSet<>();
+    private final Set<Location> firstTickLocations = ConcurrentHashMap.newKeySet();
+
+    /** Starts the shared hanging-block ticker after the plugin instance is fully initialized. */
+    public static void startSharedTicker() {
+        if (!SHARED_TICKER_STARTED.compareAndSet(false, true)) {
+            return;
+        }
+        sharedTickerTask = Bukkit.getScheduler().runTaskTimer(
+            Networks.getInstance(),
+            () -> {
+                Location location;
+                while ((location = scheduledHangingTick.poll()) != null) {
+                    World world = location.getWorld();
+                    if (world != null && world.isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
+                        HangingBlock.tickHangingBlocks(location.getBlock());
+                    }
+                }
+            },
+            1L,
+            Slimefun.getTickerTask().getTickRate());
+    }
+
+    /** Stops and clears the shared ticker during plugin shutdown or failed startup. */
+    public static void stopSharedTicker() {
+        BukkitTask task = sharedTickerTask;
+        if (task != null) {
+            task.cancel();
+            sharedTickerTask = null;
+        }
+        scheduledHangingTick.clear();
+        SHARED_TICKER_STARTED.set(false);
+    }
 
     protected NetworkObject(
         @NotNull ItemGroup itemGroup,
@@ -176,6 +198,8 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
             }
         }
 
+        firstTickLocations.remove(location);
+        NetworkStorage.removeNode(location);
         Slimefun.getDatabaseManager().getBlockDataController().removeBlock(location);
     }
 
@@ -208,6 +232,6 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
     }
 
     public boolean runSync() {
-        return false;
+        return Networks.getConfigManager().useSynchronizedMachineTickers();
     }
 }

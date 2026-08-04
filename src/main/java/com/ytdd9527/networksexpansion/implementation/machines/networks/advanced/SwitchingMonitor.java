@@ -13,6 +13,7 @@ import io.github.sefiraat.networks.network.NodeType;
 import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
 import io.github.sefiraat.networks.utils.Keys;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.sefiraat.networks.utils.StackUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
@@ -221,20 +222,21 @@ public class SwitchingMonitor extends NetworkObject implements HangingBlock, Pla
             }
         } else {
             if (shift) {
-                for (ItemStack item : player.getInventory().getStorageContents()) {
+                ItemStack[] storage = player.getInventory().getStorageContents();
+                for (int slot = 0; slot < storage.length; slot++) {
+                    ItemStack item = storage[slot];
                     if (item != null
                         && item.getType() != Material.AIR
                         && StackUtils.itemsMatch(item, template, true, false)) {
-                        int before = item.getAmount();
-                        root.addItemStack0(attachon, item);
-                        int after = item.getAmount();
-                        if (before == after) {
+                        int moved = NetworkTransferUtils.moveInventorySlotIntoNetwork(
+                            root, attachon, player.getInventory(), slot);
+                        if (moved <= 0) {
                             break;
                         }
                     }
                 }
             } else {
-                root.addItemStack0(attachon, hand);
+                NetworkTransferUtils.movePlayerMainHandIntoNetwork(root, attachon, player);
             }
         }
     }

@@ -21,6 +21,7 @@ import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.block.Block;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
@@ -58,7 +59,7 @@ public class NetworkController extends NetworkObject {
         addItemHandler(new BlockTicker() {
             @Override
             public boolean isSynchronized() {
-                return false;
+                return io.github.sefiraat.networks.Networks.getConfigManager().useSynchronizedMachineTickers();
             }
 
             @Override
@@ -136,6 +137,23 @@ public class NetworkController extends NetworkObject {
                 NetworkStorage.removeNode(node.getNodePosition());
             }
         }
+    }
+
+    /** Clears every runtime cache associated with a controller location. */
+    public static void removeRuntimeState(@NotNull Location location) {
+        wipeNetwork(location);
+        NETWORKS.remove(location);
+        records.remove(location);
+        recordFlow.remove(location);
+        CRAYONS.remove(location);
+    }
+
+    @Override
+    protected void postBreak(@NotNull BlockBreakEvent event) {
+        super.postBreak(event);
+        Location location = event.getBlock().getLocation();
+        firstTickMap.remove(location);
+        removeRuntimeState(location);
     }
 
     @SuppressWarnings("unused")

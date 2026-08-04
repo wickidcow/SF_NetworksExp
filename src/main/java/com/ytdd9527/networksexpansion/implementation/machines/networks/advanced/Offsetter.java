@@ -214,7 +214,7 @@ public class Offsetter extends SpecialSlimefunItem implements AdminDebuggable {
         addItemHandler(new BlockTicker() {
             @Override
             public boolean isSynchronized() {
-                return false;
+                return io.github.sefiraat.networks.Networks.getConfigManager().useSynchronizedMachineTickers();
             }
 
             @Override

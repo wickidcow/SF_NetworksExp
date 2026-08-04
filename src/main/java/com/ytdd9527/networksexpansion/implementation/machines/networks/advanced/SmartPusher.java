@@ -94,7 +94,7 @@ public class SmartPusher extends SpecialSlimefunItem implements AdminDebuggable 
             new BlockTicker() {
                 @Override
                 public boolean isSynchronized() {
-                    return false;
+                    return io.github.sefiraat.networks.Networks.getConfigManager().useSynchronizedMachineTickers();
                 }
 
                 @Override

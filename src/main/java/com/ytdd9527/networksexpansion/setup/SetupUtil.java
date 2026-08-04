@@ -321,6 +321,6 @@ public class SetupUtil {
         setupIntegration();
 
         // wait for logitech integration
-        Bukkit.getScheduler().runTaskLaterAsynchronously(Networks.getInstance(), SetupUtil::setupMenu, 2L);
+        Bukkit.getScheduler().runTaskLater(Networks.getInstance(), SetupUtil::setupMenu, 2L);
     }
 }

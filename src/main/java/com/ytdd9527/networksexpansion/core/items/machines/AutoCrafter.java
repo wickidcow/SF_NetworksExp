@@ -15,6 +15,7 @@ import io.github.sefiraat.networks.network.stackcaches.BlueprintInstance;
 import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
 import io.github.sefiraat.networks.utils.Keys;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.sefiraat.networks.utils.StackUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
@@ -38,12 +39,13 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @SuppressWarnings("DuplicatedCode")
 public class AutoCrafter extends NetworkObject implements SoftCellBannable, CraftTyped {
     public static final int BLUEPRINT_SLOT = 10;
     public static final int OUTPUT_SLOT = 16;
-    public static final Map<Location, BlueprintInstance> INSTANCE_MAP = new HashMap<>();
+    public static final Map<Location, BlueprintInstance> INSTANCE_MAP = new ConcurrentHashMap<>();
     private static final int[] BACKGROUND_SLOTS = new int[]{3, 4, 5, 12, 13, 14, 21, 22, 23};
     private static final int[] BLUEPRINT_BACKGROUND = new int[]{0, 1, 2, 9, 11, 18, 19, 20};
     private static final int[] OUTPUT_BACKGROUND = new int[]{6, 7, 8, 15, 17, 24, 25, 26};
@@ -68,7 +70,7 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
         addItemHandler(new BlockTicker() {
             @Override
             public boolean isSynchronized() {
-                return false;
+                return io.github.sefiraat.networks.Networks.getConfigManager().useSynchronizedMachineTickers();
             }
 
             @Override
@@ -106,7 +108,8 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
         if (!withholding) {
             final ItemStack stored = blockMenu.getItemInSlot(OUTPUT_SLOT);
             if (stored != null && stored.getType() != Material.AIR) {
-                root.addItemStack0(blockMenu.getLocation(), stored);
+                NetworkTransferUtils.moveMenuSlotIntoNetwork(
+                    root, blockMenu.getLocation(), blockMenu, OUTPUT_SLOT);
             }
         }
 
@@ -154,6 +157,10 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
         int blueprintAmount = canBlueprintStack() ? blueprint.getAmount() : 1;
 
         ItemStack targetOutput = instance.getItemStack();
+        if (targetOutput == null || targetOutput.getType() == Material.AIR || targetOutput.getAmount() <= 0) {
+            sendFeedback(blockMenu.getLocation(), FeedbackType.BROKEN_BLUEPRINT);
+            return;
+        }
         if (output != null
             && output.getType() != Material.AIR
             && targetOutput != null
@@ -239,8 +246,20 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
     protected void returnItems(
         @NotNull NetworkRoot root, @Nullable ItemStack @NotNull [] inputs, @NotNull BlockMenu blockMenu) {
         for (ItemStack input : inputs) {
-            if (input != null) {
-                root.addItemStack0(blockMenu.getLocation(), input);
+            if (input == null || input.getType() == Material.AIR || input.getAmount() <= 0) {
+                continue;
+            }
+
+            root.addItemStack0(blockMenu.getLocation(), input);
+            if (input.getAmount() <= 0) {
+                continue;
+            }
+
+            BlockMenuUtil.pushItem(blockMenu, input, OUTPUT_SLOT);
+            if (input.getAmount() > 0) {
+                Location dropLocation = blockMenu.getLocation().clone().add(0.5, 1.0, 0.5);
+                dropLocation.getWorld().dropItemNaturally(dropLocation, input.clone());
+                input.setAmount(0);
             }
         }
     }

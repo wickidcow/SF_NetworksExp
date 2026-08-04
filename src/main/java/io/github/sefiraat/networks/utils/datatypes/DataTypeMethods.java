@@ -28,6 +28,23 @@ public class DataTypeMethods {
     }
 
     /**
+     * Reads custom data without allowing malformed legacy payloads to break item handling.
+     *
+     * <p>Paper may throw a runtime deserialization exception when a value was written by an
+     * older ItemStack serializer. Callers that support multiple historical formats should use
+     * this method and continue to their next compatibility key.</p>
+     */
+    @Nullable
+    public static <T, Z> Z getCustomSafely(
+        @NotNull PersistentDataHolder holder, @NotNull NamespacedKey key, @NotNull PersistentDataType<T, Z> type) {
+        try {
+            return getCustom(holder, key, type);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    /**
      * This method returns an {@link Optional} describing the object defined by the {@link PersistentDataType}
      * found under the given key. An empty {@link Optional} will be returned if no value has been found.
      *

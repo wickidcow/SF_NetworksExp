@@ -4,7 +4,7 @@ authors:
   - balugaq
   - ytdd9527
   - wickidcow
-description: A modern, English-first continuation of Networks for Slimefun Legacy.
+description: A modern Networks continuation for Slimefun Legacy, United, and Gugu.
 main: io.github.sefiraat.networks.Networks
 website: https://github.com/wickidcow/SF_NetworksExp
 version: ${version}
@@ -67,4 +67,7 @@ permissions:
     default: op
   networks.commands.map:
     description: Allows /networks map
+    default: op
+  networks.commands.doctor:
+    description: Allows Networks runtime integrity scans and repairs
     default: op

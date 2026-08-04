@@ -223,7 +223,7 @@ public abstract class AbstractGridNewStyle extends AbstractGrid implements Keybi
         }
 
         // Update Screen
-        Bukkit.getScheduler().runTaskAsynchronously(Networks.getInstance(), () -> {
+        Bukkit.getScheduler().runTask(Networks.getInstance(), () -> {
 
         final BlockMenu blockMenu = StorageCacheUtils.getMenu(location);
         if (blockMenu == null) {
@@ -472,8 +472,8 @@ public abstract class AbstractGridNewStyle extends AbstractGrid implements Keybi
             return;
         }
 
-        ItemStack cursor = player.getItemOnCursor();
-        receiveItem(definition.getNode().getRoot(), player, cursor, action, blockMenu);
+        NetworkTransferUtils.movePlayerCursorIntoNetwork(
+            definition.getNode().getRoot(), blockMenu.getLocation(), player);
     }
 
     @Override
@@ -504,7 +504,7 @@ public abstract class AbstractGridNewStyle extends AbstractGrid implements Keybi
         ClickAction action,
         BlockMenu blockMenu) {
         if (itemStack != null && itemStack.getType() != Material.AIR && !StackUtils.isBlacklisted(itemStack)) {
-            root.addItemStack(itemStack);
+            NetworkTransferUtils.moveStackReferenceIntoNetwork(root, blockMenu.getLocation(), itemStack);
         }
     }
 

@@ -64,7 +64,7 @@ public class NetworkExport extends NetworkObject {
 
                 @Override
                 public boolean isSynchronized() {
-                    return false;
+                    return io.github.sefiraat.networks.Networks.getConfigManager().useSynchronizedMachineTickers();
                 }
 
                 @Override
@@ -102,7 +102,7 @@ public class NetworkExport extends NetworkObject {
     private void tryFetchItem(@NotNull BlockMenu blockMenu) {
         final NodeDefinition definition = NetworkStorage.getNode(blockMenu.getLocation());
 
-        if (definition.getNode() == null) {
+        if (definition == null || definition.getNode() == null) {
             sendFeedback(blockMenu.getLocation(), FeedbackType.NO_NETWORK_FOUND);
             return;
         }

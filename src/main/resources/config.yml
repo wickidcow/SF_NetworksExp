@@ -5,10 +5,28 @@ auto-update: false
 language: en-US
 
 # Do not change this value unless you know what you are doing.
-config-version: 2.1.68
+config-version: 2.1.112-legacy-alpha2
 
 # Do not change this value unless you know what you are doing.
 debug: false
+
+# Runtime compatibility policy. Legacy is the primary target; United and Gugu are accepted
+# through their stable Slimefun API surface. Unknown cores fail closed by default.
+compatibility:
+  allow-unknown-slimefun-core: false
+  allow-unsupported-runtime: false
+  # Safe default for Paper 1.21.11+: keep Bukkit inventory/world access on the owning server thread.
+  # Turning this off restores the old asynchronous ticker behavior and is not recommended.
+  synchronized-machine-tickers: true
+
+# Drawer database shutdown is bounded so the main server thread can never hang indefinitely.
+database:
+  shutdown-timeout-seconds: 15
+
+# Loaded-state integrity checks. These never force-load chunks or rewrite world block data.
+doctor:
+  auto-repair-stale-runtime-state: true
+  auto-scan-period-ticks: 1200
 
 grid-new-style-max-custom-amount: 2304
 

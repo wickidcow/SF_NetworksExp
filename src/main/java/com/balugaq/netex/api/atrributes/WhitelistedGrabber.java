@@ -1,6 +1,7 @@
 package com.balugaq.netex.api.atrributes;
 
 import io.github.sefiraat.networks.network.NetworkRoot;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.sefiraat.networks.utils.StackUtils;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
@@ -42,26 +43,21 @@ public interface WhitelistedGrabber {
         return false;
     }
 
-    default void grabMenu(@NotNull BlockMenu blockMenu, @NotNull BlockMenu targetMenu, @NotNull NetworkRoot root, @NotNull List<ItemStack> templates) {
+    default void grabMenu(
+        @NotNull BlockMenu blockMenu,
+        @NotNull BlockMenu targetMenu,
+        @NotNull NetworkRoot root,
+        @NotNull List<ItemStack> templates) {
+
         final int[] slots =
             targetMenu.getPreset().getSlotsAccessedByItemTransport(targetMenu, ItemTransportFlow.WITHDRAW, null);
 
         for (int slot : slots) {
             final ItemStack itemInSlot = targetMenu.getItemInSlot(slot);
-
-            if (itemInSlot != null && itemInSlot.getType() != Material.AIR) {
-                boolean found = false;
-                for (ItemStack template : templates) {
-                    if (StackUtils.itemsMatch(template, itemInSlot)) {
-                        int before = itemInSlot.getAmount();
-                        root.addItemStack0(blockMenu.getLocation(), itemInSlot);
-                        found = true;
-                        break;
-                    }
-                }
-                if (found) {
-                    break;
-                }
+            if (inTemplates(templates, itemInSlot)
+                && NetworkTransferUtils.moveMenuSlotIntoNetwork(
+                    root, blockMenu.getLocation(), targetMenu, slot) > 0) {
+                break;
             }
         }
     }

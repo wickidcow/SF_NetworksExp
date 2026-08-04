@@ -41,7 +41,7 @@ public class NetworkPowerDisplay extends NetworkObject {
         addItemHandler(new BlockTicker() {
             @Override
             public boolean isSynchronized() {
-                return false;
+                return io.github.sefiraat.networks.Networks.getConfigManager().useSynchronizedMachineTickers();
             }
 
             @Override
@@ -66,7 +66,7 @@ public class NetworkPowerDisplay extends NetworkObject {
         if (blockMenu.hasViewer()) {
             final NodeDefinition definition = NetworkStorage.getNode(blockMenu.getLocation());
 
-            if (definition.getNode() == null) {
+            if (definition == null || definition.getNode() == null) {
                 blockMenu.replaceExistingItem(DISPLAY_SLOT, Icon.POWER_DISPLAY_EMPTY);
                 sendFeedback(blockMenu.getLocation(), FeedbackType.NO_NETWORK_FOUND);
                 return;

@@ -150,4 +150,13 @@ public class ConfigManager {
     public boolean isFastInteractQuantum() {
         return Networks.getInstance().getConfig().getBoolean("fast-interact-quantum", false);
     }
+
+    /**
+     * Runs inventory, entity, event, and world-facing machine ticks on the server-owned thread.
+     * This is the safe default for Paper 1.21.11+ and for Slimefun Legacy's region scheduler.
+     */
+    public boolean useSynchronizedMachineTickers() {
+        return Networks.getInstance().getConfig().getBoolean(
+            "compatibility.synchronized-machine-tickers", true);
+    }
 }
