@@ -60,7 +60,7 @@ jobs:
 
       - name: Build exact ${{ matrix.display }} JAR
         shell: bash
-        run: scripts/build_slimefun_core.sh .ci/slimefun-core "${{ matrix.key }}"
+        run: bash scripts/build_slimefun_core.sh .ci/slimefun-core "${{ matrix.key }}"
 
       - name: Locate exact Slimefun core JAR
         shell: bash
