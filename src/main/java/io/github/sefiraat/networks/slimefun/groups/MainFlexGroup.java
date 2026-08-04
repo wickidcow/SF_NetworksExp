@@ -1,6 +1,7 @@
 package io.github.sefiraat.networks.slimefun.groups;
 
 import com.balugaq.netex.utils.Lang;
+import com.ytdd9527.networksexpansion.implementation.ExpansionItemsMenus;
 import com.ytdd9527.networksexpansion.utils.TextUtil;
 import io.github.sefiraat.networks.slimefun.NetworksItemGroups;
 import io.github.sefiraat.networks.utils.Theme;
@@ -38,6 +39,14 @@ public class MainFlexGroup extends FlexItemGroup {
     private static final int TOOLS = 11;
     private static final int NETWORK_ITEMS = 12;
     private static final int NETWORK_QUANTUMS = 13;
+
+    // Network Expansion sections are opened through Slimefun's native ItemGroup pages.
+    // This keeps every item under the single Networks root category and avoids the
+    // legacy custom FlexItemGroup tree that could stall guide rendering.
+    private static final int EXPANSION_ITEMS = 18;
+    private static final int EXPANSION_CARGO = 19;
+    private static final int EXPANSION_MACHINES = 20;
+    private static final int EXPANSION_INFO = 21;
 
     private static final int[] HEADER = new int[]{0, 1, 2, 3, 4, 5, 6, 7, 8};
     private static final int[] FOOTER = new int[]{45, 46, 47, 48, 49, 50, 51, 52, 53};
@@ -124,6 +133,32 @@ public class MainFlexGroup extends FlexItemGroup {
             NETWORK_QUANTUMS,
             (player1, i1, itemStack1, clickAction) ->
                 openPage(profile, NetworksItemGroups.NETWORK_QUANTUMS, mode, 1));
+
+        // Networks Expansion: use the normal Slimefun guide renderer for stability
+        // across Slimefun Legacy, United and Gugu.
+        menu.replaceExistingItem(EXPANSION_ITEMS, ExpansionItemsMenus.MENU_ITEMS.getItem(player));
+        menu.addMenuClickHandler(
+            EXPANSION_ITEMS,
+            (player1, i1, itemStack1, clickAction) ->
+                openPage(profile, ExpansionItemsMenus.MENU_ITEMS, mode, 1));
+
+        menu.replaceExistingItem(EXPANSION_CARGO, ExpansionItemsMenus.MENU_CARGO_SYSTEM.getItem(player));
+        menu.addMenuClickHandler(
+            EXPANSION_CARGO,
+            (player1, i1, itemStack1, clickAction) ->
+                openPage(profile, ExpansionItemsMenus.MENU_CARGO_SYSTEM, mode, 1));
+
+        menu.replaceExistingItem(EXPANSION_MACHINES, ExpansionItemsMenus.MENU_FUNCTIONAL_MACHINE.getItem(player));
+        menu.addMenuClickHandler(
+            EXPANSION_MACHINES,
+            (player1, i1, itemStack1, clickAction) ->
+                openPage(profile, ExpansionItemsMenus.MENU_FUNCTIONAL_MACHINE, mode, 1));
+
+        menu.replaceExistingItem(EXPANSION_INFO, ExpansionItemsMenus.MENU_TROPHY.getItem(player));
+        menu.addMenuClickHandler(
+            EXPANSION_INFO,
+            (player1, i1, itemStack1, clickAction) ->
+                openPage(profile, ExpansionItemsMenus.MENU_TROPHY, mode, 1));
     }
 
     @ParametersAreNonnullByDefault

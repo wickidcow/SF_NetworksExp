@@ -105,6 +105,8 @@ crafting_grid = read("src/main/java/io/github/sefiraat/networks/slimefun/network
 crafting_grid_new = read("src/main/java/com/ytdd9527/networksexpansion/implementation/machines/networks/advanced/NetworkCraftingGridNewStyle.java")
 recipe_registry = read("src/main/java/com/balugaq/netex/api/helpers/SupportedCraftingTableRecipes.java")
 runtime_stability = read("RUNTIME_STABILITY.md")
+main_flex_group = read("src/main/java/io/github/sefiraat/networks/slimefun/groups/MainFlexGroup.java")
+setup_util = read("src/main/java/com/ytdd9527/networksexpansion/setup/SetupUtil.java")
 java_sources = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "src/main/java").rglob("*.java"))
 
 # Stable world/plugin identity.
@@ -159,6 +161,23 @@ workflow_invariants = [
 ]
 for required in workflow_invariants:
     require(required in workflow, f"workflow invariant missing: {required}")
+
+# Single-root, native-guide compatibility.
+for native_group in [
+    "ExpansionItemsMenus.MENU_ITEMS",
+    "ExpansionItemsMenus.MENU_CARGO_SYSTEM",
+    "ExpansionItemsMenus.MENU_FUNCTIONAL_MACHINE",
+    "ExpansionItemsMenus.MENU_TROPHY",
+]:
+    require(native_group in main_flex_group, f"Networks root guide is missing native expansion link: {native_group}")
+require("SlimefunGuide.openItemGroup" in main_flex_group,
+        "Networks root guide must use Slimefun's native item-group renderer")
+require("MAIN_ITEM_GROUP.register" not in setup_util,
+        "duplicate Networks Expansion root category is still registered")
+require("SetupUtil::setupMenu" not in setup_util,
+        "legacy delayed custom guide registration is still enabled")
+require("Main Item Group" not in locale_text and "Sub Menu " not in locale_text,
+        "placeholder expansion guide names remain player-facing")
 
 # Runtime compatibility and thread ownership.
 require('MINIMUM_MINECRAFT = "1.21.11"' in runtime_compatibility, "Minecraft runtime floor is missing")

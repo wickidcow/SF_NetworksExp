@@ -2550,30 +2550,30 @@ groups:
   disabled_items: <main>Disabled / Removed Items
   expansion:
     slimefun:
-      main: <color_random_string>Main
-      items: <color_random_string>Items
-      cargo_system: <color_random_string>Cargo System
-      functional_machine: <color_random_string>Functional Machine
-      trophy: <color_random_string>Trophy
+      main: <main>Networks Expansion
+      items: <main>Expansion Items
+      cargo_system: <main>Expansion Cargo and Storage
+      functional_machine: <main>Expansion Machines
+      trophy: <main>Expansion Information
     custom:
-      main_item_group: <color_random_string>Main Item Group
-      main_menu_item: <color_random_string>item
-      sub_menu_tool: <color_random_string>Sub Menu Tool
-      sub_menu_blueprint: <color_random_string>item - blueprint
-      main_menu_cargo_system: <color_random_string>Main Menu Cargo System
-      sub_menu_advanced_storage: <color_random_string>Sub Menu Advanced Storage
-      sub_menu_networks_drawers: <color_random_string>Sub Menu Networks Drawers
-      sub_menu_cargo: <color_random_string>Sub Menu Cargo
-      main_menu_functional_machine: <color_random_string>Main Menu Functional Machine
-      sub_menu_core_machine: <color_random_string>Sub Menu Core Machine
-      sub_menu_advanced_networks: <color_random_string>Sub Menu Advanced Networks
-      sub_menu_bridge: <color_random_string>Sub Menu Bridge
-      sub_menu_encoder: <color_random_string>Sub Menu Encoder
-      sub_menu_crafter_machine: <color_random_string>Sub Menu Crafter Machine
-      main_menu_trophy: <color_random_string>Main Menu Trophy
-      sub_menu_author: <color_random_string>Sub Menu Contributor
-      sub_menu_announce: <color_random_string>Sub Menu Information
-      sub_menu_deprecated: <color_random_string>Sub Menu Deprecated
+      main_item_group: <main>Networks Expansion
+      main_menu_item: <main>Expansion Items
+      sub_menu_tool: <main>Tools
+      sub_menu_blueprint: <main>Blueprints
+      main_menu_cargo_system: <main>Cargo and Storage
+      sub_menu_advanced_storage: <main>Advanced Storage
+      sub_menu_networks_drawers: <main>Network Drawers
+      sub_menu_cargo: <main>Cargo Transfer
+      main_menu_functional_machine: <main>Functional Machines
+      sub_menu_core_machine: <main>Core Machines
+      sub_menu_advanced_networks: <main>Advanced Networks
+      sub_menu_bridge: <main>Network Bridges
+      sub_menu_encoder: <main>Recipe Encoders
+      sub_menu_crafter_machine: <main>Crafting Machines
+      main_menu_trophy: <main>Information
+      sub_menu_author: <main>Contributors
+      sub_menu_announce: <main>Information
+      sub_menu_deprecated: <main>Deprecated Items
 theme:
   gold: ''
   white: ''
