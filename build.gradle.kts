@@ -8,6 +8,7 @@ version = "2.1.112-Legacy-Alpha1"
 
 val slimefunLegacyJarPath = providers.gradleProperty("slimefunLegacyJar")
     .orElse(providers.environmentVariable("SLIMEFUN_LEGACY_JAR"))
+    .orElse(providers.environmentVariable("SLIMEFUN_COMPATIBILITY_JAR"))
     .orElse(layout.projectDirectory.file("lib/Slimefun-Legacy.jar").asFile.absolutePath)
 val slimefunLegacyJar = file(slimefunLegacyJarPath.get())
 
