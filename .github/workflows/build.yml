@@ -1,4 +1,4 @@
-name: Build Networks Compatibility Matrix
+name: Build Networks Universal
 
 on:
   push:
@@ -11,58 +11,36 @@ permissions:
   contents: read
 
 jobs:
-  compatibility:
-    name: ${{ matrix.display }}
+  build:
+    name: Build universal Networks JAR
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - key: legacy
-            display: Slimefun Legacy (primary)
-            repository: wickidcow/Slimefun-Legacy
-            ref: master
-            core_java: "25"
-            cache: gradle
-          - key: united
-            display: Slimefun United
-            repository: Slimefun-United/Slimefun-United
-            ref: dev
-            core_java: "21"
-            cache: maven
-          - key: gugu
-            display: Slimefun Gugu
-            repository: SlimefunGuguProject/Slimefun4
-            ref: master
-            core_java: "21"
-            cache: gradle
 
     steps:
       - name: Check out Networks
         uses: actions/checkout@v6
 
-      - name: Check out ${{ matrix.display }}
+      - name: Check out Slimefun Legacy
         uses: actions/checkout@v6
         with:
-          repository: ${{ matrix.repository }}
-          ref: ${{ matrix.ref }}
+          repository: wickidcow/Slimefun-Legacy
+          ref: master
           path: .ci/slimefun-core
 
-      - name: Set up Java ${{ matrix.core_java }} for the Slimefun core
+      - name: Set up Java 25 for Slimefun Legacy
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: ${{ matrix.core_java }}
-          cache: ${{ matrix.cache }}
+          java-version: "25"
+          cache: gradle
 
       - name: Verify Networks source contract
         run: python3 scripts/verify_legacy_compatibility.py
 
-      - name: Build exact ${{ matrix.display }} JAR
+      - name: Build exact Slimefun Legacy JAR
         shell: bash
-        run: bash scripts/build_slimefun_core.sh .ci/slimefun-core "${{ matrix.key }}"
+        run: bash scripts/build_slimefun_core.sh .ci/slimefun-core legacy
 
-      - name: Locate exact Slimefun core JAR
+      - name: Locate exact Slimefun Legacy JAR
         shell: bash
         run: |
           CORE_JAR="$(python3 scripts/find_slimefun_jar.py .ci/slimefun-core)"
@@ -77,22 +55,26 @@ jobs:
           java-version: "21"
           cache: gradle
 
-      - name: Build Networks against ${{ matrix.display }}
+      - name: Build and test Networks
         shell: bash
         run: |
           chmod +x gradlew
           ./gradlew clean build --no-daemon -PslimefunCoreJar="$SLIMEFUN_CORE_JAR"
 
-      - name: Verify Java 21 bytecode
+      - name: Locate universal Networks JAR
         shell: bash
         run: |
           NETWORKS_JAR="$(find build/libs -name 'Networks-Legacy-*.jar' ! -name '*-sources.jar' -print -quit)"
           test -n "$NETWORKS_JAR"
-          python3 scripts/verify_java21_bytecode.py "$NETWORKS_JAR"
+          echo "NETWORKS_JAR=$NETWORKS_JAR" >> "$GITHUB_ENV"
+          echo "Built universal Networks JAR: $NETWORKS_JAR"
 
-      - name: Upload ${{ matrix.display }} artifact
+      - name: Verify Java 21 bytecode
+        run: python3 scripts/verify_java21_bytecode.py "$NETWORKS_JAR"
+
+      - name: Upload universal Networks JAR
         uses: actions/upload-artifact@v7
         with:
-          name: Networks-Alpha2-${{ matrix.key }}
-          path: build/libs/Networks-Legacy-*.jar
+          name: Networks-Universal
+          path: ${{ env.NETWORKS_JAR }}
           if-no-files-found: error
