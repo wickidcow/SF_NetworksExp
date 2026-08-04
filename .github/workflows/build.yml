@@ -42,6 +42,13 @@ jobs:
           ./gradlew spotlessApply --no-daemon
           ./gradlew clean build --no-daemon
 
+      - name: Set up Java 21 for Networks
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
       - name: Build Networks against Slimefun Legacy
         shell: bash
         run: |
