@@ -20,6 +20,7 @@ import lombok.Getter;
 import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
@@ -64,6 +65,12 @@ public class NetworkController extends NetworkObject {
 
             @Override
             public void tick(@NotNull Block block, SlimefunItem item, @NotNull SlimefunBlockData data) {
+                if (block.getType() == Material.AIR) {
+                    firstTickMap.remove(block.getLocation());
+                    removeRuntimeState(block.getLocation());
+                    return;
+                }
+
                 if (!firstTickMap.containsKey(block.getLocation())) {
                     onFirstTick(block, data);
                     firstTickMap.put(block.getLocation(), true);

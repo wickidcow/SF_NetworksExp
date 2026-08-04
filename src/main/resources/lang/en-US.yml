@@ -53,6 +53,7 @@ messages:
     not_allowed_block: This block is not allowed
     not_blueprint: This item is not a blueprint
     not_enough_items_in_network: Not enough items in the network
+    not_enough_items: Not enough items
     not_enough_power: Not enough network power
     not_enough_resources: Not enough resources in the network
     output_full: The output is full
