@@ -1,0 +1,2598 @@
+# English locale for SF_NetworksExp Legacy Edition
+# Classic item names and descriptions follow Sefiraat's original Blob Builds wording.
+# Expansion-only content uses maintained English terminology.
+messages:
+  guide:
+    click-to-research: '&7Click to unlock this item'
+    cost: 'Cost: '
+    cost-level: ' levels'
+  keybind:
+    title: '&aSelect the keybind set you want to edit'
+    sub-title: '&aClick the keybind action you want to change'
+    action-select-title: '&aSelect the action for this keybind'
+    scripts:
+      upload: '&aEnter a name for your keybind script'
+      copied: '&aKeybind script copied'
+    scripts-title: '&aKeybind Control Center'
+  feedback:
+    afk: Waiting for activity
+    already_has_item: The grabber slot already contains an item
+    block_already_cut: The block has already been cut
+    block_already_pasted: The block has already been pasted
+    block_cannot_be_air: The selected block cannot be air
+    block_cannot_be_cut: This block cannot be cut
+    block_not_match_template: The block does not match the template
+    cannot_output_energy: Network power cannot be supplied to this machine
+    disabled_blueprint: This blueprint is disabled
+    disabled_output: This recipe output is disabled
+    error_occurred: An error occurred
+    full_energy_buffer: The energy buffer is full
+    initialization: Initializing direction
+    invalid_block: Invalid block
+    invalid_blueprint: Invalid blueprint
+    invalid_recipe: Invalid recipe
+    invalid_template: Invalid template
+    loading_data: Loading data
+    no_blueprint_found: No blueprint inserted
+    no_blueprint_instance_found: The blueprint data is invalid
+    no_direction_set: No direction configured
+    no_enough_space: Not enough space
+    no_input: No input items
+    no_inventory_found: Inventory not found
+    no_item_found: Item not found
+    no_item_request: No item was requested
+    no_linked_block_menu_found: The linked block has no accessible menu
+    no_linked_location_found: No linked block location was configured
+    no_network_found: No network connected
+    no_owner_found: No owner was found
+    no_permission: You do not have permission
+    no_target_block: No target block selected
+    no_template_found: No template inserted
+    no_vanilla_recipe_found: No vanilla recipe found
+    no_valid_recipe_found: No valid recipe found
+    not_allowed_block: This block is not allowed
+    not_blueprint: This item is not a blueprint
+    not_enough_items_in_network: Not enough items in the network
+    not_enough_power: Not enough network power
+    not_enough_resources: Not enough resources in the network
+    output_full: The output is full
+    protected_block: This block is protected
+    result_is_too_large: The result is too large
+    success: Success
+    working: Working
+    not_allowed_item: This item is not allowed
+    soft_cell_banned: This operation was limited because the network has too many connected cells
+    ticking: Ticking
+    transfer_ticking: Transfer Ticking
+    transfer_try_push_item_with_counter: Attempting to push an item with counter tracking
+    transfer_try_push_item: Attempting to push an item
+    transfer_try_grab_item_with_counter: Attempting to grab an item with counter tracking
+    transfer_try_grab_item: Attempting to grab an item
+    root_request_0: 'Invalid request: attempted to retrieve zero items'
+    root_limiting_access_output: Network output access was rate-limited
+    root_limiting_access_input: Network input access was rate-limited
+    too_many_entities: Too many nearby entities
+    no_target_location: No target location configured
+    no_target_network_found: Target network not found
+    same_network: Items cannot be sent to the same network
+    no_menu: Menu not found
+    unsupported_blueprint: Unsupported blueprint
+    broken_blueprint: The blueprint is damaged
+    no_location_found: Location not found
+    no_enough_items: Not enough items
+    cannot_access_code: Unable to access the required code
+  blueprint:
+    title: <click_info>Encoded Recipe
+    empty: <passive>Empty
+    output: <click_info>Output Item
+  data-saving:
+    saving-drawer: Saving Network Drawer data...
+    saved-drawer: Network Drawer data saved successfully.
+    error-occurred-when-creating-data-folder: Unable to create the Networks data folder.
+    error-occurred-when-saving-new-data: 'An error occurred while saving new storage data:'
+    error-occurred-when-updating-environment-var: 'An error occurred while updating environment data:'
+    error-occurred-when-loading-data: 'An error occurred while loading storage data:'
+    error-occurred-when-saving-itemstack: 'An error occurred while saving an item:'
+    error-occurred-when-updating-container-data: 'An error occurred while updating container data:'
+    error-occurred-when-updating-storage: 'An error occurred while updating storage:'
+    error-occurred-when-fixing-data: 'An error occurred while repairing container data:'
+    error-occurred-when-loading-itemstack: 'An error occurred while loading an item:'
+    error-occurred-when-loading-environment-var: 'An error occurred while loading environment data:'
+    error-occurred-when-loading-storage: 'An error occurred while loading stored items:'
+    error-occurred-when-executing-query: 'An error occurred while executing a data query:'
+  debug:
+    info: '%s - %s'
+    viewer-info: <warning>%s - %s
+    toggle-debug: '<success>Debug mode for this block is now: %s.'
+    enabled-debug: <success>Debug mode remains enabled until it is manually disabled or the server stops.
+    wildchests: 'WildChests installed: %s'
+    ischest: 'WildChests identifies this block as a chest: %s'
+    wildchests-trigger-success: WildChests integration test succeeded.
+    wildchests-trigger-failed: WildChests integration test failed.
+    status_view: 'Location %s reported: %s'
+  commands:
+    no-permission: '&cYou do not have permission to use this command!'
+    no-item-in-hand: '&cYou must hold an item in your hand!'
+    missing-required-argument: '&cMissing required argument: <%s>'
+    invalid-required-argument: '&cInvalid required argument: <%s>'
+    invalid-argument: '&cInvalid argument: <%s>'
+    must-be-player: '&cThis command can only be used by a player!'
+    unknown-error: '&cAn unknown error occurred!'
+    must-admin-debuggable: '&cYou must look at an AdminDebuggable block to use this command!'
+    viewer-added: '&aYou were added to this block''s diagnostic viewers.'
+    viewer-removed: '&aYou were removed from this block''s diagnostic viewers.'
+    invalid-quantum-storage: <error>This is not a valid Quantum Storage.
+    must-look-at-quantum-storage: '&cYou must look at a Network Quantum Storage!'
+    must-look-at-drawer: '&cYou must look at a Network Drawer!'
+    invalid-drawer: <error>This Network Drawer is missing or damaged.
+    updated-drawer: '&aThe stored item was updated.'
+    must-hand-item: '&cYou must hold an item to use this command!'
+    must-hand-blueprint: <error>You must hold a Crafting Blueprint.
+    invalid-blueprint: <error>Unable to read the blueprint data.
+    fixed-blueprint: <success>The blueprint was repaired.
+    updated-quantum-storage: <success>The stored item was updated.
+    must-hand-quantum-storage: <error>You must hold a Quantum Storage.
+    no-set-item: <error>This Quantum Storage has no item assigned or is damaged.
+    not-a-slimefun-item: <error>This is not a Slimefun item.
+    cannot-update-cargo-storage-unit: <error>Updating Network Drawers is not supported here.
+    updated-item: <success>The item was updated.
+    updated-item-in-quantum-storage: <success>The stored item was updated!
+    wait-for-data: <green>Data requested. Please wait...
+    set-container-id: '&aSet the Network Drawer at %s to container ID %s.'
+    invalid-slot-index: <error>The slot must be between 0 and %s!
+    empty-slot: <error>That slot is empty!
+    selected-area-outline-hide-request: '&aRequested that the selected-area outline be hidden.'
+    selected-area-outline-show-request: '&aRequested that the selected-area outline be shown.'
+    clear-selected-pos: '&aCleared the selected positions.'
+    help:
+    - '&6Networks command help:'
+    - '&6/networks help - Show this help message.'
+    - '&6/networks fillquantum <amount> - Set the amount stored in the Quantum Storage held in your hand.'
+    - '&6/networks fixblueprint <keyInMeta> - Repair the Crafting Blueprint held in your hand.'
+    - '&6/networks addstorageitem <amount> - Add the held item to the Network Drawer you are looking at.'
+    - '&6/networks reducestorageitem <amount> - Remove items from the Network Drawer you are looking at.'
+    - '&6/networks setquantum <amount> - Set the item and amount in the Quantum Storage you are looking at.'
+    - '&6/networks setcontainerid <containerId> - Set a Network Drawer''s container ID.'
+    - '&6/networks updateitem - Update the item held in your hand.'
+    - '&6/networks getstorageitem <slot> - Get an item from a slot in the Network Drawer you are looking at.'
+    - '&6/networks viewlog - View diagnostic output from the AdminDebuggable block you are looking at.'
+    example:
+      help:
+      - '&6/networks help - Show command help.'
+      - '&6ex: /networks help'
+      fillquantum:
+      - '&6/networks fillQuantum <amount> - Set the held Quantum Storage amount.'
+      - '&6ex: /networks fillQuantum 1000'
+      fixblueprint:
+      - '&6/networks fixBlueprint <keyInMeta> - Repair the held Crafting Blueprint.'
+      - '&6ex: /networks fixBlueprint networks-changed'
+      addstorageitem:
+      - '&6/networks addStorageItem <amount> - Add held items to the targeted Network Drawer.'
+      - '&6ex: /networks addstorageItem 1000'
+      reducestorageitem:
+      - '&6/networks reduceStorageItem <amount> - Remove items from the targeted Network Drawer.'
+      - '&6ex: /networks reduceStorageItem 1000'
+      setquantum:
+      - '&6/networks setQuantum <amount> - Set the targeted Quantum Storage item and amount.'
+      - '&6ex: /networks setQuantum 1000'
+      setcontainerid:
+      - '&6/networks setContainerId <containerId> - Set the targeted Network Drawer''s ID.'
+      - '&6ex: /networks setContainerId 6'
+      getstorageitem:
+      - '&6/networks getStorageItem <slot> - Get an item from the targeted Network Drawer.'
+      - '&6ex: /networks getStorageItem 0'
+      updateitem:
+      - '&6/networks updateItem - Update the held item.'
+      - '&6ex: /networks updateItem'
+      viewlog:
+      - '&6/networks viewLog - View diagnostic output from the targeted block.'
+      - '&6ex: /networks viewLog'
+      unknown-command:
+      - <error>Unknown command. Use /networks help for assistance.
+  normal-operation:
+    common:
+      page: Page
+      crafter_types:
+        ancient_altar: Ancient Altar
+        armor_forge: Armor Forge
+        compressor: Compressor
+        crafting: Crafting Table
+        expansion_workbench: Networks Expansion Workbench
+        grind_stone: Grind Stone
+        juicer: Juicer
+        magic_workbench: Magic Workbench
+        ore_crusher: Ore Crusher
+        pressure_chamber: Pressure Chamber
+        quantum_workbench: Network Quantum Workbench
+        smeltery: Smeltery
+        ae: Advanced Enchantments
+    quantum_cache:
+      empty: Empty
+      stored_item: '<click_info>Stored item: %s'
+      stored_amount: '<click_info>Stored amount: <white>%s'
+      custom_max_limit: '<click_info>Capacity limit: <error>%s'
+    memory_card:
+      empty: <warning>Empty
+    item_mover:
+      stored_item: '&bStored item: %s'
+      stored_amount: '&bStored amount: %s'
+      suggest_use_drawers: '&cUse the Network Drawer''s quick-transfer mode.'
+    quantum_storage:
+      waiting_for_input_custom_max_amount: <passive>[<gold>Networks Expansion<passive>] <warning>Enter a capacity from 1 to
+        140737488355328.
+      waiting_for_input_custom_max_amount_new: <passive>[<gold>Networks Expansion<passive>] <warning>Enter a capacity from
+        1 to 140737488355328.
+    grid:
+      waiting_for_filter: <warning>Enter an item display name or material to filter by.
+      item_amount: '{0}Amount: {1}{2}'
+      filter: '&aCurrent search: %s'
+    grid_new_style:
+      click_to_withdraw: <passive>Click to withdraw this item
+      crafted: '<success>Last crafted: <click_info>%s x%s'
+    directional:
+      limit_quantity: '<random_color>Transfer amount: %s'
+      transport_mode: '<random_color>Transfer mode: %s'
+      display_empty: '&7Set direction: %s'
+      display_name: '<passive>Direction: %s (%s)'
+      preset_display_name: '<passive>Click to preset direction: %s'
+      display_lore:
+      - '<click_info>Left-click: <passive>Set direction'
+      - '<click_info>Shift + Left-click: <passive>Open the target block'
+      set_facing: <success>Direction set to this inventory.
+    manager:
+      set_name: '<passive>Enter a name: '
+      id: '<passive>ID: %s'
+      location: <click_info>%s:%s:%s
+      advance: '<passive>Advanced crafter: %s'
+      crafter_type: '<passive>Crafter type: %s'
+      true: '&a✔'
+      false: '&c✘'
+      quantum-manager-click-behavior:
+      - '<click_info>Left-click: <passive>Open storage'
+      - '<click_info>Left-click while holding an item: <passive>Set the storage item'
+      - '<click_info>Right-click: <passive>Highlight storage'
+      - '<click_info>Shift + Left-click: <passive>Pin or unpin storage'
+      - '<click_info>Shift + Right-click: <passive>Rename storage'
+      - '<click_info>Shift + Right-click while holding an item: <passive>Set the display icon'
+      drawer-manager-click-behavior:
+      - '<click_info>Left-click: <passive>Open storage'
+      - '<click_info>Right-click: <passive>Highlight storage'
+      - '<click_info>Shift + Left-click: <passive>Pin or unpin storage'
+      - '<click_info>Shift + Right-click: <passive>Rename storage'
+      - '<click_info>Shift + Right-click while holding an item: <passive>Set the display icon'
+      crafter-manager-click-behavior:
+      - '<click_info>Left-click: <passive>Open the crafter'
+      - '<click_info>Right-click: <passive>Highlight the crafter'
+      - '<click_info>Shift + Left-click: <passive>Pin or unpin the crafter'
+      - '<click_info>Shift + Right-click: <passive>Rename the crafter'
+      - '<click_info>Q: <passive>Remove this crafter from the manager'
+      - '<click_info>Shift + Q: <passive>Clear the assigned blueprint'
+      - '<click_info>Middle-click: <passive>Set the display icon'
+    viewer:
+      location: '&7%s:%s:%s'
+      when: '&7Time: %s'
+      change: '%s'
+      item-flow-viewer-click-behavior:
+      - '<click_info>Click: <passive>View item-flow details'
+      item-flow-viewer-sub-click-behavior:
+      - '<click_info>Click: <passive>Return to the item-flow overview'
+      linker-grid-click-behavior:
+      - '<click_info>Click: <passive>Open the linked storage'
+    comprehensive:
+      auto_set_face: Automatically set direction
+  completed-operation:
+    directional:
+      presetted_facing: '<success>Saved preset direction: %s'
+      presetted: '<success>Preset direction changed to: %s'
+      presetted_failed: <warning>No compatible machine was found for this direction preset.
+    comprehensive:
+      toggled_filter_mode: '<success>Filter mode changed to: %s'
+      filter_mode_black_list: Blacklist
+      filter_mode_white_list: Whitelist
+      toggled_match_mode: '<success>Match mode changed to: %s'
+      match_mode_all_match: Exact item match
+      match_mode_material_match: Material-only match
+      facing_preset_applied: <success>Direction preset applied automatically.
+    status_viewer:
+      subscribed: <success>Now watching machine (%s).
+      unsubscribed: <success>Stopped watching machine (%s).
+      is_networks_object: <success>This is a Networks node.
+      not_networks_object: <warning>This is not a Networks node.
+      connected_to_network: <success>Connected to a network.
+      not_connected_to_network: <warning>Not connected to a network.
+    decoder:
+      decode_blueprint_success: '&aBlueprint decoded successfully.'
+    wireless_configurator:
+      transmitter_linked: <success>Wireless Transmitter linked.
+      receiver_set: <success>Wireless Receiver location saved.
+      set_location: Set machine %s target location to %s.
+    cargo_node_quick_tool:
+      node_set: '&9Stored node type: %s'
+      config_saved: '&aCargo node configuration loaded.'
+      pasted_config: '&aCargo node configuration applied.'
+    grid:
+      filter_set: <success>Search filter enabled.
+      sort_orders:
+        alphabetical: Sort alphabetically
+        number: Sort by item amount
+        number_reverse: Sort by item amount, descending
+        addon: Sort alphabetically by addon
+    quantum_storage:
+      changed_custom_max_amount: '<passive>[<gold>Networks Expansion<passive>] <success>Capacity changed to: %s'
+    remote:
+      bound_to_grid: <success>Network Grid bound to this remote.
+    probe:
+      split: '------------------------------'
+      networks_title: '         Networks - Node Statistics         '
+      expansion_title: '    Networks Expansion - Node Statistics    '
+      distinct_items: Distinct item types
+      total_items: Total stored items
+      total_nodes: 'Total nodes: %s/%s'
+      overburdened: '<error>Warning: <passive>This network reached its node limit. Some nodes may stop working; remove unnecessary
+        nodes.'
+    crayon:
+      enabled: <success>Network particles enabled.
+      disabled: <warning>Network particles disabled.
+    configurator:
+      copied: <success>Configuration copied.
+      copied_limit_quantity: '<success>Saved transfer amount: %s'
+      pasted_limit_quantity: '<success>Applied transfer amount: %s'
+      copied_transport_mode: '<success>Saved transfer mode: %s'
+      pasted_transport_mode: '<success>Applied transfer mode: %s'
+      pasted_facing: '<success>Direction: <passive>Applied successfully.'
+      pasted_item: '<success>Item [%s]: <passive>Added to the filter.'
+    drawer:
+      bound_id: '&9Bound container ID: &e%s'
+      server-uuid: '&7Server ID: %s'
+      deposited_item: '&aItem deposited.'
+      transferred_to_quantum_storage: '&aTransferred to Quantum Storage.'
+      transferred_to_drawer: '&aDeposited %sx%s into the Network Drawer.'
+      transferred_to_item_mover: '&aTransferred %sx%s into the Item Mover.'
+    item_mover:
+      deposit_success: Stored %sx%s in the Item Mover.
+      withdraw_success: Transferred %sx%s into storage.
+    manager:
+      top_storage_off: <warning>Storage unpinned.
+      top_storage_on: <success>Storage pinned.
+      set_icon: <success>Display icon updated.
+      set_name: <success>Name updated.
+    manual_crafter:
+      success: '&aCrafting completed.'
+    storage_card_converter:
+      success: '&aStorage Card conversion completed.'
+    viewer:
+      linked-stack: '&aEntangled-link history refreshed.'
+  unsupported-operation:
+    incompatible-jeg-version: <error>Your JustEnoughGuide version is too old. Install the latest compatible build.
+    storage_card_converter:
+      final_tech_required: <error>FinalTECH or FinalTECH-Changed is required to use this machine.
+      research_required: <error>You have not unlocked the Storage Card research.
+      card_disabled: <error>Storage Cards are disabled in this world.
+      output_full: <error>The output slot is full.
+      no_quantum_storage: <error>Insert a Quantum Storage.
+      quantum_storage_not_single: <error>Insert exactly one Quantum Storage.
+      not_quantum_storage: <error>The inserted item is not a Quantum Storage.
+      too_few_items: <error>The Quantum Storage does not contain enough items.
+      not_target_item: <error>The stored item cannot be converted into a Storage Card.
+    controller:
+      cancel_place: <error>This network already has a Network Controller.
+    comprehensive:
+      cancel_place: <error>Two Network Controllers cannot be connected.
+      no_permission: '&cYou do not have permission to use this item.'
+      invalid_queue: Unable to queue this task. Restart the server and try again.
+      unable_to_auto_set_face: '&cUnable to set a direction automatically at x:{} y:{} z:{}.'
+    decoder:
+      no_input: '&cInsert a Crafting Blueprint.'
+      not_blueprint: '&cThe inserted item is not a Crafting Blueprint.'
+      unsupported_blueprint: '&cThis blueprint type is not supported.'
+      invalid_blueprint: '&cThis item does not contain valid blueprint data.'
+      output_full: '&cClear the output slot first.'
+    storage_unit_upgrade_table:
+      no_recipe_match: '&cNo matching upgrade recipe was found.'
+    wireless_configurator:
+      not_network_wireless_block: <error>Use this tool on a Networks wireless block.
+      no_target_location: <error>Set a receiver location first.
+      not_same_world: <error>The Wireless Receiver is in another world.
+    item_mover:
+      invalid_item_mover: '&cThis is not a valid Item Mover.'
+      invalid_storage: '&cSelect a valid storage device.'
+      empty_storage: '&cThe storage contains no available items.'
+      invalid_item: '&cUnable to read the stored item.'
+      empty_mover: '&cThe Item Mover is empty.'
+      full_storage: '&cThe target storage is full.'
+      suggest_use_drawers: '&cUse this item inside the Network Drawer interface.'
+    encoder:
+      not_enough_power: <warning>The network does not have enough power to encode this recipe.
+      invalid_blueprint: <warning>Insert a valid blank Crafting Blueprint.
+      disabled_blueprint: <warning>This blueprint is disabled.
+      disabled_output: <warning>This recipe output is disabled.
+      invalid_recipe: <warning>The arranged items do not form a valid recipe.
+      output_full: <warning>Clear the output slot first.
+    cargo_node_quick_tool:
+      invalid_tool: '&cThis tool is invalid. Do not use it in a stack.'
+      invalid_node: '&cLook at a Cargo node first.'
+      not-enough-items: '&cYou do not have enough materials.'
+      node-type-not-same: '&cThe saved node type does not match the target node.'
+      no-config: '&cLoad a Cargo node configuration first.'
+    display:
+      unknown_type: Unknown display group type '%s'; custom models were disabled.
+    memory_card:
+      blacklisted_item: <warning>This item cannot be stored on a Memory Card.
+      invalid_amount: <warning>Use one Memory Card at a time; do not stack them.
+      not_empty: <warning>Only an empty Memory Card can be assigned a new item.
+    can_cooldown: <warning>The Network Probe is still cooling down.
+    drawer:
+      wrong_server: '<warning>Use this item on the correct server. Drawer server: %s; current server: %s.'
+      already_exists: '&cThis container already exists at another location.'
+      invalid_container: '&cInsert a Quantum Storage or Item Mover into the storage slot.'
+      invalid_container_amount: '&cOnly one item may be placed in the storage slot.'
+      invalid_chosen_item: '&cPlace the item you want to transfer in the selection slot.'
+      invalid_quantum_storage: '&cThe Quantum Storage is empty, invalid, or damaged.'
+      quantum_storage_item_mismatch: '&cThe Quantum Storage contains a different item.'
+      quantum_storage_full: '&cThe Quantum Storage cannot provide or accept the requested amount.'
+      not_enough_item: '&cThis container does not have enough items to transfer.'
+      each_not_enough_item: '&cThere are no more items available to transfer.'
+      not_found_chosen_item: '&cItem not found: %s'
+      item_mover_empty: '&cThe Item Mover contains no items.'
+      item_mover_item_mismatch: '&cThe Item Mover contains a different item.'
+    directional:
+      unexcepted_value: 'Unexpected value: %s'
+    remote:
+      must_connect_to_grid: <error>Bind this remote to a Network Grid first.
+      not_a_grid_found: <error>Unable to find the bound Network Grid.
+      grid_not_in_range: <error>The bound Network Grid is out of range.
+      no_grid_bound: <error>This remote is not bound to a Network Grid.
+      grid_not_loaded: <error>The bound Network Grid's chunk is not loaded.
+    quantum_storage:
+      quantum_storage_not_empty: <warning>Quantum Storage must be empty before changing its stored item.
+      custom_max_amount_not_supported: <warning>This is not a valid Advanced Quantum Storage.
+      invalid_custom_max_amount: <passive>[<gold>Networks Expansion<passive>] <error>The capacity must be from 1 to 140737488355328.
+      invalid_custom_max_amount_new: <passive>[<gold>Networks Expansion<passive>] <error>The capacity must be from 1 to 140737488355328.
+      may_duping: Player '%s' attempted an unsafe Quantum Storage operation at %s. The action was blocked.
+      dangerous_operation: '<error>Unsafe configuration blocked: do not connect Quantum Storage and a Network Cell to the
+        same operation.'
+    configurator:
+      not_a_copyable_block: <error>This block has no direction configuration to copy.
+      not_a_pasteable_block: <error>Look at a directional Networks block before pasting.
+      facing_not_found: '<error>Direction: <passive>Not provided.'
+      not_enough_items: '<warning>Item [%s]: <passive>Not enough items to fill the filter.'
+      no_item_configured_pusher: '<warning>Item [%s]: <passive>No item was saved in this pusher configuration.'
+      no_item_configured: '<warning>Item: <passive>No item was saved in this configuration.'
+    debugger:
+      player_is_not_op: <error>Only server operators may use this item.
+    quantum_workbench:
+      output_slot_full: <warning>Clear the output slot first.
+    grid:
+      may_duping: Player '%s' attempted to open a Network Grid from an invalid node at %s. The action was blocked.
+    manager:
+      support_quantum_only: '&cThis operation only supports Network Quantum Storage.'
+      quantum_storage_not_empty: <warning>The Network Quantum Storage must be empty before changing its item.
+    manual_crafter:
+      disabled-output: '&cThis recipe output is disabled.'
+      full-output: '&cThe output slot is full.'
+    crafter_manager:
+      different_type_1: '&cThe stored blueprint does not match this crafter type.'
+      different_type_2: '&cStored type: %s; &aExpected type: %s'
+    viewer:
+      location-not-found: '&cUnable to find this item''s location.'
+      link-stack-not-found: '&cNot enough Hyperlinks or Quantum Entangled Singularities are available.'
+      no-permission: '&cYou do not have permission to access that storage block.'
+      cannot-access-code: '&cThe required integration code is unavailable; the setting was not changed.'
+      not-initialized: '&cUnable to initialize the integration. Contact the plugin maintainer.'
+  super-head:
+  - ============================================================
+  - Networks Expansion - Slimefun Legacy Edition
+  - Original project by Sefiraat
+  - Expansion development by the NetworksExpansion contributors
+  - 'Legacy maintenance: https://github.com/wickidcow/SF_NetworksExp'
+  - Always stop the server normally to protect stored network data.
+  - ============================================================
+  depend:
+    not-found-guizhanlib: GuizhanLibPlugin was not found.
+    suggest-download-guizhanlib: This Legacy build no longer requires GuizhanLibPlugin for updates.
+    suggest-download-newer-slimefun: Install the supported Slimefun Legacy release.
+  startup:
+    loaded-language: Loaded language file.
+    getting-config: Loading configuration...
+    trying-auto-update: Automatic updates are disabled in the Slimefun Legacy fork.
+    connecting-database: Connecting to the Networks database...
+    failed-to-connect-database: Failed to connect to the Networks database.
+    creating-query-queue: Starting the database query queue...
+    creating-auto-save-thread: Starting the drawer auto-save task...
+    registering-items: Registering Networks items...
+    registering-listeners: Registering Networks listeners...
+    registering-commands: Registering Networks commands...
+    enabled-successfully: Networks enabled successfully.
+  shutdown:
+    saving-config: Saving Networks configuration...
+    disconnecting-database: Closing the Networks database...
+    saving-data: Waiting for %s pending data operations...
+    saved-all-data: All Networks data was saved.
+    disabled-successfully: Networks disabled successfully.
+  integrations:
+    found-slimehud: SlimeHUD detected; registering Networks HUD support.
+    not-found-slimehud: Update SlimeHUD to use Networks HUD support.
+    found-netheopoiesis: Netheopoiesis detected; registering integration items.
+    not-found-netheopoiesis: Netheopoiesis is required for these integration items.
+    slimehud:
+      empty_quantum_storage: '&7| Empty'
+    netheopoiesis:
+      dirt_tips: (or a higher purification tier)
+      dirt_level:
+        highest: Nether Grass Block
+        high: Greedy Dirt
+      stone_chunk_seed:
+        name: Stone Chunk Seed
+        lore:
+        - When fully grown,
+        - this plant yields Stone Chunks.
+      synthetic_seed:
+        name: Synthetic Seed
+        lore:
+        - This seed has no special effect.
+      synthetic_emerald_seed:
+        name: Synthetic Emerald Seed
+        lore:
+        - When fully grown,
+        - this plant yields Synthetic Emeralds.
+      synthetic_diamond_seed:
+        name: Synthetic Diamond Seed
+        lore:
+        - When fully grown,
+        - this plant yields Synthetic Diamonds.
+      fragmented_seed:
+        name: Fragmented Seed
+        lore:
+        - When fully grown,
+        - this plant yields Synthetic Emerald Shards.
+  save-all: Saving Networks data.
+icons:
+  keybind-settings:
+    name: Keybind Settings
+  light-gray-background:
+    name: Light Gray Background
+  yellow-border:
+    name: Yellow Border
+  upload-keybind-script:
+    name: Upload Keybind Script
+  gray-background:
+    name: Gray Background
+  script-center:
+    name: Script Center
+  return-ingredient:
+    name: Return Ingredient
+  return-output:
+    name: Return Output
+  craft:
+    name: Craft
+    lore:
+    - <click_info>Networks interface control.
+  keybinds:
+    scripts:
+      display:
+        name: '&6%s''s Keybind Script%s (#%s)'
+        lore:
+        - '&aNetworks interface control.'
+    store-item:
+      name: Store Item
+    do-nothing:
+      name: Do Nothing
+    hanginggridnewstyle-display-keybinds:
+      name: Hanginggridnewstyle Display Keybinds
+    networkgridnewstyle-display-keybinds:
+      name: Networkgridnewstyle Display Keybinds
+    networkcraftinggridnewstyle-display-keybinds:
+      name: Networkcraftinggridnewstyle Display Keybinds
+    smartnetworkcraftinggridnewstyle-display-keybinds:
+      name: Smartnetworkcraftinggridnewstyle Display Keybinds
+    outside-keybinds:
+      name: Outside Keybinds
+    smart-outside-keybinds:
+      name: Smart Outside Keybinds
+    clicked-item-not-equals-to-cursor:
+      name: Clicked Item Not Equals To Cursor
+    store-cursor:
+      name: Store Cursor
+    left-click:
+      name: Left Click
+    right-click:
+      name: Right Click
+    shift-click:
+      name: Shift Click
+    shift-left-click:
+      name: Shift Left Click
+    shift-right-click:
+      name: Shift Right Click
+    one-cursor:
+      name: One Cursor
+    stack-cursor:
+      name: Stack Cursor
+    stack-inv:
+      name: Stack Inv
+    one-inv:
+      name: One Inv
+    custom-cursor:
+      name: Custom Cursor
+    custom-inv:
+      name: Custom Inv
+    ask-cursor:
+      name: Ask Cursor
+    ask-inv:
+      name: Ask Inv
+    hanginggridnewstyle-store-cursor:
+      name: Hanginggridnewstyle Store Cursor
+    hanginggridnewstyle-one-cursor:
+      name: Hanginggridnewstyle One Cursor
+    hanginggridnewstyle-stack-cursor:
+      name: Hanginggridnewstyle Stack Cursor
+    hanginggridnewstyle-stack-inv:
+      name: Hanginggridnewstyle Stack Inv
+    hanginggridnewstyle-one-inv:
+      name: Hanginggridnewstyle One Inv
+    hanginggridnewstyle-custom-cursor:
+      name: Hanginggridnewstyle Custom Cursor
+    hanginggridnewstyle-custom-inv:
+      name: Hanginggridnewstyle Custom Inv
+    hanginggridnewstyle-ask-cursor:
+      name: Hanginggridnewstyle Ask Cursor
+    hanginggridnewstyle-ask-inv:
+      name: Hanginggridnewstyle Ask Inv
+    networkgridnewstyle-store-cursor:
+      name: Networkgridnewstyle Store Cursor
+    networkgridnewstyle-one-cursor:
+      name: Networkgridnewstyle One Cursor
+    networkgridnewstyle-stack-cursor:
+      name: Networkgridnewstyle Stack Cursor
+    networkgridnewstyle-stack-inv:
+      name: Networkgridnewstyle Stack Inv
+    networkgridnewstyle-one-inv:
+      name: Networkgridnewstyle One Inv
+    networkgridnewstyle-custom-cursor:
+      name: Networkgridnewstyle Custom Cursor
+    networkgridnewstyle-custom-inv:
+      name: Networkgridnewstyle Custom Inv
+    networkgridnewstyle-ask-cursor:
+      name: Networkgridnewstyle Ask Cursor
+    networkgridnewstyle-ask-inv:
+      name: Networkgridnewstyle Ask Inv
+    networkcraftinggridnewstyle-store-cursor:
+      name: Networkcraftinggridnewstyle Store Cursor
+    networkcraftinggridnewstyle-one-cursor:
+      name: Networkcraftinggridnewstyle One Cursor
+    networkcraftinggridnewstyle-stack-cursor:
+      name: Networkcraftinggridnewstyle Stack Cursor
+    networkcraftinggridnewstyle-stack-inv:
+      name: Networkcraftinggridnewstyle Stack Inv
+    networkcraftinggridnewstyle-one-inv:
+      name: Networkcraftinggridnewstyle One Inv
+    networkcraftinggridnewstyle-custom-cursor:
+      name: Networkcraftinggridnewstyle Custom Cursor
+    networkcraftinggridnewstyle-custom-inv:
+      name: Networkcraftinggridnewstyle Custom Inv
+    networkcraftinggridnewstyle-ask-cursor:
+      name: Networkcraftinggridnewstyle Ask Cursor
+    networkcraftinggridnewstyle-ask-inv:
+      name: Networkcraftinggridnewstyle Ask Inv
+    smartnetworkcraftinggridnewstyle-store-cursor:
+      name: Smartnetworkcraftinggridnewstyle Store Cursor
+    smartnetworkcraftinggridnewstyle-one-cursor:
+      name: Smartnetworkcraftinggridnewstyle One Cursor
+    smartnetworkcraftinggridnewstyle-stack-cursor:
+      name: Smartnetworkcraftinggridnewstyle Stack Cursor
+    smartnetworkcraftinggridnewstyle-stack-inv:
+      name: Smartnetworkcraftinggridnewstyle Stack Inv
+    smartnetworkcraftinggridnewstyle-one-inv:
+      name: Smartnetworkcraftinggridnewstyle One Inv
+    smartnetworkcraftinggridnewstyle-custom-cursor:
+      name: Smartnetworkcraftinggridnewstyle Custom Cursor
+    smartnetworkcraftinggridnewstyle-custom-inv:
+      name: Smartnetworkcraftinggridnewstyle Custom Inv
+    smartnetworkcraftinggridnewstyle-ask-cursor:
+      name: Smartnetworkcraftinggridnewstyle Ask Cursor
+    smartnetworkcraftinggridnewstyle-ask-inv:
+      name: Smartnetworkcraftinggridnewstyle Ask Inv
+  filter-mode-black-list:
+    name: Filter Mode Black List
+    lore:
+    - '&7Click to configure the item search filter.'
+  filter-mode-white-list:
+    name: Filter Mode White List
+    lore:
+    - '&7Click to configure the item search filter.'
+  match-mode-all-match:
+    name: Match Mode All Match
+    lore:
+    - '&7Networks interface control.'
+  match-mode-material-match:
+    name: Match Mode Material Match
+    lore:
+    - '&7Networks interface control.'
+  advanced-vacuum-split-block:
+    name: Advanced Vacuum Split Block
+    lore:
+    - Networks interface control.
+  jeg-button:
+    name: JEG Button
+    lore:
+    - '&7Networks interface control.'
+  item-flow-viewer-force-clean:
+    name: Item Flow Viewer Force Clean
+    lore:
+    - '&7Networks interface control.'
+  item-flow-viewer-back-to-main:
+    name: Item Flow Viewer Back To Main
+    lore:
+    - '&7Click to return to the previous menu.'
+  unknown-item:
+    name: Unknown Item
+    lore:
+    - '&7Networks interface control.'
+  craft-button-stack-6x6:
+    name: Craft Button Stack 6X6
+    lore:
+    - Networks interface control.
+  craft-button-stack-3x3:
+    name: Craft Button Stack 3X3
+    lore:
+    - Networks interface control.
+  craft-button:
+    name: Craft Button
+    lore:
+    - <click_info>Networks interface control.
+  craft-button-new-style:
+    name: Craft Button New Style
+    lore:
+    - <click_info>Networks interface control.
+  docs_icon:
+    click_to_visit_wiki: Click To Visit Wiki
+    name: Docs Icon
+    lore:
+    - Networks interface control.
+  transport_mode:
+    none: None
+    null_only: Null Only
+    nonnull_only: Nonnull Only
+    first_only: First Only
+    last_only: Last Only
+    first_stop: First Stop
+    lazy: Lazy
+    void: Clearmode
+    specified_quantity: Specified Quantity
+    p2p: P2P
+  mechanism:
+    transfers:
+      data_title: '&aData Title'
+      max_distance: '&7Max Distance %s'
+      push_item_tick: '&7Push Item Tick %s'
+      grab_item_tick: '&7Grab Item Tick %s'
+      required_power: '&7Required Power %s'
+    advanced_purger:
+      name: Advanced Purger
+      lore:
+      - Networks interface control.
+    import:
+      name: Importer
+      lore:
+      - '&7Networks interface control.'
+    export:
+      name: Exporter
+      lore:
+      - Networks interface control.
+  drawer:
+    click_to_disable: '&eClickDisable'
+    click_to_enable: '&eClickEnable'
+    stored_item: '&bstorageAmount: &e%s &7/ &6%s'
+    storage_info:
+      enabled: '&a✔'
+      disabled: '&4✘'
+      name: Storage Information
+      id: '&binventoryID: &a%s'
+      type_count: '&bType Count %s %s'
+      max_each: '&bMax Each %s %s'
+      locked: '&bLocked %s'
+      void_excess: '&bVoid Excess %s'
+    content_lock:
+      locked: '&cLocked'
+      unlocked: '&aUnlocked'
+      name: Content Lock
+      lore_before_status:
+      - Networks interface control.
+      status: '&bStatus: %s'
+      lore_after_status:
+      - Networks interface control.
+    void_excess:
+      enabled: '&aEnabled'
+      disabled: '&cDisabled'
+      name: Void Excess
+      lore_before_status:
+      - Networks interface control.
+      status: '&bStatus: %s'
+      lore_after_status:
+      - Networks interface control.
+    quick_transfer:
+      name: Quick Transfer
+      lore_before_status:
+      - Networks interface control.
+      status: '&bStatus: %s'
+      lore_after_status:
+      - Networks interface control.
+      from_quantum: '&aFrom Quantum'
+      to_quantum: '&aTo Quantum'
+    location_error:
+      name: Location Error
+      lore_before_info:
+      - Networks interface control.
+      id: '&binventoryID: &a%s'
+      world: '&bWorld %s'
+      location: '&bLocation %s %s %s'
+      unknown: Unknown
+  power_display:
+    status_title: <click_info>Status
+    charge: '<passive>networkpower: %sJ'
+  output-background-stack:
+    name: Output Background Stack
+    lore:
+    - Click to return to the previous menu.
+  blueprint-background-stack:
+    name: Blueprint Background Stack
+    lore:
+    - Click to return to the previous menu.
+  blueprint-back-stack:
+    name: Blueprint Back Stack
+    lore:
+    - Click to return to the previous menu.
+  encode-stack:
+    name: Encode Stack
+    lore:
+    - Networks interface control.
+  blank-slot-stack:
+    name: Blank Slot Stack
+    lore:
+    - Networks interface control.
+  page-previous-stack:
+    name: Page Previous Stack
+    lore:
+    - Click to open the previous page.
+  page-next-stack:
+    name: Page Next Stack
+    lore:
+    - Click to open the next page.
+  change-sort-stack:
+    name: Change Sort Stack
+    lore:
+    - Click to change the sorting mode.
+  filter-stack:
+    name: Filter Stack
+    lore:
+    - Click to configure the item search filter.
+  display-mode-stack:
+    name: Display Mode Stack
+    lore:
+    - <click_info>Networks interface control.
+  history-mode-stack:
+    name: History Mode Stack
+    lore:
+    - <click_info>Networks interface control.
+  minus-icon:
+    name: Minus Icon
+    lore:
+    - Networks interface control.
+  show-icon:
+    name: Show Icon
+    lore:
+    - <color_random_string>Networks interface control.
+  add-icon:
+    name: Add Icon
+    lore:
+    - Networks interface control.
+  transport-mode-icon:
+    name: Transport Mode Icon
+    lore:
+    - <color_random_string>Networks interface control.
+  pusher-template-background-stack:
+    name: Pusher Template Background Stack
+    lore:
+    - Click to return to the previous menu.
+  background-stack-6x6:
+    name: Background Stack 6X6
+    lore:
+    - Click to return to the previous menu.
+  background-stack-3x3:
+    name: Background Stack 3X3
+    lore:
+    - Click to return to the previous menu.
+  blue-background:
+    name: Blue Background
+    lore:
+    - Click to return to the previous menu.
+  greedy-template-background-stack:
+    name: Greedy Template Background Stack
+    lore:
+    - Click to return to the previous menu.
+  storage-background-stack:
+    name: Storage Background Stack
+    lore:
+    - Click to return to the previous menu.
+  purger-template-background-stack:
+    name: Purger Template Background Stack
+    lore:
+    - Click to return to the previous menu.
+  grabber-template-background-stack:
+    name: Grabber Template Background Stack
+    lore:
+    - Click to return to the previous menu.
+  control-v-template-background-stack:
+    name: Control V Template Background Stack
+    lore:
+    - Click to return to the previous menu.
+  control-x-template-background-stack:
+    name: Control X Template Background Stack
+    lore:
+    - <passive>Click to return to the previous menu.
+  export-template-background-stack:
+    name: Exporter Template Background Stack
+    lore:
+    - Click to return to the previous menu.
+  export-output-background-stack:
+    name: Exporter Output Background Stack
+    lore:
+    - Click to return to the previous menu.
+  power-display-empty:
+    name: Power Display Empty
+    lore:
+    - <passive>Networks interface control.
+  quantum-storage-back-output:
+    name: Quantum Storage Back Output
+    lore:
+    - Click to return to the previous menu.
+  quantum-storage-set-item-supporting-custom-max:
+    name: Quantum Storage Set Item Supporting Custom Max
+    lore:
+    - <passive>Networks interface control.
+  quantum-storage-set-item:
+    name: Quantum Storage Set Item
+    lore:
+    - <passive>Networks interface control.
+  quantum-storage-back-input:
+    name: Quantum Storage Back Input
+    lore:
+    - Click to return to the previous menu.
+  quantum-storage-no-item:
+    name: Quantum Storage No Item
+    lore:
+    - <passive>Networks interface control.
+  quantum-storage-back-item:
+    name: Quantum Storage Back Item
+    lore:
+    - Click to return to the previous menu.
+  quantum-workbench-craft-button-stack:
+    name: Quantum Workbench Craft Button Stack
+    lore:
+    - Networks interface control.
+  received-background-stack:
+    name: Received Background Stack
+    lore:
+    - Click to return to the previous menu.
+  transmitter-template-background-stack:
+    name: Transmitter Template Background Stack
+    lore:
+    - Click to return to the previous menu.
+  due-border-icon:
+    name: Dual Border Icon
+    lore:
+    - Networks interface control.
+  due-input-split-icon:
+    name: Dual Input Split Icon
+    lore:
+    - Place input items here.
+  input-output-split-icon:
+    name: Input Output Split Icon
+    lore:
+    - Place input items here.
+  decode-item:
+    name: Decode Item
+    lore:
+    - '&7Networks interface control.'
+  offset-decrease-icon:
+    name: Offset Decrease Icon
+    lore:
+    - Networks interface control.
+  offset-show-icon:
+    name: Offset Show Icon
+    lore:
+    - '&7Current offset: &e%s'
+  offset-increase-icon:
+    name: Offset Increase Icon
+    lore:
+    - Networks interface control.
+  quick-input:
+    name: Quick Input
+    lore:
+    - '&7Place input items here.'
+  quick-output:
+    name: Quick Output
+    lore:
+    - '&7Processed items appear here.'
+  action-button:
+    name: Action Button
+    lore:
+    - Networks interface control.
+  ae_switcher:
+    name: Ae Switcher
+  diff-button:
+    name: Diff Button
+    lore:
+    - Networks interface control.
+  diff-result-icon:
+    name: Diff Result Icon
+    lore:
+    - Networks interface control.
+  storage-convert-button:
+    name: Storage Convert Button
+    lore:
+    - Networks interface control.
+  item-target-desc-stack:
+    name: Item Target Desc Stack
+    lore:
+    - '&aNetworks interface control.'
+  facing-presetter-help-icon:
+    name: Facing Preset Tool Help Icon
+    lore:
+    - '&aNetworks interface control.'
+  linker-type-hyper-link:
+    name: Linker Type Hyper Link
+    lore:
+    - '&aNetworks interface control.'
+  linker-type-quantum-link:
+    name: Linker Type Quantum Link
+    lore:
+    - '&aNetworks interface control.'
+  recipe-types:
+    expansion_workbench_3x3:
+      name: Expansion Workbench 3X3
+      lore:
+      - Networks interface control.
+    quantum_workbench:
+      name: Quantum Workbench
+      lore:
+      - Networks interface control.
+items:
+  NTW_EXPANSION_ANNOUNCE_1:
+    name: Networks Expansion Information
+    lore:
+    - Information about this Networks Expansion build.
+  NTW_EXPANSION_ANNOUNCE_2:
+    name: Networks Expansion Information
+    lore:
+    - Information about this Networks Expansion build.
+  NTW_EXPANSION_ANNOUNCE_3:
+    name: Networks Expansion Information
+    lore:
+    - Information about this Networks Expansion build.
+  NTW_EXPANSION_ANNOUNCE_4:
+    name: Networks Expansion Information
+    lore:
+    - Information about this Networks Expansion build.
+  NTW_EXPANSION_ANNOUNCE_5:
+    name: Networks Expansion Information
+    lore:
+    - Information about this Networks Expansion build.
+  NTW_EXPANSION_ANNOUNCE_6:
+    name: Networks Expansion Information
+    lore:
+    - Information about this Networks Expansion build.
+  NTW_EXPANSION_ANNOUNCE_7:
+    name: Networks Expansion Information
+    lore:
+    - Information about this Networks Expansion build.
+  NTW_EXPANSION_ANNOUNCE_8:
+    name: Networks Expansion Information
+    lore:
+    - Information about this Networks Expansion build.
+  NTW_EXPANSION_ANNOUNCE_9:
+    name: Networks Expansion Information
+    lore:
+    - Information about this Networks Expansion build.
+  NTW_EXPANSION_ANNOUNCE_10:
+    name: Networks Expansion Information
+    lore:
+    - Information about this Networks Expansion build.
+  NTW_EXPANSION_WORKBENCH:
+    name: Network Expansion Workbench
+    lore:
+    - A component of the Networks Expansion system.
+    - Use the Slimefun guide to learn how Network Expansion Workbench works.
+  NTW_EXPANSION_INFO_TOOL:
+    name: Network Expansion Information Tool
+    lore:
+    - A Networks administration tool for
+    - configuring and inspecting devices.
+  NTW_EXPANSION_ADVANCED_IMPORT:
+    name: Network Expansion Advanced Importer
+    lore:
+    - Moves items from its inventory into
+    - the connected network.
+  NTW_EXPANSION_ADVANCED_EXPORT:
+    name: Network Expansion Advanced Exporter
+    lore:
+    - Moves selected items from the network
+    - into its accessible output inventory.
+  NTW_EXPANSION_ADVANCED_PURGER:
+    name: Network Expansion Advanced Purger
+    lore:
+    - Permanently removes matching items
+    - from the connected network.
+    - Use with care!
+  NTW_EXPANSION_ADVANCED_GREEDY_BLOCK:
+    name: Network Expansion Advanced Greedy Block
+    lore:
+    - Reserves network capacity for a selected
+    - item and rejects excess matching items.
+  NTW_EXPANSION_CAPACITOR_5:
+    name: Network Expansion Capacitor 5
+    lore:
+    - Stores Network power for connected
+    - machines and network operations.
+  NTW_EXPANSION_CAPACITOR_6:
+    name: Network Expansion Capacitor 6
+    lore:
+    - Stores Network power for connected
+    - machines and network operations.
+  NTW_INPUT_ONLY_MONITOR:
+    name: Network Input Only Monitor
+    lore:
+    - Connects an adjacent compatible inventory
+    - to the Networks storage system.
+  NTW_OUTPUT_ONLY_MONITOR:
+    name: Network Output Only Monitor
+    lore:
+    - Connects an adjacent compatible inventory
+    - to the Networks storage system.
+  NTW_EXPANSION_LINE_TRANSFER_PUSHER:
+    name: Network Expansion Line Transfer Pusher
+    lore:
+    - Continuously pushes items into the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_LINE_TRANSFER_MORE_PUSHER:
+    name: Network Expansion Line Transfer Enhanced Pusher
+    lore:
+    - Continuously pushes items into the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_LINE_TRANSFER_BEST_PUSHER:
+    name: Network Expansion Line Transfer Ultimate Pusher
+    lore:
+    - Continuously pushes items into the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_LINE_TRANSFER_GRABBER:
+    name: Network Expansion Line Transfer Grabber
+    lore:
+    - Continuously pulls items from the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_LINE_TRANSFER:
+    name: Network Expansion Line Transfer
+    lore:
+    - Continuously moves items between connected inventories
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_LINE_TRANSFER_PLUS_PUSHER:
+    name: Network Expansion Line Transfer Plus Pusher
+    lore:
+    - Continuously pushes items into the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_LINE_TRANSFER_PLUS_MORE_PUSHER:
+    name: Network Expansion Line Transfer Plus Enhanced Pusher
+    lore:
+    - Continuously pushes items into the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_LINE_TRANSFER_PLUS_BEST_PUSHER:
+    name: Network Expansion Line Transfer Plus Ultimate Pusher
+    lore:
+    - Continuously pushes items into the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_LINE_TRANSFER_PLUS_GRABBER:
+    name: Network Expansion Line Transfer Plus Grabber
+    lore:
+    - Continuously pulls items from the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_LINE_TRANSFER_PLUS:
+    name: Network Expansion Line Transfer Plus
+    lore:
+    - Continuously moves items between connected inventories
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_LINE_TRANSFER_VANILLA_PUSHER:
+    name: Network Expansion Line Transfer Vanilla Pusher
+    lore:
+    - Continuously pushes items into the selected inventory
+    - using the Networks system and vanilla inventories.
+  NTW_EXPANSION_LINE_TRANSFER_VANILLA_GRABBER:
+    name: Network Expansion Line Transfer Vanilla Grabber
+    lore:
+    - Continuously pulls items from the selected inventory
+    - using the Networks system and vanilla inventories.
+  NTW_EXPANSION_ADVANCED_LINE_TRANSFER_PUSHER:
+    name: Network Expansion Advanced Line Transfer Pusher
+    lore:
+    - Continuously pushes items into the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_ADVANCED_LINE_TRANSFER_MORE_PUSHER:
+    name: Network Expansion Advanced Line Transfer Enhanced Pusher
+    lore:
+    - Continuously pushes items into the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_ADVANCED_LINE_TRANSFER_BEST_PUSHER:
+    name: Network Expansion Advanced Line Transfer Ultimate Pusher
+    lore:
+    - Continuously pushes items into the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_ADVANCED_LINE_TRANSFER_GRABBER:
+    name: Network Expansion Advanced Line Transfer Grabber
+    lore:
+    - Continuously pulls items from the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_ADVANCED_LINE_TRANSFER:
+    name: Network Expansion Advanced Line Transfer
+    lore:
+    - Continuously moves items between connected inventories
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_ADVANCED_LINE_TRANSFER_PLUS_PUSHER:
+    name: Network Expansion Advanced Line Transfer Plus Pusher
+    lore:
+    - Continuously pushes items into the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_ADVANCED_LINE_TRANSFER_PLUS_MORE_PUSHER:
+    name: Network Expansion Advanced Line Transfer Plus Enhanced Pusher
+    lore:
+    - Continuously pushes items into the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_ADVANCED_LINE_TRANSFER_PLUS_BEST_PUSHER:
+    name: Network Expansion Advanced Line Transfer Plus Ultimate Pusher
+    lore:
+    - Continuously pushes items into the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_ADVANCED_LINE_TRANSFER_PLUS_GRABBER:
+    name: Network Expansion Advanced Line Transfer Plus Grabber
+    lore:
+    - Continuously pulls items from the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_ADVANCED_LINE_TRANSFER_PLUS:
+    name: Network Expansion Advanced Line Transfer Plus
+    lore:
+    - Continuously moves items between connected inventories
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_ADVANCED_LINE_TRANSFER_VANILLA_GRABBER:
+    name: Network Expansion Advanced Line Transfer Vanilla Grabber
+    lore:
+    - Continuously pulls items from the selected inventory
+    - using the Networks system and vanilla inventories.
+  NTW_EXPANSION_ADVANCED_LINE_TRANSFER_VANILLA_PUSHER:
+    name: Network Expansion Advanced Line Transfer Vanilla Pusher
+    lore:
+    - Continuously pushes items into the selected inventory
+    - using the Networks system and vanilla inventories.
+  NTW_EXPANSION_ADVANCED_LINE_TRANSFER_VANILLA_PLUS_GRABBER:
+    name: Network Expansion Advanced Line Transfer Vanilla Plus Grabber
+    lore:
+    - Continuously pulls items from the selected inventory
+    - using the Networks system and vanilla inventories.
+  NTW_EXPANSION_ADVANCED_LINE_TRANSFER_VANILLA_PLUS_PUSHER:
+    name: Network Expansion Advanced Line Transfer Vanilla Plus Pusher
+    lore:
+    - Continuously pushes items into the selected inventory
+    - using the Networks system and vanilla inventories.
+  NTW_EXPANSION_TRANSFER_PUSHER:
+    name: Network Expansion Transfer Pusher
+    lore:
+    - Continuously pushes items into the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_TRANSFER_MORE_PUSHER:
+    name: Network Expansion Transfer Enhanced Pusher
+    lore:
+    - Continuously pushes items into the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_TRANSFER_BEST_PUSHER:
+    name: Network Expansion Transfer Ultimate Pusher
+    lore:
+    - Continuously pushes items into the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_TRANSFER_GRABBER:
+    name: Network Expansion Transfer Grabber
+    lore:
+    - Continuously pulls items from the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_TRANSFER:
+    name: Network Expansion Transfer
+    lore:
+    - Continuously moves items between connected inventories
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_ADVANCED_TRANSFER_PUSHER:
+    name: Network Expansion Advanced Transfer Pusher
+    lore:
+    - Continuously pushes items into the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_ADVANCED_TRANSFER_MORE_PUSHER:
+    name: Network Expansion Advanced Transfer Enhanced Pusher
+    lore:
+    - Continuously pushes items into the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_ADVANCED_TRANSFER_BEST_PUSHER:
+    name: Network Expansion Advanced Transfer Ultimate Pusher
+    lore:
+    - Continuously pushes items into the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_ADVANCED_TRANSFER_GRABBER:
+    name: Network Expansion Advanced Transfer Grabber
+    lore:
+    - Continuously pulls items from the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_ADVANCED_TRANSFER:
+    name: Network Expansion Advanced Transfer
+    lore:
+    - Continuously moves items between connected inventories
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_SMART_GRABBER:
+    name: Network Expansion Smart Grabber
+    lore:
+    - Pulls matching items from the selected
+    - machine using configurable filters.
+  NTW_EXPANSION_SMART_PUSHER:
+    name: Network Expansion Smart Pusher
+    lore:
+    - Pushes matching items into the selected
+    - machine using configurable filters.
+  NTW_EXPANSION_GRID_NEW_STYLE:
+    name: Network Expansion Grid New Style
+    lore:
+    - Displays items available in the connected
+    - network and allows direct interaction.
+  NTW_EXPANSION_MAGIC_WORKBENCH_BLUEPRINT:
+    name: Network Expansion Magic Workbench Blueprint
+    lore:
+    - Stores a Network Expansion Magic Workbench recipe
+    - for use by a compatible Network crafter.
+  NTW_EXPANSION_ARMOR_FORGE_BLUEPRINT:
+    name: Network Expansion Armor Forge Blueprint
+    lore:
+    - Stores a Network Expansion Armor Forge recipe
+    - for use by a compatible Network crafter.
+  NTW_EXPANSION_SMELTERY_BLUEPRINT:
+    name: Network Expansion Smeltery Blueprint
+    lore:
+    - Stores a Network Expansion Smeltery recipe
+    - for use by a compatible Network crafter.
+  NTW_EXPANSION_QUANTUM_WORKBENCH_BLUEPRINT:
+    name: Network Expansion Quantum Workbench Blueprint
+    lore:
+    - Stores a Network Expansion Quantum Workbench recipe
+    - for use by a compatible Network crafter.
+  NTW_EXPANSION_ANCIENT_ALTAR_BLUEPRINT:
+    name: Network Expansion Ancient Altar Blueprint
+    lore:
+    - Stores a Network Expansion Ancient Altar recipe
+    - for use by a compatible Network crafter.
+  NTW_EXPANSION_EXPANSION_WORKBENCH_BLUEPRINT:
+    name: Network Expansion Expansion Workbench Blueprint
+    lore:
+    - Stores a Network Expansion Expansion Workbench recipe
+    - for use by a compatible Network crafter.
+  NTW_EXPANSION_COMPRESSOR_BLUEPRINT:
+    name: Network Expansion Compressor Blueprint
+    lore:
+    - Stores a Network Expansion Compressor recipe
+    - for use by a compatible Network crafter.
+  NTW_EXPANSION_GRIND_STONE_BLUEPRINT:
+    name: Network Expansion Grind Stone Blueprint
+    lore:
+    - Stores a Network Expansion Grind Stone recipe
+    - for use by a compatible Network crafter.
+  NTW_EXPANSION_JUICER_BLUEPRINT:
+    name: Network Expansion Juicer Blueprint
+    lore:
+    - Stores a Network Expansion Juicer recipe
+    - for use by a compatible Network crafter.
+  NTW_EXPANSION_ORE_CRUSHER_BLUEPRINT:
+    name: Network Expansion Ore Crusher Blueprint
+    lore:
+    - Stores a Network Expansion Ore Crusher recipe
+    - for use by a compatible Network crafter.
+  NTW_EXPANSION_PRESSURE_CHAMBER_BLUEPRINT:
+    name: Network Expansion Pressure Chamber Blueprint
+    lore:
+    - Stores a Network Expansion Pressure Chamber recipe
+    - for use by a compatible Network crafter.
+  NTW_EXPANSION_MAGIC_WORKBENCH_RECIPE_ENCODER:
+    name: Network Expansion Magic Workbench Recipe Encoder
+    lore:
+    - Encodes recipes for the Network Expansion Magic Workbench.
+    - Insert the recipe and a blank blueprint.
+  NTW_EXPANSION_ARMOR_FORGE_RECIPE_ENCODER:
+    name: Network Expansion Armor Forge Recipe Encoder
+    lore:
+    - Encodes recipes for the Network Expansion Armor Forge.
+    - Insert the recipe and a blank blueprint.
+  NTW_EXPANSION_SMELTERY_RECIPE_ENCODER:
+    name: Network Expansion Smeltery Recipe Encoder
+    lore:
+    - Encodes recipes for the Network Expansion Smeltery.
+    - Insert the recipe and a blank blueprint.
+  NTW_EXPANSION_QUANTUM_WORKBENCH_RECIPE_ENCODER:
+    name: Network Expansion Quantum Workbench Recipe Encoder
+    lore:
+    - Encodes recipes for the Network Expansion Quantum Workbench.
+    - Insert the recipe and a blank blueprint.
+  NTW_EXPANSION_ANCIENT_ALTAR_RECIPE_ENCODER:
+    name: Network Expansion Ancient Altar Recipe Encoder
+    lore:
+    - Encodes recipes for the Network Expansion Ancient Altar.
+    - Insert the recipe and a blank blueprint.
+  NTW_EXPANSION_EXPANSION_WORKBENCH_RECIPE_ENCODER:
+    name: Network Expansion Expansion Workbench Recipe Encoder
+    lore:
+    - Encodes recipes for the Network Expansion Expansion Workbench.
+    - Insert the recipe and a blank blueprint.
+  NTW_EXPANSION_COMPRESSOR_RECIPE_ENCODER:
+    name: Network Expansion Compressor Recipe Encoder
+    lore:
+    - Encodes recipes for the Network Expansion Compressor.
+    - Insert the recipe and a blank blueprint.
+  NTW_EXPANSION_GRIND_STONE_RECIPE_ENCODER:
+    name: Network Expansion Grind Stone Recipe Encoder
+    lore:
+    - Encodes recipes for the Network Expansion Grind Stone.
+    - Insert the recipe and a blank blueprint.
+  NTW_EXPANSION_JUICER_RECIPE_ENCODER:
+    name: Network Expansion Juicer Recipe Encoder
+    lore:
+    - Encodes recipes for the Network Expansion Juicer.
+    - Insert the recipe and a blank blueprint.
+  NTW_EXPANSION_ORE_CRUSHER_RECIPE_ENCODER:
+    name: Network Expansion Ore Crusher Recipe Encoder
+    lore:
+    - Encodes recipes for the Network Expansion Ore Crusher.
+    - Insert the recipe and a blank blueprint.
+  NTW_EXPANSION_PRESSURE_CHAMBER_RECIPE_ENCODER:
+    name: Network Expansion Pressure Chamber Recipe Encoder
+    lore:
+    - Encodes recipes for the Network Expansion Pressure Chamber.
+    - Insert the recipe and a blank blueprint.
+  NTW_EXPANSION_AUTO_MAGIC_WORKBENCH:
+    name: Network Expansion Auto Magic Workbench
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+  NTW_EXPANSION_AUTO_MAGIC_WORKBENCH_WITHHOLDING:
+    name: Network Expansion Auto Magic Workbench Withholding
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+    - Keeps one output stack available.
+  NTW_EXPANSION_AUTO_ARMOR_FORGE:
+    name: Network Expansion Auto Armor Forge
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+  NTW_EXPANSION_AUTO_ARMOR_FORGE_WITHHOLDING:
+    name: Network Expansion Auto Armor Forge Withholding
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+    - Keeps one output stack available.
+  NTW_EXPANSION_AUTO_SMELTERY:
+    name: Network Expansion Auto Smeltery
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+  NTW_EXPANSION_AUTO_SMELTERY_WITHHOLDING:
+    name: Network Expansion Auto Smeltery Withholding
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+    - Keeps one output stack available.
+  NTW_EXPANSION_AUTO_QUANTUM_WORKBENCH:
+    name: Network Expansion Auto Quantum Workbench
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+  NTW_EXPANSION_AUTO_QUANTUM_WORKBENCH_WITHHOLDING:
+    name: Network Expansion Auto Quantum Workbench Withholding
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+    - Keeps one output stack available.
+  NTW_EXPANSION_AUTO_ANCIENT_ALTAR:
+    name: Network Expansion Auto Ancient Altar
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+  NTW_EXPANSION_AUTO_ANCIENT_ALTAR_WITHHOLDING:
+    name: Network Expansion Auto Ancient Altar Withholding
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+    - Keeps one output stack available.
+  NTW_EXPANSION_AUTO_EXPANSION_WORKBENCH:
+    name: Network Expansion Auto Expansion Workbench
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+  NTW_EXPANSION_AUTO_EXPANSION_WORKBENCH_WITHHOLDING:
+    name: Network Expansion Auto Expansion Workbench Withholding
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+    - Keeps one output stack available.
+  NTW_EXPANSION_AUTO_COMPRESSOR:
+    name: Network Expansion Auto Compressor
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+  NTW_EXPANSION_AUTO_COMPRESSOR_WITHHOLDING:
+    name: Network Expansion Auto Compressor Withholding
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+    - Keeps one output stack available.
+  NTW_EXPANSION_AUTO_GRIND_STONE:
+    name: Network Expansion Auto Grind Stone
+    lore:
+    - A component of the Networks Expansion system.
+    - Use the Slimefun guide to learn how Network Expansion Auto Grind Stone works.
+  NTW_EXPANSION_AUTO_GRIND_STONE_WITHHOLDING:
+    name: Network Expansion Auto Grind Stone Withholding
+    lore:
+    - A component of the Networks Expansion system.
+    - Use the Slimefun guide to learn how Network Expansion Auto Grind Stone Withholding works.
+  NTW_EXPANSION_AUTO_JUICER:
+    name: Network Expansion Auto Juicer
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+  NTW_EXPANSION_AUTO_JUICER_WITHHOLDING:
+    name: Network Expansion Auto Juicer Withholding
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+    - Keeps one output stack available.
+  NTW_EXPANSION_AUTO_ORE_CRUSHER:
+    name: Network Expansion Auto Ore Crusher
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+  NTW_EXPANSION_AUTO_ORE_CRUSHER_WITHHOLDING:
+    name: Network Expansion Auto Ore Crusher Withholding
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+    - Keeps one output stack available.
+  NTW_EXPANSION_AUTO_PRESSURE_CHAMBER:
+    name: Network Expansion Auto Pressure Chamber
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+  NTW_EXPANSION_AUTO_PRESSURE_CHAMBER_WITHHOLDING:
+    name: Network Expansion Auto Pressure Chamber Withholding
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+    - Keeps one output stack available.
+  NTW_EXPANSION_ADVANCED_AUTO_MAGIC_WORKBENCH:
+    name: Network Expansion Advanced Auto Magic Workbench
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+  NTW_EXPANSION_ADVANCED_AUTO_MAGIC_WORKBENCH_WITHHOLDING:
+    name: Network Expansion Advanced Auto Magic Workbench Withholding
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+    - Keeps one output stack available.
+  NTW_EXPANSION_ADVANCED_AUTO_ARMOR_FORGE:
+    name: Network Expansion Advanced Auto Armor Forge
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+  NTW_EXPANSION_ADVANCED_AUTO_ARMOR_FORGE_WITHHOLDING:
+    name: Network Expansion Advanced Auto Armor Forge Withholding
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+    - Keeps one output stack available.
+  NTW_EXPANSION_ADVANCED_AUTO_SMELTERY:
+    name: Network Expansion Advanced Auto Smeltery
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+  NTW_EXPANSION_ADVANCED_AUTO_SMELTERY_WITHHOLDING:
+    name: Network Expansion Advanced Auto Smeltery Withholding
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+    - Keeps one output stack available.
+  NTW_EXPANSION_ADVANCED_AUTO_QUANTUM_WORKBENCH:
+    name: Network Expansion Advanced Auto Quantum Workbench
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+  NTW_EXPANSION_ADVANCED_AUTO_QUANTUM_WORKBENCH_WITHHOLDING:
+    name: Network Expansion Advanced Auto Quantum Workbench Withholding
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+    - Keeps one output stack available.
+  NTW_EXPANSION_ADVANCED_AUTO_ANCIENT_ALTAR:
+    name: Network Expansion Advanced Auto Ancient Altar
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+  NTW_EXPANSION_ADVANCED_AUTO_ANCIENT_ALTAR_WITHHOLDING:
+    name: Network Expansion Advanced Auto Ancient Altar Withholding
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+    - Keeps one output stack available.
+  NTW_EXPANSION_ADVANCED_AUTO_EXPANSION_WORKBENCH:
+    name: Network Expansion Advanced Auto Expansion Workbench
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+  NTW_EXPANSION_ADVANCED_AUTO_EXPANSION_WORKBENCH_WITHHOLDING:
+    name: Network Expansion Advanced Auto Expansion Workbench Withholding
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+    - Keeps one output stack available.
+  NTW_EXPANSION_ADVANCED_AUTO_COMPRESSOR:
+    name: Network Expansion Advanced Auto Compressor
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+  NTW_EXPANSION_ADVANCED_AUTO_COMPRESSOR_WITHHOLDING:
+    name: Network Expansion Advanced Auto Compressor Withholding
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+    - Keeps one output stack available.
+  NTW_EXPANSION_ADVANCED_AUTO_GRIND_STONE:
+    name: Network Expansion Advanced Auto Grind Stone
+    lore:
+    - A component of the Networks Expansion system.
+    - Use the Slimefun guide to learn how Network Expansion Advanced Auto Grind Stone works.
+  NTW_EXPANSION_ADVANCED_AUTO_GRIND_STONE_WITHHOLDING:
+    name: Network Expansion Advanced Auto Grind Stone Withholding
+    lore:
+    - A component of the Networks Expansion system.
+    - Use the Slimefun guide to learn how Network Expansion Advanced Auto Grind Stone Withholding works.
+  NTW_EXPANSION_ADVANCED_AUTO_JUICER:
+    name: Network Expansion Advanced Auto Juicer
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+  NTW_EXPANSION_ADVANCED_AUTO_JUICER_WITHHOLDING:
+    name: Network Expansion Advanced Auto Juicer Withholding
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+    - Keeps one output stack available.
+  NTW_EXPANSION_ADVANCED_AUTO_ORE_CRUSHER:
+    name: Network Expansion Advanced Auto Ore Crusher
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+  NTW_EXPANSION_ADVANCED_AUTO_ORE_CRUSHER_WITHHOLDING:
+    name: Network Expansion Advanced Auto Ore Crusher Withholding
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+    - Keeps one output stack available.
+  NTW_EXPANSION_ADVANCED_AUTO_PRESSURE_CHAMBER:
+    name: Network Expansion Advanced Auto Pressure Chamber
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+  NTW_EXPANSION_ADVANCED_AUTO_PRESSURE_CHAMBER_WITHHOLDING:
+    name: Network Expansion Advanced Auto Pressure Chamber Withholding
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+    - Keeps one output stack available.
+  NTW_EXPANSION_ADVANCED_AUTO_CRAFTING:
+    name: Network Expansion Advanced Auto Crafting
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+  NTW_EXPANSION_ADVANCED_AUTO_CRAFTING_WITHHOLDING:
+    name: Network Expansion Advanced Auto Crafting Withholding
+    lore:
+    - Automatically crafts the encoded recipe
+    - using materials stored in the network.
+    - Keeps one output stack available.
+  NTW_EXPANSION_BRIDGE_ORDINAL:
+    name: Network Bridge (Standard)
+    lore:
+    - Connects nearby Network nodes together
+    - to extend the same network.
+  NTW_EXPANSION_BRIDGE_WHITE:
+    name: Network Bridge (White)
+    lore:
+    - Connects nearby Network nodes together
+    - to extend the same network.
+  NTW_EXPANSION_BRIDGE_LIGHT_GRAY:
+    name: Network Bridge (Light Gray)
+    lore:
+    - Connects nearby Network nodes together
+    - to extend the same network.
+  NTW_EXPANSION_BRIDGE_GRAY:
+    name: Network Bridge (Gray)
+    lore:
+    - Connects nearby Network nodes together
+    - to extend the same network.
+  NTW_EXPANSION_BRIDGE_BLACK:
+    name: Network Bridge (Black)
+    lore:
+    - Connects nearby Network nodes together
+    - to extend the same network.
+  NTW_EXPANSION_BRIDGE_BROWN:
+    name: Network Bridge (Brown)
+    lore:
+    - Connects nearby Network nodes together
+    - to extend the same network.
+  NTW_EXPANSION_BRIDGE_RED:
+    name: Network Bridge (Red)
+    lore:
+    - Connects nearby Network nodes together
+    - to extend the same network.
+  NTW_EXPANSION_BRIDGE_ORANGE:
+    name: Network Bridge (Orange)
+    lore:
+    - Connects nearby Network nodes together
+    - to extend the same network.
+  NTW_EXPANSION_BRIDGE_YELLOW:
+    name: Network Bridge (Yellow)
+    lore:
+    - Connects nearby Network nodes together
+    - to extend the same network.
+  NTW_EXPANSION_BRIDGE_LIME:
+    name: Network Bridge (Lime)
+    lore:
+    - Connects nearby Network nodes together
+    - to extend the same network.
+  NTW_EXPANSION_BRIDGE_GREEN:
+    name: Network Bridge (Green)
+    lore:
+    - Connects nearby Network nodes together
+    - to extend the same network.
+  NTW_EXPANSION_BRIDGE_CYAN:
+    name: Network Bridge (Cyan)
+    lore:
+    - Connects nearby Network nodes together
+    - to extend the same network.
+  NTW_EXPANSION_BRIDGE_LIGHT_BLUE:
+    name: Network Bridge (Light Blue)
+    lore:
+    - Connects nearby Network nodes together
+    - to extend the same network.
+  NTW_EXPANSION_BRIDGE_BLUE:
+    name: Network Bridge (Blue)
+    lore:
+    - Connects nearby Network nodes together
+    - to extend the same network.
+  NTW_EXPANSION_BRIDGE_PURPLE:
+    name: Network Bridge (Purple)
+    lore:
+    - Connects nearby Network nodes together
+    - to extend the same network.
+  NTW_EXPANSION_BRIDGE_MAGENTA:
+    name: Network Bridge (Magenta)
+    lore:
+    - Connects nearby Network nodes together
+    - to extend the same network.
+  NTW_EXPANSION_BRIDGE_PINK:
+    name: Network Bridge (Pink)
+    lore:
+    - Connects nearby Network nodes together
+    - to extend the same network.
+  NTW_EXPANSION_ADVANCED_QUANTUM_STORAGE:
+    name: Network Expansion Advanced Quantum Storage
+    lore:
+    - Stores a massive quantity of one item
+    - inside a quantum singularity.
+  NTW_EXPANSION_LINE_POWER_OUTLET_1:
+    name: Network Line Power Outlet 1
+    lore:
+    - Transfers stored Network power to
+    - an adjacent EnergyNet machine.
+  NTW_EXPANSION_LINE_POWER_OUTLET_2:
+    name: Network Line Power Outlet 2
+    lore:
+    - Transfers stored Network power to
+    - an adjacent EnergyNet machine.
+  NTW_EXPANSION_LINE_POWER_OUTLET_3:
+    name: Network Line Power Outlet 3
+    lore:
+    - Transfers stored Network power to
+    - an adjacent EnergyNet machine.
+  NTW_EXPANSION_LINE_POWER_OUTLET_4:
+    name: Network Line Power Outlet 4
+    lore:
+    - Transfers stored Network power to
+    - an adjacent EnergyNet machine.
+  NTW_EXPANSION_LINE_POWER_OUTLET_5:
+    name: Network Line Power Outlet 5
+    lore:
+    - Transfers stored Network power to
+    - an adjacent EnergyNet machine.
+  NTW_EXPANSION_LINE_POWER_OUTLET_6:
+    name: Network Line Power Outlet 6
+    lore:
+    - Transfers stored Network power to
+    - an adjacent EnergyNet machine.
+  NTW_EXPANSION_LINE_POWER_OUTLET_7:
+    name: Network Line Power Outlet 7
+    lore:
+    - Transfers stored Network power to
+    - an adjacent EnergyNet machine.
+  NTW_EXPANSION_LINE_POWER_OUTLET_8:
+    name: Network Line Power Outlet 8
+    lore:
+    - Transfers stored Network power to
+    - an adjacent EnergyNet machine.
+  NTW_EXPANSION_LINE_POWER_OUTLET_9:
+    name: Network Line Power Outlet 9
+    lore:
+    - Transfers stored Network power to
+    - an adjacent EnergyNet machine.
+  NTW_EXPANSION_LINE_POWER_OUTLET_10:
+    name: Network Line Power Outlet 10
+    lore:
+    - Transfers stored Network power to
+    - an adjacent EnergyNet machine.
+  NTW_EXPANSION_LINE_POWER_OUTLET_11:
+    name: Network Line Power Outlet 11
+    lore:
+    - Transfers stored Network power to
+    - an adjacent EnergyNet machine.
+  NTW_EXPANSION_AUTHOR_SEFIRAAT:
+    name: Contributor Sefiraat
+    lore:
+    - Contributed to the continued development
+    - and maintenance of Networks Expansion.
+  NTW_EXPANSION_AUTHOR_YBW0014:
+    name: Contributor YBW0014
+    lore:
+    - Contributed to the continued development
+    - and maintenance of Networks Expansion.
+  NTW_EXPANSION_AUTHOR_YITOUDAIDAI:
+    name: Contributor Yitoudaidai
+    lore:
+    - Contributed to the continued development
+    - and maintenance of Networks Expansion.
+  NTW_EXPANSION_AUTHOR_TINALNESS:
+    name: Contributor Tinalness
+    lore:
+    - Contributed to the continued development
+    - and maintenance of Networks Expansion.
+  NTW_EXPANSION_CARGO_NODE_QUICK_TOOL:
+    name: Network Expansion Cargo Node Quick Tool
+    lore:
+    - Quickly configures compatible Cargo
+    - nodes for Networks integration.
+  NTW_EXPANSION_STORAGE_UPGRADE_TABLE:
+    name: Network Expansion Storage Upgrade Table
+    lore:
+    - Upgrades compatible Networks storage
+    - devices while preserving stored items.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_1:
+    name: Network Cargo Storage Unit 1
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_2:
+    name: Network Cargo Storage Unit 2
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_3:
+    name: Network Cargo Storage Unit 3
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_4:
+    name: Network Cargo Storage Unit 4
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_5:
+    name: Network Cargo Storage Unit 5
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_6:
+    name: Network Cargo Storage Unit 6
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_7:
+    name: Network Cargo Storage Unit 7
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_8:
+    name: Network Cargo Storage Unit 8
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_9:
+    name: Network Cargo Storage Unit 9
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_10:
+    name: Network Cargo Storage Unit 10
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_11:
+    name: Network Cargo Storage Unit 11
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_12:
+    name: Network Cargo Storage Unit 12
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_13:
+    name: Network Cargo Storage Unit 13
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_1_MODEL:
+    name: Network Cargo Storage Unit 1 Model
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_2_MODEL:
+    name: Network Cargo Storage Unit 2 Model
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_3_MODEL:
+    name: Network Cargo Storage Unit 3 Model
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_4_MODEL:
+    name: Network Cargo Storage Unit 4 Model
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_5_MODEL:
+    name: Network Cargo Storage Unit 5 Model
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_6_MODEL:
+    name: Network Cargo Storage Unit 6 Model
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_7_MODEL:
+    name: Network Cargo Storage Unit 7 Model
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_8_MODEL:
+    name: Network Cargo Storage Unit 8 Model
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_9_MODEL:
+    name: Network Cargo Storage Unit 9 Model
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_10_MODEL:
+    name: Network Cargo Storage Unit 10 Model
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_11_MODEL:
+    name: Network Cargo Storage Unit 11 Model
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_12_MODEL:
+    name: Network Cargo Storage Unit 12 Model
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_CARGO_STORAGE_UNIT_13_MODEL:
+    name: Network Cargo Storage Unit 13 Model
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_DUE_MACHINE_CONFIGURATOR:
+    name: Network Expansion Dual Machine Configurator
+    lore:
+    - A Networks administration tool for
+    - configuring and inspecting devices.
+  NTW_EXPANSION_ITEM_MOVER:
+    name: Network Expansion Item Mover
+    lore:
+    - Moves stored items between compatible
+    - Networks storage devices.
+  NTW_EXPANSION_BLUEPRINT_DECODER:
+    name: Network Expansion Blueprint Decoder
+    lore:
+    - Reads and displays the recipe stored
+    - inside a Crafting Blueprint.
+  NTW_EXPANSION_DUE_MACHINE:
+    name: Network Expansion Dual Machine
+    lore:
+    - A component of the Networks Expansion system.
+    - Use the Slimefun guide to learn how Network Expansion Dual Machine works.
+  NTW_EXPANSION_OFFSETTER:
+    name: Network Expansion Offset Tool
+    lore:
+    - A component of the Networks Expansion system.
+    - Use the Slimefun guide to learn how Network Expansion Offset Tool works.
+  NTW_EXPANSION_BETTER_GRABBER:
+    name: Network Expansion Improved Grabber
+    lore:
+    - A component of the Networks Expansion system.
+    - Use the Slimefun guide to learn how Network Expansion Improved Grabber works.
+  NTW_SYNTHETIC_EMERALD_SHARD:
+    name: Synthetic Emerald Shard
+    lore:
+    - A shard of synthetic emerald that
+    - is the backbone for information
+    - transference.
+  NTW_OPTIC_GLASS:
+    name: Optic Glass
+    lore:
+    - A simple glass that is able to
+    - transfer small bits of information.
+  NTW_OPTIC_CABLE:
+    name: Optic Cable
+    lore:
+    - A simple wire that is able to
+    - transfer large bits of information.
+  NTW_OPTIC_STAR:
+    name: Optic Star
+    lore:
+    - A crystalline star structure that
+    - can transfer large bits of information.
+  NTW_RADIOACTIVE_OPTIC_STAR:
+    name: Radioactive Optic Star
+    lore:
+    - A crystalline star structure that
+    - can store insane amounts of information.
+  NTW_SHRINKING_BASE:
+    name: Shrinking Base
+    lore:
+    - An advanced construct able to make
+    - big things go small.
+  NTW_SIMPLE_NANOBOTS:
+    name: Simple Nanobots
+    lore:
+    - Teeny tiny little bots that can
+    - help you with precise tasks.
+  NTW_ADVANCED_NANOBOTS:
+    name: Advanced Nanobots
+    lore:
+    - Teeny tiny little bots that can
+    - help you with precise tasks.
+    - This version is smarter and faster.
+  NTW_AI_CORE:
+    name: A.I. Core
+    lore:
+    - A burgeoning artificial intelligence
+    - resides within this weak shell.
+  NTW_EMPOWERED_AI_CORE:
+    name: Empowered A.I. Core
+    lore:
+    - A flourishing artificial intelligence
+    - resides within this shell.
+  NTW_PRISTINE_AI_CORE:
+    name: Pristine A.I. Core
+    lore:
+    - A perfected artificial intelligence
+    - resides within this defined shell.
+  NTW_INTERDIMENSIONAL_PRESENCE:
+    name: Interdimensional Presence
+    lore:
+    - An artificial intelligence that has
+    - grown too powerful for just a
+    - single dimension.
+  NTW_CONTROLLER:
+    name: Network Controller
+    lore:
+    - The Network Controller is the brain
+    - for the whole network. Max 1 per network.
+  NTW_BRIDGE:
+    name: Network Bridge
+    lore:
+    - The bridge allows you to cheaply
+    - connect network objects together.
+  NTW_MONITOR:
+    name: Network Monitor
+    lore:
+    - Allows the network to interact with
+    - an adjacent supported inventory.
+    - ''
+    - Supports Network Shells and compatible
+    - addon storage implementations.
+  NTW_IMPORT:
+    name: Network Importer
+    lore:
+    - Moves items placed inside it into
+    - the network, up to 9 stacks per
+    - Slimefun tick.
+    - Accepts items from Cargo.
+  NTW_EXPORT:
+    name: Network Exporter
+    lore:
+    - Can be configured to constantly
+    - export one stack of a chosen item.
+    - Its inventory can be accessed by Cargo.
+  NTW_GRABBER:
+    name: Network Grabber
+    lore:
+    - Tries to grab the first available
+    - item from the selected Slimefun machine.
+  NTW_PUSHER:
+    name: Network Pusher
+    lore:
+    - Tries to push a matching item from
+    - the network into the selected machine.
+  NTW_MOREPUSHER:
+    name: Network Pusher (Enhanced)
+    lore:
+    - Pushes matching items from the network
+    - into the selected machine at a higher rate.
+  NTW_BESTPUSHER:
+    name: Network Pusher (Ultimate)
+    lore:
+    - Pushes matching items from the network
+    - into the selected machine at the best rate.
+  NTW_CONTROL_X:
+    name: 'Network Control: X'
+    lore:
+    - Cuts a supported vanilla block out
+    - of the world and stores it in the network.
+    - Only works on blocks without inventories.
+  NTW_CONTROL_V:
+    name: 'Network Control: V'
+    lore:
+    - Pastes a stored vanilla block from
+    - the network back into the world.
+  NTW_VACUUM:
+    name: Network Vacuum
+    lore:
+    - Collects nearby dropped items and
+    - tries to insert them into the network.
+  NTW_VANILLA_GRABBER:
+    name: Network Vanilla Grabber
+    lore:
+    - Pulls the first available item from
+    - the selected vanilla inventory.
+  NTW_VANILLA_PUSHER:
+    name: Network Vanilla Pusher
+    lore:
+    - Pushes items supplied to this node
+    - into the selected vanilla inventory.
+  NTW_NETWORK_WIRELESS_TRANSMITTER:
+    name: Network Wireless Transmitter
+    lore:
+    - Transmits matching items to a linked
+    - Network Wireless Receiver in this world.
+    - Use the Wireless Configurator to link it.
+  NTW_EXPANSION_ADVANCED_WIRELESS_TRANSMITTER:
+    name: Network Expansion Advanced Wireless Transmitter
+    lore:
+    - A component of the Networks Expansion system.
+    - Use the Slimefun guide to learn how Network Expansion Advanced Wireless Transmitter works.
+  NTW_NETWORK_WIRELESS_RECEIVER:
+    name: Network Wireless Receiver
+    lore:
+    - Receives items from a linked wireless
+    - transmitter and inserts them into
+    - its connected network.
+  NTW_TRASH:
+    name: Network Purger
+    lore:
+    - Pulls matching items from the network
+    - and permanently voids them.
+    - Use with great care!
+  NTW_GRID:
+    name: Network Grid
+    lore:
+    - Displays every item stored in the network
+    - and allows direct insertion or withdrawal.
+  NTW_CRAFTING_GRID:
+    name: Network Crafting Grid
+    lore:
+    - A Network Grid with a crafting area
+    - that crafts using items stored directly
+    - inside the network.
+  NTW_CELL:
+    name: Network Cell
+    lore:
+    - A double-chest-sized inventory that
+    - can be accessed from the network
+    - or opened directly in the world.
+  NTW_GREEDY_BLOCK:
+    name: Network Greedy Block
+    lore:
+    - Reserves one stack for a selected item.
+    - If that stack is full, additional matching
+    - items will not enter the network.
+  NTW_QUANTUM_WORKBENCH:
+    name: Network Quantum Workbench
+    lore:
+    - Allows the crafting of Quantum Storages.
+  NTW_QUANTUM_STORAGE_0:
+    name: Network Quantum Storage (0)
+    lore:
+    - Stores a massive quantity of one item
+    - inside a quantum singularity.
+  NTW_QUANTUM_STORAGE_9:
+    name: Network Quantum Storage (9)
+    lore:
+    - Stores a massive quantity of one item
+    - inside a quantum singularity.
+  NTW_QUANTUM_STORAGE_10:
+    name: Network Quantum Storage (10)
+    lore:
+    - Stores a massive quantity of one item
+    - inside a quantum singularity.
+  NTW_QUANTUM_STORAGE_1:
+    name: Network Quantum Storage (1)
+    lore:
+    - Stores a massive quantity of one item
+    - inside a quantum singularity.
+  NTW_QUANTUM_STORAGE_2:
+    name: Network Quantum Storage (2)
+    lore:
+    - Stores a massive quantity of one item
+    - inside a quantum singularity.
+  NTW_QUANTUM_STORAGE_3:
+    name: Network Quantum Storage (3)
+    lore:
+    - Stores a massive quantity of one item
+    - inside a quantum singularity.
+  NTW_QUANTUM_STORAGE_4:
+    name: Network Quantum Storage (4)
+    lore:
+    - Stores a massive quantity of one item
+    - inside a quantum singularity.
+  NTW_QUANTUM_STORAGE_5:
+    name: Network Quantum Storage (5)
+    lore:
+    - Stores a massive quantity of one item
+    - inside a quantum singularity.
+  NTW_QUANTUM_STORAGE_6:
+    name: Network Quantum Storage (6)
+    lore:
+    - Stores a massive quantity of one item
+    - inside a quantum singularity.
+  NTW_QUANTUM_STORAGE_7:
+    name: Network Quantum Storage (7)
+    lore:
+    - Stores a massive quantity of one item
+    - inside a quantum singularity.
+  NTW_QUANTUM_STORAGE_8:
+    name: Network Quantum Storage (8)
+    lore:
+    - Stores a massive quantity of one item
+    - inside a quantum singularity.
+  NTW_QUANTUM_STORAGE_11:
+    name: Network Quantum Storage (11)
+    lore:
+    - Stores a massive quantity of one item
+    - inside a quantum singularity.
+  NTW_QUANTUM_STORAGE_12:
+    name: Network Quantum Storage (12)
+    lore:
+    - Stores a massive quantity of one item
+    - inside a quantum singularity.
+  NTW_QUANTUM_STORAGE_13:
+    name: Network Quantum Storage (13)
+    lore:
+    - Stores a massive quantity of one item
+    - inside a quantum singularity.
+  NTW_QUANTUM_STORAGE_14:
+    name: Network Quantum Storage (14)
+    lore:
+    - Stores a massive quantity of one item
+    - inside a quantum singularity.
+  NTW_CAPACITOR_1:
+    name: Network Capacitor (1)
+    lore:
+    - Stores Network power for connected
+    - machines and network operations.
+  NTW_CAPACITOR_2:
+    name: Network Capacitor (2)
+    lore:
+    - Stores Network power for connected
+    - machines and network operations.
+  NTW_CAPACITOR_3:
+    name: Network Capacitor (3)
+    lore:
+    - Stores Network power for connected
+    - machines and network operations.
+  NTW_CAPACITOR_4:
+    name: Network Capacitor (4)
+    lore:
+    - Stores Network power for connected
+    - machines and network operations.
+  NTW_POWER_OUTLET_1:
+    name: Network Power Outlet (1)
+    lore:
+    - Transfers stored Network power to
+    - an adjacent EnergyNet machine.
+  NTW_POWER_OUTLET_2:
+    name: Network Power Outlet (2)
+    lore:
+    - Transfers stored Network power to
+    - an adjacent EnergyNet machine.
+  NTW_POWER_DISPLAY:
+    name: Network Power Display
+    lore:
+    - Displays the power stored in the network.
+    - Simple, right?
+  NTW_RECIPE_ENCODER:
+    name: Network Recipe Encoder
+    lore:
+    - Creates a Crafting Blueprint from
+    - the items placed in its recipe area.
+  NTW_AUTO_CRAFTER:
+    name: Network Auto Crafter
+    lore:
+    - Accepts a Crafting Blueprint and
+    - automatically crafts requested items
+    - using materials from the network.
+  NTW_AUTO_CRAFTER_WITHHOLDING:
+    name: Network Auto Crafter (Withholding)
+    lore:
+    - Automatically crafts from a blueprint
+    - and keeps one stack in its output.
+    - That output remains visible to the network
+    - and can also be accessed by Cargo.
+  NTW_CRAFTING_BLUEPRINT:
+    name: Crafting Blueprint
+    lore:
+    - A blank blueprint used to store
+    - a crafting recipe.
+  NTW_PROBE:
+    name: Network Probe
+    lore:
+    - Use on a controller to show every
+    - node connected to the network.
+  NTW_REMOTE:
+    name: Network Remote
+    lore:
+    - Opens a bound grid wirelessly.
+    - The grid's chunk must be loaded.
+  NTW_REMOTE_EMPOWERED:
+    name: Empowered Network Remote
+    lore:
+    - Opens a bound grid wirelessly.
+    - The grid's chunk must be loaded.
+  NTW_REMOTE_PRISTINE:
+    name: Pristine Network Remote
+    lore:
+    - Opens a bound grid wirelessly
+    - with unlimited range in the same world.
+  NTW_REMOTE_ULTIMATE:
+    name: Ultimate Network Remote
+    lore:
+    - Opens a bound grid wirelessly
+    - across dimensions.
+  NTW_CRAYON:
+    name: Network Crayon
+    lore:
+    - Use on a controller to toggle working
+    - particle effects for network nodes.
+  NTW_CONFIGURATOR:
+    name: Network Configurator
+    lore:
+    - Copies and pastes the configuration
+    - of directional network interfaces.
+  NTW_WIRELESS_CONFIGURATOR:
+    name: Network Wireless Configurator
+    lore:
+    - Stores a receiver location and applies
+    - it to a Wireless Transmitter.
+  NTW_RAKE_1:
+    name: Network Rake (1)
+    lore:
+    - Right-click a Network object to
+    - break it instantly.
+    - ''
+    - 250 uses remaining
+  NTW_RAKE_2:
+    name: Network Rake (2)
+    lore:
+    - Right-click a Network object to
+    - break it instantly.
+    - ''
+    - 1,000 uses remaining
+  NTW_RAKE_3:
+    name: Network Rake (3)
+    lore:
+    - Right-click a Network object to
+    - break it instantly.
+    - ''
+    - 9,999 uses remaining
+  NTW_DEBUG_STICK:
+    name: Network Debug Stick
+    lore:
+    - Right-click a Network object to
+    - toggle diagnostic logging.
+  NTW_EXPANSION_CRAFTING_GRID_NEW_STYLE:
+    name: Network Expansion Crafting Grid New Style
+    lore:
+    - Displays items available in the connected
+    - network and allows direct interaction.
+  NTW_EXPANSION_STATUS_VIEWER:
+    name: Network Expansion Status Viewer
+    lore:
+    - Displays live diagnostic information
+    - for connected Networks devices.
+  NTW_EXPANSION_DRAWER_TIPS:
+    name: Network Expansion Drawer Tips
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_QUANTUM_MANAGER:
+    name: Network Expansion Quantum Manager
+    lore:
+    - Provides a management interface for
+    - connected Networks devices.
+  NTW_EXPANSION_DRAWER_MANAGER:
+    name: Network Expansion Drawer Manager
+    lore:
+    - A high-capacity storage unit exposed
+    - to Networks and compatible Cargo systems.
+  NTW_EXPANSION_ITEM_FLOW_VIEWER:
+    name: Network Expansion Item Flow Viewer
+    lore:
+    - Displays live diagnostic information
+    - for connected Networks devices.
+  NTW_EXPANSION_CRAFTER_MANAGER:
+    name: Network Expansion Crafter Manager
+    lore:
+    - Provides a management interface for
+    - connected Networks devices.
+  NTW_EXPANSION_ADVANCED_VACUUM:
+    name: Network Expansion Advanced Vacuum
+    lore:
+    - Collects nearby dropped items and
+    - inserts them into the network.
+  NTW_EXPANSION_SWITCHING_MONITOR:
+    name: Network Expansion Switching Monitor
+    lore:
+    - Connects an adjacent compatible inventory
+    - to the Networks storage system.
+  NTW_EXPANSION_HANGING_GRID_NEW_STYLE:
+    name: Network Expansion Hanging Grid New Style
+    lore:
+    - Displays items available in the connected
+    - network and allows direct interaction.
+  NTW_EXPANSION_WHITELISTED_TRANSFER_GRABBER:
+    name: Network Expansion Whitelisted Transfer Grabber
+    lore:
+    - Continuously pulls items from the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_WHITELISTED_TRANSFER_VANILLA_GRABBER:
+    name: Network Expansion Whitelisted Transfer Vanilla Grabber
+    lore:
+    - Continuously pulls items from the selected inventory
+    - using the Networks system and vanilla inventories.
+  NTW_EXPANSION_WHITELISTED_LINE_TRANSFER_GRABBER:
+    name: Network Expansion Whitelisted Line Transfer Grabber
+    lore:
+    - Continuously pulls items from the selected inventory
+    - using the Networks system and Slimefun-compatible inventories.
+  NTW_EXPANSION_WHITELISTED_LINE_TRANSFER_VANILLA_GRABBER:
+    name: Network Expansion Whitelisted Line Transfer Vanilla Grabber
+    lore:
+    - Continuously pulls items from the selected inventory
+    - using the Networks system and vanilla inventories.
+  NTW_EXPANSION_SMART_NETWORK_CRAFTING_GRID_NEW_STYLE:
+    name: Network Expansion Smart Network Crafting Grid New Style
+    lore:
+    - Displays items available in the connected
+    - network and allows direct interaction.
+  NTW_EXPANSION_ITEM_DIFFERENTER:
+    name: Network Expansion Item Differentiator
+    lore:
+    - A component of the Networks Expansion system.
+    - Use the Slimefun guide to learn how Network Expansion Item Differentiator works.
+  NTW_EXPANSION_STORAGE_CARD_CONVERTER:
+    name: Network Expansion Storage Card Converter
+    lore:
+    - A component of the Networks Expansion system.
+    - Use the Slimefun guide to learn how Network Expansion Storage Card Converter works.
+  NTW_EXPANSION_FACING_PRESETTER:
+    name: Network Expansion Facing Preset Tool
+    lore:
+    - A Networks administration tool for
+    - configuring and inspecting devices.
+  NTW_EXPANSION_SUPER_TRASH:
+    name: Network Expansion Super Purger
+    lore:
+    - Permanently removes matching items
+    - from the connected network.
+    - Use with care!
+  NTW_EXPANSION_LINKER_GRID:
+    name: Network Expansion Linker Grid
+    lore:
+    - Displays items available in the connected
+    - network and allows direct interaction.
+  NTW_EXPANSION_PLACEHOLDER_ITEM:
+    name: Network Expansion Placeholder Item
+    lore:
+    - Internal placeholder item.
+displays:
+  quantum_storage:
+    void_excess: <click_info>Void Excess %s
+    enabled_void_excess: Enabled
+    disabled_void_excess: Disabled
+    stored_amount: '<click_info>Amount: <passive>%s'
+    custom_max_amount: '<click_info>CurrentCapacity: <success>%s'
+groups:
+  main: <main>Networks
+  materials: <main>Crafting Materials
+  tools: <main>Network Management Tools
+  network_items: <main>Network Machines
+  network_quantums: <main>Quantum Storage
+  disabled_items: <main>Disabled / Removed Items
+  expansion:
+    slimefun:
+      main: <color_random_string>Main
+      items: <color_random_string>Items
+      cargo_system: <color_random_string>Cargo System
+      functional_machine: <color_random_string>Functional Machine
+      trophy: <color_random_string>Trophy
+    custom:
+      main_item_group: <color_random_string>Main Item Group
+      main_menu_item: <color_random_string>item
+      sub_menu_tool: <color_random_string>Sub Menu Tool
+      sub_menu_blueprint: <color_random_string>item - blueprint
+      main_menu_cargo_system: <color_random_string>Main Menu Cargo System
+      sub_menu_advanced_storage: <color_random_string>Sub Menu Advanced Storage
+      sub_menu_networks_drawers: <color_random_string>Sub Menu Networks Drawers
+      sub_menu_cargo: <color_random_string>Sub Menu Cargo
+      main_menu_functional_machine: <color_random_string>Main Menu Functional Machine
+      sub_menu_core_machine: <color_random_string>Sub Menu Core Machine
+      sub_menu_advanced_networks: <color_random_string>Sub Menu Advanced Networks
+      sub_menu_bridge: <color_random_string>Sub Menu Bridge
+      sub_menu_encoder: <color_random_string>Sub Menu Encoder
+      sub_menu_crafter_machine: <color_random_string>Sub Menu Crafter Machine
+      main_menu_trophy: <color_random_string>Main Menu Trophy
+      sub_menu_author: <color_random_string>Sub Menu Contributor
+      sub_menu_announce: <color_random_string>Sub Menu Information
+      sub_menu_deprecated: <color_random_string>Sub Menu Deprecated
+theme:
+  gold: ''
+  white: ''
+  aqua: ''
+  warning: Warning
+  error: Error
+  notice: Notice
+  passive: ''
+  success: Success
+  main: Networks
+  click_info: Click
+  research: Research
+  crafting: Crafting Material
+  machine: Machine
+  tool: Tool
+  mechanism: Mechanism
+  fuel: Fuel
+  material_class: Material
+  recipe_type: Recipe Type
+  guide: Guide
+  name_not_found: Name not configured
+  lore_not_found: Lore not configured
+  model: ' &f(&aModel&f)'

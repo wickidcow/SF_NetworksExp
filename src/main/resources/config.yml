@@ -1,8 +1,8 @@
-# Auto update from Guizhan Build is enabled by default.
-auto-update: true
+# Automatic JAR replacement is disabled in the Slimefun Legacy edition.
+auto-update: false
 
 # Language
-language: zh-CN
+language: en-US
 
 # Do not change this value unless you know what you are doing.
 config-version: 2.1.68

@@ -28,10 +28,6 @@ import io.github.thebusybiscuit.slimefun4.core.guide.options.SlimefunGuideSettin
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.libraries.paperlib.PaperLib;
 import lombok.Getter;
-import net.byteflux.libby.BukkitLibraryManager;
-import net.byteflux.libby.Library;
-import net.byteflux.libby.LibraryManager;
-import net.guizhanss.guizhanlibplugin.updater.GuizhanUpdater;
 import org.bstats.bukkit.Metrics;
 import org.bstats.charts.AdvancedPie;
 import org.bukkit.Bukkit;
@@ -45,7 +41,6 @@ import org.jetbrains.annotations.Nullable;
 import org.yaml.snakeyaml.error.YAMLException;
 
 import java.sql.SQLException;
-import java.text.MessageFormat;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -54,7 +49,7 @@ import java.util.Set;
 import java.util.logging.Level;
 
 public class Networks extends JavaPlugin implements SlimefunAddon {
-    private static final String DEFAULT_LANGUAGE = "zh-CN";
+    private static final String DEFAULT_LANGUAGE = "en-US";
     private static Networks instance;
 
     @Getter
@@ -67,20 +62,12 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
     private static BukkitRunnable autoSaveThread;
 
     private static MinecraftVersion minecraftVersion = MinecraftVersion.UNKNOWN;
-    private final @NotNull String username;
-    private final @NotNull String repo;
-    private final @NotNull String branch;
     private ConfigManager configManager;
     private ListenerManager listenerManager;
     private SupportedPluginManager supportedPluginManager;
     private LocalizationService localizationService;
     private long slimefunTickCount;
 
-    public Networks() {
-        this.username = "ytdd9527";
-        this.repo = "NetworksExpansion";
-        this.branch = "master";
-    }
 
     public static ConfigManager getConfigManager() {
         return Networks.getInstance().configManager;
@@ -136,7 +123,6 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
         saveDefaultConfig();
 
         getLogger().info(getLocalizationService().getString("messages.startup.trying-auto-update"));
-        tryUpdate();
 
         this.supportedPluginManager = new SupportedPluginManager();
 
@@ -259,12 +245,6 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
         getLogger().info(getLocalizationService().getString("messages.shutdown.disabled-successfully"));
     }
 
-    @SuppressWarnings("deprecation")
-    public void tryUpdate() {
-        if (configManager.isAutoUpdate() && getDescription().getVersion().startsWith("Build")) {
-            GuizhanUpdater.start(this, getFile(), username, repo, branch);
-        }
-    }
 
     public void superHead() {
         List<String> superHead = getLocalizationService().getStringList("messages.super-head");
@@ -274,14 +254,6 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
     }
 
     public void environmentCheck() {
-        if (!getServer().getPluginManager().isPluginEnabled("GuizhanLibPlugin")) {
-            getLogger().log(Level.SEVERE, getLocalizationService().getString("messages.depend.not-found-guizhanlib"));
-            getLogger()
-                .log(
-                    Level.SEVERE,
-                    getLocalizationService().getString("messages.depend.suggest-download-guizhanlib"));
-            return;
-        }
         try {
             minecraftVersion = MinecraftVersion.current();
         } catch (NoClassDefFoundError | NoSuchFieldError e) {
@@ -318,27 +290,6 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
         }
     }
 
-    private void loadLibraries() {
-        LibraryManager libraryManager = new BukkitLibraryManager(this);
-        libraryManager.addMavenCentral();
-
-        getLogger().info("正在加载 Pinyin");
-        Library pinyin = Library.builder()
-            .groupId("com{}github{}houbb")
-            .artifactId("pinyin")
-            .version("0.4.0")
-            .build();
-        libraryManager.loadLibrary(pinyin);
-
-        getLogger().info("正在加载 opencc4j");
-        Library opencc4j = Library.builder()
-            .groupId("com{}github{}houbb")
-            .artifactId("opencc4j")
-            .version("1.14.0")
-            .build();
-        libraryManager.loadLibrary(opencc4j);
-    }
-
     public MinecraftVersion getMCVersion() {
         return minecraftVersion;
     }
@@ -365,13 +316,12 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
     @Nullable
     @Override
     public String getBugTrackerURL() {
-        return MessageFormat.format("https://github.com/{0}/{1}/issues/", this.username, this.repo);
+        return "https://github.com/wickidcow/SF_NetworksExp/issues";
     }
 
     @NotNull
     public String getWikiURL() {
-        return MessageFormat.format(
-            "https://slimefun-addons-wiki.guizhanss.cn/networks/{0}/{1}", this.username, this.repo);
+        return "https://github.com/wickidcow/SF_NetworksExp#readme";
     }
 
     public void debug(String message) {

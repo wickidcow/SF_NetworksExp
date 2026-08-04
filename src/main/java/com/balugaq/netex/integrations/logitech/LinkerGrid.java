@@ -38,7 +38,7 @@ import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
-import net.guizhanss.guizhanlib.minecraft.helper.inventory.ItemStackHelper;
+import io.github.sefiraat.networks.utils.DisplayNameUtils;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -294,7 +294,7 @@ public class LinkerGrid extends NetworkObject {
                 }
 
                 displayStack = new CustomItemStack(
-                    displayStack, TextUtil.GRAY + ItemStackHelper.getDisplayName(stack));
+                    displayStack, TextUtil.GRAY + DisplayNameUtils.getDisplayName(stack));
 
                 final ItemMeta itemMeta = displayStack.getItemMeta();
                 if (itemMeta == null) {

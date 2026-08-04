@@ -43,7 +43,7 @@ import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
-import net.guizhanss.guizhanlib.minecraft.helper.inventory.ItemStackHelper;
+import io.github.sefiraat.networks.utils.DisplayNameUtils;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -676,7 +676,7 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
             }
             player.sendMessage(String.format(
                 Lang.getString("messages.unsupported-operation.drawer.not_found_chosen_item"),
-                ItemStackHelper.getDisplayName(toTransfer)));
+                DisplayNameUtils.getDisplayName(toTransfer)));
         } else if (isMover) {
             ItemStack moverStored = ItemMover.getStoredItemStack(itemStack);
             if (mode == QuickTransferMode.FROM_QUANTUM) {
@@ -711,7 +711,7 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
                                     Lang.getString("messages.unsupported-operation.drawer.item_mover_empty"));
                             }
                             int before = stored.getAmount();
-                            String name = ItemStackHelper.getDisplayName(stored);
+                            String name = DisplayNameUtils.getDisplayName(stored);
                             thisStorage.depositItemStack0(location, stored, true);
                             int left = stored.getAmount();
                             ItemMover.setStoredAmount(itemStack, exist - (before - left));
@@ -725,7 +725,7 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
                             int before = each.getAmount();
                             ItemStack fetched = thisStorage.requestItem0(location, itemRequest, false);
                             if (fetched != null) {
-                                String name = ItemStackHelper.getDisplayName(fetched);
+                                String name = DisplayNameUtils.getDisplayName(fetched);
                                 ItemMover.depositItem(itemStack, fetched);
                                 int left = fetched.getAmount();
                                 if (fetched.getAmount() > 0) {
@@ -744,7 +744,7 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
             }
             player.sendMessage(String.format(
                 Lang.getString("messages.unsupported-operation.drawer.not_found_chosen_item"),
-                ItemStackHelper.getDisplayName(toTransfer)));
+                DisplayNameUtils.getDisplayName(toTransfer)));
         } else {
             player.sendMessage(Lang.getString("messages.unsupported-operation.drawer.invalid_container"));
         }

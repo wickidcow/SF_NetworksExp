@@ -6,7 +6,7 @@ import com.ytdd9527.networksexpansion.utils.itemstacks.ItemStackUtil;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.items.CustomItemStack;
 import lombok.Getter;
-import net.guizhanss.guizhanlib.minecraft.helper.inventory.ItemStackHelper;
+import io.github.sefiraat.networks.utils.DisplayNameUtils;
 import net.md_5.bungee.api.ChatColor;
 import org.bukkit.Color;
 import org.bukkit.Material;
@@ -273,7 +273,7 @@ public enum Theme {
     @NotNull
     @ParametersAreNonnullByDefault
     public static ItemStack themedItemStack(ItemStack itemStack, Theme themeType) {
-        String name = ItemStackHelper.getDisplayName(itemStack);
+        String name = DisplayNameUtils.getDisplayName(itemStack);
         ItemMeta meta = itemStack.getItemMeta();
         if (meta == null) {
             return itemStack;

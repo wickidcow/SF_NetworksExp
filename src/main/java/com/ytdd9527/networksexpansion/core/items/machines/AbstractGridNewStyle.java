@@ -9,8 +9,6 @@ import com.balugaq.netex.api.interfaces.BaseGrid;
 import com.balugaq.netex.api.keybind.Keybindable;
 import com.balugaq.netex.utils.InventoryUtil;
 import com.balugaq.netex.utils.Lang;
-import com.github.houbb.pinyin.constant.enums.PinyinStyleEnum;
-import com.github.houbb.pinyin.util.PinyinHelper;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import com.ytdd9527.networksexpansion.implementation.machines.networks.advanced.SmartNetworkCraftingGridNewStyle;
@@ -33,7 +31,7 @@ import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import me.mrCookieSlime.CSCoreLibPlugin.general.Inventory.ClickAction;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
-import net.guizhanss.guizhanlib.minecraft.helper.inventory.ItemStackHelper;
+import io.github.sefiraat.networks.utils.DisplayNameUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -429,16 +427,8 @@ public abstract class AbstractGridNewStyle extends AbstractGrid implements Keybi
                     }
                 }
                 String name = TextUtil.stripColor(
-                    ItemStackHelper.getDisplayName(itemStack).toLowerCase(Locale.ROOT));
-                if (searchTerm.matches("^[a-zA-Z]+$")) {
-                    final String pinyinName = PinyinHelper.toPinyin(name, PinyinStyleEnum.INPUT, "");
-                    final String pinyinFirstLetter = PinyinHelper.toPinyin(name, PinyinStyleEnum.FIRST_LETTER, "");
-                    return name.contains(searchTerm)
-                        || pinyinName.contains(searchTerm)
-                        || pinyinFirstLetter.contains(searchTerm);
-                } else {
-                    return name.contains(searchTerm);
-                }
+                    DisplayNameUtils.getDisplayName(itemStack).toLowerCase(Locale.ROOT));
+                return name.contains(searchTerm);
             })
             .sorted(SORT_MAP.get(cache.getSortOrder()))
             .toList();

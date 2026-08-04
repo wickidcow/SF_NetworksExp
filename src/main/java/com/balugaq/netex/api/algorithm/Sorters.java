@@ -6,7 +6,7 @@ import com.ytdd9527.networksexpansion.implementation.machines.managers.DrawerMan
 import com.ytdd9527.networksexpansion.utils.TextUtil;
 import io.github.sefiraat.networks.network.stackcaches.BarrelIdentity;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
-import net.guizhanss.guizhanlib.minecraft.helper.inventory.ItemStackHelper;
+import io.github.sefiraat.networks.utils.DisplayNameUtils;
 import org.bukkit.inventory.ItemStack;
 import org.jspecify.annotations.NullMarked;
 
@@ -17,7 +17,7 @@ import java.util.Map;
 
 @NullMarked
 public class Sorters {
-    public static final String NO_ITEM = ItemStackHelper.getDisplayName(Icon.QUANTUM_STORAGE_NO_ITEM);
+    public static final String NO_ITEM = DisplayNameUtils.getDisplayName(Icon.QUANTUM_STORAGE_NO_ITEM);
 
     public static final Comparator<Map.Entry<ItemStack, Long>> ITEMSTACK_ALPHABETICAL_SORT = Comparator.comparing(
         entry -> {
@@ -26,7 +26,7 @@ public class Sorters {
             if (slimefunItem != null) {
                 return TextUtil.stripColor(slimefunItem.getItemName());
             } else {
-                return TextUtil.stripColor(ItemStackHelper.getDisplayName(itemStack));
+                return TextUtil.stripColor(DisplayNameUtils.getDisplayName(itemStack));
             }
         },
         Collator.getInstance(Locale.CHINA)::compare);
@@ -53,7 +53,7 @@ public class Sorters {
             if (slimefunItem != null) {
                 return TextUtil.stripColor(slimefunItem.getItemName());
             } else {
-                return TextUtil.stripColor(ItemStackHelper.getDisplayName(itemStack));
+                return TextUtil.stripColor(DisplayNameUtils.getDisplayName(itemStack));
             }
         },
         Collator.getInstance(Locale.CHINA)::compare);
@@ -69,7 +69,7 @@ public class Sorters {
             if (slimefunItem != null) {
                 return TextUtil.stripColor(slimefunItem.getItemName());
             } else {
-                return TextUtil.stripColor(ItemStackHelper.getDisplayName(itemStack));
+                return TextUtil.stripColor(DisplayNameUtils.getDisplayName(itemStack));
             }
         },
         Collator.getInstance(Locale.CHINA)::compare);

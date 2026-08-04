@@ -27,7 +27,7 @@ import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
-import net.guizhanss.guizhanlib.minecraft.helper.MaterialHelper;
+import io.github.sefiraat.networks.utils.DisplayNameUtils;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -141,7 +141,7 @@ public abstract class AdvancedDirectional extends NetworkDirectional {
                 String.format(
                     Lang.getString("messages.normal-operation.directional.display_name"),
                     blockFace.name(),
-                    MaterialHelper.getName(blockMaterial)));
+                    DisplayNameUtils.getMaterialName(blockMaterial)));
             final ItemMeta itemMeta = displayStack.getItemMeta();
             itemMeta.setLore(Lang.getStringList("messages.normal-operation.directional.display_lore"));
             if (active) {
@@ -363,12 +363,12 @@ public abstract class AdvancedDirectional extends NetworkDirectional {
 
                 if (getCargoNumberSlot() != -1) {
                     blockMenu.addMenuClickHandler(getCargoNumberSlot(), (player, i, itemStack, clickAction) -> {
-                        player.sendMessage(ChatColors.color("&e输入数量"));
+                        player.sendMessage(ChatColors.color("&eEnter the transfer amount"));
                         ChatUtils.awaitInput(player, input -> {
                             try {
                                 int value = Calculator.calculate(input).intValue();
                                 if (value <= 0 || value > getMaxLimit()) {
-                                    player.sendMessage("请输入 1 ~ " + getMaxLimit() + " 之间的正整数");
+                                    player.sendMessage("Enter a positive whole number between 1 and " + getMaxLimit());
                                     BlockMenu menu = StorageCacheUtils.getMenu(location);
                                     if (menu != null) menu.open(player);
                                     return;

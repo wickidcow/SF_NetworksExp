@@ -1,26 +1,54 @@
-![](https://cdn.jsdelivr.net/gh/SlimefunGuguProject/Networks@master/images/logo/logo_large.png)
+# Networks Legacy
 
-[网络拓展](https://github.com/balugaq/NetworksExpansion)是一个[Slimefun](https://github.com/SlimefunGuguProject/Slimefun4)附属插件，基于[网络](https://github.com/SlimefunGuguProject/Networks)进行再开发以及 bug 修复，可以创建一个简单有效的物品存储与运输系统，并可以与货运系统交互。
+**Networks Legacy** is an English-first, actively maintained continuation of the original **Networks** addon for **Slimefun Legacy**.
 
-![](https://cdn.jsdelivr.net/gh/SlimefunGuguProject/Networks@master/images/wiki/setup.png)
+It preserves the original plugin identity, item IDs, packages, and storage behavior while bringing the modern NetworksExpansion feature set to current Paper and Purpur servers.
 
-> [!IMPORTANT]
-> [网络拓展](https://github.com/balugaq/NetworksExpansion)不需要[网络](https://github.com/SlimefunGuguProject/Networks)作为前置
+## Highlights
 
-## 下载
+- Complete network-based item storage and transport
+- Network Controllers, Bridges, Grids, Importers, Exporters, Pushers, and Grabbers
+- Quantum Storage, Network Drawers, managers, viewers, and crafting systems
+- P2P, wireless, power, blueprint, and advanced transfer features from NetworksExpansion
+- English item names and descriptions based on Sefiraat's original Blob Builds wording
+- Exact Slimefun Legacy compile-time compatibility
+- Java 21 bytecode for Java 21 and newer runtimes
+- Automatic JAR replacement disabled
 
-[![构建状态](https://builds.guizhanss.com/api/badge/ytdd9527/NetworksExpansion/master/latest)](https://builds.guizhanss.com/ytdd9527/NetworksExpansion/master)
+## Compatibility
 
-## Wiki / 文档
+| Platform | Status |
+|---|---|
+| Slimefun Legacy | Required |
+| Paper / Purpur 1.21.x and 26.x | Primary target |
+| Java 21+ | Supported bytecode target |
+| Folia | Not yet supported |
+| Original Networks data | Preserved by design; staging backup test required |
 
-你可以在这里查看[网络](https://github.com/SlimefunGuguProject/Networks)所有物品的功能：[点击查看](https://slimefun-addons-wiki.guizhanss.cn/networks/)
+This first Legacy alpha intentionally avoids changing item IDs, plugin identity, storage keys, or database formats.
 
-## 感谢
+## Building
 
-感谢 Boomer, Cai 以及 Lucky 帮忙测试并完善插件。
+Networks Legacy must be compiled against an exact Slimefun Legacy JAR:
 
-感谢 **mct.tantrum.org** 的服主提供的测试环境。
+```bash
+./gradlew clean build \
+  -PslimefunLegacyJar=/path/to/Slimefun-4.1.16.jar
+```
 
-另外，感谢 **mc.talosmp.net** 的 **GentlemanCheesy** 成为[本人](https://github.com/Sefiraat)的首位赞助者！每个月能多喝一杯咖啡让我能有动力更好地编写插件。
+The shaded plugin will be created in `build/libs/`.
 
-感谢 [m1919810 / matl114](https://github.com/m1919810) — 帮助[我](https://github.com/balugaq)找到了一些[网络拓展](https://github.com/balugaq/NetworksExpansion)的 bug
+GitHub Actions builds Slimefun Legacy first, then compiles Networks against that exact artifact and verifies Java 21 bytecode.
+
+## Credits
+
+- **Sefiraat** — original Networks project and classic English wording
+- **SlimefunGuguProject contributors** — continued compatibility work
+- **ytdd9527, balugaq, yitoudaidai, tinalness, and contributors** — NetworksExpansion development
+- **wickidcow** — Slimefun Legacy maintenance and Albion compatibility
+
+Networks Legacy remains licensed under the GNU General Public License v3.0.
+
+## Safety
+
+Back up the server, Networks configuration, and Slimefun data before replacing an existing Networks build. Test existing Controllers, Grids, Drawers, Quantum Storage, blueprints, and wireless links on a staging copy first.

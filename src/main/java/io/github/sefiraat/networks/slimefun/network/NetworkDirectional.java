@@ -27,7 +27,7 @@ import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
-import net.guizhanss.guizhanlib.minecraft.helper.MaterialHelper;
+import io.github.sefiraat.networks.utils.DisplayNameUtils;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -160,7 +160,7 @@ public abstract class NetworkDirectional extends NetworkObject {
                 String.format(
                     Lang.getString("messages.normal-operation.directional.display_name"),
                     blockFace.name(),
-                    MaterialHelper.getName(blockMaterial)));
+                    DisplayNameUtils.getMaterialName(blockMaterial)));
             final ItemMeta itemMeta = displayStack.getItemMeta();
             itemMeta.setLore(Lang.getStringList("messages.normal-operation.directional.display_lore"));
             if (active) {

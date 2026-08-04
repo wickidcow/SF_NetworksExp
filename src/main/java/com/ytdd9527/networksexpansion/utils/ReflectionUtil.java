@@ -12,7 +12,7 @@
  *
  * - The above copyright notice and this permission notice shall be included in
  *   all copies or substantial portions of the Software.
- * - The author's name (balugaq or 大香蕉) and project name (JustEnoughGuide or JEG) shall not be
+ * - The author's name (balugaq or balugaq) and project name (JustEnoughGuide or JEG) shall not be
  *   removed or altered from any source distribution or documentation.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR

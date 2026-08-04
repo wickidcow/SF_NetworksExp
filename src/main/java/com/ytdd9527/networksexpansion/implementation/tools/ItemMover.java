@@ -30,7 +30,7 @@ import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.protection.Interaction;
 import io.ncbpfluffybear.fluffymachines.items.Barrel;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
-import net.guizhanss.guizhanlib.minecraft.helper.inventory.ItemStackHelper;
+import io.github.sefiraat.networks.utils.DisplayNameUtils;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -253,7 +253,7 @@ public class ItemMover extends SpecialSlimefunItem implements DistinctiveItem {
         if (storedItemStack != null && amount > 0) {
             lore.add(String.format(
                 Lang.getString("messages.normal-operation.item_mover.stored_item"),
-                ItemStackHelper.getDisplayName(storedItemStack)));
+                DisplayNameUtils.getDisplayName(storedItemStack)));
             lore.add(String.format(Lang.getString("messages.normal-operation.item_mover.stored_amount"), amount));
         } else {
             clearPDC(itemStack);
@@ -408,7 +408,7 @@ public class ItemMover extends SpecialSlimefunItem implements DistinctiveItem {
         }
 
         int before = fetched.getAmount();
-        String name = ItemStackHelper.getDisplayName(fetched);
+        String name = DisplayNameUtils.getDisplayName(fetched);
         depositItem(mover, fetched);
         int after = fetched.getAmount();
         player.sendMessage(String.format(
@@ -443,7 +443,7 @@ public class ItemMover extends SpecialSlimefunItem implements DistinctiveItem {
         }
 
         ItemStack clone = StackUtils.getAsQuantity(storedItemStack, storedAmount);
-        String name = ItemStackHelper.getDisplayName(clone);
+        String name = DisplayNameUtils.getDisplayName(clone);
         int before = clone.getAmount();
         barrel.depositItemStack(clone);
         int after = clone.getAmount();

@@ -3,7 +3,7 @@ package io.github.sefiraat.networks.network.stackcaches;
 import com.balugaq.netex.utils.Lang;
 import lombok.Getter;
 import lombok.Setter;
-import net.guizhanss.guizhanlib.minecraft.helper.inventory.ItemStackHelper;
+import io.github.sefiraat.networks.utils.DisplayNameUtils;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.jetbrains.annotations.NotNull;
@@ -135,7 +135,7 @@ public class QuantumCache extends ItemStackCache {
         final List<String> lore = old != null ? new ArrayList<>(old) : new ArrayList<>();
         String itemName = Lang.getString("messages.normal-operation.quantum_cache.empty");
         if (getItemStack() != null) {
-            itemName = ItemStackHelper.getDisplayName(this.getItemStack());
+            itemName = DisplayNameUtils.getDisplayName(this.getItemStack());
         }
         lore.add("");
         lore.add(String.format(Lang.getString("messages.normal-operation.quantum_cache.stored_item"), itemName));
@@ -156,7 +156,7 @@ public class QuantumCache extends ItemStackCache {
         }
         String itemName = Lang.getString("messages.normal-operation.quantum_cache.empty");
         if (getItemStack() != null) {
-            itemName = ItemStackHelper.getDisplayName(this.getItemStack());
+            itemName = DisplayNameUtils.getDisplayName(this.getItemStack());
         }
         final int loreIndexModifier = this.supportsCustomMaxAmount ? 1 : 0;
         lore.set(

@@ -39,6 +39,10 @@ public class ConfigManager {
             checkKey(existingConfig, resourceConfig, key);
         }
 
+        // This distribution is English-only and never replaces its own JAR.
+        existingConfig.set("language", "en-US");
+        existingConfig.set("auto-update", false);
+
         try {
             existingConfig.save(existingFile);
         } catch (IOException e) {
@@ -68,7 +72,7 @@ public class ConfigManager {
     }
 
     public @NotNull String getLanguage() {
-        return Networks.getInstance().getConfig().getString("language", "zh-CN");
+        return "en-US";
     }
 
     public boolean isForceCheckLore() {
