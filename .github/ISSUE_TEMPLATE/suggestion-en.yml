@@ -1,14 +1,13 @@
 name: Development Suggestion Feedback
 description: Submit development suggestions
 labels: [ "suggestion" ]
-assignees:
-  - balugaq
+assignees: []
 body:
   - type: markdown
     attributes:
       value: |
-        ## Welcome to the NetworksExpansion Issue Tracker
-        You are submitting a development suggestion for NetworksExpansion.
+        ## Welcome to the Networks Legacy Issue Tracker
+        You are submitting a development suggestion for Networks Legacy.
         
         <strong><i>You must fill out the fields marked with an asterisk (*)</i></strong>
 
@@ -18,7 +17,7 @@ body:
       label: Checklist
       description: Before reporting, you need to confirm
       options:
-        - label: You have searched the [list of known issues](https://github.com/ytdd9527/NetworksExpansion/issues) and have not found the same suggestion
+        - label: You have searched the [list of known issues](https://github.com/ytdd9527/Networks Legacy/issues) and have not found the same suggestion
           required: true
 
   - type: textarea

@@ -1,44 +1,65 @@
-name: Build CI
+name: Build Networks Legacy
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [master]
   pull_request:
-    branches: [ "master" ]
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
-    if: startsWith(github.event.head_commit.message, '[ci skip]') == false
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out Networks Legacy
+        uses: actions/checkout@v6
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+      - name: Check out Slimefun Legacy
+        uses: actions/checkout@v6
         with:
-          java-version: '21'
-          distribution: 'temurin'
+          repository: wickidcow/Slimefun-Legacy
+          ref: master
+          path: .ci/slimefun-legacy
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up Java 25
+        uses: actions/setup-java@v5
         with:
-          gradle-version: wrapper
+          distribution: temurin
+          java-version: "25"
+          cache: gradle
 
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
+      - name: Verify Networks compatibility contract
+        run: python3 scripts/verify_legacy_compatibility.py
+
+      - name: Build exact Slimefun Legacy JAR
+        working-directory: .ci/slimefun-legacy
+        run: |
+          chmod +x gradlew
+          python3 scripts/verify_legacy.py .
+          ./gradlew spotlessApply --no-daemon
+          ./gradlew clean build --no-daemon
+
+      - name: Build Networks against Slimefun Legacy
+        shell: bash
+        run: |
+          chmod +x gradlew
+          SLIMEFUN_JAR="$(find .ci/slimefun-legacy/build/libs -name 'Slimefun-*.jar' ! -name '*-sources.jar' -print -quit)"
+          test -n "$SLIMEFUN_JAR"
+          ./gradlew clean build --no-daemon -PslimefunLegacyJar="$PWD/$SLIMEFUN_JAR"
+
+      - name: Verify Java 21 bytecode
+        shell: bash
+        run: |
+          NETWORKS_JAR="$(find build/libs -name 'Networks-Legacy-*.jar' ! -name '*-sources.jar' -print -quit)"
+          test -n "$NETWORKS_JAR"
+          python3 scripts/verify_java21_bytecode.py "$NETWORKS_JAR"
+
+      - name: Upload plugin artifact
+        uses: actions/upload-artifact@v7
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: ${{ runner.os }}-gradle
-
-      - name: Build with Gradle
-        run: gradle clean build
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: NetworksExpansion
-          path: build/libs/*.jar
+          name: Networks-Legacy-Alpha1
+          path: build/libs/Networks-Legacy-*.jar
+          if-no-files-found: error
