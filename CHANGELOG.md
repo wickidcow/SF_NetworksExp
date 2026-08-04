@@ -28,3 +28,10 @@
 - Replaced the Tencent Gradle mirror with the official Gradle distribution.
 - Added compatibility, localization, placeholder, item-ID, and Java bytecode verification.
 - Marked Folia unsupported until a dedicated scheduler and region-ownership audit is complete.
+
+## 2.1.112-Legacy-Alpha1 compile compatibility follow-up
+
+- Build Slimefun Legacy with Java 25, then switch the Networks compilation to Java 21.
+- Update Lombok to 1.18.46 for current JDK compatibility.
+- Replace inheritance from Paper's now-final `RecipeChoice.ExactChoice` with a composition-based `RecipeChoice` implementation.
+- Add permanent verifier checks for the Java 21 compile lane and recipe-choice compatibility.

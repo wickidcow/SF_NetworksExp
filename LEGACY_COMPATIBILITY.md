@@ -49,3 +49,7 @@ The original Chinese locale is retained only under `scripts/localization/` as a 
 10. Stop the server normally and verify data after a second startup.
 
 Folia is intentionally not claimed for Alpha 1 because the inherited code still contains direct Bukkit scheduler access that needs a separate ownership audit.
+
+## Java compilation boundary
+
+The workflow builds Slimefun Legacy using Java 25, then deliberately switches to Java 21 before compiling Networks. This keeps Networks on its supported Java 21 bytecode and annotation-processing path while still consuming the exact current Slimefun Legacy JAR. Paper 26.x also makes `RecipeChoice.ExactChoice` final, so Networks uses a composition-based recipe choice rather than subclassing Bukkit internals.

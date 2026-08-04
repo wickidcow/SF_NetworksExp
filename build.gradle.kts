@@ -19,6 +19,9 @@ if (!slimefunLegacyJar.isFile) {
 }
 
 java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(21))
+    }
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21
     withSourcesJar()
@@ -59,8 +62,10 @@ dependencies {
         exclude("net.jcip", "jcip-annotations")
         exclude("com.google.code.findbugs", "jsr305")
     }
-    compileOnly("org.projectlombok:lombok:1.18.44")
-    annotationProcessor("org.projectlombok:lombok:1.18.44")
+    compileOnly("org.projectlombok:lombok:1.18.46")
+    annotationProcessor("org.projectlombok:lombok:1.18.46")
+    testCompileOnly("org.projectlombok:lombok:1.18.46")
+    testAnnotationProcessor("org.projectlombok:lombok:1.18.46")
 
     // Optional integrations. These remain compile-only and are never bundled.
     compileOnly("com.github.SlimefunGuguProject:InfinityExpansion:3c5db3650a")

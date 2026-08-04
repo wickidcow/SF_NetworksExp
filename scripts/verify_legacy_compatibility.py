@@ -69,6 +69,7 @@ locale = yaml.safe_load(locale_text) or {}
 source_locale = yaml.safe_load(read("scripts/localization/zh-CN-source.yml")) or {}
 baseline_ids = [line for line in read("compatibility/item-ids-2.1.111.txt").splitlines() if line]
 workflow = read(".github/workflows/build.yml")
+simple_recipe_choice = read("src/main/java/com/balugaq/netex/api/data/SimpleRecipeChoice.java")
 wrapper = read("gradle/wrapper/gradle-wrapper.properties")
 networks_java = read("src/main/java/io/github/sefiraat/networks/Networks.java")
 java_sources = ''.join(p.read_text(encoding="utf-8") for p in (ROOT / "src/main/java").rglob("*.java"))
@@ -81,6 +82,8 @@ require(config.get("language") == "en-US", "default language must be en-US")
 require(config.get("auto-update") is False, "automatic JAR replacement must remain disabled")
 require('version = "2.1.112-Legacy-Alpha1"' in build, "project version is not Alpha1")
 require('options.release.set(21)' in build, "Java 21 release target is missing")
+require('languageVersion.set(JavaLanguageVersion.of(21))' in build, "Java 21 Gradle toolchain is missing")
+require('org.projectlombok:lombok:1.18.46' in build, "Lombok 1.18.46 compatibility processor is missing")
 require('paper-api:1.21.11-R0.1-SNAPSHOT' in build, "Paper 1.21.11 API baseline is missing")
 require('compileOnly(files(slimefunLegacyJar))' in build, "exact local Slimefun Legacy dependency is missing")
 require('com.github.SlimefunGuguProject:Slimefun4:' not in build, "Gugu Slimefun core dependency is still present")
@@ -92,6 +95,8 @@ require('net.guizhanss.guizhanlib' not in java_sources, "GuizhanLib runtime impo
 require('DisplayNameUtils.getDisplayName(' in java_sources, "Networks-owned item display-name bridge is not in use")
 require('DisplayNameUtils.getMaterialName(' in java_sources, "Networks-owned material-name bridge is not in use")
 require('services.gradle.org/distributions/gradle-9.4.1-bin.zip' in wrapper, "official Gradle wrapper URL is missing")
+require('extends RecipeChoice.ExactChoice' not in simple_recipe_choice, "SimpleRecipeChoice still extends final RecipeChoice.ExactChoice")
+require('implements RecipeChoice' in simple_recipe_choice, "SimpleRecipeChoice no longer implements RecipeChoice")
 
 runtime_langs = sorted(p.name for p in (ROOT / "src/main/resources/lang").glob("*.yml"))
 require(runtime_langs == ["en-US.yml"], f"unexpected runtime language files: {runtime_langs}")
@@ -119,6 +124,8 @@ for base in [ROOT / "src", ROOT / ".github", ROOT / "README.md", ROOT / "LEGACY_
 for required in [
     'repository: wickidcow/Slimefun-Legacy',
     'java-version: "25"',
+    'name: Set up Java 21 for Networks',
+    'java-version: "21"',
     '-PslimefunLegacyJar=',
     'verify_legacy_compatibility.py',
     'verify_java21_bytecode.py',
