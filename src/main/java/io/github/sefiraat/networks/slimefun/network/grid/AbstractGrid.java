@@ -3,7 +3,6 @@ package io.github.sefiraat.networks.slimefun.network.grid;
 import com.balugaq.netex.api.algorithm.Sorters;
 import com.balugaq.netex.api.enums.FeedbackType;
 import com.balugaq.netex.api.helpers.Icon;
-import com.balugaq.netex.utils.InventoryUtil;
 import com.balugaq.netex.utils.Lang;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
@@ -44,6 +43,7 @@ import org.jetbrains.annotations.Range;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.text.MessageFormat;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -107,7 +107,9 @@ public abstract class AbstractGrid extends NetworkObject {
                     }
                     addToRegistry(block);
                     tryAddItem(blockMenu);
-                    GridCache cache = getCacheMap().get(block.getLocation());
+                    GridCache cache = getCacheMap().computeIfAbsent(
+                        block.getLocation().clone(),
+                        ignored -> new GridCache(0, 0, GridCache.SortOrder.ALPHABETICAL));
                     cache.setEntriesCache(null);
                     updateDisplay(blockMenu);
                 }
@@ -196,9 +198,17 @@ public abstract class AbstractGrid extends NetworkObject {
             return;
         }
 
-        final NetworkRoot root = definition.getNode().getRoot();
+        final NodeDefinition currentDefinition = NetworkStorage.getNode(blockMenu.getLocation());
+        if (currentDefinition == null || currentDefinition.getNode() == null) {
+            clearDisplay(blockMenu);
+            sendFeedback(blockMenu.getLocation(), FeedbackType.NO_NETWORK_FOUND);
+            return;
+        }
+        final NetworkRoot root = currentDefinition.getNode().getRoot();
 
-        final GridCache gridCache = getCacheMap().get(blockMenu.getLocation().clone());
+        final GridCache gridCache = getCacheMap().computeIfAbsent(
+            blockMenu.getLocation().clone(),
+            ignored -> new GridCache(0, 0, GridCache.SortOrder.ALPHABETICAL));
         final List<Map.Entry<ItemStack, Long>> entries = getEntries(root, gridCache);
         final int pages = (int) Math.ceil(entries.size() / (double) getDisplaySlots().length) - 1;
 
@@ -235,13 +245,11 @@ public abstract class AbstractGrid extends NetworkObject {
                 if (itemMeta == null) {
                     continue;
                 }
-                List<String> lore = itemMeta.getLore();
-
-                if (lore == null) {
-                    lore = getLoreAddition(entry.getValue());
-                } else {
-                    lore.addAll(getLoreAddition(entry.getValue()));
-                }
+                final List<String> existingLore = itemMeta.getLore();
+                final List<String> lore = existingLore == null
+                    ? new ArrayList<>()
+                    : new ArrayList<>(existingLore);
+                lore.addAll(getLoreAddition(entry.getValue()));
 
                 itemMeta.setLore(lore);
                 displayStack.setItemMeta(itemMeta);
@@ -336,9 +344,7 @@ public abstract class AbstractGrid extends NetworkObject {
                         BlockMenu actualMenu = data.getBlockMenu();
                         if (actualMenu != null) {
                             actualMenu.open(player);
-                            if (gridCache.getMaxPages() >= 1) {
-                                gridCache.setPage(1);
-                            }
+                            gridCache.setPage(0);
                             updateDisplay(actualMenu);
                         }
                     }
@@ -418,17 +424,12 @@ public abstract class AbstractGrid extends NetworkObject {
     @ParametersAreNonnullByDefault
     private void addToInventory(
         Player player, NodeDefinition definition, GridItemRequest request, ClickAction action, BlockMenu menu) {
-        ItemStack requestingStack = definition.getNode().getRoot().getItemStack0(menu.getLocation(), request);
-
-        if (requestingStack == null) {
-            return;
-        }
-
-        HashMap<Integer, ItemStack> remnant = InventoryUtil.addItem(player, requestingStack);
-        requestingStack = remnant.values().stream().findFirst().orElse(null);
-        if (requestingStack != null) {
-            definition.getNode().getRoot().addItemStack0(menu.getLocation(), requestingStack);
-        }
+        NetworkTransferUtils.moveNetworkItemIntoPlayerInventory(
+            definition.getNode().getRoot(),
+            menu.getLocation(),
+            player,
+            request.getItemStack(),
+            request.getAmount());
     }
 
     @SuppressWarnings("deprecation")
@@ -446,17 +447,12 @@ public abstract class AbstractGrid extends NetworkObject {
             return;
         }
 
-        ItemStack requestingStack = definition.getNode().getRoot().getItemStack0(menu.getLocation(), request);
-        setCursor(player, cursor, requestingStack);
-    }
-
-    private void setCursor(@NotNull Player player, @NotNull ItemStack cursor, @Nullable ItemStack requestingStack) {
-        if (requestingStack != null) {
-            if (cursor.getType() != Material.AIR) {
-                requestingStack.setAmount(cursor.getAmount() + 1);
-            }
-            player.setItemOnCursor(requestingStack);
-        }
+        NetworkTransferUtils.moveNetworkItemOntoCursor(
+            definition.getNode().getRoot(),
+            menu.getLocation(),
+            player,
+            request.getItemStack(),
+            request.getAmount());
     }
 
     @SuppressWarnings("deprecation")

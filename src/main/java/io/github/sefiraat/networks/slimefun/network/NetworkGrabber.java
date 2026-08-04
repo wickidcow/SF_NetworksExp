@@ -1,5 +1,6 @@
 package io.github.sefiraat.networks.slimefun.network;
 
+import com.balugaq.netex.utils.BlockMenuUtil;
 import com.balugaq.netex.api.enums.FeedbackType;
 import com.balugaq.netex.api.interfaces.SoftCellBannable;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
@@ -62,7 +63,7 @@ public class NetworkGrabber extends NetworkDirectional implements SoftCellBannab
         }
 
         int[] slots =
-            targetMenu.getPreset().getSlotsAccessedByItemTransport(targetMenu, ItemTransportFlow.WITHDRAW, null);
+            BlockMenuUtil.getSafeTransportSlots(targetMenu, ItemTransportFlow.WITHDRAW);
 
         for (int slot : slots) {
             final ItemStack itemStack = targetMenu.getItemInSlot(slot);

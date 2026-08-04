@@ -65,7 +65,7 @@ public class NetworkController extends NetworkObject {
 
             @Override
             public void tick(@NotNull Block block, SlimefunItem item, @NotNull SlimefunBlockData data) {
-                if (block.getType() == Material.AIR) {
+                if (block.getType() == Material.AIR || !getId().equals(data.getSfId())) {
                     firstTickMap.remove(block.getLocation());
                     removeRuntimeState(block.getLocation());
                     return;

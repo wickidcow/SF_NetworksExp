@@ -53,6 +53,12 @@ Build requirements:
 - Cached nodes are lazily invalidated when their physical Slimefun item or node type no longer matches.
 - Quantum Storage withdrawals update the cache before synchronizing persistent block data.
 - Crafting grids bind one exact recipe matrix to one output, consume the complete matrix before output creation, restore reserved ingredients after cancellation/failure, and stop repeated crafting when refills or output space run out.
+- Cargo-facing menu access is routed through a defensive transport-slot adapter that supports both the item-aware and legacy Slimefun menu methods and filters invalid slot indexes.
+- Vanilla pushers commit partial insertion exactly, reject Crafter inventories, and verify furnace/brewing destinations before changing the source.
+- Vanilla grabbers verify an exact cloned destination stack before clearing the source inventory slot.
+- Network Remote revalidates its live grid, loaded chunk, protection permission, block data, and menu after deferred loading.
+- Controller tickers reject stale AIR/replaced records, and root-ready events report the actual caller thread mode.
+- Drawer and LogiTech linker hot caches use concurrency-safe collections; invalid linker icons/types fail closed or repair to a safe default.
 
 ## Doctor commands
 
@@ -85,5 +91,8 @@ The reflective bridge is absent at class-link time, allowing the same JAR to loa
 9. Test wireless and P2P links across chunk unload/reload.
 10. Break and replace test nodes, then confirm no ghost entries remain.
 11. Stop normally, start again, and repeat the amount/blueprint checks.
+12. Test Slimefun cargo nodes against Networks storage and machines from installed addons with full, partial, filtered, and rejected-item inventories.
+13. Test Network Remotes before and after grid replacement and chunk unload/reload.
+14. Test vanilla pushers/grabbers with ordinary containers, furnaces, brewing stands, and Crafter blocks.
 
 Folia remains unclaimed because safe individual ticker dispatch does not by itself make a multi-chunk transactional network region-safe.

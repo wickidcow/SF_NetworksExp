@@ -36,7 +36,7 @@ import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jspecify.annotations.NullMarked;
 
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -65,7 +65,7 @@ public class NetworkCraftingGridNewStyle extends AbstractGridNewStyle implements
     private static final int CRAFT_BUTTON_SLOT = 33;
     private static final int OUTPUT_SLOT = 34;
     private static final int[] INGREDIENT_SLOTS = {6, 7, 8, 15, 16, 17, 24, 25, 26};
-    private static final Map<Location, GridCache> CACHE_MAP = new HashMap<>();
+    private static final Map<Location, GridCache> CACHE_MAP = new ConcurrentHashMap<>();
 
     public NetworkCraftingGridNewStyle(
         @NotNull ItemGroup itemGroup,
@@ -280,7 +280,19 @@ public class NetworkCraftingGridNewStyle extends AbstractGridNewStyle implements
                     menu, INGREDIENT_SLOTS[slotIndex], Math.max(1, required.getAmount()), true);
             }
 
-            BlockMenuUtil.pushItem(menu, eventOutput.clone(), OUTPUT_SLOT);
+            final ItemStack outputRemainder = BlockMenuUtil.pushItem(menu, eventOutput.clone(), OUTPUT_SLOT);
+            if (outputRemainder != null
+                && outputRemainder.getType() != Material.AIR
+                && outputRemainder.getAmount() > 0) {
+                NetworkTransferUtils.rollbackNetworkWithdrawal(
+                    root,
+                    menu.getLocation(),
+                    outputRemainder,
+                    menu.getLocation(),
+                    "new-style crafting-grid output commit");
+            }
+            menu.markDirty();
+            root.refreshRootItems();
         }
     }
 
@@ -317,12 +329,13 @@ public class NetworkCraftingGridNewStyle extends AbstractGridNewStyle implements
                 return;
             }
 
-            GridItemRequest request =
-                new GridItemRequest(required.clone(), Math.max(1, required.getAmount()), player);
-            ItemStack refill = root.getItemStack0(menu.getLocation(), request);
-            if (refill != null && refill.getType() != Material.AIR) {
-                menu.replaceExistingItem(menuSlot, refill);
-            }
+            NetworkTransferUtils.moveNetworkItemIntoMenu(
+                root,
+                menu.getLocation(),
+                menu,
+                required,
+                Math.max(1, required.getAmount()),
+                menuSlot);
         }
     }
 

@@ -36,6 +36,9 @@ Unknown Slimefun cores fail closed by default. An override exists in `config.yml
 - `/networks doctor status|scan|repair confirm`
 - Optional reflective integration with Slimefun Legacy's `/sf doctor addons` service
 - Exact-core GitHub Actions builds against all three Slimefun families
+- Defensive cross-fork cargo-slot resolution for Legacy, United, Gugu, and addon menu presets
+- Verified partial vanilla-container transfers and clone-before-source-removal grabber behavior
+- Network Remote and controller stale-state revalidation across chunk unload/reload
 
 ## Building
 
@@ -54,6 +57,8 @@ The GitHub Actions workflow builds each Slimefun core first, compiles this same 
 Back up the full server before replacing an existing Networks build. Test a copy of the world first, including existing Controllers, Grids, Drawers, Quantum Storage, Importers, Exporters, Pushers, Grabbers, wireless/P2P links, encoded blueprints, automatic crafters, a clean restart, and `/networks doctor scan`.
 
 Alpha 2 contains a safe startup migration that combines duplicate drawer rows before creating a uniqueness index. It does not rename the database or intentionally change item IDs, plugin identity, or world block records.
+
+See [`RUNTIME_STABILITY.md`](RUNTIME_STABILITY.md) for the complete preserved-data contract and server validation checklist.
 
 ## Credits
 

@@ -1,6 +1,5 @@
 package com.balugaq.netex.utils;
 
-import com.ytdd9527.networksexpansion.implementation.machines.networks.advanced.SmartNetworkCraftingGridNewStyle;
 import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.utils.StackUtils;
 import lombok.experimental.UtilityClass;
@@ -14,9 +13,18 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;
 
+/**
+ * Inventory helpers with explicit remainder semantics.
+ *
+ * <p>The original implementation stopped after filling the first matching stack. On inventories with
+ * several partial stacks this could report a remainder even though later slots still had capacity. The
+ * implementation below always fills every compatible stack before consuming empty slots and never silently
+ * discards an input remainder.</p>
+ */
 @SuppressWarnings("DuplicatedCode")
 @UtilityClass
 public class InventoryUtil {
+
     public static @NotNull HashMap<Integer, ItemStack> addItem(@NotNull Player player, ItemStack... toAdd) {
         HashMap<Integer, ItemStack> result = addItem(player.getInventory(), toAdd);
         player.updateInventory();
@@ -29,60 +37,55 @@ public class InventoryUtil {
 
     public static @NotNull HashMap<Integer, ItemStack> addItem(
         @NotNull Inventory inventory, ItemStack @NotNull ... toAdds) {
-        HashMap<Integer, ItemStack> leftover = new HashMap<>();
-        ItemStack[] storage = inventory.getStorageContents();
+
+        final HashMap<Integer, ItemStack> leftovers = new HashMap<>();
+        final ItemStack[] storage = inventory.getStorageContents();
         if (storage == null) {
-            // Fallback
             return inventory.addItem(toAdds);
         }
 
-        for (ItemStack toAdd : toAdds) {
-            if (toAdd == null || toAdd.getType() == Material.AIR) {
+        int remainderIndex = 0;
+        for (ItemStack incoming : toAdds) {
+            if (incoming == null || incoming.getType() == Material.AIR || incoming.getAmount() <= 0) {
+                remainderIndex++;
                 continue;
             }
 
-            int index = firstSimilar(storage, toAdd);
-            if (index == -1) {
-                while (toAdd.getAmount() > 0) {
-                    index = firstEmpty(storage);
-                    if (index == -1) {
-                        leftover.put(inventory.firstEmpty(), toAdd);
-                        break;
-                    }
-                    int handledAmount = Math.min(toAdd.getAmount(), toAdd.getMaxStackSize());
-                    storage[index] = toAdd.asQuantity(handledAmount);
-                    toAdd.setAmount(toAdd.getAmount() - handledAmount);
+            // Fill every matching partial stack, not just the first one.
+            for (int slot = 0; slot < storage.length && incoming.getAmount() > 0; slot++) {
+                final ItemStack existing = storage[slot];
+                if (existing == null
+                    || existing.getType() == Material.AIR
+                    || existing.getAmount() >= existing.getMaxStackSize()
+                    || !StackUtils.itemsMatch(existing, incoming, true, false)) {
+                    continue;
                 }
-            } else {
-                ItemStack exist = storage[index];
-                int existing = exist.getAmount();
-                int maxStack = exist.getMaxStackSize();
-                if (existing >= maxStack) {
-                    while (toAdd.getAmount() > 0) {
-                        index = firstEmpty(storage);
-                        if (index == -1) {
-                            leftover.put(inventory.firstEmpty(), toAdd);
-                            break;
-                        }
-                        int handledAmount = Math.min(toAdd.getAmount(), toAdd.getMaxStackSize());
-                        storage[index] = toAdd.asQuantity(handledAmount);
-                        toAdd.setAmount(toAdd.getAmount() - handledAmount);
-                    }
-                } else if (existing < maxStack) {
-                    int handled = Math.min(maxStack - existing, toAdd.getAmount());
-                    exist.setAmount(existing + handled);
-                    toAdd.setAmount(toAdd.getAmount() - handled);
-                    if (toAdd.getAmount() != 0) {
-                        leftover.put(index, toAdd);
-                    }
-                } else {
-                    leftover.put(index, toAdd);
-                }
+
+                final int handled = Math.min(existing.getMaxStackSize() - existing.getAmount(), incoming.getAmount());
+                existing.setAmount(existing.getAmount() + handled);
+                incoming.setAmount(incoming.getAmount() - handled);
             }
+
+            // Then split the remainder across empty storage slots.
+            for (int slot = 0; slot < storage.length && incoming.getAmount() > 0; slot++) {
+                final ItemStack existing = storage[slot];
+                if (existing != null && existing.getType() != Material.AIR) {
+                    continue;
+                }
+
+                final int handled = Math.min(incoming.getAmount(), incoming.getMaxStackSize());
+                storage[slot] = incoming.asQuantity(handled);
+                incoming.setAmount(incoming.getAmount() - handled);
+            }
+
+            if (incoming.getAmount() > 0) {
+                leftovers.put(remainderIndex, incoming);
+            }
+            remainderIndex++;
         }
 
         inventory.setStorageContents(storage);
-        return leftover;
+        return leftovers;
     }
 
     public static int firstSimilar(ItemStack @NotNull [] storage, ItemStack item) {
@@ -91,11 +94,12 @@ public class InventoryUtil {
 
     public static int firstSimilar(ItemStack @NotNull [] storage, ItemStack item, boolean withoutAmount) {
         for (int i = 0; i < storage.length; i++) {
-            if (storage[i] != null && storage[i].getAmount() < storage[i].getMaxStackSize() && StackUtils.itemsMatch(storage[i], item, true, !withoutAmount)) {
+            if (storage[i] != null
+                && storage[i].getAmount() < storage[i].getMaxStackSize()
+                && StackUtils.itemsMatch(storage[i], item, true, !withoutAmount)) {
                 return i;
             }
         }
-
         return -1;
     }
 
@@ -105,14 +109,31 @@ public class InventoryUtil {
                 return i;
             }
         }
-
         return -1;
     }
 
-    public static void give(Player player, ItemStack stack) {
-        HashMap<Integer, ItemStack> remnant = InventoryUtil.addItem(player, stack);
-        remnant.values().stream().findFirst().ifPresent(r2 -> Bukkit.getScheduler().runTask(Networks.getInstance(), () -> {
-            player.getWorld().dropItem(player.getLocation(), r2);
-        }));
+    /** Gives an item and drops every remainder rather than losing it. */
+    public static void give(@NotNull Player player, ItemStack stack) {
+        if (stack == null || stack.getType() == Material.AIR || stack.getAmount() <= 0) {
+            return;
+        }
+
+        final HashMap<Integer, ItemStack> remnants = addItem(player, stack);
+        if (remnants.isEmpty()) {
+            return;
+        }
+
+        final Runnable drop = () -> remnants.values().forEach(remainder -> {
+            if (remainder != null && remainder.getType() != Material.AIR && remainder.getAmount() > 0) {
+                player.getWorld().dropItemNaturally(player.getLocation(), remainder.clone());
+                remainder.setAmount(0);
+            }
+        });
+
+        if (Bukkit.isPrimaryThread()) {
+            drop.run();
+        } else {
+            Bukkit.getScheduler().runTask(Networks.getInstance(), drop);
+        }
     }
 }

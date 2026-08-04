@@ -17,7 +17,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -101,67 +100,102 @@ public class StorageUnitData {
         this.storedItems = storedItems; //!! DO NOT USE `new` keyword to create a new ConcurrentHashMap, this will cause data lose!!
     }
 
-    public static void addPersistentAccessHistory(Location location, Integer accessLocation) {
-        Map<Integer, Integer> locations = persistentAccessHistory.getOrDefault(location, new ConcurrentHashMap<>());
-        locations.put(accessLocation, 0);
-        persistentAccessHistory.put(location, locations);
+    /**
+     * Per-accessor hot-path caches store stable database item IDs, never positions in a map snapshot.
+     * This prevents a drawer insert/removal from making a cached index point at a different item.
+     */
+    public static void addPersistentAccessHistory(Location location, Integer itemId) {
+        persistentAccessHistory
+            .computeIfAbsent(normalizeHistoryLocation(location), ignored -> new ConcurrentHashMap<>())
+            .put(itemId, 0);
     }
 
-    public static void addCacheMiss(Location location, Integer accessLocation) {
-        Map<Integer, Integer> locations = persistentAccessHistory.getOrDefault(location, new ConcurrentHashMap<>());
-        int value = locations.getOrDefault(accessLocation, 0) + 1;
+    public static void addCacheMiss(Location location, Integer itemId) {
+        final Map<Integer, Integer> locations =
+            persistentAccessHistory.computeIfAbsent(normalizeHistoryLocation(location), ignored -> new ConcurrentHashMap<>());
+        final int value = locations.merge(itemId, 1, Integer::sum);
         if (value > NetworkRoot.cacheMissThreshold) {
-            removePersistentAccessHistory(location, accessLocation);
+            removePersistentAccessHistory(location, itemId);
+        }
+    }
+
+    public static void minusCacheMiss(Location location, Integer itemId) {
+        final Map<Integer, Integer> locations = persistentAccessHistory.get(normalizeHistoryLocation(location));
+        if (locations == null) {
             return;
         }
-        locations.put(accessLocation, value);
-        persistentAccessHistory.put(location, locations);
-    }
-
-    public static void minusCacheMiss(Location location, Integer accessLocation) {
-        Map<Integer, Integer> locations = persistentAccessHistory.getOrDefault(location, new ConcurrentHashMap<>());
-        int value = Math.max(locations.getOrDefault(accessLocation, 0) - 1, 0);
-        locations.put(accessLocation, value);
+        locations.computeIfPresent(itemId, (ignored, misses) -> misses <= 1 ? null : misses - 1);
     }
 
     public static Map<Integer, Integer> getPersistentAccessHistory(Location location) {
-        return persistentAccessHistory.getOrDefault(location, new ConcurrentHashMap<>());
+        final Map<Integer, Integer> cached = persistentAccessHistory.get(normalizeHistoryLocation(location));
+        return cached == null ? Map.of() : cached;
     }
 
     public static void removePersistentAccessHistory(Location location) {
-        persistentAccessHistory.remove(location);
+        persistentAccessHistory.remove(normalizeHistoryLocation(location));
     }
 
-    public static void removePersistentAccessHistory(Location location, Integer accessLocation) {
-        Map<Integer, Integer> locations = persistentAccessHistory.getOrDefault(location, new ConcurrentHashMap<>());
-        locations.remove(accessLocation);
-        persistentAccessHistory.put(location, locations);
-    }
-
-    public static void addCountObservingAccessHistory(Location location, Integer accessLocation) {
-        Map<Integer, Integer> locations = observingAccessHistory.getOrDefault(location, new HashMap<>());
-        Integer count = locations.getOrDefault(accessLocation, 0);
-        if (count >= NetworkRoot.persistentThreshold) {
-            removeCountObservingAccessHistory(location, accessLocation);
-            addPersistentAccessHistory(location, accessLocation);
+    public static void removePersistentAccessHistory(Location location, Integer itemId) {
+        final Map<Integer, Integer> locations = persistentAccessHistory.get(normalizeHistoryLocation(location));
+        if (locations == null) {
             return;
         }
-        locations.put(accessLocation, count + 1);
-        observingAccessHistory.put(location, locations);
+        locations.remove(itemId);
+        if (locations.isEmpty()) {
+            persistentAccessHistory.remove(normalizeHistoryLocation(location), locations);
+        }
+    }
+
+    public static void addCountObservingAccessHistory(Location location, Integer itemId) {
+        final Map<Integer, Integer> locations =
+            observingAccessHistory.computeIfAbsent(normalizeHistoryLocation(location), ignored -> new ConcurrentHashMap<>());
+        final int count = locations.merge(itemId, 1, Integer::sum);
+        if (count >= NetworkRoot.persistentThreshold) {
+            locations.remove(itemId);
+            addPersistentAccessHistory(location, itemId);
+        }
     }
 
     public static Map<Integer, Integer> getCountObservingAccessHistory(Location location) {
-        return observingAccessHistory.getOrDefault(location, new ConcurrentHashMap<>());
+        final Map<Integer, Integer> cached = observingAccessHistory.get(normalizeHistoryLocation(location));
+        return cached == null ? Map.of() : cached;
     }
 
     public static void removeCountObservingAccessHistory(Location location) {
-        observingAccessHistory.remove(location);
+        observingAccessHistory.remove(normalizeHistoryLocation(location));
     }
 
-    public static void removeCountObservingAccessHistory(Location location, Integer accessLocation) {
-        Map<Integer, Integer> locations = observingAccessHistory.getOrDefault(location, new ConcurrentHashMap<>());
-        locations.remove(accessLocation);
-        observingAccessHistory.put(location, locations);
+    public static void removeCountObservingAccessHistory(Location location, Integer itemId) {
+        final Map<Integer, Integer> locations = observingAccessHistory.get(normalizeHistoryLocation(location));
+        if (locations == null) {
+            return;
+        }
+        locations.remove(itemId);
+        if (locations.isEmpty()) {
+            observingAccessHistory.remove(normalizeHistoryLocation(location), locations);
+        }
+    }
+
+    public static void clearAccessHistory(Location location) {
+        final Location key = normalizeHistoryLocation(location);
+        observingAccessHistory.remove(key);
+        persistentAccessHistory.remove(key);
+    }
+
+    public static void clearAllAccessHistory() {
+        observingAccessHistory.clear();
+        persistentAccessHistory.clear();
+    }
+
+    private static @NotNull Location normalizeHistoryLocation(@NotNull Location location) {
+        final Location normalized = location.clone();
+        normalized.setX(location.getBlockX());
+        normalized.setY(location.getBlockY());
+        normalized.setZ(location.getBlockZ());
+        normalized.setYaw(0.0F);
+        normalized.setPitch(0.0F);
+        return normalized;
     }
 
     public static boolean isBlacklisted(@NotNull ItemStack itemStack) {
@@ -202,50 +236,7 @@ public class StorageUnitData {
      */
     @Deprecated
     public int addStoredItem(@NotNull ItemStack item, int amount, boolean contentLocked, boolean force) {
-        int add = 0;
-        boolean isVoidExcess = NetworksDrawer.isVoidExcess(getLastLocation());
-        for (ItemContainer each : storedItems.values()) {
-            if (each.isSimilar(item)) {
-                // Found existing one, add amount
-                int raw = sizeType.getEachMaxSize() - each.getAmount();
-                if (raw < 0) {
-                    // If super-full, no more add and roll back to normal amount
-                    each.setAmount(sizeType.getEachMaxSize());
-                    return 0;
-                }
-                add = Math.max(0, Math.min(amount, raw));
-                if (isVoidExcess) {
-                    if (add > 0) {
-                        each.addAmount(add);
-                        DataStorage.setStoredAmount(id, each.getId(), each.getAmount());
-                    } else {
-                        item.setAmount(0);
-                        return add;
-                    }
-                } else {
-                    each.addAmount(add);
-                    DataStorage.setStoredAmount(id, each.getId(), each.getAmount());
-                }
-                return add;
-            }
-        }
-
-        // isforce?
-        if (!force) {
-            // If in content locked mode, no new input allowed
-            if (contentLocked || NetworksDrawer.isLocked(getLastLocation())) return 0;
-        }
-        // Not found, new one
-        synchronized (storedItems) {
-            if (storedItems.size() < sizeType.getMaxItemCount()) {
-                add = Math.min(amount, sizeType.getEachMaxSize());
-                int itemId = DataStorage.getItemId(item);
-                storedItems.put(itemId, new ItemContainer(itemId, item, add));
-                DataStorage.addStoredItem(id, itemId, add);
-                return add;
-            }
-        }
-        return add;
+        return addStoredItem0(getLastLocation(), item, amount, contentLocked, force);
     }
 
     public synchronized void setPlaced(boolean isPlaced) {
@@ -263,9 +254,9 @@ public class StorageUnitData {
     }
 
     public synchronized void setLastLocation(@NotNull Location lastLocation) {
-        if (this.lastLocation != lastLocation) {
-            this.lastLocation = lastLocation;
-            DataStorage.setContainerLocation(id, lastLocation);
+        if (!lastLocation.equals(this.lastLocation)) {
+            this.lastLocation = lastLocation.clone();
+            DataStorage.setContainerLocation(id, this.lastLocation);
         }
     }
 
@@ -344,84 +335,37 @@ public class StorageUnitData {
     @Deprecated
     @Nullable
     public ItemStack requestItem(@NotNull ItemRequest itemRequest) {
-        ItemStack item = itemRequest.getItemStack();
-        if (item == null) {
-            return null;
-        }
-
-        int amount = itemRequest.getAmount();
-        for (ItemContainer itemContainer : getStoredItems()) {
-            int containerAmount = itemContainer.getAmount();
-            if (StackUtils.itemsMatch(itemRequest, itemContainer.getSampleDirectly())) {
-                int take = Math.min(amount, containerAmount);
-                if (take <= 0) {
-                    break;
-                }
-                itemContainer.removeAmount(take);
-                DataStorage.setStoredAmount(id, itemContainer.getId(), itemContainer.getAmount());
-                ItemStack clone = item.clone();
-                clone.setAmount(take);
-                return clone;
-            }
-        }
-        return null;
+        return requestItem0(getLastLocation(), itemRequest);
     }
 
     @Deprecated
     public void depositItemStacks(@NotNull Map<ItemStack, Long> itemsToDeposit, boolean contentLocked) {
-        for (Map.Entry<ItemStack, Long> entry : itemsToDeposit.entrySet()) {
-            if (entry.getValue() > Integer.MAX_VALUE) {
-                // rollback to MAX_VALUE
-                long before = entry.getValue();
-                ItemStack item = StackUtils.getAsQuantity(entry.getKey(), Integer.MAX_VALUE);
-                depositItemStack(item, contentLocked);
-                long leftover = item.getAmount();
-                entry.setValue(before - Integer.MAX_VALUE + leftover);
-            } else {
-                ItemStack item = StackUtils.getAsQuantity(entry.getKey(), Math.toIntExact(entry.getValue()));
-                depositItemStack(item, contentLocked);
-                long rest = item.getAmount();
-                entry.setValue(rest);
-            }
-        }
+        depositItemStacks0(getLastLocation(), itemsToDeposit, contentLocked);
     }
 
     @Deprecated
     public void depositItemStack(@NotNull Map.Entry<ItemStack, Integer> entry, boolean contentLocked) {
-        ItemStack item = StackUtils.getAsQuantity(entry.getKey(), entry.getValue());
-        depositItemStack(item, contentLocked);
-        int leftover = item.getAmount();
-        entry.setValue(leftover);
+        depositItemStack0(getLastLocation(), entry, contentLocked);
     }
 
     @Deprecated
     public void depositItemStack(@NotNull Map<ItemStack, Integer> itemsToDeposit, boolean contentLocked) {
-        for (Map.Entry<ItemStack, Integer> entry : itemsToDeposit.entrySet()) {
-            depositItemStack(entry, contentLocked);
-        }
+        depositItemStack0(getLastLocation(), itemsToDeposit, contentLocked);
     }
 
     @Deprecated
     public void depositItemStack(@NotNull ItemStack @NotNull [] itemsToDeposit, boolean contentLocked) {
-        for (ItemStack item : itemsToDeposit) {
-            depositItemStack(item, contentLocked);
-        }
+        depositItemStack0(getLastLocation(), itemsToDeposit, contentLocked);
     }
 
     @Deprecated
     public void depositItemStack(@Nullable ItemStack itemsToDeposit, boolean contentLocked, boolean force) {
-        if (itemsToDeposit == null || isBlacklisted(itemsToDeposit)) {
-            return;
-        }
-        int actualAdded = addStoredItem(itemsToDeposit, itemsToDeposit.getAmount(), contentLocked, force);
-        if (actualAdded > 0) {
-            itemsToDeposit.setAmount(itemsToDeposit.getAmount() - actualAdded);
-        }
+        depositItemStack0(getLastLocation(), itemsToDeposit, contentLocked, force);
     }
 
     @Deprecated
     public void depositItemStack(ItemStack item, boolean contentLocked) {
-        depositItemStack(item, contentLocked, false);
+        depositItemStack0(getLastLocation(), item, contentLocked);
     }
 
     @Nullable
@@ -429,94 +373,80 @@ public class StorageUnitData {
         return requestItem0(accessor, itemRequest, true);
     }
 
+    /**
+     * Atomically withdraws one matching drawer entry. Cached lookups use stable ItemContainer IDs and every
+     * database write is queued only after the in-memory amount has been committed.
+     */
     @Nullable
-    public ItemStack requestItem0(@NotNull Location accessor, @NotNull ItemRequest itemRequest, boolean contentLocked) {
-        ItemStack item = itemRequest.getItemStack();
-        if (item == null) {
+    public synchronized ItemStack requestItem0(
+        @NotNull Location accessor,
+        @NotNull ItemRequest itemRequest,
+        boolean contentLocked) {
+
+        final ItemStack template = itemRequest.getItemStack();
+        final int requested = itemRequest.getAmount();
+        if (template == null || template.getType().isAir() || requested <= 0) {
             return null;
         }
 
-        int amount = itemRequest.getAmount();
-
-        List<ItemContainer> stored = getStoredItems();
-
-        Map<Integer, Integer> m = getPersistentAccessHistory(accessor);
-        if (m != null) {
-            // Netex - Cache start
-            boolean found = false;
-            List<Integer> misses = new ArrayList<>();
-            // Netex - Cache end
-            for (Integer i : m.keySet()) {
-                // Netex - Cache start
-                if (i >= stored.size()) {
-                    removePersistentAccessHistory(accessor, i);
-                    continue;
-                }
-                // Netex - Cache end
-
-                ItemContainer itemContainer = stored.get(i);
-                int containerAmount = itemContainer.getAmount();
-                if (StackUtils.itemsMatch(itemRequest, itemContainer.getSampleDirectly())) {
-                    int take = Math.min(amount, containerAmount);
-                    if (take <= 0) {
-                        if (!contentLocked) {
-                            removeItem(itemContainer.getId());
-                            removePersistentAccessHistory(accessor, i);
-                        }
-                        break;
-                    }
-                    itemContainer.removeAmount(take);
-
-                    DataStorage.setStoredAmount(id, itemContainer.getId(), itemContainer.getAmount());
-                    // Netex - Cache start
-                    minusCacheMiss(accessor, i);
-                    found = true;
-                    // Netex - Cache end
-
-                    ItemStack clone = item.clone();
-                    clone.setAmount(take);
-                    return clone;
-                } else {
-                    // Netex - Cache start
-                    misses.add(i);
-                    // Netex - Cache end
-                }
+        final Map<Integer, Integer> hotIds = getPersistentAccessHistory(accessor);
+        for (Integer itemId : List.copyOf(hotIds.keySet())) {
+            final ItemContainer container = storedItems.get(itemId);
+            if (container == null) {
+                removePersistentAccessHistory(accessor, itemId);
+                continue;
+            }
+            if (!StackUtils.itemsMatch(itemRequest, container.getSampleDirectly())) {
+                addCacheMiss(accessor, itemId);
+                continue;
             }
 
-            // Netex - Cache start
-            if (!found) {
-                for (int miss : misses) {
-                    minusCacheMiss(accessor, miss);
-                }
+            final ItemStack withdrawn = withdrawFromContainer(container, template, requested, contentLocked);
+            if (withdrawn != null) {
+                minusCacheMiss(accessor, itemId);
+                return withdrawn;
             }
-            // Netex - Cache end
         }
 
-        for (int i = 0; i < stored.size(); i++) {
-            ItemContainer itemContainer = stored.get(i);
-            int containerAmount = itemContainer.getAmount();
-            if (StackUtils.itemsMatch(itemRequest, itemContainer.getSampleDirectly())) {
-                int take = Math.min(amount, containerAmount);
-                if (take <= 0) {
-                    if (!contentLocked) {
-                        removeItem(itemContainer.getId());
-                    }
-                    break;
-                }
-
-                itemContainer.removeAmount(take);
-
-                // Netex - Cache start
-                addCountObservingAccessHistory(accessor, i);
-                // Netex - Cache end
-                DataStorage.setStoredAmount(id, itemContainer.getId(), itemContainer.getAmount());
-
-                ItemStack clone = item.clone();
-                clone.setAmount(take);
-                return clone;
+        for (ItemContainer container : storedItems.values()) {
+            if (!StackUtils.itemsMatch(itemRequest, container.getSampleDirectly())) {
+                continue;
+            }
+            final ItemStack withdrawn = withdrawFromContainer(container, template, requested, contentLocked);
+            if (withdrawn != null) {
+                addCountObservingAccessHistory(accessor, container.getId());
+                return withdrawn;
             }
         }
         return null;
+    }
+
+    @Nullable
+    private ItemStack withdrawFromContainer(
+        @NotNull ItemContainer container,
+        @NotNull ItemStack template,
+        int requested,
+        boolean contentLocked) {
+
+        final int available = Math.max(0, container.getAmount());
+        final int taken = Math.min(requested, available);
+        if (taken <= 0) {
+            if (!contentLocked) {
+                removeItem(container.getId());
+            }
+            return null;
+        }
+
+        container.removeAmount(taken);
+        if (container.getAmount() <= 0 && !contentLocked) {
+            removeItem(container.getId());
+        } else {
+            DataStorage.setStoredAmount(id, container.getId(), Math.max(0, container.getAmount()));
+        }
+
+        final ItemStack result = template.clone();
+        result.setAmount(taken);
+        return result;
     }
 
     public void depositItemStacks0(
@@ -562,12 +492,21 @@ public class StorageUnitData {
 
     public void depositItemStack0(
         @NotNull Location accessor, @Nullable ItemStack itemsToDeposit, boolean contentLocked, boolean force) {
-        if (itemsToDeposit == null || isBlacklisted(itemsToDeposit)) {
+        if (itemsToDeposit == null
+            || itemsToDeposit.getType().isAir()
+            || itemsToDeposit.getAmount() <= 0
+            || isBlacklisted(itemsToDeposit)) {
             return;
         }
-        int actualAdded = addStoredItem0(accessor, itemsToDeposit, itemsToDeposit.getAmount(), contentLocked, force);
-        if (actualAdded > 0) {
-            itemsToDeposit.setAmount(itemsToDeposit.getAmount() - actualAdded);
+
+        final int incoming = itemsToDeposit.getAmount();
+        final boolean matchedExistingType = storedItems.values().stream().anyMatch(container -> container.isSimilar(itemsToDeposit));
+        final int actualAdded = addStoredItem0(accessor, itemsToDeposit, incoming, contentLocked, force);
+        if (NetworksDrawer.isVoidExcess(getLastLocation()) && matchedExistingType) {
+            // Preserve historical drawer semantics: only overflow for an already stored item type is voided.
+            itemsToDeposit.setAmount(0);
+        } else {
+            itemsToDeposit.setAmount(Math.max(0, incoming - actualAdded));
         }
     }
 
@@ -583,111 +522,84 @@ public class StorageUnitData {
      * @param amount:   amount will be added
      * @return the amount actual added
      */
-    public int addStoredItem0(
-        Location accessor, @NotNull ItemStack item, int amount, boolean contentLocked, boolean force) {
-        int add = 0;
-        boolean isVoidExcess = NetworksDrawer.isVoidExcess(getLastLocation());
-        List<ItemContainer> stored = getStoredItems();
+    public synchronized int addStoredItem0(
+        @NotNull Location accessor,
+        @NotNull ItemStack item,
+        int amount,
+        boolean contentLocked,
+        boolean force) {
 
-        Map<Integer, Integer> m = getPersistentAccessHistory(accessor);
-        if (m != null) {
-            boolean found = false;
-            List<Integer> misses = new ArrayList<>();
-            for (Integer i : m.keySet()) {
-                // Netex - Cache start
-                if (i >= stored.size()) {
-                    removePersistentAccessHistory(accessor, i);
-                    continue;
-                }
-                // Netex - Cache end
-
-                ItemContainer each = stored.get(i);
-                if (each.isSimilar(item)) {
-                    // Found existing one, add amount
-                    int raw = sizeType.getEachMaxSize() - each.getAmount();
-                    if (raw < 0) {
-                        // If super-full, no more add and roll back to normal amount
-                        each.setAmount(sizeType.getEachMaxSize());
-                        return 0;
-                    }
-                    add = Math.max(0, Math.min(amount, raw));
-                    if (isVoidExcess) {
-                        if (add > 0) {
-                            each.addAmount(add);
-                            DataStorage.setStoredAmount(id, each.getId(), each.getAmount());
-                        } else {
-                            item.setAmount(0);
-                        }
-                    } else {
-                        each.addAmount(add);
-                        DataStorage.setStoredAmount(id, each.getId(), each.getAmount());
-                    }
-
-                    // Netex - Cache start
-                    minusCacheMiss(accessor, i);
-                    found = true;
-                    // Netex - Cache end
-                    return add;
-                } else {
-                    // Netex - Cache start
-                    misses.add(i);
-                    // Netex - Cache end
-                }
-            }
-
-            if (!found) {
-                for (int i : misses) {
-                    addCacheMiss(accessor, i);
-                }
-            }
+        if (item.getType().isAir() || amount <= 0 || isBlacklisted(item)) {
+            return 0;
         }
 
-        for (int i = 0; i < stored.size(); i++) {
-            ItemContainer each = stored.get(i);
-            if (each.isSimilar(item)) {
-                // Found existing one, add amount
-                int raw = sizeType.getEachMaxSize() - each.getAmount();
-                if (raw < 0) {
-                    // If super-full, no more add and roll back to normal amount
-                    each.setAmount(sizeType.getEachMaxSize());
-                    return 0;
-                }
-                add = Math.max(0, Math.min(amount, raw));
-                if (isVoidExcess) {
-                    if (add > 0) {
-                        each.addAmount(add);
-                        DataStorage.setStoredAmount(id, each.getId(), each.getAmount());
-                    } else {
-                        item.setAmount(0);
-                    }
-                } else {
-                    each.addAmount(add);
-                    DataStorage.setStoredAmount(id, each.getId(), each.getAmount());
-                }
-
-                // Netex - Cache start
-                addCountObservingAccessHistory(accessor, i);
-                // Netex - Cache end
-                return add;
+        final Map<Integer, Integer> hotIds = getPersistentAccessHistory(accessor);
+        for (Integer itemId : List.copyOf(hotIds.keySet())) {
+            final ItemContainer container = storedItems.get(itemId);
+            if (container == null) {
+                removePersistentAccessHistory(accessor, itemId);
+                continue;
             }
+            if (!container.isSimilar(item)) {
+                addCacheMiss(accessor, itemId);
+                continue;
+            }
+
+            final int accepted = addToContainer(container, amount);
+            minusCacheMiss(accessor, itemId);
+            return accepted;
         }
 
-        // isforce?
-        if (!force) {
-            // If in content locked mode, no new input allowed
-            if (contentLocked || NetworksDrawer.isLocked(getLastLocation())) return 0;
-        }
-        // Not found, new one
-        synchronized (storedItems) {
-            if (storedItems.size() < sizeType.getMaxItemCount()) {
-                add = Math.min(amount, sizeType.getEachMaxSize());
-                int itemId = DataStorage.getItemId(item);
-                storedItems.put(itemId, new ItemContainer(itemId, item, add));
-                DataStorage.addStoredItem(id, itemId, add);
-                return add;
+        for (ItemContainer container : storedItems.values()) {
+            if (!container.isSimilar(item)) {
+                continue;
             }
+
+            final int accepted = addToContainer(container, amount);
+            addCountObservingAccessHistory(accessor, container.getId());
+            return accepted;
         }
-        return add;
+
+        if (!force && (contentLocked || NetworksDrawer.isLocked(getLastLocation()))) {
+            return 0;
+        }
+
+        if (storedItems.size() >= sizeType.getMaxItemCount()) {
+            return 0;
+        }
+
+        final int accepted = Math.max(0, Math.min(amount, sizeType.getEachMaxSize()));
+        if (accepted <= 0) {
+            return 0;
+        }
+        final int itemId = DataStorage.getItemId(item);
+        final ItemContainer existing = storedItems.putIfAbsent(itemId, new ItemContainer(itemId, item, accepted));
+        if (existing == null) {
+            DataStorage.addStoredItem(id, itemId, accepted);
+            addCountObservingAccessHistory(accessor, itemId);
+            return accepted;
+        }
+
+        // A concurrent creator won the slot. Reuse its canonical container instead of overwriting its amount.
+        final int added = addToContainer(existing, amount);
+        return added;
+    }
+
+    private int addToContainer(@NotNull ItemContainer container, int requested) {
+        final int current = Math.max(0, container.getAmount());
+        if (current > sizeType.getEachMaxSize()) {
+            container.setAmount(sizeType.getEachMaxSize());
+            DataStorage.setStoredAmount(id, container.getId(), container.getAmount());
+            return 0;
+        }
+
+        final int capacity = Math.max(0, sizeType.getEachMaxSize() - current);
+        final int accepted = Math.max(0, Math.min(requested, capacity));
+        if (accepted > 0) {
+            container.addAmount(accepted);
+            DataStorage.setStoredAmount(id, container.getId(), container.getAmount());
+        }
+        return accepted;
     }
 
     /**

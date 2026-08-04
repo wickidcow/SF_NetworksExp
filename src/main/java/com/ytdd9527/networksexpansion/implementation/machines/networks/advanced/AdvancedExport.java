@@ -2,7 +2,6 @@ package com.ytdd9527.networksexpansion.implementation.machines.networks.advanced
 
 import com.balugaq.netex.api.enums.FeedbackType;
 import com.balugaq.netex.api.helpers.Icon;
-import com.balugaq.netex.utils.BlockMenuUtil;
 import com.balugaq.netex.utils.Lang;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
@@ -11,9 +10,8 @@ import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
-import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
-import io.github.sefiraat.networks.utils.StackUtils;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemSetting;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
@@ -125,67 +123,31 @@ public class AdvancedExport extends NetworkObject implements RecipeDisplayItem {
             sendFeedback(blockMenu.getLocation(), FeedbackType.NO_NETWORK_FOUND);
             return;
         }
-        NetworkRoot networkRoot = definition.getNode().getRoot();
 
-        List<ItemRequest> itemRequests = new ArrayList<>();
-        int totalFreeStackSpaces = 0;
-
-        for (int outputSlot : getOutputSlots()) {
-            ItemStack currentStack = blockMenu.getItemInSlot(outputSlot);
-            if (currentStack == null || currentStack.getType() == Material.AIR) {
-                totalFreeStackSpaces += 64;
-            } else {
-                totalFreeStackSpaces += currentStack.getMaxStackSize() - currentStack.getAmount();
-            }
-        }
-
-        // no free space, we should escape quickly
-        if (totalFreeStackSpaces == 0) {
-            sendFeedback(blockMenu.getLocation(), FeedbackType.NO_ENOUGH_SPACE);
-            return;
-        }
-
-        // for each every slot, then make itemRequests
+        boolean hasRequest = false;
+        int moved = 0;
         for (int testItemSlot : getTestSlots()) {
-            ItemStack currentStack = blockMenu.getItemInSlot(testItemSlot);
-            if (currentStack != null && currentStack.getType() != Material.AIR) {
-                itemRequests.add(new ItemRequest(StackUtils.getAsQuantity(currentStack, 1), currentStack.getAmount()));
+            final ItemStack template = blockMenu.getItemInSlot(testItemSlot);
+            if (template == null || template.getType() == Material.AIR) {
+                continue;
             }
+            hasRequest = true;
+            moved += NetworkTransferUtils.moveNetworkItemIntoMenu(
+                definition.getNode().getRoot(),
+                blockMenu.getLocation(),
+                blockMenu,
+                template,
+                template.getAmount(),
+                getOutputSlots());
         }
 
-        // if there is no item request, we should escape quickly
-        if (itemRequests.isEmpty()) {
+        if (!hasRequest) {
             sendFeedback(blockMenu.getLocation(), FeedbackType.NO_ITEM_REQUEST);
-            return;
+        } else if (moved > 0) {
+            sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
+        } else {
+            sendFeedback(blockMenu.getLocation(), FeedbackType.NO_ENOUGH_SPACE);
         }
-
-        // fetch items from network
-        ItemStack fetched;
-        for (ItemRequest itemRequest : itemRequests) {
-            fetched = networkRoot.getItemStack0(blockMenu.getLocation(), itemRequest); // fetch item from network
-            if (fetched != null) {
-                // amount may not be excepted, but it is the max amount we can fetch.
-                placeItems(networkRoot, blockMenu, fetched.clone(), fetched.getAmount(), getOutputSlots());
-            }
-        }
-        sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
-    }
-
-    private void placeItems(
-        @NotNull NetworkRoot root,
-        @NotNull BlockMenu blockMenu,
-        @NotNull ItemStack itemStack,
-        int itemAmount,
-        int[] outputSlots) {
-        BlockMenuUtil.pushItem(blockMenu, itemStack, outputSlots);
-
-        if (itemStack.getAmount() > 0) {
-            returnItems(root, itemStack.clone(), blockMenu);
-        }
-    }
-
-    private void returnItems(@NotNull NetworkRoot root, @NotNull ItemStack itemStack, @NotNull BlockMenu blockMenu) {
-        root.addItemStack0(blockMenu.getLocation(), itemStack);
     }
 
     @Override

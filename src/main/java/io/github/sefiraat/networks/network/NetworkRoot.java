@@ -224,66 +224,79 @@ public class NetworkRoot extends NetworkNode {
     }
 
     public static void addPersistentAccessHistory(Location location, Location accessLocation) {
-        Map<Location, Integer> locations = persistentAccessHistory.getOrDefault(location, new ConcurrentHashMap<>());
-        locations.put(accessLocation, 0);
-        persistentAccessHistory.put(location, locations);
+        persistentAccessHistory
+            .computeIfAbsent(normalizeHistoryLocation(location), ignored -> new ConcurrentHashMap<>())
+            .put(normalizeHistoryLocation(accessLocation), 0);
     }
 
     public static void addCacheMiss(Location location, Location accessLocation) {
-        Map<Location, Integer> locations = persistentAccessHistory.getOrDefault(location, new ConcurrentHashMap<>());
-        int value = locations.getOrDefault(accessLocation, 0) + 1;
+        final Map<Location, Integer> locations = persistentAccessHistory.computeIfAbsent(
+            normalizeHistoryLocation(location), ignored -> new ConcurrentHashMap<>());
+        final int value = locations.merge(normalizeHistoryLocation(accessLocation), 1, Integer::sum);
         if (value > cacheMissThreshold) {
             removePersistentAccessHistory(location, accessLocation);
-            return;
         }
-        locations.put(accessLocation, value);
-        persistentAccessHistory.put(location, locations);
     }
 
     public static void minusCacheMiss(Location location, Location accessLocation) {
-        Map<Location, Integer> locations = persistentAccessHistory.getOrDefault(location, new ConcurrentHashMap<>());
-        int value = Math.max(locations.getOrDefault(accessLocation, 0) - 1, 0);
-        locations.put(accessLocation, value);
+        final Map<Location, Integer> locations = persistentAccessHistory.get(normalizeHistoryLocation(location));
+        if (locations != null) {
+            locations.computeIfPresent(
+                normalizeHistoryLocation(accessLocation), (ignored, misses) -> misses <= 1 ? null : misses - 1);
+        }
     }
 
     public static Map<Location, Integer> getPersistentAccessHistory(Location location) {
-        return persistentAccessHistory.getOrDefault(location, new ConcurrentHashMap<>());
+        final Map<Location, Integer> cached = persistentAccessHistory.get(normalizeHistoryLocation(location));
+        return cached == null ? Map.of() : cached;
     }
 
     public static void removePersistentAccessHistory(Location location) {
-        persistentAccessHistory.remove(location);
+        persistentAccessHistory.remove(normalizeHistoryLocation(location));
     }
 
     public static void removePersistentAccessHistory(Location location, Location accessLocation) {
-        Map<Location, Integer> locations = persistentAccessHistory.getOrDefault(location, new ConcurrentHashMap<>());
-        locations.remove(accessLocation);
-        persistentAccessHistory.put(location, locations);
+        final Location key = normalizeHistoryLocation(location);
+        final Map<Location, Integer> locations = persistentAccessHistory.get(key);
+        if (locations == null) {
+            return;
+        }
+        locations.remove(normalizeHistoryLocation(accessLocation));
+        if (locations.isEmpty()) {
+            persistentAccessHistory.remove(key, locations);
+        }
     }
 
     public static void addCountObservingAccessHistory(Location location, Location accessLocation) {
-        Map<Location, Integer> locations = observingAccessHistory.getOrDefault(location, new ConcurrentHashMap<>());
-        Integer count = locations.getOrDefault(accessLocation, 0);
+        final Map<Location, Integer> locations = observingAccessHistory.computeIfAbsent(
+            normalizeHistoryLocation(location), ignored -> new ConcurrentHashMap<>());
+        final Location accessKey = normalizeHistoryLocation(accessLocation);
+        final int count = locations.merge(accessKey, 1, Integer::sum);
         if (count >= persistentThreshold) {
-            removeCountObservingAccessHistory(location, accessLocation);
+            locations.remove(accessKey);
             addPersistentAccessHistory(location, accessLocation);
-            return;
         }
-        locations.put(accessLocation, count + 1);
-        observingAccessHistory.put(location, locations);
     }
 
     public static Map<Location, Integer> getCountObservingAccessHistory(Location location) {
-        return observingAccessHistory.getOrDefault(location, new ConcurrentHashMap<>());
+        final Map<Location, Integer> cached = observingAccessHistory.get(normalizeHistoryLocation(location));
+        return cached == null ? Map.of() : cached;
     }
 
     public static void removeCountObservingAccessHistory(Location location) {
-        observingAccessHistory.remove(location);
+        observingAccessHistory.remove(normalizeHistoryLocation(location));
     }
 
     public static void removeCountObservingAccessHistory(Location location, Location accessLocation) {
-        Map<Location, Integer> locations = observingAccessHistory.getOrDefault(location, new ConcurrentHashMap<>());
-        locations.remove(accessLocation);
-        observingAccessHistory.put(location, locations);
+        final Location key = normalizeHistoryLocation(location);
+        final Map<Location, Integer> locations = observingAccessHistory.get(key);
+        if (locations == null) {
+            return;
+        }
+        locations.remove(normalizeHistoryLocation(accessLocation));
+        if (locations.isEmpty()) {
+            observingAccessHistory.remove(key, locations);
+        }
     }
 
     @Nullable
@@ -530,14 +543,15 @@ public class NetworkRoot extends NetworkNode {
     public void setOverburdened(boolean overburdened) {
         if (overburdened && !isOverburdened) {
             final Location loc = this.nodePosition.clone();
-            for (int x = 0; x <= 1; x++) {
-                for (int y = 0; y <= 1; y++) {
-                    for (int z = 0; z <= 1; z++) {
-                        loc.getWorld()
-                            .spawnParticle(
+            if (loc.getWorld() != null) {
+                for (int x = 0; x <= 1; x++) {
+                    for (int y = 0; y <= 1; y++) {
+                        for (int z = 0; z <= 1; z++) {
+                            loc.getWorld().spawnParticle(
                                 NetworksVersionedParticle.EXPLOSION,
                                 loc.clone().add(x, y, z),
                                 0);
+                        }
                     }
                 }
             }
@@ -597,7 +611,7 @@ public class NetworkRoot extends NetworkNode {
         }
 
         for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {
-            int[] slots = blockMenu.getPreset().getSlotsAccessedByItemTransport(ItemTransportFlow.WITHDRAW);
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
             for (int slot : slots) {
                 final ItemStack itemStack = blockMenu.getItemInSlot(slot);
                 if (itemStack == null || itemStack.getType() == Material.AIR) {
@@ -621,7 +635,10 @@ public class NetworkRoot extends NetworkNode {
         }
 
         for (BlockMenu blockMenu : getGreedyBlockMenus()) {
-            int[] slots = blockMenu.getPreset().getSlotsAccessedByItemTransport(ItemTransportFlow.WITHDRAW);
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
+            if (slots.length == 0) {
+                continue;
+            }
             final ItemStack itemStack = blockMenu.getItemInSlot(slots[0]);
             if (itemStack == null || itemStack.getType() == Material.AIR) {
                 continue;
@@ -643,7 +660,7 @@ public class NetworkRoot extends NetworkNode {
         }
 
         for (BlockMenu blockMenu : getCrafterOutputs()) {
-            int[] slots = blockMenu.getPreset().getSlotsAccessedByItemTransport(ItemTransportFlow.WITHDRAW);
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
             for (int slot : slots) {
                 final ItemStack itemStack = blockMenu.getItemInSlot(slot);
                 if (itemStack == null || itemStack.getType() == Material.AIR) {
@@ -965,7 +982,7 @@ public class NetworkRoot extends NetworkNode {
 
         // Crafters
         for (BlockMenu blockMenu : getCrafterOutputs()) {
-            int[] slots = blockMenu.getPreset().getSlotsAccessedByItemTransport(ItemTransportFlow.WITHDRAW);
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
             for (int slot : slots) {
                 final ItemStack itemStack = blockMenu.getItemInSlot(slot);
                 if (itemStack == null
@@ -973,6 +990,9 @@ public class NetworkRoot extends NetworkNode {
                     || !StackUtils.itemsMatch(request, itemStack)) {
                     continue;
                 }
+
+                // Mark menu-backed storage dirty before changing its live stack.
+                blockMenu.markDirty();
 
                 // Stack is null, so we can fill it here
                 if (stackToReturn == null) {
@@ -993,7 +1013,7 @@ public class NetworkRoot extends NetworkNode {
         }
 
         for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {
-            int[] slots = blockMenu.getPreset().getSlotsAccessedByItemTransport(ItemTransportFlow.WITHDRAW);
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
             for (int slot : slots) {
                 final ItemStack itemStack = blockMenu.getItemInSlot(slot);
                 if (itemStack == null
@@ -1001,6 +1021,9 @@ public class NetworkRoot extends NetworkNode {
                     || !StackUtils.itemsMatch(request, itemStack)) {
                     continue;
                 }
+
+                // Mark menu-backed storage dirty before changing its live stack.
+                blockMenu.markDirty();
 
                 // Stack is null, so we can fill it here
                 if (stackToReturn == null) {
@@ -1022,7 +1045,10 @@ public class NetworkRoot extends NetworkNode {
 
         // Greedy Blocks
         for (BlockMenu blockMenu : getGreedyBlockMenus()) {
-            int[] slots = blockMenu.getPreset().getSlotsAccessedByItemTransport(ItemTransportFlow.WITHDRAW);
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
+            if (slots.length == 0) {
+                continue;
+            }
             final ItemStack itemStack = blockMenu.getItemInSlot(slots[0]);
             if (itemStack == null
                 || itemStack.getType() == Material.AIR
@@ -1091,7 +1117,7 @@ public class NetworkRoot extends NetworkNode {
 
         // Crafters
         for (BlockMenu blockMenu : getCrafterOutputs()) {
-            int[] slots = blockMenu.getPreset().getSlotsAccessedByItemTransport(ItemTransportFlow.WITHDRAW);
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
             for (int slot : slots) {
                 final ItemStack itemStack = blockMenu.getItemInSlot(slot);
                 if (itemStack == null
@@ -1128,7 +1154,7 @@ public class NetworkRoot extends NetworkNode {
         }
 
         for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {
-            int[] slots = blockMenu.getPreset().getSlotsAccessedByItemTransport(ItemTransportFlow.WITHDRAW);
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
             for (int slot : slots) {
                 final ItemStack itemStack = blockMenu.getItemInSlot(slot);
                 if (itemStack == null
@@ -1148,7 +1174,10 @@ public class NetworkRoot extends NetworkNode {
 
         // Greedy Blocks
         for (BlockMenu blockMenu : getGreedyBlockMenus()) {
-            int[] slots = blockMenu.getPreset().getSlotsAccessedByItemTransport(ItemTransportFlow.WITHDRAW);
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
+            if (slots.length == 0) {
+                continue;
+            }
             final ItemStack itemStack = blockMenu.getItemInSlot(slots[0]);
             if (itemStack == null
                 || itemStack.getType() == Material.AIR
@@ -1190,7 +1219,7 @@ public class NetworkRoot extends NetworkNode {
     public int getAmount(@NotNull ItemStack itemStack) {
         long totalAmount = 0;
         for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {
-            int[] slots = blockMenu.getPreset().getSlotsAccessedByItemTransport(ItemTransportFlow.WITHDRAW);
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
             for (int slot : slots) {
                 final ItemStack inputSlotItem = blockMenu.getItemInSlot(slot);
                 if (inputSlotItem != null && StackUtils.itemsMatch(inputSlotItem, itemStack)) {
@@ -1200,7 +1229,10 @@ public class NetworkRoot extends NetworkNode {
         }
 
         for (BlockMenu blockMenu : getGreedyBlockMenus()) {
-            int[] slots = blockMenu.getPreset().getSlotsAccessedByItemTransport(ItemTransportFlow.WITHDRAW);
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
+            if (slots.length == 0) {
+                continue;
+            }
             ItemStack inputSlotItem = blockMenu.getItemInSlot(slots[0]);
             if (inputSlotItem != null && StackUtils.itemsMatch(inputSlotItem, itemStack)) {
                 totalAmount += inputSlotItem.getAmount();
@@ -1244,7 +1276,7 @@ public class NetworkRoot extends NetworkNode {
     public @NotNull HashMap<ItemStack, Long> getAmount(@NotNull Set<ItemStack> itemStacks) {
         HashMap<ItemStack, Long> totalAmounts = new HashMap<>();
         for (BlockMenu menu : getAdvancedGreedyBlockMenus()) {
-            int[] slots = menu.getPreset().getSlotsAccessedByItemTransport(ItemTransportFlow.WITHDRAW);
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(menu, ItemTransportFlow.WITHDRAW);
             for (int slot : slots) {
                 final ItemStack inputSlotItem = menu.getItemInSlot(slot);
                 if (inputSlotItem != null) {
@@ -1259,7 +1291,10 @@ public class NetworkRoot extends NetworkNode {
         }
 
         for (BlockMenu blockMenu : getGreedyBlockMenus()) {
-            int[] slots = blockMenu.getPreset().getSlotsAccessedByItemTransport(ItemTransportFlow.WITHDRAW);
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
+            if (slots.length == 0) {
+                continue;
+            }
             ItemStack inputSlotItem = blockMenu.getItemInSlot(slots[0]);
             if (inputSlotItem != null) {
                 for (ItemStack itemStack : itemStacks) {
@@ -1812,6 +1847,11 @@ public class NetworkRoot extends NetworkNode {
         this.outputAbleBarrels = null;
         this.inputAbleCargoStorageUnitDatas = null;
         this.outputAbleCargoStorageUnitDatas = null;
+        this.mapInputAbleBarrels = null;
+        this.mapOutputAbleBarrels = null;
+        this.mapInputAbleCargoStorageUnits = null;
+        this.mapOutputAbleCargoStorageUnits = null;
+        this.allItemsView = null;
 
         getBarrels();
         getCargoStorageUnitDatas();
@@ -1880,6 +1920,9 @@ public class NetworkRoot extends NetworkNode {
             FeedbackSendable.sendFeedback0(accessor, FeedbackType.ROOT_LIMITING_ACCESS_OUTPUT);
             return null;
         }
+
+        // Every successful or attempted withdrawal can change live menu-backed storage. Never serve a stale grid view.
+        allItemsView = null;
 
         Map<Location, Integer> m = getPersistentAccessHistory(accessor);
         if (m != null) {
@@ -1982,7 +2025,7 @@ public class NetworkRoot extends NetworkNode {
             // Netex - Cache start
             if (!found) {
                 for (Location miss : misses) {
-                    minusCacheMiss(accessor, miss);
+                    addCacheMiss(accessor, miss);
                 }
             }
             // Netex - Cache end
@@ -2103,7 +2146,7 @@ public class NetworkRoot extends NetworkNode {
 
         // Crafters
         for (BlockMenu blockMenu : getCrafterOutputs()) {
-            int[] slots = blockMenu.getPreset().getSlotsAccessedByItemTransport(ItemTransportFlow.WITHDRAW);
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
             for (int slot : slots) {
                 final ItemStack itemStack = blockMenu.getItemInSlot(slot);
                 if (itemStack == null
@@ -2111,6 +2154,8 @@ public class NetworkRoot extends NetworkNode {
                     || !StackUtils.itemsMatch(request, itemStack)) {
                     continue;
                 }
+
+                blockMenu.markDirty();
 
                 // Stack is null, so we can fill it here
                 if (stackToReturn == null) {
@@ -2137,7 +2182,7 @@ public class NetworkRoot extends NetworkNode {
         }
 
         for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {
-            int[] slots = blockMenu.getPreset().getSlotsAccessedByItemTransport(ItemTransportFlow.WITHDRAW);
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
             for (int slot : slots) {
                 final ItemStack itemStack = blockMenu.getItemInSlot(slot);
                 if (itemStack == null
@@ -2145,6 +2190,8 @@ public class NetworkRoot extends NetworkNode {
                     || !StackUtils.itemsMatch(request, itemStack)) {
                     continue;
                 }
+
+                blockMenu.markDirty();
 
                 // Stack is null, so we can fill it here
                 if (stackToReturn == null) {
@@ -2172,7 +2219,10 @@ public class NetworkRoot extends NetworkNode {
 
         // Greedy Blocks
         for (BlockMenu blockMenu : getGreedyBlockMenus()) {
-            int[] slots = blockMenu.getPreset().getSlotsAccessedByItemTransport(ItemTransportFlow.WITHDRAW);
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
+            if (slots.length == 0) {
+                continue;
+            }
             final ItemStack itemStack = blockMenu.getItemInSlot(slots[0]);
             if (itemStack == null
                 || itemStack.getType() == Material.AIR
@@ -2239,9 +2289,12 @@ public class NetworkRoot extends NetworkNode {
             return;
         }
 
-        if (StackUtils.isBlacklisted(incoming)) {
+        if (StackUtils.isBlacklisted(incoming) || incoming.getType() == Material.AIR || incoming.getAmount() <= 0) {
             return;
         }
+
+        // Deposits invalidate the item snapshot used by grids and crafting interfaces.
+        allItemsView = null;
 
         ItemStack beforeItemStack = null;
         if (recordFlow && itemFlowRecord != null) {
@@ -2470,12 +2523,13 @@ public class NetworkRoot extends NetworkNode {
             return this.mapInputAbleCargoStorageUnits;
         }
 
+        final Map<Location, StorageUnitData> result = new ConcurrentHashMap<>();
         for (Map.Entry<StorageUnitData, Location> entry :
             getInputAbleCargoStorageUnitDatas().entrySet()) {
-            this.mapInputAbleCargoStorageUnits.put(entry.getValue(), entry.getKey());
+            result.put(entry.getValue(), entry.getKey());
         }
-
-        return this.mapInputAbleCargoStorageUnits;
+        this.mapInputAbleCargoStorageUnits = result;
+        return result;
     }
 
     public Map<Location, StorageUnitData> getMapOutputAbleCargoStorageUnits() {
@@ -2483,78 +2537,135 @@ public class NetworkRoot extends NetworkNode {
             return this.mapOutputAbleCargoStorageUnits;
         }
 
+        final Map<Location, StorageUnitData> result = new ConcurrentHashMap<>();
         for (Map.Entry<StorageUnitData, Location> entry :
             getOutputAbleCargoStorageUnitDatas().entrySet()) {
-            this.mapOutputAbleCargoStorageUnits.put(entry.getValue(), entry.getKey());
+            result.put(entry.getValue(), entry.getKey());
         }
+        this.mapOutputAbleCargoStorageUnits = result;
+        return result;
+    }
 
-        return this.mapOutputAbleCargoStorageUnits;
+    /** Clears per-accessor throttling and storage-location history when a Networks block unloads or breaks. */
+    public static void clearAccessHistory(@NotNull Location accessor) {
+        final Location key = normalizeHistoryLocation(accessor);
+        observingAccessHistory.remove(key);
+        persistentAccessHistory.remove(key);
+
+        // The same location may also be stored as an accessor inside another storage location's hot-path
+        // map. Remove those reverse references as well so broken cargo nodes and grids cannot remain pinned.
+        observingAccessHistory.forEach((storage, accesses) -> {
+            accesses.remove(key);
+            if (accesses.isEmpty()) {
+                observingAccessHistory.remove(storage, accesses);
+            }
+        });
+        persistentAccessHistory.forEach((storage, accesses) -> {
+            accesses.remove(key);
+            if (accesses.isEmpty()) {
+                persistentAccessHistory.remove(storage, accesses);
+            }
+        });
+
+        transportMissInputHistory.remove(key);
+        transportMissOutputHistory.remove(key);
+        controlledAccessInputHistory.remove(key);
+        controlledAccessOutputHistory.remove(key);
+    }
+
+    public static void clearAllAccessHistory() {
+        observingAccessHistory.clear();
+        persistentAccessHistory.clear();
+        transportMissInputHistory.clear();
+        transportMissOutputHistory.clear();
+        controlledAccessInputHistory.clear();
+        controlledAccessOutputHistory.clear();
     }
 
     public boolean allowAccessInput(@NotNull Location accessor) {
-        Long lastTime = controlledAccessInputHistory.get(accessor);
+        final Location key = normalizeHistoryLocation(accessor);
+        final Long lastTime = controlledAccessInputHistory.get(key);
         if (lastTime == null) {
             return true;
-        } else {
-            return System.currentTimeMillis() - lastTime > reduceMs;
         }
+        if (System.currentTimeMillis() - lastTime > reduceMs) {
+            controlledAccessInputHistory.remove(key, lastTime);
+            return true;
+        }
+        return false;
     }
 
     public boolean allowAccessOutput(@NotNull Location accessor) {
-        Long lastTime = controlledAccessOutputHistory.get(accessor);
+        final Location key = normalizeHistoryLocation(accessor);
+        final Long lastTime = controlledAccessOutputHistory.get(key);
         if (lastTime == null) {
             return true;
-        } else {
-            return System.currentTimeMillis() - lastTime > reduceMs;
         }
+        if (System.currentTimeMillis() - lastTime > reduceMs) {
+            controlledAccessOutputHistory.remove(key, lastTime);
+            return true;
+        }
+        return false;
     }
 
     public void addTransportInputMiss(@NotNull Location location) {
-        transportMissInputHistory.merge(location, 1, (a, b) -> {
+        final Location key = normalizeHistoryLocation(location);
+        transportMissInputHistory.merge(key, 1, (a, b) -> {
             if (a + b > transportMissThreshold) {
-                controlAccessInput(location);
+                controlAccessInput(key);
                 return transportMissThreshold;
-            } else {
-                return a + b;
             }
+            return a + b;
         });
     }
 
     public void addTransportOutputMiss(@NotNull Location location) {
-        transportMissOutputHistory.merge(location, 1, (a, b) -> {
+        final Location key = normalizeHistoryLocation(location);
+        transportMissOutputHistory.merge(key, 1, (a, b) -> {
             if (a + b > transportMissThreshold) {
-                controlAccessOutput(location);
+                controlAccessOutput(key);
                 return transportMissThreshold;
-            } else {
-                return a + b;
             }
+            return a + b;
         });
     }
 
     public void reduceTransportInputMiss(@NotNull Location location) {
-        transportMissInputHistory.merge(location, -1, (a, b) -> Math.max(a + b, 0));
+        transportMissInputHistory.computeIfPresent(
+            normalizeHistoryLocation(location), (ignored, misses) -> misses <= 1 ? null : misses - 1);
     }
 
     public void reduceTransportOutputMiss(@NotNull Location location) {
-        transportMissOutputHistory.merge(location, -1, (a, b) -> Math.max(a + b, 0));
+        transportMissOutputHistory.computeIfPresent(
+            normalizeHistoryLocation(location), (ignored, misses) -> misses <= 1 ? null : misses - 1);
     }
 
     public void controlAccessInput(@NotNull Location accessor) {
-        controlledAccessInputHistory.put(accessor, System.currentTimeMillis());
+        controlledAccessInputHistory.put(normalizeHistoryLocation(accessor), System.currentTimeMillis());
     }
 
     public void controlAccessOutput(@NotNull Location accessor) {
-        controlledAccessOutputHistory.put(accessor, System.currentTimeMillis());
+        controlledAccessOutputHistory.put(normalizeHistoryLocation(accessor), System.currentTimeMillis());
     }
 
     public void uncontrolAccessInput(@NotNull Location accessor) {
-        controlledAccessInputHistory.remove(accessor);
+        controlledAccessInputHistory.remove(normalizeHistoryLocation(accessor));
         reduceTransportInputMiss(accessor);
     }
 
     public void uncontrolAccessOutput(@NotNull Location accessor) {
-        controlledAccessOutputHistory.remove(accessor);
+        controlledAccessOutputHistory.remove(normalizeHistoryLocation(accessor));
         reduceTransportOutputMiss(accessor);
+    }
+
+    private static @NotNull Location normalizeHistoryLocation(@NotNull Location location) {
+        final Location normalized = location.clone();
+        normalized.setX(location.getBlockX());
+        normalized.setY(location.getBlockY());
+        normalized.setZ(location.getBlockZ());
+        normalized.setYaw(0.0F);
+        normalized.setPitch(0.0F);
+        return normalized;
     }
 
     public int getCellsSize() {

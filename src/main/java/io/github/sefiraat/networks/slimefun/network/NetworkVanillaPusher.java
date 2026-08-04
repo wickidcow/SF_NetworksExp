@@ -11,10 +11,10 @@ import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
+import io.github.sefiraat.networks.utils.StackUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
-import io.github.thebusybiscuit.slimefun4.libraries.dough.inventory.InvUtils;
 import io.github.thebusybiscuit.slimefun4.libraries.paperlib.PaperLib;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Color;
@@ -116,14 +116,12 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
             return;
         }
 
-        if (Networks.getInstance().getMCVersion().isAtLeast(MinecraftVersion.V1_21)) {
-            if (blockState instanceof CrafterInventory) {
-                sendFeedback(block.getLocation(), FeedbackType.NOT_ALLOWED_BLOCK);
-                return;
-            }
-        }
-
         final Inventory inventory = holder.getInventory();
+        if (Networks.getInstance().getMCVersion().isAtLeast(MinecraftVersion.V1_21)
+            && inventory instanceof CrafterInventory) {
+            sendFeedback(block.getLocation(), FeedbackType.NOT_ALLOWED_BLOCK);
+            return;
+        }
         final ItemStack stack = blockMenu.getItemInSlot(INPUT_SLOT);
 
         if (stack == null || stack.getType() == Material.AIR) {
@@ -137,61 +135,88 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
         sendDebugMessage(block.getLocation(), String.format(Lang.getString("messages.debug.wildchests"), wildChests));
         sendDebugMessage(block.getLocation(), String.format(Lang.getString("messages.debug.ischest"), isChest));
 
+        final int before = stack.getAmount();
+        boolean moved = false;
         if (inventory instanceof FurnaceInventory furnace) {
-            handleFurnace(blockMenu, stack, furnace);
+            moved = handleFurnace(stack, furnace);
         } else if (inventory instanceof BrewerInventory brewer) {
-            handleBrewingStand(blockMenu, stack, brewer);
+            moved = handleBrewingStand(stack, brewer);
         } else if (wildChests && isChest) {
             sendDebugMessage(block.getLocation(), Lang.getString("messages.debug.wildchests-trigger-failed"));
-        } else if (InvUtils.fits(holder.getInventory(), stack)) {
+        } else {
+            // Bukkit inventories may accept only part of a stack. Commit exactly the accepted amount and
+            // leave the live source remainder in the Networks pusher menu.
             sendDebugMessage(block.getLocation(), Lang.getString("messages.debug.wildchests-trigger-success"));
             InventoryUtil.addItem(holder.getInventory(), stack);
+            moved = stack.getAmount() < before;
+        }
+
+        if (moved) {
+            blockMenu.markDirty();
+            sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
         }
     }
 
-    private void handleFurnace(
-        @NotNull BlockMenu blockMenu, @NotNull ItemStack stack, @NotNull FurnaceInventory furnace) {
+    private boolean handleFurnace(@NotNull ItemStack stack, @NotNull FurnaceInventory furnace) {
+        final ItemStack transfer = stack.clone();
         if (stack.getType().isFuel()
             && (furnace.getFuel() == null || furnace.getFuel().getType() == Material.AIR)) {
-            furnace.setFuel(stack.clone());
-            stack.setAmount(0);
-            sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
-        } else if (furnace.canSmelt(stack) && (furnace.getSmelting() == null || furnace.getSmelting().getType() == Material.AIR)) {
-            furnace.setSmelting(stack.clone());
-            stack.setAmount(0);
-            sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
+            furnace.setFuel(transfer);
+            if (StackUtils.itemsMatch(furnace.getFuel(), transfer, true, true)) {
+                stack.setAmount(0);
+                return true;
+            }
+        } else if (furnace.canSmelt(stack)
+            && (furnace.getSmelting() == null || furnace.getSmelting().getType() == Material.AIR)) {
+            furnace.setSmelting(transfer);
+            if (StackUtils.itemsMatch(furnace.getSmelting(), transfer, true, true)) {
+                stack.setAmount(0);
+                return true;
+            }
         }
+        return false;
     }
 
-    private void handleBrewingStand(
-        @NotNull BlockMenu blockMenu, @NotNull ItemStack stack, @NotNull BrewerInventory brewer) {
+    private boolean handleBrewingStand(@NotNull ItemStack stack, @NotNull BrewerInventory brewer) {
+        final ItemStack transfer = stack.clone();
         if (stack.getType() == Material.BLAZE_POWDER) {
             if (brewer.getFuel() == null || brewer.getFuel().getType() == Material.AIR) {
-                brewer.setFuel(stack.clone());
-                stack.setAmount(0);
-                sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
+                brewer.setFuel(transfer);
+                if (StackUtils.itemsMatch(brewer.getFuel(), transfer, true, true)) {
+                    stack.setAmount(0);
+                    return true;
+                }
             } else if (brewer.getIngredient() == null || brewer.getIngredient().getType() == Material.AIR) {
-                brewer.setIngredient(stack.clone());
-                stack.setAmount(0);
-                sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
+                brewer.setIngredient(transfer);
+                if (StackUtils.itemsMatch(brewer.getIngredient(), transfer, true, true)) {
+                    stack.setAmount(0);
+                    return true;
+                }
             }
-        } else if (stack.getType() == Material.POTION || stack.getType() == Material.SPLASH_POTION || stack.getType() == Material.LINGERING_POTION) {
+        } else if (stack.getType() == Material.POTION
+            || stack.getType() == Material.SPLASH_POTION
+            || stack.getType() == Material.LINGERING_POTION) {
             for (int i = 0; i < 3; i++) {
                 final ItemStack stackInSlot = brewer.getContents()[i];
                 if (stackInSlot == null || stackInSlot.getType() == Material.AIR) {
                     final ItemStack[] contents = brewer.getContents();
-                    contents[i] = stack.clone();
+                    contents[i] = transfer;
                     brewer.setContents(contents);
-                    stack.setAmount(0);
-                    sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
-                    return;
+                    final ItemStack placed = brewer.getContents()[i];
+                    if (StackUtils.itemsMatch(placed, transfer, true, true)) {
+                        stack.setAmount(0);
+                        return true;
+                    }
                 }
             }
         } else if (brewer.getIngredient() == null || brewer.getIngredient().getType() == Material.AIR) {
-            brewer.setIngredient(stack.clone());
-            stack.setAmount(0);
-            sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
+            brewer.setIngredient(transfer);
+            if (StackUtils.itemsMatch(brewer.getIngredient(), transfer, true, true)) {
+                stack.setAmount(0);
+                return true;
+            }
         }
+        return false;
     }
 
     @Override

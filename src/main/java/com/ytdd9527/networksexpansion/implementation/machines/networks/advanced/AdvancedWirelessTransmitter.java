@@ -10,7 +10,7 @@ import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
-import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
@@ -226,13 +226,12 @@ public class AdvancedWirelessTransmitter extends AdvancedDirectional implements 
             sendFeedback(location, FeedbackType.NO_TEMPLATE_FOUND);
             return;
         }
+        boolean movedAny = false;
         for (ItemStack template : templates) {
-            ItemStack itemStack = src.getItemStack0(location, new ItemRequest(template, getLimitQuantity(location)));
-            if (itemStack != null && itemStack.getAmount() > 0) {
-                tgt.addItemStack0(target, itemStack);
-                src.addItemStack0(location, itemStack);
-            }
+            int moved = NetworkTransferUtils.moveNetworkItemBetweenRoots(
+                src, location, tgt, target, template, getLimitQuantity(location));
+            movedAny |= moved > 0;
         }
-        sendFeedback(location, FeedbackType.WORKING);
+        sendFeedback(location, movedAny ? FeedbackType.WORKING : FeedbackType.NO_ITEM_FOUND);
     }
 }

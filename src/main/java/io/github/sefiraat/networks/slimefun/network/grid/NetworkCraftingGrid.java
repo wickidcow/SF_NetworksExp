@@ -29,7 +29,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 
 @SuppressWarnings("DuplicatedCode")
@@ -54,7 +54,7 @@ public class NetworkCraftingGrid extends AbstractGrid {
     private static final int CRAFT_BUTTON_SLOT = 34;
     private static final int CRAFT_OUTPUT_SLOT = 43;
 
-    private static final Map<Location, GridCache> CACHE_MAP = new HashMap<>();
+    private static final Map<Location, GridCache> CACHE_MAP = new ConcurrentHashMap<>();
 
     public NetworkCraftingGrid(
         @NotNull ItemGroup itemGroup,
@@ -271,7 +271,18 @@ public class NetworkCraftingGrid extends AbstractGrid {
             BlockMenuUtil.consumeItem(menu, CRAFT_ITEMS[slotIndex], Math.max(1, required.getAmount()), true);
         }
 
-        BlockMenuUtil.pushItem(menu, eventOutput.clone(), CRAFT_OUTPUT_SLOT);
+        final ItemStack outputRemainder = BlockMenuUtil.pushItem(menu, eventOutput.clone(), CRAFT_OUTPUT_SLOT);
+        if (outputRemainder != null
+            && outputRemainder.getType() != Material.AIR
+            && outputRemainder.getAmount() > 0) {
+            NetworkTransferUtils.rollbackNetworkWithdrawal(
+                root,
+                menu.getLocation(),
+                outputRemainder,
+                menu.getLocation(),
+                "classic crafting-grid output commit");
+        }
+        menu.markDirty();
         root.refreshRootItems();
 
         // Refill only empty ingredient slots with the same exact recipe ingredient.
@@ -287,12 +298,13 @@ public class NetworkCraftingGrid extends AbstractGrid {
                 continue;
             }
 
-            GridItemRequest request =
-                new GridItemRequest(required.clone(), Math.max(1, required.getAmount()), player);
-            ItemStack refill = root.getItemStack0(menu.getLocation(), request);
-            if (refill != null && refill.getType() != Material.AIR) {
-                menu.replaceExistingItem(menuSlot, refill);
-            }
+            NetworkTransferUtils.moveNetworkItemIntoMenu(
+                root,
+                menu.getLocation(),
+                menu,
+                required,
+                Math.max(1, required.getAmount()),
+                menuSlot);
         }
     }
 

@@ -1,5 +1,6 @@
 package com.ytdd9527.networksexpansion.implementation.machines.networks.advanced;
 
+import com.balugaq.netex.utils.BlockMenuUtil;
 import com.balugaq.netex.api.enums.FeedbackType;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
@@ -126,9 +127,7 @@ public class SmartGrabber extends SpecialSlimefunItem implements AdminDebuggable
             final BlockMenu targetMenu = StorageCacheUtils.getMenu(container.getLocation());
             if (targetMenu != null) {
                 final NetworkRoot root = definition.getNode().getRoot();
-                final int[] slots = targetMenu
-                    .getPreset()
-                    .getSlotsAccessedByItemTransport(targetMenu, ItemTransportFlow.WITHDRAW, null);
+                final int[] slots = BlockMenuUtil.getSafeTransportSlots(targetMenu, ItemTransportFlow.WITHDRAW);
                 int limit = getLimitQuantity();
                 if (slots.length > 0) {
                     final ItemStack delta = targetMenu.getItemInSlot(slots[0]);

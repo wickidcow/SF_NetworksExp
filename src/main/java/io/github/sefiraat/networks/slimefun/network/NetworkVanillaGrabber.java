@@ -188,12 +188,26 @@ public class NetworkVanillaGrabber extends NetworkDirectional implements SoftCel
 
     private boolean grabInventoryItem(
         @NotNull BlockMenu blockMenu, @NotNull Inventory inventory, int sourceSlot) {
-        final ItemStack stack = inventory.getItem(sourceSlot);
-        if (stack == null || stack.getType() == Material.AIR) {
+        if (sourceSlot < 0 || sourceSlot >= inventory.getSize()) {
             return false;
         }
 
-        blockMenu.replaceExistingItem(OUTPUT_SLOT, stack.clone());
+        final ItemStack stack = inventory.getItem(sourceSlot);
+        if (stack == null || stack.getType() == Material.AIR || stack.getAmount() <= 0) {
+            return false;
+        }
+
+        // Clone first and verify the destination before committing the source removal. This keeps vanilla
+        // and third-party inventories loss-safe if a menu implementation rejects or rewrites the output.
+        final ItemStack transfer = stack.clone();
+        blockMenu.replaceExistingItem(OUTPUT_SLOT, transfer);
+        final ItemStack committed = blockMenu.getItemInSlot(OUTPUT_SLOT);
+        if (!io.github.sefiraat.networks.utils.StackUtils.itemsMatch(committed, transfer, true, true)) {
+            blockMenu.replaceExistingItem(OUTPUT_SLOT, null);
+            blockMenu.markDirty();
+            return false;
+        }
+
         blockMenu.markDirty();
         inventory.setItem(sourceSlot, null);
         sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);

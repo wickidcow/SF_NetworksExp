@@ -75,7 +75,7 @@ public class FluffyBarrel extends BarrelIdentity {
         if (menu == null) {
             return new int[0];
         }
-        return menu.getPreset().getSlotsAccessedByItemTransport(menu, ItemTransportFlow.INSERT, null);
+        return BlockMenuUtil.getSafeTransportSlots(menu, ItemTransportFlow.INSERT);
     }
 
     @Override
@@ -84,6 +84,6 @@ public class FluffyBarrel extends BarrelIdentity {
         if (menu == null) {
             return new int[0];
         }
-        return menu.getPreset().getSlotsAccessedByItemTransport(menu, ItemTransportFlow.WITHDRAW, null);
+        return BlockMenuUtil.getSafeTransportSlots(menu, ItemTransportFlow.WITHDRAW);
     }
 }

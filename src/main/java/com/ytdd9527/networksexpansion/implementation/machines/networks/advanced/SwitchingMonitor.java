@@ -2,7 +2,6 @@ package com.ytdd9527.networksexpansion.implementation.machines.networks.advanced
 
 import com.balugaq.netex.api.interfaces.HangingBlock;
 import com.balugaq.netex.utils.Debug;
-import com.balugaq.netex.utils.InventoryUtil;
 import com.ytdd9527.networksexpansion.implementation.ExpansionItems;
 import com.ytdd9527.networksexpansion.utils.TextUtil;
 import com.ytdd9527.networksexpansion.utils.databases.DataSource;
@@ -10,7 +9,6 @@ import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
-import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
 import io.github.sefiraat.networks.utils.Keys;
 import io.github.sefiraat.networks.utils.NetworkTransferUtils;
@@ -208,18 +206,9 @@ public class SwitchingMonitor extends NetworkObject implements HangingBlock, Pla
                 return;
             }
 
-            if (shift) {
-                ItemStack result = root.getItemStack0(attachon, new ItemRequest(template, amount));
-                if (result != null) {
-                    InventoryUtil.addItem(player, result).values().forEach(item -> root.addItemStack0(attachon, item));
-                }
-            } else {
-                ItemStack result = root.getItemStack0(
-                    attachon, new ItemRequest(template, Math.min(amount, template.getMaxStackSize())));
-                if (result != null) {
-                    InventoryUtil.addItem(player, result).values().forEach(item -> root.addItemStack0(attachon, item));
-                }
-            }
+            final int requested = shift ? amount : Math.min(amount, template.getMaxStackSize());
+            NetworkTransferUtils.moveNetworkItemIntoPlayerInventory(
+                root, attachon, player, template, requested);
         } else {
             if (shift) {
                 ItemStack[] storage = player.getInventory().getStorageContents();

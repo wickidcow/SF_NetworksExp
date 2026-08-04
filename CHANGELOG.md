@@ -35,11 +35,21 @@
 - Replaced skull `OfflinePlayer` comparison with local player-profile comparison to avoid Mojang profile lookups and rate limits.
 - Retains modern potion metadata handling and blocks unsafe containers/bundles from network storage matching.
 
+### Runtime stability pack
+
+- Added a defensive Slimefun transport-slot adapter that supports item-aware and legacy menu APIs, rejects invalid slots, and is used across Networks cargo/storage integrations.
+- Corrected `NetworkRootReadyEvent` thread metadata and rejects stale controller records before rebuilding a root.
+- Revalidates Network Remote bindings after deferred menu loading so broken, replaced, or unloaded grids cannot open stale menus.
+- Hardened vanilla pushers for verified partial insertion and Crafter rejection, and vanilla grabbers for clone-verify-commit source removal.
+- Made drawer and LogiTech linker runtime caches concurrency-safe and repairs invalid stored linker types/icons.
+- Clears reverse storage-access history when nodes break or unload, preventing stale cargo endpoints from remaining hot-cached.
+
 ### Diagnostics
 
 - Added `/networks doctor status|scan|repair confirm`.
 - Scans loaded nodes, controllers, chunk indexes, drawer caches, database state, and compatibility information without force-loading chunks.
 - Added a reflective Slimefun Legacy Addon Doctor bridge that does not hard-link on United or Gugu.
+- Added `RUNTIME_STABILITY.md` with the preserved-data contract and an in-world validation matrix.
 
 ## 2.1.112-Legacy-Alpha1
 

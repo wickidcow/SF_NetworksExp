@@ -17,6 +17,8 @@ import java.io.Reader;
 
 public class ConfigManager {
 
+    private boolean warnedAsyncTickerOverride;
+
     public ConfigManager() {
         setupDefaultConfig();
     }
@@ -156,7 +158,14 @@ public class ConfigManager {
      * This is the safe default for Paper 1.21.11+ and for Slimefun Legacy's region scheduler.
      */
     public boolean useSynchronizedMachineTickers() {
-        return Networks.getInstance().getConfig().getBoolean(
+        final boolean configured = Networks.getInstance().getConfig().getBoolean(
             "compatibility.synchronized-machine-tickers", true);
+        if (!configured && !warnedAsyncTickerOverride) {
+            warnedAsyncTickerOverride = true;
+            Networks.getInstance().getLogger().warning(
+                "compatibility.synchronized-machine-tickers=false is unsafe on modern Paper/Slimefun cores. "
+                    + "Networks will keep inventory and world-facing tickers synchronized to prevent item loss and async API errors.");
+        }
+        return true;
     }
 }

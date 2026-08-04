@@ -51,7 +51,7 @@ import org.jspecify.annotations.NullMarked;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -88,7 +88,7 @@ public class SmartNetworkCraftingGridNewStyle extends AbstractGridNewStyle imple
         9, 10, 11,
         18, 19, 20
     };
-    private static final Map<Location, GridCache> CACHE_MAP = new HashMap<>();
+    private static final Map<Location, GridCache> CACHE_MAP = new ConcurrentHashMap<>();
     public static int THRESHOLD = 4096;
     private final Keybinds smartOutsideKeybinds = Keybinds.create(Keys.newKey("smart-outside-keybinds"), it -> {
             it.usableKeybinds(
@@ -420,6 +420,7 @@ public class SmartNetworkCraftingGridNewStyle extends AbstractGridNewStyle imple
                     if (c2.getAmount() == 0) break label;
 
                     // 2. try store back into networks
+                    root.uncontrolAccessInput(menu.getLocation());
                     root.addItemStack0(menu.getLocation(), c2);
                     if (c2.getAmount() == 0) break label;
 
@@ -431,14 +432,19 @@ public class SmartNetworkCraftingGridNewStyle extends AbstractGridNewStyle imple
                     InventoryUtil.addItem(player, c2);
                     if (c2.getAmount() == 0) break label;
 
-                    // 5. try drop in the world
-                player.getWorld().dropItem(player.getLocation(), c2);
+                    // 5. final loss-prevention fallback
+                NetworkTransferUtils.rollbackNetworkWithdrawal(
+                    root,
+                    menu.getLocation(),
+                    c2,
+                    player.getLocation(),
+                    "smart crafting-grid output commit");
             }
         }
     }
 
     private static Map<ItemStack, Integer> aggregateIngredients(ItemStack[] recipe) {
-        Map<ItemStack, Integer> required = new HashMap<>();
+        Map<ItemStack, Integer> required = new ConcurrentHashMap<>();
         for (ItemStack ingredient : recipe) {
             if (ingredient == null || ingredient.getType() == Material.AIR) {
                 continue;
@@ -458,6 +464,7 @@ public class SmartNetworkCraftingGridNewStyle extends AbstractGridNewStyle imple
                 continue;
             }
 
+            root.uncontrolAccessInput(menu.getLocation());
             root.addItemStack0(menu.getLocation(), item);
             if (item.getAmount() <= 0) {
                 continue;
@@ -465,13 +472,18 @@ public class SmartNetworkCraftingGridNewStyle extends AbstractGridNewStyle imple
 
             BlockMenuUtil.pushItem(menu, item, TEMPLATE_SLOTS);
             if (item.getAmount() <= 0) {
+                menu.markDirty();
                 continue;
             }
 
             InventoryUtil.addItem(player, item);
             if (item.getAmount() > 0) {
-                player.getWorld().dropItemNaturally(player.getLocation(), item.clone());
-                item.setAmount(0);
+                NetworkTransferUtils.rollbackNetworkWithdrawal(
+                    root,
+                    menu.getLocation(),
+                    item,
+                    player.getLocation(),
+                    "smart crafting-grid ingredient rollback");
             }
         }
     }

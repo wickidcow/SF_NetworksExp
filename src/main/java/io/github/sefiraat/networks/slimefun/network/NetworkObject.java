@@ -1,5 +1,6 @@
 package io.github.sefiraat.networks.slimefun.network;
 
+import com.balugaq.netex.api.data.StorageUnitData;
 import com.balugaq.netex.api.interfaces.HangingBlock;
 import com.balugaq.netex.utils.Lang;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
@@ -183,8 +184,8 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
 
     @OverridingMethodsMustInvokeSuper
     protected void preBreak(@NotNull BlockBreakEvent event) {
-        NetworkRoot.removePersistentAccessHistory(event.getBlock().getLocation());
-        NetworkRoot.removeCountObservingAccessHistory(event.getBlock().getLocation());
+        NetworkRoot.clearAccessHistory(event.getBlock().getLocation());
+        StorageUnitData.clearAccessHistory(event.getBlock().getLocation());
     }
 
     @OverridingMethodsMustInvokeSuper

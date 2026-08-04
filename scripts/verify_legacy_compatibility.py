@@ -79,6 +79,20 @@ query_queue = read("src/main/java/com/ytdd9527/networksexpansion/utils/databases
 data_source = read("src/main/java/com/ytdd9527/networksexpansion/utils/databases/DataSource.java")
 blueprint_type = read("src/main/java/io/github/sefiraat/networks/utils/datatypes/PersistentCraftingBlueprintType.java")
 stack_utils = read("src/main/java/io/github/sefiraat/networks/utils/StackUtils.java")
+storage_unit = read("src/main/java/com/balugaq/netex/api/data/StorageUnitData.java")
+inventory_util = read("src/main/java/com/balugaq/netex/utils/InventoryUtil.java")
+block_menu_util = read("src/main/java/com/balugaq/netex/utils/BlockMenuUtil.java")
+vanilla_pusher = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkVanillaPusher.java")
+vanilla_grabber = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkVanillaGrabber.java")
+network_remote = read("src/main/java/io/github/sefiraat/networks/slimefun/tools/NetworkRemote.java")
+network_root = read("src/main/java/io/github/sefiraat/networks/network/NetworkRoot.java")
+networks_drawer = read("src/main/java/com/ytdd9527/networksexpansion/implementation/machines/unit/NetworksDrawer.java")
+fluffy_barrel = read("src/main/java/io/github/sefiraat/networks/network/barrel/FluffyBarrel.java")
+root_ready_event = read("src/main/java/com/balugaq/netex/api/events/NetworkRootReadyEvent.java")
+network_controller = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkController.java")
+quantum_cache = read("src/main/java/io/github/sefiraat/networks/network/stackcaches/QuantumCache.java")
+quantum_workbench = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkQuantumWorkbench.java")
+linker_grid = read("src/main/java/com/balugaq/netex/integrations/logitech/LinkerGrid.java")
 doctor = read("src/main/java/io/github/sefiraat/networks/diagnostics/NetworksDoctor.java")
 doctor_bridge = read("src/main/java/io/github/sefiraat/networks/diagnostics/LegacyDoctorBridge.java")
 runtime_compatibility = read("src/main/java/io/github/sefiraat/networks/compatibility/RuntimeCompatibility.java")
@@ -90,9 +104,14 @@ smart_crafting = read("src/main/java/com/ytdd9527/networksexpansion/implementati
 crafting_grid = read("src/main/java/io/github/sefiraat/networks/slimefun/network/grid/NetworkCraftingGrid.java")
 crafting_grid_new = read("src/main/java/com/ytdd9527/networksexpansion/implementation/machines/networks/advanced/NetworkCraftingGridNewStyle.java")
 recipe_registry = read("src/main/java/com/balugaq/netex/api/helpers/SupportedCraftingTableRecipes.java")
+runtime_stability = read("RUNTIME_STABILITY.md")
 java_sources = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "src/main/java").rglob("*.java"))
 
 # Stable world/plugin identity.
+require("Preserved data contract" in runtime_stability
+        and "Slimefun Legacy is the primary" in runtime_stability
+        and "Do not use `/reload`" in runtime_stability,
+        "runtime stability and staging contract is missing")
 require(plugin.get("name") == "Networks", "plugin name must remain Networks")
 require(plugin.get("main") == "io.github.sefiraat.networks.Networks", "main class changed")
 require(plugin.get("depend") == ["Slimefun"], "plugin must depend on Slimefun by its stable plugin name")
@@ -179,8 +198,12 @@ require("highestUsedId" in data_source, "database counter recovery is missing")
 require("readLegacyRecipe" in blueprint_type and "readCurrentRecipe" in blueprint_type,
         "version-tolerant blueprint decoder is missing")
 require("BlueprintInstance.INVALID" in blueprint_type, "malformed blueprint fail-closed result is missing")
-require("getOwnerProfile()" in stack_utils, "local-only skull profile comparison is missing")
-require("getOwningPlayer()" not in stack_utils, "remote OfflinePlayer skull comparison remains")
+require("getOwnerProfile()" not in stack_utils and "getOwningPlayer()" not in stack_utils,
+        "skull comparison still uses a profile API that can perform remote resolution")
+require("getLocallySerializedSkullProfile" in stack_utils and "meta.serialize()" in stack_utils,
+        "local-only serialized skull profile comparison is missing")
+require("return !Objects.equals(instanceOne.getBaseColor(), instanceTwo.getBaseColor())" in stack_utils,
+        "shield metadata comparison still rejects equal shields")
 require("source.clone()" in transfer_utils and "root.addItemStack0(accessor, offered)" in transfer_utils,
         "clone-and-commit network transfer helper is missing")
 for method in [
@@ -201,6 +224,42 @@ require(control_x.find("instanceof InventoryHolder") < control_x.find("addItemSt
         "Control X must reject inventory containers before network insertion")
 require("invalidateStaleNode" in network_storage and "StorageCacheUtils.getSfItem" in network_storage,
         "lazy stale physical-node invalidation is missing")
+require("StorageUnitData.clearAccessHistory(key)" in network_storage
+        and "StorageUnitData.clearAllAccessHistory()" in network_storage,
+        "drawer access caches are not cleared with runtime network entries")
+require("normalizeHistoryLocation" in storage_unit and "clearAllAccessHistory" in storage_unit,
+        "normalized drawer access-cache lifecycle is missing")
+require("StackUtils.itemsMatch(existing, incoming, true, false)" in inventory_util,
+        "inventory insertion still compares partial-stack amounts")
+require("blockMenu.markDirty()" in block_menu_util and "slot < 0 || slot >= blockMenu.getSize()" in block_menu_util,
+        "BlockMenu transfer persistence/bounds hardening is missing")
+require("getSafeTransportSlots" in block_menu_util
+        and "AbstractMethodError" in block_menu_util
+        and ".distinct()" in block_menu_util,
+        "cross-fork Slimefun cargo-slot adapter is missing")
+require("BlockMenuUtil.getSafeTransportSlots" in network_root
+        and "BlockMenuUtil.getSafeTransportSlots" in fluffy_barrel
+        and "BlockMenuUtil.getSafeTransportSlots" in linker_grid,
+        "safe transport-slot enumeration is not applied across storage/cargo integrations")
+require("blockMenu.markDirty()" in vanilla_pusher and "handleFurnace" in vanilla_pusher
+        and "handleBrewingStand" in vanilla_pusher,
+        "vanilla cargo pusher persistence verification is missing")
+require("inventory instanceof CrafterInventory" in vanilla_pusher
+        and "InventoryUtil.addItem(holder.getInventory(), stack)" in vanilla_pusher
+        and "stack.getAmount() < before" in vanilla_pusher,
+        "vanilla cargo pusher partial-commit/Crafter protection is missing")
+require("final ItemStack transfer = stack.clone()" in vanilla_grabber
+        and "itemsMatch(committed, transfer, true, true)" in vanilla_grabber
+        and "inventory.setItem(sourceSlot, null)" in vanilla_grabber,
+        "vanilla cargo grabber clone-verify-commit protection is missing")
+require("super(!Bukkit.isPrimaryThread())" in root_ready_event,
+        "NetworkRootReadyEvent thread mode is not derived from the actual caller")
+require("block.getType() == Material.AIR" in network_controller
+        and "!getId().equals(data.getSfId())" in network_controller,
+        "stale controller ticker records are not rejected before root rebuild")
+require("World world = dropLocation.getWorld()" in transfer_utils
+        and "no loaded world was" in transfer_utils,
+        "last-resort transfer rollback can still clear an undropped remainder")
 
 quantum_get_start = quantum_storage.find("public static ItemStack getItemStack")
 quantum_get_end = quantum_storage.find("public void", quantum_get_start + 1)
@@ -210,6 +269,34 @@ require("withdrawItem" in quantum_get and "syncBlock" in quantum_get,
         "Quantum Storage withdrawal persistence calls are missing")
 require(quantum_get.find("withdrawItem") < quantum_get.find("syncBlock"),
         "Quantum Storage must withdraw before synchronizing persistent data")
+require("Math.max(Math.max(1L, limit), repairedAmount)" in quantum_cache
+        and "Math.max(Math.max(1L, newLimit), this.amount)" in quantum_cache,
+        "Quantum Cache limit changes can truncate stored contents")
+require("temporarily restore the required capacity" in quantum_storage
+        and "cache.restoreAmount(notRestored)" in quantum_storage,
+        "Quantum Storage output rollback capacity repair is missing")
+require("Fire the event before consuming ingredients" in quantum_workbench
+        and "recipeStillPresent" in quantum_workbench
+        and "InventoryUtil.give(player, outputRemainder)" in quantum_workbench,
+        "Quantum Workbench event/output transaction hardening is missing")
+require("LinkReservation" in linker_grid and "rollbackLinkReservation" in linker_grid,
+        "LogiTech linker item reservation rollback is missing")
+require("new ConcurrentHashMap<>()" in linker_grid
+        and "computeIfAbsent" in linker_grid
+        and 'icon.split(":", 2)' in linker_grid
+        and "StorageCacheUtils.setData(location, BS_LINKER_TYPE" in linker_grid,
+        "LogiTech linker cache/icon/type hardening is missing")
+require("new ConcurrentHashMap<>()" in networks_drawer
+        and "ConcurrentHashMap.newKeySet()" in networks_drawer,
+        "Networks Drawer runtime caches are not concurrency-safe")
+require("clearAccessHistory" in network_root
+        and "accesses.remove(key)" in network_root
+        and "clearAllAccessHistory" in network_root,
+        "network reverse-access history cleanup is missing")
+require("world.isChunkLoaded" in network_remote
+        and "Revalidate after the deferred load callback" in network_remote
+        and "isGrid(currentItem)" in network_remote,
+        "Network Remote stale-grid/chunk revalidation is missing")
 
 require("SupportedCraftingTableRecipes.findRecipe" in smart_crafting,
         "Smart Crafting Grid exact recipe binding is missing")
@@ -233,6 +320,8 @@ require("instance.getItemStack()" in auto_crafter,
 # Doctor integration.
 require("class NetworksDoctor" in doctor, "Networks Doctor scanner is missing")
 require("isChunkLoaded" in doctor and "loadChunk" not in doctor, "Networks Doctor must not force-load chunks")
+require("NetworkQuantumStorage.getCaches()" in doctor and "Stale quantum cache" in doctor,
+        "Networks Doctor quantum-storage scan/repair is missing")
 require("Proxy.newProxyInstance" in doctor_bridge, "reflective Legacy Doctor bridge is missing")
 require("io.github.thebusybiscuit.slimefun4.api.diagnostics.AddonDoctor" in doctor_bridge,
         "Legacy Addon Doctor class name is missing")
@@ -247,6 +336,8 @@ require("DisplayNameUtils.getMaterialName(" in java_sources, "Networks-owned mat
 runtime_langs = sorted(p.name for p in (ROOT / "src/main/resources/lang").glob("*.yml"))
 require(runtime_langs == ["en-US.yml"], f"unexpected runtime language files: {runtime_langs}")
 require(not CJK.search(locale_text), "en-US.yml contains CJK characters")
+require("not_enough_items: Not enough items" in locale_text,
+        "missing Networks remote/deposit feedback localization")
 
 current_ids = sorted((locale.get("items") or {}).keys())
 require(current_ids == baseline_ids, f"item-ID drift detected: expected {len(baseline_ids)}, found {len(current_ids)}")
@@ -274,5 +365,5 @@ if ERRORS:
 
 print(
     f"Networks Alpha2 verification passed: {len(current_ids)} item IDs, three-core matrix, "
-    "Java 21, Paper 1.21.11, database/runtime/blueprint/transfer/crafting/doctor hardening."
+    "Java 21, Paper 1.21.11, database/runtime/storage/cargo/crafting/remote/doctor hardening."
 )

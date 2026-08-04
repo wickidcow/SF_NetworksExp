@@ -115,7 +115,7 @@ public class AdvancedVacuum extends NetworkObject {
 
                     addToRegistry(block);
                     tryAddItem(blockMenu);
-                    Bukkit.getScheduler().runTask(Networks.getInstance(), bukkitTask -> findItem(blockMenu));
+                    findItem(blockMenu);
                 }
             }
 
@@ -380,6 +380,7 @@ public class AdvancedVacuum extends NetworkObject {
                         }
 
                         blockMenu.replaceExistingItem(inputSlot, finalPush);
+                        blockMenu.markDirty();
                         ParticleUtils.displayParticleRandomly(item, 1, 5, new Particle.DustOptions(Color.BLUE, 1));
                         return;
                     }

@@ -1,5 +1,6 @@
 package com.balugaq.netex.utils;
 
+import com.balugaq.netex.utils.BlockMenuUtil;
 import com.balugaq.netex.api.data.VanillaInventoryWrapper;
 import com.balugaq.netex.api.enums.TransportMode;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
@@ -209,7 +210,7 @@ public class LineOperationUtil {
         @NotNull TransportMode transportMode,
         int limitQuantity) {
         final int[] slots =
-            blockMenu.getPreset().getSlotsAccessedByItemTransport(blockMenu, ItemTransportFlow.WITHDRAW, null);
+            BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
 
         int limit = limitQuantity;
         switch (transportMode) {
@@ -381,7 +382,7 @@ public class LineOperationUtil {
         final ItemRequest itemRequest = new ItemRequest(template, template.getMaxStackSize());
 
         final int[] slots =
-            blockMenu.getPreset().getSlotsAccessedByItemTransport(blockMenu, ItemTransportFlow.INSERT, template);
+            BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.INSERT, template);
         switch (transportMode) {
             case NONE -> {
                 int freeSpace = 0;
@@ -408,7 +409,7 @@ public class LineOperationUtil {
 
                 final ItemStack retrieved = root.getItemStack0(accessor, itemRequest);
                 if (retrieved != null && retrieved.getType() != Material.AIR) {
-                    BlockMenuUtil.pushItem(blockMenu, retrieved, slots);
+                    NetworkTransferUtils.commitNetworkWithdrawal(root, accessor, blockMenu, retrieved, slots);
                 }
             }
 
@@ -425,8 +426,8 @@ public class LineOperationUtil {
 
                     final ItemStack retrieved = root.getItemStack0(accessor, itemRequest);
                     if (retrieved != null && retrieved.getType() != Material.AIR) {
-                        free -= retrieved.getAmount();
-                        BlockMenuUtil.pushItem(blockMenu, retrieved, slot);
+                        free -= NetworkTransferUtils.commitNetworkWithdrawal(
+                            root, accessor, blockMenu, retrieved, slot);
                         if (free <= 0) {
                             break;
                         }
@@ -458,8 +459,8 @@ public class LineOperationUtil {
 
                     final ItemStack retrieved = root.getItemStack0(accessor, itemRequest);
                     if (retrieved != null && retrieved.getType() != Material.AIR) {
-                        free -= retrieved.getAmount();
-                        BlockMenuUtil.pushItem(blockMenu, retrieved, slot);
+                        free -= NetworkTransferUtils.commitNetworkWithdrawal(
+                            root, accessor, blockMenu, retrieved, slot);
                         if (free <= 0) {
                             break;
                         }
@@ -507,7 +508,7 @@ public class LineOperationUtil {
 
                 final ItemStack retrieved = root.getItemStack0(accessor, itemRequest);
                 if (retrieved != null && retrieved.getType() != Material.AIR) {
-                    BlockMenuUtil.pushItem(blockMenu, retrieved, slots);
+                    NetworkTransferUtils.commitNetworkWithdrawal(root, accessor, blockMenu, retrieved, slots);
                 }
             }
             case LAZY -> {
@@ -538,7 +539,7 @@ public class LineOperationUtil {
 
                         final ItemStack retrieved = root.getItemStack0(accessor, itemRequest);
                         if (retrieved != null && retrieved.getType() != Material.AIR) {
-                            BlockMenuUtil.pushItem(blockMenu, retrieved, slots);
+                            NetworkTransferUtils.commitNetworkWithdrawal(root, accessor, blockMenu, retrieved, slots);
                         }
                     }
                 }
@@ -579,7 +580,8 @@ public class LineOperationUtil {
                     itemRequest.setAmount(toRequest);
                     final ItemStack retrieved = root.getItemStack0(accessor, itemRequest);
                     if (retrieved != null && retrieved.getType() != Material.AIR) {
-                        BlockMenuUtil.pushItem(blockMenu, retrieved, slots);
+                        NetworkTransferUtils.commitNetworkWithdrawal(
+                            root, accessor, blockMenu, retrieved, slots);
                     }
                 }
             }
@@ -625,7 +627,7 @@ public class LineOperationUtil {
 
         final ItemStack retrieved = root.getItemStack0(accessor, itemRequest);
         if (retrieved != null && retrieved.getType() != Material.AIR) {
-            BlockMenuUtil.pushItem(blockMenu, retrieved, slot);
+            NetworkTransferUtils.commitNetworkWithdrawal(root, accessor, blockMenu, retrieved, slot);
         }
     }
 

@@ -62,20 +62,20 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 @SuppressWarnings({"deprecation", "DuplicatedCode"})
 public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveItem, ModellableItem {
     private static final boolean DEFAULT_USE_SPECIAL_MODEL = false;
-    private static final Map<Location, StorageUnitData> storages = new HashMap<>();
-    private static final Map<Location, QuickTransferMode> quickTransferModes = new HashMap<>();
-    private static final Set<Location> locked = new HashSet<>();
-    private static final Set<Location> voidExcesses = new HashSet<>();
+    private static final Map<Location, StorageUnitData> storages = new ConcurrentHashMap<>();
+    private static final Map<Location, QuickTransferMode> quickTransferModes = new ConcurrentHashMap<>();
+    private static final Set<Location> locked = ConcurrentHashMap.newKeySet();
+    private static final Set<Location> voidExcesses = ConcurrentHashMap.newKeySet();
     private static final String KEY_UUID = "display-uuid";
     private static final int[] DISPLAY_SLOTS = {
         10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 28, 29, 30, 31, 32, 33, 34, 37, 38, 39, 40, 41, 42, 43,

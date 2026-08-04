@@ -40,6 +40,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.annotation.ParametersAreNonnullByDefault;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -542,10 +543,10 @@ public class StackUtils {
             if (instanceOne.hasOwner() != instanceTwo.hasOwner()) {
                 return true;
             }
-            if (!Networks.getConfigManager().isDisableProfileCheck()) {
-                if (!Objects.equals(instanceOne.getOwnerProfile(), instanceTwo.getOwnerProfile())) {
-                    return true;
-                }
+            if (!Networks.getConfigManager().isDisableProfileCheck()
+                && !Objects.equals(getLocallySerializedSkullProfile(instanceOne),
+                    getLocallySerializedSkullProfile(instanceTwo))) {
+                return true;
             }
         }
 
@@ -634,13 +635,29 @@ public class StackUtils {
                 }
                 // Shield
                 if (metaOne instanceof ShieldMeta instanceOne && metaTwo instanceof ShieldMeta instanceTwo) {
-                    return Objects.equals(instanceOne.getBaseColor(), instanceTwo.getBaseColor());
+                    return !Objects.equals(instanceOne.getBaseColor(), instanceTwo.getBaseColor());
                 }
             }
         }
 
         // Cannot escape via any meta extension check
         return false;
+    }
+
+    /**
+     * Reads only data already serialized into the item meta. Direct profile getters can cause Paper to complete
+     * an incomplete profile through Mojang services, which is unsuitable for a hot item-comparison path and can
+     * stall storage/cargo operations or trigger HTTP rate limits.
+     */
+    private static @Nullable Object getLocallySerializedSkullProfile(@NotNull SkullMeta meta) {
+        final Map<String, Object> serialized = meta.serialize();
+        for (String key : new String[]{"skull-owner", "profile", "owner"}) {
+            final Object value = serialized.get(key);
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
     }
 
     /**

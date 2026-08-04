@@ -1,5 +1,6 @@
 package com.balugaq.netex.api.atrributes;
 
+import com.balugaq.netex.utils.BlockMenuUtil;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.sefiraat.networks.utils.StackUtils;
@@ -49,8 +50,7 @@ public interface WhitelistedGrabber {
         @NotNull NetworkRoot root,
         @NotNull List<ItemStack> templates) {
 
-        final int[] slots =
-            targetMenu.getPreset().getSlotsAccessedByItemTransport(targetMenu, ItemTransportFlow.WITHDRAW, null);
+        final int[] slots = BlockMenuUtil.getSafeTransportSlots(targetMenu, ItemTransportFlow.WITHDRAW);
 
         for (int slot : slots) {
             final ItemStack itemInSlot = targetMenu.getItemInSlot(slot);

@@ -7,7 +7,6 @@ import com.balugaq.netex.api.enums.FeedbackType;
 import com.balugaq.netex.api.helpers.Icon;
 import com.balugaq.netex.api.interfaces.BaseGrid;
 import com.balugaq.netex.api.keybind.Keybindable;
-import com.balugaq.netex.utils.InventoryUtil;
 import com.balugaq.netex.utils.Lang;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
@@ -22,8 +21,8 @@ import io.github.sefiraat.networks.network.NodeType;
 import io.github.sefiraat.networks.slimefun.network.grid.AbstractGrid;
 import io.github.sefiraat.networks.slimefun.network.grid.GridCache;
 import io.github.sefiraat.networks.slimefun.network.grid.GridCache.DisplayMode;
-import io.github.sefiraat.networks.utils.StackUtils;
 import io.github.sefiraat.networks.utils.NetworkTransferUtils;
+import io.github.sefiraat.networks.utils.StackUtils;
 import io.github.sefiraat.networks.utils.Theme;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
@@ -109,12 +108,13 @@ public abstract class AbstractGridNewStyle extends AbstractGrid implements Keybi
         if (cloneMeta == null) {
             return null;
         }
-        final List<String> cloneLore = cloneMeta.getLore();
+        final List<String> originalLore = cloneMeta.getLore();
 
-        if (cloneLore == null || cloneLore.size() < 2) {
+        if (originalLore == null || originalLore.size() < 2) {
             return null;
         }
 
+        final List<String> cloneLore = new ArrayList<>(originalLore);
         cloneLore.remove(cloneLore.size() - 1);
         cloneLore.remove(cloneLore.size() - 1);
         cloneMeta.setLore(cloneLore);
@@ -132,7 +132,12 @@ public abstract class AbstractGridNewStyle extends AbstractGrid implements Keybi
     @Override
     public void addToInventory(
         Player player, NodeDefinition definition, GridItemRequest request, BlockMenu menu) {
-        InventoryUtil.give(player, definition.getNode().getRoot().getItemStack0(menu.getLocation(), request));
+        NetworkTransferUtils.moveNetworkItemIntoPlayerInventory(
+            definition.getNode().getRoot(),
+            menu.getLocation(),
+            player,
+            request.getItemStack(),
+            request.getAmount());
     }
 
     @Override
@@ -149,8 +154,12 @@ public abstract class AbstractGridNewStyle extends AbstractGrid implements Keybi
             return;
         }
 
-        ItemStack requestingStack = definition.getNode().getRoot().getItemStack0(blockMenu.getLocation(), request);
-        setCursor(player, cursor, requestingStack);
+        NetworkTransferUtils.moveNetworkItemOntoCursor(
+            definition.getNode().getRoot(),
+            blockMenu.getLocation(),
+            player,
+            request.getItemStack(),
+            request.getAmount());
     }
 
     protected static List<String> getLoreAddition(Long long1) {
@@ -173,15 +182,6 @@ public abstract class AbstractGridNewStyle extends AbstractGrid implements Keybi
             && request.getAmount() == 1
             && cursor.getAmount() < cursor.getMaxStackSize()
             && StackUtils.itemsMatch(request, cursor);
-    }
-
-    private void setCursor(Player player, ItemStack cursor, @Nullable ItemStack requestingStack) {
-        if (requestingStack != null) {
-            if (cursor.getType() != Material.AIR) {
-                requestingStack.setAmount(cursor.getAmount() + 1);
-            }
-            player.setItemOnCursor(requestingStack);
-        }
     }
 
     protected abstract int getKeybindButtonSlot();
@@ -231,9 +231,17 @@ public abstract class AbstractGridNewStyle extends AbstractGrid implements Keybi
             return;
         }
 
-        final NetworkRoot root = definition.getNode().getRoot();
+        final NodeDefinition currentDefinition = NetworkStorage.getNode(blockMenu.getLocation());
+        if (currentDefinition == null || currentDefinition.getNode() == null) {
+            clearDisplay(blockMenu);
+            sendFeedback(blockMenu.getLocation(), FeedbackType.NO_NETWORK_FOUND);
+            return;
+        }
+        final NetworkRoot root = currentDefinition.getNode().getRoot();
 
-        final GridCache gridCache = getCacheMap().get(blockMenu.getLocation().clone());
+        final GridCache gridCache = getCacheMap().computeIfAbsent(
+            blockMenu.getLocation().clone(),
+            ignored -> new GridCache(0, 0, GridCache.SortOrder.ALPHABETICAL));
 
         SlimefunBlockData data = StorageCacheUtils.getBlock(blockMenu.getLocation());
         if (data == null) {
@@ -285,13 +293,11 @@ public abstract class AbstractGridNewStyle extends AbstractGrid implements Keybi
                     if (itemMeta == null) {
                         continue;
                     }
-                    List<String> lore = itemMeta.getLore();
-
-                    if (lore == null) {
-                        lore = getLoreAddition(entry.getValue());
-                    } else {
-                        lore.addAll(getLoreAddition(entry.getValue()));
-                    }
+                    final List<String> existingLore = itemMeta.getLore();
+                    final List<String> lore = existingLore == null
+                        ? new ArrayList<>()
+                        : new ArrayList<>(existingLore);
+                    lore.addAll(getLoreAddition(entry.getValue()));
 
                     itemMeta.setLore(lore);
                     displayStack.setItemMeta(itemMeta);
@@ -341,13 +347,11 @@ public abstract class AbstractGridNewStyle extends AbstractGrid implements Keybi
                     if (itemMeta == null) {
                         continue;
                     }
-                    List<String> lore = itemMeta.getLore();
-
-                    if (lore == null) {
-                        lore = getHistoryLoreAddition();
-                    } else {
-                        lore.addAll(getHistoryLoreAddition());
-                    }
+                    final List<String> existingLore = itemMeta.getLore();
+                    final List<String> lore = existingLore == null
+                        ? new ArrayList<>()
+                        : new ArrayList<>(existingLore);
+                    lore.addAll(getHistoryLoreAddition());
 
                     itemMeta.setLore(lore);
                     displayStack.setItemMeta(itemMeta);

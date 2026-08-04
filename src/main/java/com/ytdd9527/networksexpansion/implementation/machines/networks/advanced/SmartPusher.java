@@ -1,15 +1,15 @@
 package com.ytdd9527.networksexpansion.implementation.machines.networks.advanced;
 
-import com.balugaq.netex.api.enums.FeedbackType;
 import com.balugaq.netex.utils.BlockMenuUtil;
+import com.balugaq.netex.api.enums.FeedbackType;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import com.ytdd9527.networksexpansion.core.items.SpecialSlimefunItem;
 import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
-import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
 import io.github.sefiraat.networks.slimefun.network.AdminDebuggable;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.sefiraat.networks.utils.StackUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
@@ -190,44 +190,21 @@ public class SmartPusher extends SpecialSlimefunItem implements AdminDebuggable 
             final BlockMenu targetMenu = StorageCacheUtils.getMenu(container.getLocation());
             if (targetMenu != null) {
                 final NetworkRoot root = definition.getNode().getRoot();
-                final int[] slots = targetMenu
-                    .getPreset()
-                    .getSlotsAccessedByItemTransport(targetMenu, ItemTransportFlow.INSERT, null);
+                final int[] slots = BlockMenuUtil.getSafeTransportSlots(targetMenu, ItemTransportFlow.INSERT);
+                int moved = 0;
                 for (ItemStack template : getTemplateItems(blockMenu)) {
                     final ItemStack clone = StackUtils.getAsQuantity(template, 1);
-                    final ItemRequest itemRequest = new ItemRequest(clone, clone.getMaxStackSize());
-                    final int limitQuantity = getLimitQuantity();
-                    if (slots.length > 0) {
-                        final ItemStack delta = targetMenu.getItemInSlot(slots[0]);
-                        if (delta == null || delta.getType() == Material.AIR) {
-                            int freeSpace = 0;
-                            for (int slot : slots) {
-                                final ItemStack itemStack = targetMenu.getItemInSlot(slot);
-                                if (itemStack == null || itemStack.getType() == Material.AIR) {
-                                    freeSpace += clone.getMaxStackSize();
-                                } else {
-                                    if (itemStack.getAmount() >= clone.getMaxStackSize()) {
-                                        continue;
-                                    }
-                                    if (StackUtils.itemsMatch(itemRequest, itemStack)) {
-                                        final int availableSpace = itemStack.getMaxStackSize() - itemStack.getAmount();
-                                        if (availableSpace > 0) {
-                                            freeSpace += availableSpace;
-                                        }
-                                    }
-                                }
-                            }
-                            if (freeSpace <= 0) {
-                                continue;
-                            }
-                            itemRequest.setAmount(Math.min(freeSpace, limitQuantity));
-
-                            final ItemStack retrieved = root.getItemStack0(blockMenu.getLocation(), itemRequest);
-                            if (retrieved != null && retrieved.getType() != Material.AIR) {
-                                BlockMenuUtil.pushItem(targetMenu, retrieved, slots);
-                            }
-                        }
-                    }
+                    moved += NetworkTransferUtils.moveNetworkItemIntoMenu(
+                        root,
+                        blockMenu.getLocation(),
+                        targetMenu,
+                        clone,
+                        getLimitQuantity(),
+                        slots);
+                }
+                if (moved <= 0) {
+                    sendFeedback(blockMenu.getLocation(), FeedbackType.NO_ITEM_FOUND);
+                    return;
                 }
                 sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
             } else {

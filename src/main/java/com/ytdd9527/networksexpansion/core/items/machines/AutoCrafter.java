@@ -219,7 +219,7 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
 
         // Push item
         final Location location = blockMenu.getLocation().clone().add(0.5, 1.1, 0.5);
-        if (root.isDisplayParticles()) {
+        if (root.isDisplayParticles() && location.getWorld() != null) {
             location.getWorld().spawnParticle(Particle.WAX_OFF, location, 0, 0, 4, 0);
         }
 
@@ -234,10 +234,21 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
         }
 
         if (!withholding && existing != null && existing.getType() != Material.AIR) {
+            root.uncontrolAccessInput(blockMenu.getLocation());
             root.addItemStack0(blockMenu.getLocation(), crafted);
         }
-        if (crafted != null && crafted.getType() != Material.AIR) {
-            BlockMenuUtil.pushItem(blockMenu, crafted, OUTPUT_SLOT);
+        if (crafted.getType() != Material.AIR && crafted.getAmount() > 0) {
+            final ItemStack remainder = BlockMenuUtil.pushItem(blockMenu, crafted, OUTPUT_SLOT);
+            if (remainder == null || remainder.getAmount() <= 0) {
+                crafted.setAmount(0);
+            } else {
+                crafted = remainder;
+            }
+            blockMenu.markDirty();
+        }
+        if (crafted.getAmount() > 0) {
+            NetworkTransferUtils.rollbackNetworkWithdrawal(
+                root, blockMenu.getLocation(), crafted, blockMenu.getLocation(), "auto-crafter output");
         }
         sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
         return true;
@@ -250,17 +261,8 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
                 continue;
             }
 
-            root.addItemStack0(blockMenu.getLocation(), input);
-            if (input.getAmount() <= 0) {
-                continue;
-            }
-
-            BlockMenuUtil.pushItem(blockMenu, input, OUTPUT_SLOT);
-            if (input.getAmount() > 0) {
-                Location dropLocation = blockMenu.getLocation().clone().add(0.5, 1.0, 0.5);
-                dropLocation.getWorld().dropItemNaturally(dropLocation, input.clone());
-                input.setAmount(0);
-            }
+            NetworkTransferUtils.rollbackNetworkWithdrawal(
+                root, blockMenu.getLocation(), input, blockMenu.getLocation(), "auto-crafter ingredient restore");
         }
     }
 

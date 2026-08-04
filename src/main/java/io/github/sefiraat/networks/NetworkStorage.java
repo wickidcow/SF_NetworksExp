@@ -1,8 +1,10 @@
 package io.github.sefiraat.networks;
 
+import com.balugaq.netex.api.data.StorageUnitData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import io.github.bakedlibs.dough.blocks.ChunkPosition;
 import io.github.sefiraat.networks.network.NetworkNode;
+import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.slimefun.network.NetworkController;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
@@ -63,6 +65,8 @@ public class NetworkStorage {
     public static void removeNodeOnly(@NotNull Location location) {
         Location key = normalize(location);
         ALL_NETWORK_OBJECTS.remove(key);
+        NetworkRoot.clearAccessHistory(key);
+        StorageUnitData.clearAccessHistory(key);
 
         ChunkPosition chunkPosition = new ChunkPosition(key);
         Set<Location> locations = ALL_NETWORK_OBJECTS_BY_CHUNK.get(chunkPosition);
@@ -148,6 +152,8 @@ public class NetworkStorage {
         }
         for (Location location : new HashSet<>(locations)) {
             ALL_NETWORK_OBJECTS.remove(location);
+            NetworkRoot.clearAccessHistory(location);
+            StorageUnitData.clearAccessHistory(location);
         }
         locations.clear();
     }
@@ -181,6 +187,8 @@ public class NetworkStorage {
     public static void clear() {
         ALL_NETWORK_OBJECTS.clear();
         ALL_NETWORK_OBJECTS_BY_CHUNK.clear();
+        NetworkRoot.clearAllAccessHistory();
+        StorageUnitData.clearAllAccessHistory();
     }
 
     private static @NotNull Location normalize(@NotNull Location location) {
