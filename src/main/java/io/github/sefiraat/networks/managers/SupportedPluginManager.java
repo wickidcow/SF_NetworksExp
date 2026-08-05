@@ -25,6 +25,7 @@ public final class SupportedPluginManager {
 
     private final Networks plugin;
     private final boolean infinityExpansion;
+    private final boolean infinityExpansion2;
     private final boolean fluffyMachines;
     private volatile boolean netheopoiesis;
     private volatile boolean slimeHud;
@@ -52,6 +53,8 @@ public final class SupportedPluginManager {
 
         try {
             this.infinityExpansion = isEnabled("InfinityExpansion");
+            this.infinityExpansion2 = isEnabled("InfinityExpansion2")
+                && hasPluginClass("InfinityExpansion2", "net.guizhanss.infinityexpansion2.InfinityExpansion2");
             this.fluffyMachines = isEnabled("FluffyMachines");
             this.netheopoiesis = isEnabled("Netheopoiesis");
             this.slimeHud = isEnabled("SlimeHUD") || isEnabled("SlimeHUDPlus");
@@ -254,6 +257,7 @@ public final class SupportedPluginManager {
     public @NotNull List<String> getIntegrationSummary() {
         List<String> summary = new ArrayList<>();
         addStatus(summary, "InfinityExpansion", infinityExpansion);
+        addStatus(summary, "InfinityExpansion2", infinityExpansion2);
         addStatus(summary, "FluffyMachines", fluffyMachines);
         addStatus(summary, "Netheopoiesis", netheopoiesis);
         addStatus(summary, "SlimeHUD", slimeHud);
@@ -274,6 +278,10 @@ public final class SupportedPluginManager {
 
     public boolean isInfinityExpansion() {
         return infinityExpansion;
+    }
+
+    public boolean isInfinityExpansion2() {
+        return infinityExpansion2;
     }
 
     public boolean isFluffyMachines() {

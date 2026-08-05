@@ -13,6 +13,7 @@ depend:
   - Slimefun
 softdepend:
   - InfinityExpansion
+  - InfinityExpansion2
   - FluffyMachines
   - Netheopoiesis
   - SlimeHUD

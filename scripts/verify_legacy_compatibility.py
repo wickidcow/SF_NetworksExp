@@ -132,7 +132,7 @@ require(config.get("compatibility", {}).get("allow-unknown-slimefun-core") is Fa
 require(config.get("doctor", {}).get("max-auto-scan-entries") == 512,
         "bounded automatic Doctor scan budget must default to 512 entries")
 softdepend = plugin.get("softdepend") or []
-for optional_plugin in ["SlimeHUDPlus", "JustEnoughGuide", "LogiTech"]:
+for optional_plugin in ["InfinityExpansion2", "SlimeHUDPlus", "JustEnoughGuide", "LogiTech"]:
     require(optional_plugin in softdepend, f"optional integration is missing from softdepend: {optional_plugin}")
 
 # Java/Paper/exact-core build contract.
@@ -399,6 +399,10 @@ require("setVanillaItemAmount" in supported_plugins
         "vanilla item-entity stack commit fallback is missing")
 require('com.balugaq.jeg.api.objects.events.GuideEvents' in supported_plugins,
         "JustEnoughGuide API marker validation is missing")
+require('isEnabled("InfinityExpansion2")' in supported_plugins
+        and 'net.guizhanss.infinityexpansion2.InfinityExpansion2' in supported_plugins
+        and 'addStatus(summary, "InfinityExpansion2", infinityExpansion2)' in supported_plugins,
+        "InfinityExpansion2 detection and Doctor integration status are missing")
 require("ConcurrentHashMap" in localization_service and "clearRuntimeCache" in localization_service,
         "thread-safe localization cache lifecycle is missing")
 require("try (InputStream resource" in localization_service
