@@ -95,11 +95,12 @@ jobs:
         run: |
           rm -rf release-artifact
           mkdir -p release-artifact
-          cp "$NETWORKS_JAR" release-artifact/
+
+          RELEASE_NAME="Networks-Legacy-2.1.112-Alpha3.jar"
+          cp "$NETWORKS_JAR" "release-artifact/$RELEASE_NAME"
           cp compatibility-manifest.txt release-artifact/
 
-          RELEASE_JAR="release-artifact/$(basename "$NETWORKS_JAR")"
-          test -f "$RELEASE_JAR"
+          test -f "release-artifact/$RELEASE_NAME"
           test -f release-artifact/compatibility-manifest.txt
 
           echo "Release artifact ZIP root will contain:"
@@ -108,7 +109,7 @@ jobs:
       - name: Upload universal Networks JAR
         uses: actions/upload-artifact@v7
         with:
-          name: Networks-Legacy-Alpha3-Universal
+          name: Networks-Legacy-2.1.112-Alpha3
           path: "release-artifact/*"
           if-no-files-found: error
           compression-level: 0
