@@ -1,84 +1,104 @@
-# Networks Runtime Stability Pack
+# Networks Runtime Stability Contract
 
 ## Scope
 
-This update keeps the public release at `2.1.112-Legacy-Alpha2` so the existing Slimefun Legacy compatibility target remains exact. It is a runtime-hardening pack, not an item-ID, plugin-name, database-path, or world-format migration.
-
-Slimefun Legacy is the primary and release-blocking core. The same source is also compiled against Slimefun United and Slimefun Gugu to catch API drift, but the universal release JAR is produced from the Slimefun Legacy lane.
+This update advances the release to `2.1.112-Legacy-Alpha3`. Slimefun Legacy is the primary and release-blocking target; United and Gugu are required compatibility gates. Alpha 3 is a compatibility, lifecycle, and scheduled-maintenance hardening release, not an item-ID, plugin-name, database-path, guide-layout, or world-format migration.
 
 ## Preserved data contract
 
+The following identifiers and storage locations remain unchanged:
+
 - Bukkit plugin name: `Networks`
-- Main class and Java package names
-- All 288 Slimefun item IDs
-- Existing persistent-data namespaces and keys
-- Existing `CargoStorageUnits.db` file and tables
-- Existing placed blocks, controllers, grids, links, blueprints, drawers, and quantum storage records
-- Existing configuration keys, with only additive compatibility and diagnostic settings
+- Main class: `io.github.sefiraat.networks.Networks`
+- Required dependency name: `Slimefun`
+- Existing Java packages used by integrations
+- All 288 existing Slimefun item IDs
+- Existing Networks and historical fork persistent-data namespaces
+- Existing placed Slimefun blocks and machine records
+- Existing `CargoStorageUnits.db` path and core table names
+- Existing guide organization from Alpha 2
+- Existing recipes and item definitions
 
-## Storage and transfer rules
+The Alpha 2 database migration remains intact: duplicate `(ContainerID, ItemID)` rows are merged transactionally before a permanent uniqueness index is created. Alpha 3 adds no new destructive database migration.
 
-Every movement path should follow a reserve, verify, commit, and rollback model:
+## Release compatibility gate
 
-1. Clone or reserve the source stack without destroying the original record.
-2. Ask the destination how much it can really accept.
-3. Verify the destination contains the expected item and amount.
-4. Commit only the accepted amount to the source.
-5. Restore any remainder to its source or a safe fallback inventory/world drop.
+One source tree must compile and test against exact JARs built from:
 
-The hardened paths cover menu slots, Bukkit inventories, player inventory slots, cursors, held items, Networks storage, quantum storage, crafting interfaces, cargo pushers/grabbers, importers, exporters, vacuums, and LogiTech linker reservations.
+1. `wickidcow/Slimefun-Legacy` `master` — primary and release-blocking
+2. `Slimefun-United/Slimefun-United` `dev`
+3. `SlimefunGuguProject/Slimefun4` `master`
 
-## Slimefun cargo compatibility
+The universal artifact is produced only after all three jobs succeed. It is compiled from the Legacy target and verified not to contain Slimefun core classes or optional-plugin API classes.
 
-`BlockMenuUtil.getSafeTransportSlots` is the compatibility boundary for Slimefun machine menus. It:
+Runtime detection uses multiple independent signals:
 
-- Prefers the item-aware transport-slot overload.
-- Falls back to the legacy one-argument overload.
-- Handles missing/unsupported overloads without crashing a network tick.
-- Rejects invalid and duplicate slot indexes.
-- Is used by network roots, greedy storage, pushers, grabbers, offsetters, drawers/barrels, LogiTech integration, and other cargo-facing paths.
+- Legacy metadata, maintained-fork metadata, and a non-linking Legacy Doctor marker fallback
+- United metadata and its unique Slimefun command aliases
+- Gugu metadata and its unique API marker class
 
-This keeps Networks compatible with the menu implementations exposed by Slimefun Legacy while retaining compile verification against United and Gugu.
+Unknown cores fail closed unless the explicit testing override is enabled.
 
-## Runtime hardening included
+## Alpha 3 lifecycle hardening
 
-- Synchronized machine tickers by default for Bukkit/Paper world and inventory ownership.
-- Correct synchronous/asynchronous mode for `NetworkRootReadyEvent` based on the actual firing thread.
-- Stale controller records are rejected when the world block is now air or another Slimefun item.
-- Network Remote revalidates the chunk, live Slimefun item, protection permission, block data, and menu after deferred loading.
-- Network and drawer hot-path caches use normalized locations and concurrency-safe collections.
-- Reverse accessor references are removed when nodes break or unload.
-- Vanilla pushers allow verified partial insertion and reject Crafter inventories.
-- Vanilla grabbers clone into the Networks menu, verify the exact destination stack, and only then clear the source slot.
-- Quantum Storage updates amounts before synchronizing persistent block data and can restore failed output remainders without truncation.
-- Crafting grids and auto-crafters bind exact input matrices to exact outputs, consume atomically, and restore reserved ingredients after failure or cancellation.
-- SQLite drawer operations are ordered through one worker, with duplicate-row migration, uniqueness enforcement, bounded shutdown, and counter recovery.
-- `/networks doctor status|scan|repair confirm` scans loaded state without force-loading chunks.
-- Reflective Slimefun Legacy Doctor integration avoids hard-linking Legacy-only classes on United or Gugu.
+- Startup records the active initialization stage so a failure identifies whether it occurred during configuration, compatibility, integrations, database startup, item registration, listeners, commands, or services.
+- Partial startup failures disable the plugin through Bukkit and reuse the normal cleanup path.
+- Optional integrations initialize fail-soft; a broken optional API disables only that integration.
+- RoseStacker and LogiTech API initialization is deferred one tick so load order can settle.
+- JustEnoughGuide, LogiTech, and SlimeHUDPlus are declared as soft dependencies.
+- Localization caches are concurrent, duplicate language registration is rejected, and embedded resources are closed after loading.
+- The rotating Doctor cursor, shared hanging ticker, pending first-tick registrations, optional integration singleton, localization cache, database cache, node registry, and controller runtime maps are reset during disable.
+- First-tick node registration rechecks the live chunk, Slimefun block data, and registered item before adding the runtime node.
+
+## Scheduled Doctor behavior
+
+The automatic repair pass is deliberately bounded:
+
+- `doctor.max-auto-scan-entries: 512` controls the maximum node entries examined per scheduled pass.
+- Each pass continues from a rotating cursor so large servers are covered over time without one full-registry spike.
+- Unloaded chunks are skipped and never force-loaded.
+- Stale node entries and chunk-index drift can be repaired automatically.
+- Database queue/connection health remains visible in the report.
+
+Manual commands remain complete loaded-state scans:
+
+```text
+/networks doctor status
+/networks doctor scan
+/networks doctor repair confirm
+```
+
+On compatible Slimefun Legacy builds, the reflective addon Doctor bridge remains available without class-linking Legacy-only APIs on United or Gugu.
+
+## Alpha 2 safety retained
+
+Alpha 3 retains the established protections for:
+
+- Ordered SQLite work, bounded shutdown, duplicate-row merge, UPSERT writes, and counter recovery
+- Concurrent loaded-node/chunk indexes and stale runtime-state invalidation
+- Clone-and-commit item transfers and source-slot verification
+- Quantum Storage withdraw-before-sync ordering and rollback capacity repair
+- Exact recipe/output binding, atomic ingredient consumption, and rollback
+- Defensive cross-fork cargo-slot resolution
+- Vanilla pusher/grabber partial-transfer verification
+- Network Remote and controller revalidation after chunk changes
+- Local-only skull profile comparison
+- Synchronized machine tickers by default on Paper/Purpur
 
 ## Required server validation
 
-Use a copy of the production server and preserve the original world and plugin data until all checks pass.
+Use a copy of the production server and preserve the original worlds and plugin data until all checks pass.
 
 1. Back up the worlds, `/plugins/Networks`, `/plugins/Slimefun`, and `CargoStorageUnits.db`.
-2. Replace the Networks JAR and perform a complete server restart. Do not use `/reload`.
-3. Confirm startup identifies Slimefun Legacy and reports no Networks error files.
+2. Replace the JAR and perform a complete server stop/start. Do not use `/reload`.
+3. Confirm startup identifies the intended Slimefun core and reaches `enabled successfully`.
 4. Run `/networks doctor status` and `/networks doctor scan`.
-5. Open old and new Controllers, Grids, Crafting Grids, and Network Remotes.
-6. Deposit and withdraw stackable, unstackable, damaged, enchanted, potion, shield, skull, bundle, and Slimefun items.
-7. Verify exact counts through Drawers, Quantum Storage, cells, barrels, importers, exporters, pushers, grabbers, vacuums, and wireless/P2P links.
-8. Connect Slimefun cargo nodes to Networks machines and to machines from installed addons. Test both insert and withdraw directions, full inventories, partial stacks, filtered slots, and rejected items.
-9. Test furnaces, brewing stands, ordinary containers, and unsupported Crafter inventories with vanilla pushers/grabbers.
-10. Test every blueprint and automatic crafting machine used by the server, including cancellation, no-output-space, and missing-ingredient cases.
-11. Unload and reload chunks containing controllers, storage nodes, cargo endpoints, grids, and remotes.
-12. Stop normally, restart, and compare all stored amounts and item metadata with the pre-restart values.
-13. Break and replace disposable test nodes, then rerun Doctor to confirm no ghost runtime entries remain.
+5. Open existing Controllers, Grids, Crafting Grids, Drawers, Quantum Storage, and Network Remotes.
+6. Verify exact item types and counts through importers, exporters, pushers, grabbers, vacuums, cargo, wireless, and P2P links.
+7. Test old/new blueprints and automatic crafting, including cancellation, missing ingredients, and full output inventories.
+8. Unload/reload chunks containing controllers, storage nodes, cargo endpoints, grids, and remotes.
+9. Stop normally, restart, and compare stored amounts and metadata with the pre-restart values.
+10. Test with each installed optional integration and confirm an optional API failure does not disable Networks.
+11. Review the automatic Doctor log on a populated test server and confirm each pass stays within the configured node budget.
 
-## Build gates
-
-- `Build Networks Universal`: builds and tests the release JAR against Slimefun Legacy.
-- `Networks Compatibility`: compiles the same source against Legacy, United, and Gugu.
-- `scripts/verify_legacy_compatibility.py`: verifies identity, 288 item IDs, Java/Paper floors, exact-core workflows, storage/cargo/crafting invariants, remote safety, and Doctor integration.
-- `scripts/verify_java21_bytecode.py`: rejects class files above the Java 21 bytecode level.
-
-Folia support is not claimed. A multi-chunk network transaction can cross region ownership boundaries and needs a separate scheduler and transactional design audit.
+Folia support is not claimed. A multi-chunk network transaction can cross region ownership boundaries and requires a separate scheduler and transaction design.

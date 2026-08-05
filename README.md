@@ -1,48 +1,43 @@
 # Networks Legacy
 
-**Networks Legacy** is an English-first, actively maintained continuation of the original **Networks** addon. Slimefun Legacy is the primary target, with source and build verification against Slimefun United and Slimefun Gugu.
+**Networks Legacy** is an English-first, actively maintained continuation of the original **Networks** addon. Slimefun Legacy is the primary and release-blocking target. The same source is also compiled against Slimefun United and Slimefun Gugu before a universal release artifact can be published.
 
-The fork preserves the public plugin name `Networks`, Java package names, Slimefun item IDs, persistent-data keys, and the existing `CargoStorageUnits.db` location so established worlds can load the same machines and stored items.
+The fork preserves the Bukkit plugin name `Networks`, the main class, Java package names, Slimefun item IDs, persistent-data namespaces, placed machines, and the existing `CargoStorageUnits.db` location so established worlds can upgrade without an intentional format migration.
 
 ## Compatibility
 
 | Component | Support |
 |---|---|
-| Slimefun Legacy | Primary and release-blocking |
-| Slimefun United | Compatibility-matrix target (`dev`) |
-| Slimefun Gugu | Compatibility-matrix target (`master`) |
+| Slimefun Legacy | Primary and release-blocking (`master`) |
+| Slimefun United | Required compatibility target (`dev`) |
+| Slimefun Gugu | Required compatibility target (`master`) |
 | Minecraft | 1.21.11 and newer |
 | Java runtime | 21 and newer |
 | Paper / Purpur | Supported target |
-| Folia | Not claimed in Alpha 2; cross-region network transactions still require a dedicated audit |
+| Folia | Not claimed; cross-region network transactions need a separate design audit |
 
-Unknown Slimefun cores fail closed by default. An override exists in `config.yml`, but it should only be used for controlled testing.
+Unknown Slimefun cores fail closed by default. The override in `config.yml` is intended only for controlled testing.
 
-## Alpha 2 hardening
+## Alpha 3: compatibility and lifecycle stability
 
-- Serial SQLite query/update worker with bounded shutdown
-- Transactional duplicate drawer-row migration and a permanent `(ContainerID, ItemID)` uniqueness index
-- Corrected item/container ID recovery after stale environment counters
-- Thread-safe drawer cache, pending-change snapshots, network-node registry, and chunk indexes
-- Stale node/controller cleanup on breaks and chunk unloads to reduce ghost-network duplication paths
-- Clone-and-commit inventory transfers that explicitly update the exact source slot, cursor, or held item
-- Control X inventory-container rejection before a block item can enter the network
-- Quantum Storage withdraw-before-sync persistence ordering
-- Exact recipe/output binding, ingredient rollback, and bounded multi-craft behavior for crafting grids and auto-crafters
-- Main-thread machine ticker safety by default for Paper 1.21.11+
-- Version-tolerant blueprint storage and malformed legacy blueprint recovery
-- Local-only skull profile comparison, avoiding remote profile lookups during item matching
-- Runtime detection for Legacy, United, and Gugu plus Minecraft/Java support floors
-- `/networks doctor status|scan|repair confirm`
-- Optional reflective integration with Slimefun Legacy's `/sf doctor addons` service
-- Exact-core GitHub Actions builds against all three Slimefun families
-- Defensive cross-fork cargo-slot resolution for Legacy, United, Gugu, and addon menu presets
-- Verified partial vanilla-container transfers and clone-before-source-removal grabber behavior
-- Network Remote and controller stale-state revalidation across chunk unload/reload
+`2.1.112-Legacy-Alpha3` continues from the working Alpha 2 guide layout without reorganizing categories or changing item content.
+
+- Makes the three-core matrix a required release gate instead of a secondary informational build.
+- Builds the final universal JAR only after Legacy, United, and Gugu compile/test jobs pass.
+- Improves runtime fingerprinting for Legacy, United, and Gugu while failing closed for unknown forks.
+- Defers optional plugin API initialization and disables only the incompatible integration when an optional API fails.
+- Declares JustEnoughGuide, LogiTech, and SlimeHUDPlus as soft dependencies so Bukkit can establish safer load order.
+- Limits scheduled Doctor work to a rotating node budget instead of scanning the complete loaded registry in one tick.
+- Clears Doctor, localization, optional integration, shared ticker, and pending first-tick state during disable/re-enable lifecycles.
+- Revalidates first-tick node registration after chunk unload/reload without retaining every historical block location.
+- Adds a universal-JAR verifier that rejects accidentally bundled Slimefun-core or optional-plugin API classes.
+- Preserves all 288 item IDs, plugin identity, database paths, guide organization, recipes, and world records.
+
+Alpha 3 builds on the Alpha 2 database, cargo, transfer, crafting, quantum-storage, remote, and runtime safety work documented in [`RUNTIME_STABILITY.md`](RUNTIME_STABILITY.md).
 
 ## Building
 
-Compile against the exact Slimefun core JAR you intend to test:
+Compile against the exact Slimefun core JAR being tested:
 
 ```bash
 ./gradlew clean build -PslimefunCoreJar=/path/to/Slimefun.jar
@@ -50,15 +45,21 @@ Compile against the exact Slimefun core JAR you intend to test:
 
 Supported aliases are `SLIMEFUN_CORE_JAR`, `slimefunLegacyJar`, `SLIMEFUN_LEGACY_JAR`, and `SLIMEFUN_COMPATIBILITY_JAR`.
 
-The GitHub Actions workflow builds each Slimefun core first, compiles this same Networks source against that exact JAR on Java 21, runs tests, verifies the source contract, and checks Java 21 class-file output.
+The GitHub Actions flow performs these release gates:
+
+1. Build exact current JARs from Slimefun Legacy, Slimefun United, and Slimefun Gugu.
+2. Compile and test the same Networks source against each exact JAR on Java 21.
+3. Verify the static compatibility contract and Java 21 bytecode.
+4. Verify that the shaded artifact contains Networks and its intended libraries, but no Slimefun core or optional-plugin APIs.
+5. Build/upload the universal JAR from the Legacy compiler target only after all three compatibility targets pass.
 
 ## Upgrade safety
 
-Back up the full server before replacing an existing Networks build. Test a copy of the world first, including existing Controllers, Grids, Drawers, Quantum Storage, Importers, Exporters, Pushers, Grabbers, wireless/P2P links, encoded blueprints, automatic crafters, a clean restart, and `/networks doctor scan`.
+Back up the full server before replacing an existing Networks build. Test a copy of the world first, including old Controllers, Grids, Drawers, Quantum Storage, Importers, Exporters, Pushers, Grabbers, wireless/P2P links, encoded blueprints, automatic crafters, chunk unload/reload, a clean restart, and `/networks doctor scan`.
 
-Alpha 2 contains a safe startup migration that combines duplicate drawer rows before creating a uniqueness index. It does not rename the database or intentionally change item IDs, plugin identity, or world block records.
+Do not use `/reload`. Perform a complete stop and start when changing Slimefun or Networks JARs.
 
-See [`RUNTIME_STABILITY.md`](RUNTIME_STABILITY.md) for the complete preserved-data contract and server validation checklist.
+See [`ALPHA3_COMPATIBILITY_STABILITY.md`](ALPHA3_COMPATIBILITY_STABILITY.md) for the release scope and validation order.
 
 ## Credits
 

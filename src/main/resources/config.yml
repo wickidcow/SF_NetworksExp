@@ -5,7 +5,7 @@ auto-update: false
 language: en-US
 
 # Do not change this value unless you know what you are doing.
-config-version: 2.1.112-legacy-alpha2
+config-version: 2.1.112-legacy-alpha3
 
 # Do not change this value unless you know what you are doing.
 debug: false
@@ -27,6 +27,8 @@ database:
 doctor:
   auto-repair-stale-runtime-state: true
   auto-scan-period-ticks: 1200
+  # Prevent the scheduled Doctor pass from scanning every loaded node in one server tick.
+  max-auto-scan-entries: 512
 
 grid-new-style-max-custom-amount: 2304
 

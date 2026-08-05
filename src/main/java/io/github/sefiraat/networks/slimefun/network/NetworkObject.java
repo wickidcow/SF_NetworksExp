@@ -54,10 +54,10 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
 
     private static final AtomicBoolean SHARED_TICKER_STARTED = new AtomicBoolean();
     private static volatile BukkitTask sharedTickerTask;
+    private static final Set<Location> PENDING_FIRST_TICK_LOCATIONS = ConcurrentHashMap.newKeySet();
 
     private final NodeType nodeType;
     private final List<Integer> slotsToDrop = new ArrayList<>();
-    private final Set<Location> firstTickLocations = ConcurrentHashMap.newKeySet();
 
     /** Starts the shared hanging-block ticker after the plugin instance is fully initialized. */
     public static void startSharedTicker() {
@@ -87,6 +87,7 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
             sharedTickerTask = null;
         }
         scheduledHangingTick.clear();
+        PENDING_FIRST_TICK_LOCATIONS.clear();
         SHARED_TICKER_STARTED.set(false);
     }
 
@@ -129,18 +130,12 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
 
                 @Override
                 public void tick(@NotNull Block b, SlimefunItem item, @NotNull SlimefunBlockData data) {
-                    if (!firstTickLocations.contains(b.getLocation())) {
-                        // Netex - Hanging patch start
-                        Bukkit.getScheduler().runTask(Networks.getInstance(), () -> {
-                            HangingBlock.loadHangingBlocks(data);
-                            HangingBlock.doFirstTick(data);
-                        });
-                        // Netex - Hanging patch end
-                        firstTickLocations.add(b.getLocation());
+                    final Location location = b.getLocation();
+                    if (!NetworkStorage.containsKey(location)) {
+                        scheduleFirstTick(location);
                         return;
                     }
 
-                    addToRegistry(b);
                     tickHangingBlocks(b);
                 }
 
@@ -171,6 +166,43 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
             });
     }
 
+
+    /**
+     * Initializes a node once per loaded-chunk lifecycle. The old permanent first-tick set retained every
+     * location until the block was broken, which leaked locations across chunk unload/reload cycles.
+     */
+    private void scheduleFirstTick(@NotNull Location location) {
+        if (!PENDING_FIRST_TICK_LOCATIONS.add(location)) {
+            return;
+        }
+
+        try {
+            Bukkit.getScheduler().runTask(Networks.getInstance(), () -> {
+                try {
+                    final World world = location.getWorld();
+                    if (world == null || !world.isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
+                        return;
+                    }
+
+                    final SlimefunBlockData liveData = StorageCacheUtils.getBlock(location);
+                    final SlimefunItem liveItem = liveData == null ? null : SlimefunItem.getById(liveData.getSfId());
+                    if (liveData == null || liveItem != NetworkObject.this) {
+                        return;
+                    }
+
+                    HangingBlock.loadHangingBlocks(liveData);
+                    HangingBlock.doFirstTick(liveData);
+                    addToRegistry(location.getBlock());
+                } finally {
+                    PENDING_FIRST_TICK_LOCATIONS.remove(location);
+                }
+            });
+        } catch (RuntimeException exception) {
+            PENDING_FIRST_TICK_LOCATIONS.remove(location);
+            throw exception;
+        }
+    }
+
     protected void addToRegistry(@NotNull Block block) {
         if (!NetworkStorage.containsKey(block.getLocation())) {
             final NodeDefinition nodeDefinition = new NodeDefinition(nodeType);
@@ -199,7 +231,7 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
             }
         }
 
-        firstTickLocations.remove(location);
+        PENDING_FIRST_TICK_LOCATIONS.remove(location);
         NetworkStorage.removeNode(location);
         Slimefun.getDatabaseManager().getBlockDataController().removeBlock(location);
     }

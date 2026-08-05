@@ -96,6 +96,10 @@ linker_grid = read("src/main/java/com/balugaq/netex/integrations/logitech/Linker
 doctor = read("src/main/java/io/github/sefiraat/networks/diagnostics/NetworksDoctor.java")
 doctor_bridge = read("src/main/java/io/github/sefiraat/networks/diagnostics/LegacyDoctorBridge.java")
 runtime_compatibility = read("src/main/java/io/github/sefiraat/networks/compatibility/RuntimeCompatibility.java")
+supported_plugins = read("src/main/java/io/github/sefiraat/networks/managers/SupportedPluginManager.java")
+localization_service = read("src/main/java/com/ytdd9527/networksexpansion/core/services/LocalizationService.java")
+network_object = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkObject.java")
+universal_verifier = read("scripts/verify_universal_jar.py")
 transfer_utils = read("src/main/java/io/github/sefiraat/networks/utils/NetworkTransferUtils.java")
 control_x = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkControlX.java")
 quantum_storage = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkQuantumStorage.java")
@@ -125,9 +129,14 @@ require(config.get("compatibility", {}).get("synchronized-machine-tickers") is T
         "synchronized machine tickers must be the safe default")
 require(config.get("compatibility", {}).get("allow-unknown-slimefun-core") is False,
         "unknown Slimefun cores must fail closed by default")
+require(config.get("doctor", {}).get("max-auto-scan-entries") == 512,
+        "bounded automatic Doctor scan budget must default to 512 entries")
+softdepend = plugin.get("softdepend") or []
+for optional_plugin in ["SlimeHUDPlus", "JustEnoughGuide", "LogiTech"]:
+    require(optional_plugin in softdepend, f"optional integration is missing from softdepend: {optional_plugin}")
 
 # Java/Paper/exact-core build contract.
-require('version = "2.1.112-Legacy-Alpha2"' in build, "project version is not Alpha2")
+require('version = "2.1.112-Legacy-Alpha3"' in build, "project version is not Alpha3")
 require("options.release.set(21)" in build, "Java 21 release target is missing")
 require("languageVersion.set(JavaLanguageVersion.of(21))" in build, "Java 21 Gradle toolchain is missing")
 require("paper-api:1.21.11-R0.1-SNAPSHOT" in build, "Paper 1.21.11 API baseline is missing")
@@ -158,6 +167,11 @@ workflow_invariants = [
     '-PslimefunCoreJar=',
     "verify_legacy_compatibility.py",
     "verify_java21_bytecode.py",
+    "workflow_call:",
+    "uses: ./.github/workflows/compatibility.yml",
+    "needs: compatibility",
+    "verify_universal_jar.py",
+    "Networks-Legacy-Alpha3-Universal",
 ]
 for required in workflow_invariants:
     require(required in workflow, f"workflow invariant missing: {required}")
@@ -187,6 +201,12 @@ require("SLIMEFUN_UNITED" in runtime_compatibility, "United runtime detection is
 require("SLIMEFUN_GUGU" in runtime_compatibility, "Gugu runtime detection is missing")
 require('city.norain.slimefun4.api.menu.UniversalMenu' in runtime_compatibility,
         "Gugu runtime marker class is missing")
+require('io.github.thebusybiscuit.slimefun4.api.diagnostics.AddonDoctor' in runtime_compatibility,
+        "Legacy runtime marker class is missing")
+require("hasUnitedCommandAlias" in runtime_compatibility
+        and 'normalized.equals("sfu")' in runtime_compatibility
+        and 'normalized.equals("slimefununited")' in runtime_compatibility,
+        "United runtime alias fingerprint is missing")
 require('plugin.getClass().getClassLoader()' in runtime_compatibility,
         "runtime core detection must use the Slimefun plugin classloader")
 for forbidden in [
@@ -338,16 +358,64 @@ require("instance.getItemStack()" in auto_crafter,
 
 # Doctor integration.
 require("class NetworksDoctor" in doctor, "Networks Doctor scanner is missing")
+require("runAutomaticRepair" in doctor and "automaticNodeCursor" in doctor
+        and "Math.floorMod(automaticNodeCursor" in doctor,
+        "bounded rotating automatic Doctor scan is missing")
 require("isChunkLoaded" in doctor and "loadChunk" not in doctor, "Networks Doctor must not force-load chunks")
 require("NetworkQuantumStorage.getCaches()" in doctor and "Stale quantum cache" in doctor,
         "Networks Doctor quantum-storage scan/repair is missing")
 require("Proxy.newProxyInstance" in doctor_bridge, "reflective Legacy Doctor bridge is missing")
 require("io.github.thebusybiscuit.slimefun4.api.diagnostics.AddonDoctor" in doctor_bridge,
         "Legacy Addon Doctor class name is missing")
-require("io.github.thebusybiscuit.slimefun4.api.diagnostics" not in "\n".join(
-    p.read_text(encoding="utf-8") for p in (ROOT / "src/main/java").rglob("*.java")
-    if p.name != "LegacyDoctorBridge.java"
-), "Legacy-only Doctor API is directly linked outside the reflective bridge")
+doctor_api_package = "io.github.thebusybiscuit.slimefun4.api.diagnostics"
+for path in (ROOT / "src/main/java").rglob("*.java"):
+    text = path.read_text(encoding="utf-8")
+    if doctor_api_package not in text:
+        continue
+    require(path.name in {"LegacyDoctorBridge.java", "RuntimeCompatibility.java"},
+            f"Legacy-only Doctor API is referenced outside the bridge/fingerprint: {path.relative_to(ROOT)}")
+    if path.name == "RuntimeCompatibility.java":
+        require("import " + doctor_api_package not in text,
+                "RuntimeCompatibility must use only a non-linking Legacy marker string")
+
+# Alpha3 lifecycle, optional integration, and unload/reload stability.
+require("failStartup" in networks_java and "startupStage" in networks_java,
+        "staged fail-safe startup handling is missing")
+require("SupportedPluginManager.shutdown()" in networks_java
+        and "LocalizationService.clearRuntimeCache()" in networks_java,
+        "shutdown singleton/cache reset is missing")
+require("runAutomaticRepair(doctorBudget)" in networks_java,
+        "automatic Doctor task is not using the bounded scan budget")
+require("disableOptionalIntegration" in supported_plugins
+        and "initializeDeferredApis" in supported_plugins
+        and "runTaskLater" in supported_plugins,
+        "fail-soft deferred optional integration initialization is missing")
+require("WildStackerAPI.getItemAmount" in supported_plugins
+        and supported_plugins.find("WildStackerAPI.getItemAmount") < supported_plugins.find("roseApi.getStackedItem"),
+        "WildStacker-first stack ownership policy is missing")
+require("setVanillaItemAmount" in supported_plugins
+        and "item.setItemStack(stack)" in supported_plugins
+        and "item.remove()" in supported_plugins,
+        "vanilla item-entity stack commit fallback is missing")
+require('com.balugaq.jeg.api.objects.events.GuideEvents' in supported_plugins,
+        "JustEnoughGuide API marker validation is missing")
+require("ConcurrentHashMap" in localization_service and "clearRuntimeCache" in localization_service,
+        "thread-safe localization cache lifecycle is missing")
+require("try (InputStream resource" in localization_service
+        and localization_service.find("langMap.put") < localization_service.find("languages.add", localization_service.find("langMap.put")),
+        "language resources are not safely loaded before registration")
+require("PENDING_FIRST_TICK_LOCATIONS" in network_object
+        and "PENDING_FIRST_TICK_LOCATIONS.clear()" in network_object
+        and "firstTickLocations" not in network_object
+        and "world.isChunkLoaded" in network_object,
+        "chunk-lifecycle first-tick location cleanup is missing")
+require("resetRuntimeState" in doctor
+        and networks_java.count("NetworksDoctor.resetRuntimeState()") >= 2,
+        "Doctor rotating cursor lifecycle reset is missing")
+require("FORBIDDEN_PREFIXES" in universal_verifier
+        and "io/github/thebusybiscuit/slimefun4/" in universal_verifier
+        and "com/bgsoftware/wildstacker/" in universal_verifier,
+        "universal JAR bundled-class guard is missing")
 
 # English locale and item-ID invariants.
 require("DisplayNameUtils.getDisplayName(" in java_sources, "Networks-owned item display-name bridge is not in use")
@@ -383,6 +451,6 @@ if ERRORS:
     sys.exit(1)
 
 print(
-    f"Networks Alpha2 verification passed: {len(current_ids)} item IDs, three-core matrix, "
+    f"Networks Alpha3 verification passed: {len(current_ids)} item IDs, three-core matrix, "
     "Java 21, Paper 1.21.11, database/runtime/storage/cargo/crafting/remote/doctor hardening."
 )

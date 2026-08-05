@@ -7,8 +7,10 @@ import org.bukkit.plugin.PluginDescriptionFile;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -19,6 +21,8 @@ public final class RuntimeCompatibility {
     public static final int MINIMUM_JAVA = 21;
     private static final Pattern VERSION_COMPONENT = Pattern.compile("(\\d+)");
     private static final String GUGU_MARKER_CLASS = "city.norain.slimefun4.api.menu.UniversalMenu";
+    private static final String LEGACY_MARKER_CLASS =
+        "io.github.thebusybiscuit.slimefun4.api.diagnostics.AddonDoctor";
 
     private RuntimeCompatibility() {
     }
@@ -65,6 +69,7 @@ public final class RuntimeCompatibility {
         if (plugin == null) {
             return CoreVariant.OFFICIAL_OR_UNKNOWN;
         }
+
         PluginDescriptionFile description = plugin.getDescription();
         String fingerprint = String.join(" ",
             description.getName(),
@@ -73,26 +78,46 @@ public final class RuntimeCompatibility {
             nullToEmpty(description.getWebsite()))
             .toLowerCase(Locale.ROOT);
 
-        if (fingerprint.contains("slimefun legacy")
-            || fingerprint.contains("slimefun-legacy")
-            || fingerprint.contains("wickidcow")) {
+        return classifyCore(
+            fingerprint,
+            hasPluginClass(plugin, LEGACY_MARKER_CLASS),
+            hasUnitedCommandAlias(description),
+            hasPluginClass(plugin, GUGU_MARKER_CLASS));
+    }
+
+    /** Package-private pure classifier so core fingerprint behavior can be regression-tested without Bukkit mocks. */
+    static @NotNull CoreVariant classifyCore(
+        @NotNull String fingerprint,
+        boolean legacyMarker,
+        boolean unitedCommandAlias,
+        boolean guguMarker
+    ) {
+        String normalized = fingerprint.toLowerCase(Locale.ROOT);
+        if (normalized.contains("slimefun legacy")
+            || normalized.contains("slimefun-legacy")
+            || normalized.contains("wickidcow")) {
             return CoreVariant.SLIMEFUN_LEGACY;
         }
-        if (fingerprint.contains("slimefun united")
-            || fingerprint.contains("slimefun-united")) {
+        if (normalized.contains("slimefun united")
+            || normalized.contains("slimefun-united")
+            || normalized.contains("slimefun_united")
+            || unitedCommandAlias) {
             return CoreVariant.SLIMEFUN_UNITED;
         }
-        if (fingerprint.contains("gugu")
-            || fingerprint.contains("slimefunguguproject")
-            || hasPluginClass(plugin, GUGU_MARKER_CLASS)) {
+        if (normalized.contains("gugu")
+            || normalized.contains("slimefunguguproject")
+            || guguMarker) {
             return CoreVariant.SLIMEFUN_GUGU;
+        }
+        if (legacyMarker) {
+            return CoreVariant.SLIMEFUN_LEGACY;
         }
         return CoreVariant.OFFICIAL_OR_UNKNOWN;
     }
 
     /**
      * Checks a core-owned class without initializing it. Gugu retains the original Slimefun plugin metadata,
-     * so its unique API package is the reliable runtime fingerprint.
+     * so its unique API package is the reliable runtime fingerprint. Legacy exposes an optional Doctor API.
      */
     static boolean hasPluginClass(@NotNull Plugin plugin, @NotNull String className) {
         try {
@@ -101,6 +126,35 @@ public final class RuntimeCompatibility {
         } catch (ClassNotFoundException | LinkageError | SecurityException ignored) {
             return false;
         }
+    }
+
+    /** Slimefun United publishes the unique aliases "sfu" and "slimefununited". */
+    static boolean hasUnitedCommandAlias(@NotNull PluginDescriptionFile description) {
+        Map<String, Map<String, Object>> commands = description.getCommands();
+        if (commands == null) {
+            return false;
+        }
+        Map<String, Object> slimefunCommand = commands.get("slimefun");
+        if (slimefunCommand == null) {
+            return false;
+        }
+        Object aliases = slimefunCommand.get("aliases");
+        if (aliases instanceof String alias) {
+            return isUnitedAlias(alias);
+        }
+        if (aliases instanceof Collection<?> collection) {
+            for (Object alias : collection) {
+                if (alias != null && isUnitedAlias(alias.toString())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean isUnitedAlias(@NotNull String alias) {
+        String normalized = alias.toLowerCase(Locale.ROOT);
+        return normalized.equals("sfu") || normalized.equals("slimefununited");
     }
 
     static int compareVersions(@NotNull String left, @NotNull String right) {

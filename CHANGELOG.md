@@ -1,5 +1,45 @@
 # Changelog
 
+## 2.1.112-Legacy-Alpha3
+
+### Release-gated three-core compatibility
+
+- Makes Slimefun Legacy, Slimefun United, and Slimefun Gugu required compile/test gates for the universal release.
+- Keeps Slimefun Legacy as the primary compiler and release-blocking runtime target.
+- Builds the final universal artifact only after all three exact-core jobs succeed.
+- Records the exact Slimefun Legacy commit used to compile the release artifact.
+- Adds universal-JAR validation for plugin identity, version, 288 preserved item IDs, and accidental bundled core/optional API classes.
+
+### Runtime core detection
+
+- Adds a Legacy Doctor marker fallback, United command-alias fingerprinting, and Gugu API marker detection.
+- Gives explicit United/Gugu fingerprints precedence over the Legacy fallback marker to avoid future marker overlap.
+- Adds regression tests for every supported family and unknown-core fail-closed behavior.
+
+### Optional integration stability
+
+- Adds missing `softdepend` declarations for SlimeHUDPlus, JustEnoughGuide, and LogiTech.
+- Defers RoseStacker and LogiTech API initialization until the next server tick.
+- Validates optional API ownership through each plugin's classloader.
+- Disables only the failing optional integration after a runtime/linkage error instead of disabling Networks.
+- Prefers WildStacker when both WildStacker and RoseStacker are installed, preventing two stack providers from handling the same item entity.
+- Reports active/inactive optional integrations in Networks Doctor details.
+
+### Lifecycle and scheduled-maintenance stability
+
+- Adds staged startup failure reporting and safe cleanup after partial initialization.
+- Resets optional integration, localization, Doctor cursor, shared ticker, and loaded runtime caches during disable.
+- Makes localization caches concurrent and prevents duplicate language registration.
+- Closes embedded language resources and only exposes a language after it loaded successfully.
+- Replaces permanent first-tick block-location retention with a shared pending set that is cleared on shutdown and revalidated after chunk reload.
+- Limits automatic Doctor repair to a configurable rotating node budget (`doctor.max-auto-scan-entries`, default `512`).
+- Keeps manual `/networks doctor scan` and `repair confirm` as full loaded-state scans.
+
+### Preserved behavior
+
+- No guide category, item, recipe, machine, item-ID, namespace, database-path, plugin-name, or world-record migration.
+- The organized guide behavior from Alpha 2 is intentionally unchanged.
+
 ## 2.1.112-Legacy-Alpha2
 
 ### Core compatibility

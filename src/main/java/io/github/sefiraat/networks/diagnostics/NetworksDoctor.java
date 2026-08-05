@@ -9,6 +9,7 @@ import com.ytdd9527.networksexpansion.utils.databases.QueryQueue;
 import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.compatibility.CompatibilityReport;
+import io.github.sefiraat.networks.managers.SupportedPluginManager;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.stackcaches.QuantumCache;
 import io.github.sefiraat.networks.slimefun.NetworksSlimefunItemStacks;
@@ -32,8 +33,13 @@ import java.util.Set;
 public final class NetworksDoctor {
 
     private static final int SAMPLE_LIMIT = 12;
+    private static int automaticNodeCursor;
 
     private NetworksDoctor() {
+    }
+
+    public static void resetRuntimeState() {
+        automaticNodeCursor = 0;
     }
 
     public static @NotNull NetworksDoctorReport run(boolean repair) {
@@ -181,13 +187,7 @@ public final class NetworksDoctor {
             addSample(details, "Drawer database connection is closed");
         }
 
-        CompatibilityReport compatibility = Networks.getCompatibilityReport();
-        if (compatibility != null) {
-            details.add("Core: " + compatibility.getCoreVariant().getDisplayName() + ' '
-                + compatibility.getCoreVersion());
-            details.add("Runtime: Minecraft " + compatibility.getMinecraftVersion() + ", Java "
-                + compatibility.getJavaFeature());
-        }
+        addRuntimeDetails(details);
         details.add("Registry: " + nodeCount + " nodes across "
             + NetworkStorage.getIndexedChunkCount() + " loaded chunk indexes");
         details.add("Drawers: " + DataStorage.getCachedContainerCount() + " cached, "
@@ -205,6 +205,106 @@ public final class NetworksDoctor {
         }
 
         return new NetworksDoctorReport(repair, scanned, issues, repaired, failures, unloaded, details);
+    }
+
+    /**
+     * Rotating, bounded stale-node repair for the scheduled maintenance task. Manual Doctor commands still
+     * run the complete node/controller/storage scan, while automatic maintenance never walks the entire
+     * loaded registry in one server tick.
+     */
+    public static @NotNull NetworksDoctorReport runAutomaticRepair(int maximumEntries) {
+        if (!Bukkit.isPrimaryThread()) {
+            throw new IllegalStateException("Networks Doctor must run on the server thread");
+        }
+
+        final int budget = Math.max(1, maximumEntries);
+        long scanned = 0L;
+        long issues = 0L;
+        long repaired = 0L;
+        long failures = 0L;
+        long unloaded = 0L;
+        List<String> details = new ArrayList<>();
+
+        Map<Location, NodeDefinition> nodes = NetworkStorage.getAllNetworkObjects();
+        List<Location> locations = new ArrayList<>(nodes.keySet());
+        int totalNodes = locations.size();
+        int processed = Math.min(budget, totalNodes);
+
+        if (totalNodes == 0) {
+            automaticNodeCursor = 0;
+        } else {
+            int start = Math.floorMod(automaticNodeCursor, totalNodes);
+            for (int offset = 0; offset < processed; offset++) {
+                Location location = locations.get((start + offset) % totalNodes);
+                scanned++;
+                if (!isLoaded(location)) {
+                    unloaded++;
+                    continue;
+                }
+
+                try {
+                    SlimefunBlockData data = StorageCacheUtils.getBlock(location);
+                    SlimefunItem item = data == null ? null : SlimefunItem.getById(data.getSfId());
+                    boolean valid = item instanceof NetworkObject && item.getAddon() instanceof Networks;
+                    if (!valid) {
+                        issues++;
+                        addSample(details, "Stale node: " + format(location));
+                        NetworkStorage.invalidateNode(location);
+                        repaired++;
+                    }
+                } catch (RuntimeException exception) {
+                    failures++;
+                    addSample(details, "Automatic node scan failed at " + format(location) + ": "
+                        + exception.getClass().getSimpleName());
+                }
+            }
+            automaticNodeCursor = (start + processed) % totalNodes;
+        }
+
+        int nodeCount = NetworkStorage.getAllNetworkObjects().size();
+        int indexedCount = NetworkStorage.getIndexedLocationCount();
+        if (nodeCount != indexedCount) {
+            issues++;
+            addSample(details, "Chunk index mismatch: " + indexedCount + " indexed locations for "
+                + nodeCount + " registered nodes");
+            NetworkStorage.rebuildChunkIndex();
+            repaired++;
+        }
+
+        QueryQueue queue = Networks.getQueryQueue();
+        DataSource source = Networks.getDataSource();
+        if (queue == null || !queue.isAcceptingTasks()) {
+            issues++;
+            addSample(details, "Database queue is not accepting tasks");
+        }
+        if (source == null || !source.isOpen()) {
+            issues++;
+            addSample(details, "Drawer database connection is closed");
+        }
+
+        addRuntimeDetails(details);
+        details.add("Automatic scan window: " + processed + '/' + totalNodes
+            + " loaded registry entries; next cursor=" + automaticNodeCursor);
+        if (unloaded > 0L) {
+            details.add("Skipped " + unloaded + " entries in unloaded chunks; Doctor never force-loads chunks");
+        }
+
+        return new NetworksDoctorReport(true, scanned, issues, repaired, failures, unloaded, details);
+    }
+
+    private static void addRuntimeDetails(@NotNull List<String> details) {
+        CompatibilityReport compatibility = Networks.getCompatibilityReport();
+        if (compatibility != null) {
+            details.add("Core: " + compatibility.getCoreVariant().getDisplayName() + ' '
+                + compatibility.getCoreVersion());
+            details.add("Runtime: Minecraft " + compatibility.getMinecraftVersion() + ", Java "
+                + compatibility.getJavaFeature());
+        }
+
+        SupportedPluginManager integrations = Networks.getSupportedPluginManager();
+        if (integrations != null) {
+            details.add("Integrations: " + String.join(", ", integrations.getIntegrationSummary()));
+        }
     }
 
     private static boolean isLoaded(@NotNull Location location) {

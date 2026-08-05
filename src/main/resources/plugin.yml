@@ -16,6 +16,9 @@ softdepend:
   - FluffyMachines
   - Netheopoiesis
   - SlimeHUD
+  - SlimeHUDPlus
+  - JustEnoughGuide
+  - LogiTech
   - WildChests
   - RoseStacker
   - WildStacker
