@@ -11,8 +11,13 @@ permissions:
   contents: read
 
 jobs:
+  compatibility:
+    name: Gate universal release on all supported cores
+    uses: ./.github/workflows/compatibility.yml
+
   build:
     name: Build universal Networks JAR
+    needs: compatibility
     runs-on: ubuntu-latest
 
     steps:
@@ -25,6 +30,16 @@ jobs:
           repository: wickidcow/Slimefun-Legacy
           ref: master
           path: .ci/slimefun-core
+
+      - name: Record release core revision
+        shell: bash
+        run: |
+          {
+            echo "Universal release compiler: Slimefun Legacy"
+            echo "Repository: wickidcow/Slimefun-Legacy"
+            echo "Branch: master"
+            echo "Commit: $(git -C .ci/slimefun-core rev-parse HEAD)"
+          } | tee compatibility-manifest.txt
 
       - name: Set up Java 25 for Slimefun Legacy
         uses: actions/setup-java@v5
@@ -72,9 +87,14 @@ jobs:
       - name: Verify Java 21 bytecode
         run: python3 scripts/verify_java21_bytecode.py "$NETWORKS_JAR"
 
+      - name: Verify universal JAR contents
+        run: python3 scripts/verify_universal_jar.py "$NETWORKS_JAR" "2.1.112-Legacy-Alpha3"
+
       - name: Upload universal Networks JAR
         uses: actions/upload-artifact@v7
         with:
-          name: Networks-Universal
-          path: ${{ env.NETWORKS_JAR }}
+          name: Networks-Legacy-Alpha3-Universal
+          path: |
+            ${{ env.NETWORKS_JAR }}
+            compatibility-manifest.txt
           if-no-files-found: error

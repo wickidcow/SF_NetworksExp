@@ -1,10 +1,7 @@
 name: Networks Compatibility
 
 on:
-  push:
-    branches: [master]
-  pull_request:
-    branches: [master]
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -48,6 +45,13 @@ jobs:
           ref: ${{ matrix.ref }}
           path: .ci/slimefun-core
 
+      - name: Record exact core revision
+        shell: bash
+        run: |
+          echo "Core repository: ${{ matrix.repository }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Core branch: ${{ matrix.ref }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Core commit: $(git -C .ci/slimefun-core rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Set up Java ${{ matrix.core_java }} for the Slimefun core
         uses: actions/setup-java@v5
         with:
@@ -77,18 +81,24 @@ jobs:
           java-version: "21"
           cache: gradle
 
-      - name: Compile Networks against ${{ matrix.display }}
+      - name: Test and compile Networks against ${{ matrix.display }}
         shell: bash
         run: |
           chmod +x gradlew
-          ./gradlew clean compileJava shadowJar --no-daemon -PslimefunCoreJar="$SLIMEFUN_CORE_JAR"
+          ./gradlew clean test shadowJar --no-daemon -PslimefunCoreJar="$SLIMEFUN_CORE_JAR"
 
-      - name: Verify Java 21 bytecode
+      - name: Locate compatibility JAR
         shell: bash
         run: |
           NETWORKS_JAR="$(find build/libs -name 'Networks-Legacy-*.jar' ! -name '*-sources.jar' -print -quit)"
           test -n "$NETWORKS_JAR"
-          python3 scripts/verify_java21_bytecode.py "$NETWORKS_JAR"
+          echo "NETWORKS_JAR=$NETWORKS_JAR" >> "$GITHUB_ENV"
+
+      - name: Verify Java 21 bytecode
+        run: python3 scripts/verify_java21_bytecode.py "$NETWORKS_JAR"
+
+      - name: Verify core-independent universal JAR contract
+        run: python3 scripts/verify_universal_jar.py "$NETWORKS_JAR" "2.1.112-Legacy-Alpha3"
 
   result:
     name: Compatibility result
