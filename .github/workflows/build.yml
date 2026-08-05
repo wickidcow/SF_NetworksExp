@@ -90,11 +90,25 @@ jobs:
       - name: Verify universal JAR contents
         run: python3 scripts/verify_universal_jar.py "$NETWORKS_JAR" "2.1.112-Legacy-Alpha3"
 
+      - name: Stage flat release artifact
+        shell: bash
+        run: |
+          rm -rf release-artifact
+          mkdir -p release-artifact
+          cp "$NETWORKS_JAR" release-artifact/
+          cp compatibility-manifest.txt release-artifact/
+
+          RELEASE_JAR="release-artifact/$(basename "$NETWORKS_JAR")"
+          test -f "$RELEASE_JAR"
+          test -f release-artifact/compatibility-manifest.txt
+
+          echo "Release artifact ZIP root will contain:"
+          find release-artifact -maxdepth 1 -type f -printf ' - %f\n' | sort
+
       - name: Upload universal Networks JAR
         uses: actions/upload-artifact@v7
         with:
           name: Networks-Legacy-Alpha3-Universal
-          path: |
-            ${{ env.NETWORKS_JAR }}
-            compatibility-manifest.txt
+          path: "release-artifact/*"
           if-no-files-found: error
+          compression-level: 0
