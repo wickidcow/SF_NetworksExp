@@ -4,6 +4,7 @@ import com.balugaq.netex.integrations.logitech.LogitechIntegration;
 import com.bgsoftware.wildstacker.api.WildStackerAPI;
 import dev.rosewood.rosestacker.api.RoseStackerAPI;
 import io.github.sefiraat.networks.Networks;
+import io.github.sefiraat.networks.integrations.infinityexpansion2.InfinityExpansion2Integration;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Item;
 import org.bukkit.plugin.Plugin;
@@ -13,6 +14,8 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 /**
@@ -25,7 +28,7 @@ public final class SupportedPluginManager {
 
     private final Networks plugin;
     private final boolean infinityExpansion;
-    private final boolean infinityExpansion2;
+    private volatile boolean infinityExpansion2;
     private final boolean fluffyMachines;
     private volatile boolean netheopoiesis;
     private volatile boolean slimeHud;
@@ -40,6 +43,8 @@ public final class SupportedPluginManager {
     private volatile boolean logitech;
     private volatile @Nullable RoseStackerAPI roseStackerAPI;
     private volatile @Nullable LogitechIntegration logitechIntegration;
+    private volatile @Nullable InfinityExpansion2Integration infinityExpansion2Integration;
+    private final Map<String, String> integrationFailures = new ConcurrentHashMap<>();
     private volatile @Nullable BukkitTask deferredRegistrationTask;
 
     public SupportedPluginManager() {
@@ -53,8 +58,7 @@ public final class SupportedPluginManager {
 
         try {
             this.infinityExpansion = isEnabled("InfinityExpansion");
-            this.infinityExpansion2 = isEnabled("InfinityExpansion2")
-                && hasPluginClass("InfinityExpansion2", "net.guizhanss.infinityexpansion2.InfinityExpansion2");
+            this.infinityExpansion2 = isEnabled("InfinityExpansion2");
             this.fluffyMachines = isEnabled("FluffyMachines");
             this.netheopoiesis = isEnabled("Netheopoiesis");
             this.slimeHud = isEnabled("SlimeHUD") || isEnabled("SlimeHUDPlus");
@@ -102,6 +106,8 @@ public final class SupportedPluginManager {
             current.deferredRegistrationTask = null;
             current.roseStackerAPI = null;
             current.logitechIntegration = null;
+            current.infinityExpansion2Integration = null;
+            current.integrationFailures.clear();
         }
     }
 
@@ -184,11 +190,25 @@ public final class SupportedPluginManager {
     private void initializeDeferredApis() {
         deferredRegistrationTask = null;
 
+        if (infinityExpansion2) {
+            try {
+                final Plugin ie2 = Bukkit.getPluginManager().getPlugin(InfinityExpansion2Integration.PLUGIN_NAME);
+                if (ie2 == null || !ie2.isEnabled()) {
+                    infinityExpansion2 = false;
+                } else {
+                    infinityExpansion2Integration = new InfinityExpansion2Integration(ie2);
+                }
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
+                disableIntegration("InfinityExpansion2", exception);
+            }
+        }
+
         if (roseStacker) {
             try {
                 roseStackerAPI = RoseStackerAPI.getInstance();
                 if (roseStackerAPI == null) {
                     roseStacker = false;
+                    integrationFailures.put("RoseStacker", "API instance unavailable");
                     plugin.getLogger().warning("RoseStacker is enabled, but its API instance is unavailable. Integration disabled.");
                 }
             } catch (RuntimeException | LinkageError exception) {
@@ -214,6 +234,7 @@ public final class SupportedPluginManager {
             Class.forName(className, false, target.getClass().getClassLoader());
             return true;
         } catch (ClassNotFoundException | LinkageError | SecurityException exception) {
+            integrationFailures.put(pluginName, "expected API class unavailable");
             plugin.getLogger().log(
                 Level.WARNING,
                 pluginName + " is enabled, but the expected API class is unavailable. Networks will ignore this integration.",
@@ -227,7 +248,13 @@ public final class SupportedPluginManager {
     }
 
     private void disableIntegration(@NotNull String integration, @NotNull Throwable throwable) {
+        final boolean firstFailure = integrationFailures.putIfAbsent(
+            integration, throwable.getClass().getSimpleName()) == null;
         switch (integration) {
+            case "InfinityExpansion2" -> {
+                infinityExpansion2 = false;
+                infinityExpansion2Integration = null;
+            }
             case "SlimeHUD" -> slimeHud = false;
             case "Netheopoiesis" -> netheopoiesis = false;
             case "RoseStacker" -> {
@@ -244,10 +271,12 @@ public final class SupportedPluginManager {
                 // No mutable runtime flag is associated with this integration.
             }
         }
-        plugin.getLogger().log(
-            Level.WARNING,
-            integration + " integration was disabled after an API compatibility failure. Networks will continue running.",
-            throwable);
+        if (firstFailure) {
+            plugin.getLogger().log(
+                Level.WARNING,
+                integration + " integration was disabled after an API compatibility failure. Networks will continue running.",
+                throwable);
+        }
     }
 
     public void disableOptionalIntegration(@NotNull String integration, @NotNull Throwable throwable) {
@@ -256,24 +285,55 @@ public final class SupportedPluginManager {
 
     public @NotNull List<String> getIntegrationSummary() {
         List<String> summary = new ArrayList<>();
-        addStatus(summary, "InfinityExpansion", infinityExpansion);
-        addStatus(summary, "InfinityExpansion2", infinityExpansion2);
-        addStatus(summary, "FluffyMachines", fluffyMachines);
-        addStatus(summary, "Netheopoiesis", netheopoiesis);
-        addStatus(summary, "SlimeHUD", slimeHud);
-        addStatus(summary, "RoseStacker", roseStacker && roseStackerAPI != null);
-        addStatus(summary, "WildStacker", wildStacker);
-        addStatus(summary, "WildChests", wildChests);
-        addStatus(summary, "mcMMO", mcMMO);
-        addStatus(summary, "JustEnoughGuide", justEnoughGuide);
-        addStatus(summary, "LogiTech", logitech && logitechIntegration != null);
-        addStatus(summary, "GuguSlimefunLib", guguSlimefunLib);
-        addStatus(summary, "FinalTECH", finalTECH);
+        addStatus(summary, "InfinityExpansion", infinityExpansion, "InfinityExpansion");
+        addStatus(summary, "InfinityExpansion2", infinityExpansion2 && infinityExpansion2Integration != null,
+            "InfinityExpansion2");
+        addStatus(summary, "FluffyMachines", fluffyMachines, "FluffyMachines");
+        addStatus(summary, "Netheopoiesis", netheopoiesis, "Netheopoiesis");
+        addStatus(summary, "SlimeHUD", slimeHud, "SlimeHUD", "SlimeHUDPlus");
+        addStatus(summary, "RoseStacker", roseStacker && roseStackerAPI != null, "RoseStacker");
+        addStatus(summary, "WildStacker", wildStacker, "WildStacker");
+        addStatus(summary, "WildChests", wildChests, "WildChests");
+        addStatus(summary, "mcMMO", mcMMO, "mcMMO");
+        addStatus(summary, "JustEnoughGuide", justEnoughGuide, "JustEnoughGuide");
+        addStatus(summary, "LogiTech", logitech && logitechIntegration != null, "LogiTech");
+        addStatus(summary, "GuguSlimefunLib", guguSlimefunLib, "GuguSlimefunLib");
+        addStatus(summary, "FinalTECH", finalTECH, "FinalTECH", "FinalTECH-Changed");
         return summary;
     }
 
-    private static void addStatus(@NotNull List<String> summary, @NotNull String name, boolean enabled) {
-        summary.add(name + '=' + (enabled ? "active" : "inactive"));
+    private void addStatus(
+        @NotNull List<String> summary,
+        @NotNull String displayName,
+        boolean active,
+        @NotNull String... pluginNames
+    ) {
+        Plugin detected = null;
+        for (String pluginName : pluginNames) {
+            final Plugin candidate = Bukkit.getPluginManager().getPlugin(pluginName);
+            if (candidate != null) {
+                detected = candidate;
+                break;
+            }
+        }
+
+        if (detected == null) {
+            summary.add(displayName + "=not-installed");
+            return;
+        }
+
+        final String version = detected.getPluginMeta().getVersion();
+        final String versionSuffix = version == null || version.isBlank() ? "" : "[" + version + "]";
+        final String failure = integrationFailures.get(displayName);
+        if (failure != null) {
+            summary.add(displayName + "=failed" + versionSuffix + '[' + failure + ']');
+        } else if (active) {
+            summary.add(displayName + "=active" + versionSuffix);
+        } else if (detected.isEnabled()) {
+            summary.add(displayName + "=incompatible" + versionSuffix);
+        } else {
+            summary.add(displayName + "=detected" + versionSuffix + "[disabled]");
+        }
     }
 
     public boolean isInfinityExpansion() {
@@ -281,7 +341,11 @@ public final class SupportedPluginManager {
     }
 
     public boolean isInfinityExpansion2() {
-        return infinityExpansion2;
+        return infinityExpansion2 && infinityExpansion2Integration != null;
+    }
+
+    public @Nullable InfinityExpansion2Integration getInfinityExpansion2Integration() {
+        return infinityExpansion2Integration;
     }
 
     public boolean isFluffyMachines() {

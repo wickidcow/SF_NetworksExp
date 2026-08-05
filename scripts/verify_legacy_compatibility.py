@@ -97,6 +97,10 @@ doctor = read("src/main/java/io/github/sefiraat/networks/diagnostics/NetworksDoc
 doctor_bridge = read("src/main/java/io/github/sefiraat/networks/diagnostics/LegacyDoctorBridge.java")
 runtime_compatibility = read("src/main/java/io/github/sefiraat/networks/compatibility/RuntimeCompatibility.java")
 supported_plugins = read("src/main/java/io/github/sefiraat/networks/managers/SupportedPluginManager.java")
+ie2_integration = read("src/main/java/io/github/sefiraat/networks/integrations/infinityexpansion2/InfinityExpansion2Integration.java")
+ie2_barrel = read("src/main/java/io/github/sefiraat/networks/network/barrel/InfinityExpansion2Barrel.java")
+barrel_identity = read("src/main/java/io/github/sefiraat/networks/network/stackcaches/BarrelIdentity.java")
+barrel_type = read("src/main/java/io/github/sefiraat/networks/network/barrel/BarrelType.java")
 localization_service = read("src/main/java/com/ytdd9527/networksexpansion/core/services/LocalizationService.java")
 network_object = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkObject.java")
 universal_verifier = read("scripts/verify_universal_jar.py")
@@ -136,7 +140,7 @@ for optional_plugin in ["InfinityExpansion2", "SlimeHUDPlus", "JustEnoughGuide",
     require(optional_plugin in softdepend, f"optional integration is missing from softdepend: {optional_plugin}")
 
 # Java/Paper/exact-core build contract.
-require('version = "2.1.112-Legacy-Alpha3"' in build, "project version is not Alpha3")
+require('version = "2.1.112-Legacy-Alpha4"' in build, "project version is not Alpha4")
 require("options.release.set(21)" in build, "Java 21 release target is missing")
 require("languageVersion.set(JavaLanguageVersion.of(21))" in build, "Java 21 Gradle toolchain is missing")
 require("paper-api:1.21.11-R0.1-SNAPSHOT" in build, "Paper 1.21.11 API baseline is missing")
@@ -171,7 +175,7 @@ workflow_invariants = [
     "uses: ./.github/workflows/compatibility.yml",
     "needs: compatibility",
     "verify_universal_jar.py",
-    "Networks-Legacy-Alpha3-Universal",
+    "Networks-Legacy-2.1.112-Alpha4",
 ]
 for required in workflow_invariants:
     require(required in workflow, f"workflow invariant missing: {required}")
@@ -378,7 +382,7 @@ for path in (ROOT / "src/main/java").rglob("*.java"):
         require("import " + doctor_api_package not in text,
                 "RuntimeCompatibility must use only a non-linking Legacy marker string")
 
-# Alpha3 lifecycle, optional integration, and unload/reload stability.
+# Alpha4 lifecycle, optional integration, and unload/reload stability.
 require("failStartup" in networks_java and "startupStage" in networks_java,
         "staged fail-safe startup handling is missing")
 require("SupportedPluginManager.shutdown()" in networks_java
@@ -400,9 +404,35 @@ require("setVanillaItemAmount" in supported_plugins
 require('com.balugaq.jeg.api.objects.events.GuideEvents' in supported_plugins,
         "JustEnoughGuide API marker validation is missing")
 require('isEnabled("InfinityExpansion2")' in supported_plugins
-        and 'net.guizhanss.infinityexpansion2.InfinityExpansion2' in supported_plugins
-        and 'addStatus(summary, "InfinityExpansion2", infinityExpansion2)' in supported_plugins,
-        "InfinityExpansion2 detection and Doctor integration status are missing")
+        and 'new InfinityExpansion2Integration(ie2)' in supported_plugins
+        and 'getInfinityExpansion2Integration' in supported_plugins
+        and 'InfinityExpansion2=not-installed' not in supported_plugins
+        and '"=not-installed"' in supported_plugins
+        and '"=incompatible"' in supported_plugins
+        and '"=failed"' in supported_plugins,
+        "InfinityExpansion2 initialization or detailed Doctor integration states are missing")
+require('net.guizhanss.infinityexpansion2.implementation.items.storage.StorageUnit' in ie2_integration,
+        "InfinityExpansion2 StorageUnit API marker is missing")
+require('getCaches' in ie2_integration
+        and 'getCapacity' in ie2_integration
+        and 'getInputSlots' in ie2_integration
+        and 'getOutputSlots' in ie2_integration
+        and 'new BlockPosition(location.getBlock())' in ie2_integration,
+        "InfinityExpansion2 generic storage-unit cache discovery is missing")
+require('BlockMenuUtil.pushItem' in ie2_barrel
+        and 'BlockMenuUtil.consumeItem' in ie2_barrel
+        and 'integration.isStorageUnitItem(incoming)' in ie2_barrel,
+        "InfinityExpansion2 safe slot-based deposit/withdrawal adapter is missing")
+require('BarrelType.INFINITY_2' in ie2_barrel and 'INFINITY_2' in barrel_type,
+        "InfinityExpansion2 barrel identity type is missing")
+require('canAccept' in barrel_identity
+        and network_root.count('barrelIdentity.canAccept(incoming)') >= 3,
+        "empty or matching external storage acceptance bridge is missing")
+require('ie2.getBarrel(barrelLocation, item, includeEmpty)' in network_root
+        and 'getBarrel(testLocation, true)' in network_root,
+        "InfinityExpansion2 storage units are not included in network discovery and input routing")
+require('net.guizhanss.infinityexpansion2.' not in build,
+        "InfinityExpansion2 must remain reflection-only and must not become a bundled/compile dependency")
 require("ConcurrentHashMap" in localization_service and "clearRuntimeCache" in localization_service,
         "thread-safe localization cache lifecycle is missing")
 require("try (InputStream resource" in localization_service
@@ -455,6 +485,6 @@ if ERRORS:
     sys.exit(1)
 
 print(
-    f"Networks Alpha3 verification passed: {len(current_ids)} item IDs, three-core matrix, "
-    "Java 21, Paper 1.21.11, database/runtime/storage/cargo/crafting/remote/doctor hardening."
+    f"Networks Alpha4 verification passed: {len(current_ids)} item IDs, three-core matrix, "
+    "Java 21, Paper 1.21.11, database/runtime/storage/cargo/crafting/remote/doctor hardening plus IE2 storage integration."
 )

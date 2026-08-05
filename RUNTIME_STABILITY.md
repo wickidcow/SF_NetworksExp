@@ -2,7 +2,7 @@
 
 ## Scope
 
-This update advances the release to `2.1.112-Legacy-Alpha3`. Slimefun Legacy is the primary and release-blocking target; United and Gugu are required compatibility gates. Alpha 3 is a compatibility, lifecycle, and scheduled-maintenance hardening release, not an item-ID, plugin-name, database-path, guide-layout, or world-format migration.
+The current release is `2.1.112-Legacy-Alpha4`. Slimefun Legacy is the primary and release-blocking target; United and Gugu remain required compatibility gates. Alpha 4 adds fail-soft Infinity Expansion 2 storage integration and precise integration diagnostics without changing item IDs, plugin identity, database paths, guide layout, or world format.
 
 ## Preserved data contract
 

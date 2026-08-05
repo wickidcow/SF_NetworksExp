@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.1.112-Legacy-Alpha4
+
+### Infinity Expansion 2
+- Added a reflection-backed adapter for every IE2 item implemented through its shared `StorageUnit` class.
+- Added input and output routing through IE2's real menu transport slots.
+- Added read-only cache discovery for the stored item, amount, and capacity.
+- Added empty-unit first-item deposits while preventing nested IE2 storage units.
+- Kept IE2 optional and fail-soft; no IE2 classes are bundled into the universal JAR.
+
+### Diagnostics and compatibility
+- Replaced ambiguous `inactive` integration results with `active`, `not-installed`, `detected`, `incompatible`, or `failed`, including detected plugin versions.
+- Kept Slimefun Legacy primary while retaining required United and Gugu build gates.
+- Preserved all 288 item IDs, guide organization, recipes, database paths, and world data.
+- Updated the flat GitHub artifact to `Networks-Legacy-2.1.112-Alpha4.jar`.
+
 ## 2.1.112-Legacy-Alpha3
 
 ### Release-gated three-core compatibility

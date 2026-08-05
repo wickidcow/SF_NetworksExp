@@ -20,7 +20,7 @@ Unknown Slimefun cores fail closed by default. The override in `config.yml` is i
 
 ## Alpha 3: compatibility and lifecycle stability
 
-`2.1.112-Legacy-Alpha3` continues from the working Alpha 2 guide layout without reorganizing categories or changing item content.
+`2.1.112-Legacy-Alpha4` keeps the working guide layout and adds runtime-safe Infinity Expansion 2 storage-unit support plus clearer integration diagnostics.
 
 - Makes the three-core matrix a required release gate instead of a secondary informational build.
 - Builds the final universal JAR only after Legacy, United, and Gugu compile/test jobs pass.

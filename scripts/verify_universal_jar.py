@@ -82,8 +82,8 @@ def main() -> int:
                 )
 
             config_version = str(config.get("config-version", ""))
-            if "alpha3" not in config_version.lower():
-                raise SystemExit(f"config.yml is not the Alpha3 configuration: {config_version!r}")
+            if "alpha4" not in config_version.lower():
+                raise SystemExit(f"config.yml is not the Alpha4 configuration: {config_version!r}")
 
             item_ids = sorted((locale.get("items") or {}).keys())
             if len(item_ids) != 288:

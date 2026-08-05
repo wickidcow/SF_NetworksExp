@@ -16,6 +16,7 @@ import com.ytdd9527.networksexpansion.implementation.machines.unit.NetworksDrawe
 import io.github.mooy1.infinityexpansion.items.storage.StorageCache;
 import io.github.mooy1.infinityexpansion.items.storage.StorageUnit;
 import io.github.sefiraat.networks.Networks;
+import io.github.sefiraat.networks.integrations.infinityexpansion2.InfinityExpansion2Integration;
 import io.github.sefiraat.networks.network.barrel.FluffyBarrel;
 import io.github.sefiraat.networks.network.barrel.InfinityBarrel;
 import io.github.sefiraat.networks.network.barrel.NetworkStorage;
@@ -433,13 +434,22 @@ public class NetworkRoot extends NetworkNode {
 
         if (item instanceof NetworkQuantumStorage) {
             return getNetworkStorage(menu, includeEmpty);
-        } else if (item instanceof Barrel barrel) {
+        } else if (Networks.getSupportedPluginManager().isFluffyMachines() && item instanceof Barrel barrel) {
             return getFluffyBarrel(menu, barrel, includeEmpty);
-        } else if (item instanceof StorageUnit storageUnit) {
+        } else if (Networks.getSupportedPluginManager().isInfinityExpansion() && item instanceof StorageUnit storageUnit) {
             return getInfinityBarrel(menu, storageUnit, includeEmpty);
-        } else {
-            return null;
         }
+
+        final InfinityExpansion2Integration ie2 =
+            Networks.getSupportedPluginManager().getInfinityExpansion2Integration();
+        if (ie2 != null && ie2.isStorageUnit(item)) {
+            try {
+                return ie2.getBarrel(barrelLocation, item, includeEmpty);
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
+                Networks.getSupportedPluginManager().disableOptionalIntegration("InfinityExpansion2", exception);
+            }
+        }
+        return null;
     }
 
     @Nullable
@@ -752,37 +762,9 @@ public class NetworkRoot extends NetworkNode {
                 addedLocations.add(testLocation);
             }
 
-            final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(testLocation);
-
-            if (Networks.getSupportedPluginManager().isInfinityExpansion()
-                && slimefunItem instanceof StorageUnit unit) {
-                final BlockMenu menu = StorageCacheUtils.getMenu(testLocation);
-                if (menu == null) {
-                    continue;
-                }
-                final InfinityBarrel infinityBarrel = getInfinityBarrel(menu, unit);
-                if (infinityBarrel != null) {
-                    barrelSet.add(infinityBarrel);
-                }
-            } else if (Networks.getSupportedPluginManager().isFluffyMachines()
-                && slimefunItem instanceof Barrel barrel) {
-                final BlockMenu menu = StorageCacheUtils.getMenu(testLocation);
-                if (menu == null) {
-                    continue;
-                }
-                final FluffyBarrel fluffyBarrel = getFluffyBarrel(menu, barrel);
-                if (fluffyBarrel != null) {
-                    barrelSet.add(fluffyBarrel);
-                }
-            } else if (slimefunItem instanceof NetworkQuantumStorage) {
-                final BlockMenu menu = StorageCacheUtils.getMenu(testLocation);
-                if (menu == null) {
-                    continue;
-                }
-                final NetworkStorage storage = getNetworkStorage(menu);
-                if (storage != null) {
-                    barrelSet.add(storage);
-                }
+            final BarrelIdentity supportedBarrel = getBarrel(testLocation, false);
+            if (supportedBarrel != null) {
+                barrelSet.add(supportedBarrel);
             }
         }
 
@@ -1386,7 +1368,7 @@ public class NetworkRoot extends NetworkNode {
 
         // Run for matching barrels
         for (BarrelIdentity barrelIdentity : getInputAbleBarrels()) {
-            if (StackUtils.itemsMatch(barrelIdentity, incoming)) {
+            if (barrelIdentity.canAccept(incoming)) {
                 barrelIdentity.depositItemStack(incoming);
 
                 // All distributed, can escape
@@ -1503,46 +1485,9 @@ public class NetworkRoot extends NetworkNode {
                 addedLocations.add(testLocation);
             }
 
-            final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(testLocation);
-
-            if (Networks.getSupportedPluginManager().isInfinityExpansion()
-                && slimefunItem instanceof StorageUnit unit) {
-                final BlockMenu menu = StorageCacheUtils.getMenu(testLocation);
-                if (menu == null) {
-                    continue;
-                }
-                final InfinityBarrel infinityBarrel = getInfinityBarrel(menu, unit, includeEmpty);
-                if (infinityBarrel != null) {
-                    if (filter.test(infinityBarrel)) {
-                        barrelSet.add(infinityBarrel);
-                    }
-                }
-                continue;
-            }
-            if (Networks.getSupportedPluginManager().isFluffyMachines() && slimefunItem instanceof Barrel barrel) {
-                final BlockMenu menu = StorageCacheUtils.getMenu(testLocation);
-                if (menu == null) {
-                    continue;
-                }
-                final FluffyBarrel fluffyBarrel = getFluffyBarrel(menu, barrel, includeEmpty);
-                if (fluffyBarrel != null) {
-                    if (filter.test(fluffyBarrel)) {
-                        barrelSet.add(fluffyBarrel);
-                    }
-                }
-                continue;
-            }
-            if (slimefunItem instanceof NetworkQuantumStorage) {
-                final BlockMenu menu = StorageCacheUtils.getMenu(testLocation);
-                if (menu == null) {
-                    continue;
-                }
-                final NetworkStorage storage = getNetworkStorage(menu, includeEmpty);
-                if (storage != null) {
-                    if (filter.test(storage)) {
-                        barrelSet.add(storage);
-                    }
-                }
+            final BarrelIdentity supportedBarrel = getBarrel(testLocation, includeEmpty);
+            if (supportedBarrel != null && filter.test(supportedBarrel)) {
+                barrelSet.add(supportedBarrel);
             }
         }
 
@@ -1620,40 +1565,9 @@ public class NetworkRoot extends NetworkNode {
                 addedLocations.add(testLocation);
             }
 
-            final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(testLocation);
-
-            if (Networks.getSupportedPluginManager().isInfinityExpansion()
-                && slimefunItem instanceof StorageUnit unit) {
-                final BlockMenu menu = StorageCacheUtils.getMenu(testLocation);
-                if (menu == null) {
-                    continue;
-                }
-                final InfinityBarrel infinityBarrel = getInfinityBarrel(menu, unit);
-                if (infinityBarrel != null) {
-                    barrelSet.add(infinityBarrel);
-                }
-                continue;
-            }
-            if (Networks.getSupportedPluginManager().isFluffyMachines() && slimefunItem instanceof Barrel barrel) {
-                final BlockMenu menu = StorageCacheUtils.getMenu(testLocation);
-                if (menu == null) {
-                    continue;
-                }
-                final FluffyBarrel fluffyBarrel = getFluffyBarrel(menu, barrel);
-                if (fluffyBarrel != null) {
-                    barrelSet.add(fluffyBarrel);
-                }
-                continue;
-            }
-            if (slimefunItem instanceof NetworkQuantumStorage) {
-                final BlockMenu menu = StorageCacheUtils.getMenu(testLocation);
-                if (menu == null) {
-                    continue;
-                }
-                final NetworkStorage storage = getNetworkStorage(menu);
-                if (storage != null) {
-                    barrelSet.add(storage);
-                }
+            final BarrelIdentity supportedBarrel = getBarrel(testLocation, true);
+            if (supportedBarrel != null) {
+                barrelSet.add(supportedBarrel);
             }
         }
 
@@ -1696,40 +1610,9 @@ public class NetworkRoot extends NetworkNode {
                 addedLocations.add(testLocation);
             }
 
-            final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(testLocation);
-
-            if (Networks.getSupportedPluginManager().isInfinityExpansion()
-                && slimefunItem instanceof StorageUnit unit) {
-                final BlockMenu menu = StorageCacheUtils.getMenu(testLocation);
-                if (menu == null) {
-                    continue;
-                }
-                final InfinityBarrel infinityBarrel = getInfinityBarrel(menu, unit);
-                if (infinityBarrel != null) {
-                    barrelSet.add(infinityBarrel);
-                }
-                continue;
-            }
-            if (Networks.getSupportedPluginManager().isFluffyMachines() && slimefunItem instanceof Barrel barrel) {
-                final BlockMenu menu = StorageCacheUtils.getMenu(testLocation);
-                if (menu == null) {
-                    continue;
-                }
-                final FluffyBarrel fluffyBarrel = getFluffyBarrel(menu, barrel);
-                if (fluffyBarrel != null) {
-                    barrelSet.add(fluffyBarrel);
-                }
-                continue;
-            }
-            if (slimefunItem instanceof NetworkQuantumStorage) {
-                final BlockMenu menu = StorageCacheUtils.getMenu(testLocation);
-                if (menu == null) {
-                    continue;
-                }
-                final NetworkStorage storage = getNetworkStorage(menu);
-                if (storage != null) {
-                    barrelSet.add(storage);
-                }
+            final BarrelIdentity supportedBarrel = getBarrel(testLocation, false);
+            if (supportedBarrel != null) {
+                barrelSet.add(supportedBarrel);
             }
         }
 
@@ -2313,7 +2196,7 @@ public class NetworkRoot extends NetworkNode {
                 BarrelIdentity barrelIdentity = accessInputAbleBarrel(entry.getKey());
                 if (barrelIdentity != null) {
                     // <editor-fold desc="do barrel">
-                    if (StackUtils.itemsMatch(barrelIdentity, incoming)) {
+                    if (barrelIdentity.canAccept(incoming)) {
                         // Netex - Cache start
                         minusCacheMiss(accessor, entry.getKey());
                         found = true;
@@ -2418,7 +2301,7 @@ public class NetworkRoot extends NetworkNode {
         // Run for matching barrels
         for (BarrelIdentity barrelIdentity : getInputAbleBarrels()) {
             // <editor-fold desc="do barrel">
-            if (StackUtils.itemsMatch(barrelIdentity, incoming)) {
+            if (barrelIdentity.canAccept(incoming)) {
                 // Netex - Cache start
                 addCountObservingAccessHistory(accessor, barrelIdentity.getLocation());
                 // Netex - Cache end
