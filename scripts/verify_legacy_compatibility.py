@@ -425,9 +425,12 @@ require('getCaches' in ie2_integration
         and 'getCapacity' in ie2_integration
         and 'getInputSlots' in ie2_integration
         and 'getOutputSlots' in ie2_integration
-        and 'new BlockPosition(location.getBlock())' in ie2_integration
+        and 'findCache(caches, location)' in ie2_integration
+        and 'POSITION_KEY_CANDIDATES' in ie2_integration
+        and 'new BlockPosition(' not in ie2_integration
+        and 'import io.github.thebusybiscuit.slimefun4.libraries.dough.blocks.BlockPosition' not in ie2_integration
         and 'getCacheAccessors(cache.getClass())' in ie2_integration,
-        "InfinityExpansion2 generic storage-unit/cache discovery is missing")
+        "InfinityExpansion2 generic storage-unit/cache discovery is missing or directly links a core-specific BlockPosition")
 require('BlockMenuUtil.pushItem' in ie2_barrel
         and 'BlockMenuUtil.consumeItem' in ie2_barrel
         and 'integration.isStorageUnitItem(incoming)' in ie2_barrel,

@@ -3,14 +3,15 @@ package io.github.sefiraat.networks.integrations.infinityexpansion2;
 import io.github.sefiraat.networks.network.barrel.InfinityExpansion2Barrel;
 import io.github.thebusybiscuit.slimefun4.api.Slimefun;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
-import io.github.thebusybiscuit.slimefun4.libraries.dough.blocks.BlockPosition;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.block.Block;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
@@ -47,6 +48,10 @@ public final class InfinityExpansion2Integration {
         STORAGE_CACHE_CLASS,
         "net.guizhanss.infinityexpansion2.items.storage.StorageCache"
     );
+    private static final List<String> POSITION_KEY_CANDIDATES = List.of(
+        "io.github.thebusybiscuit.slimefun4.libraries.dough.blocks.BlockPosition",
+        "io.github.bakedlibs.dough.blocks.BlockPosition"
+    );
 
     private final ClassLoader pluginClassLoader;
     private final Class<?> storageUnitClass;
@@ -54,6 +59,7 @@ public final class InfinityExpansion2Integration {
     private final Method getCapacity;
     private final Method getInputSlots;
     private final Method getOutputSlots;
+    private final @Nullable PositionKeyFactory positionKeyFactory;
     private volatile @Nullable CacheAccessors cacheAccessors;
 
     public InfinityExpansion2Integration(@NotNull Plugin ie2Plugin) throws ReflectiveOperationException {
@@ -64,6 +70,7 @@ public final class InfinityExpansion2Integration {
         getCapacity = storageUnitClass.getMethod("getCapacity");
         getInputSlots = storageUnitClass.getMethod("getInputSlots");
         getOutputSlots = storageUnitClass.getMethod("getOutputSlots");
+        positionKeyFactory = resolvePositionKeyFactory();
 
         final Class<?> cacheClass = resolveKnownClass(STORAGE_CACHE_CANDIDATES);
         if (cacheClass != null) {
@@ -190,7 +197,7 @@ public final class InfinityExpansion2Integration {
             throw new ReflectiveOperationException("Infinity Expansion 2 getCaches() did not return a Map");
         }
 
-        final Object cache = caches.get(new BlockPosition(location.getBlock()));
+        final Object cache = findCache(caches, location);
         if (cache == null) {
             return new StorageSnapshot(null, 0, unitCapacity);
         }
@@ -203,6 +210,81 @@ public final class InfinityExpansion2Integration {
         final int limit = cacheLimit > 0 ? cacheLimit : unitCapacity;
 
         return new StorageSnapshot(item, Math.max(0, amount), Math.max(1, limit));
+    }
+
+    private @Nullable Object findCache(@NotNull Map<?, ?> caches, @NotNull Location location)
+        throws ReflectiveOperationException {
+        if (positionKeyFactory != null) {
+            final Object key = positionKeyFactory.create(location);
+            final Object direct = caches.get(key);
+            if (direct != null) {
+                return direct;
+            }
+        }
+
+        // Unofficial IE2 builds may relocate the position-key class. Fall back to matching
+        // existing keys without linking Networks against any Dough implementation.
+        for (Map.Entry<?, ?> entry : caches.entrySet()) {
+            if (matchesLocation(entry.getKey(), location)) {
+                return entry.getValue();
+            }
+        }
+        return null;
+    }
+
+    private @Nullable PositionKeyFactory resolvePositionKeyFactory() {
+        Class<?> keyClass = inferMapKeyClass(getCaches.getGenericReturnType());
+        if (keyClass == null || keyClass == Object.class) {
+            keyClass = resolveKnownClass(POSITION_KEY_CANDIDATES);
+        }
+        if (keyClass == null) {
+            return null;
+        }
+
+        try {
+            return new PositionKeyFactory(keyClass.getConstructor(Block.class), true);
+        } catch (NoSuchMethodException ignored) {
+            // Try a Location constructor used by some relocated compatibility implementations.
+        }
+        try {
+            return new PositionKeyFactory(keyClass.getConstructor(Location.class), false);
+        } catch (NoSuchMethodException | SecurityException ignored) {
+            return null;
+        }
+    }
+
+    private static boolean matchesLocation(@Nullable Object key, @NotNull Location location) {
+        if (key == null) {
+            return false;
+        }
+        if (key instanceof Location keyLocation) {
+            return sameBlock(keyLocation, location);
+        }
+
+        final Object block = invokeQuietly(key, "getBlock");
+        if (block instanceof Block keyBlock) {
+            return sameBlock(keyBlock.getLocation(), location);
+        }
+        final Object keyLocation = invokeQuietly(key, "getLocation");
+        if (keyLocation instanceof Location resolved) {
+            return sameBlock(resolved, location);
+        }
+        return false;
+    }
+
+    private static @Nullable Object invokeQuietly(@NotNull Object target, @NotNull String methodName) {
+        try {
+            return target.getClass().getMethod(methodName).invoke(target);
+        } catch (ReflectiveOperationException | SecurityException | IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
+    private static boolean sameBlock(@NotNull Location first, @NotNull Location second) {
+        return first.getWorld() == second.getWorld()
+            && first.getBlockX() == second.getBlockX()
+            && first.getBlockY() == second.getBlockY()
+            && first.getBlockZ() == second.getBlockZ();
     }
 
     private @NotNull Class<?> resolveStorageUnitClass(@NotNull Plugin ie2Plugin)
@@ -291,6 +373,14 @@ public final class InfinityExpansion2Integration {
             cacheClass.getMethod("getAmount"),
             cacheClass.getMethod("getLimit")
         );
+    }
+
+    private static @Nullable Class<?> inferMapKeyClass(@NotNull Type mapType) {
+        if (!(mapType instanceof ParameterizedType parameterizedType)) {
+            return null;
+        }
+        final Type[] arguments = parameterizedType.getActualTypeArguments();
+        return arguments.length < 1 ? null : rawClass(arguments[0]);
     }
 
     private static @Nullable Class<?> inferMapValueClass(@NotNull Type mapType) {
@@ -401,6 +491,20 @@ public final class InfinityExpansion2Integration {
         final ItemStack clone = stack.clone();
         clone.setAmount(1);
         return clone;
+    }
+
+    private record PositionKeyFactory(@NotNull Constructor<?> constructor, boolean fromBlock) {
+        private @NotNull Object create(@NotNull Location location) throws ReflectiveOperationException {
+            try {
+                return constructor.newInstance(fromBlock ? location.getBlock() : location);
+            } catch (InvocationTargetException exception) {
+                final Throwable cause = exception.getCause();
+                throw new ReflectiveOperationException(
+                    "Infinity Expansion 2 position-key construction failed",
+                    cause == null ? exception : cause
+                );
+            }
+        }
     }
 
     private record CacheAccessors(
