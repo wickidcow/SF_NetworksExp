@@ -196,7 +196,12 @@ public final class SupportedPluginManager {
                 if (ie2 == null || !ie2.isEnabled()) {
                     infinityExpansion2 = false;
                 } else {
-                    infinityExpansion2Integration = new InfinityExpansion2Integration(ie2);
+                    final InfinityExpansion2Integration integration = new InfinityExpansion2Integration(ie2);
+                    infinityExpansion2Integration = integration;
+                    integrationFailures.remove("InfinityExpansion2");
+                    plugin.getLogger().info(
+                        "Infinity Expansion 2 storage integration enabled using "
+                            + integration.getResolvedStorageClassName() + '.');
                 }
             } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
                 disableIntegration("InfinityExpansion2", exception);
@@ -249,7 +254,7 @@ public final class SupportedPluginManager {
 
     private void disableIntegration(@NotNull String integration, @NotNull Throwable throwable) {
         final boolean firstFailure = integrationFailures.putIfAbsent(
-            integration, throwable.getClass().getSimpleName()) == null;
+            integration, describeFailure(throwable)) == null;
         switch (integration) {
             case "InfinityExpansion2" -> {
                 infinityExpansion2 = false;
@@ -277,6 +282,17 @@ public final class SupportedPluginManager {
                 integration + " integration was disabled after an API compatibility failure. Networks will continue running.",
                 throwable);
         }
+    }
+
+
+    private static @NotNull String describeFailure(@NotNull Throwable throwable) {
+        final String simpleName = throwable.getClass().getSimpleName();
+        final String message = throwable.getMessage();
+        if (message == null || message.isBlank()) {
+            return simpleName;
+        }
+        final String compact = message.replace('\n', ' ').replace('\r', ' ').trim();
+        return simpleName + ": " + (compact.length() <= 160 ? compact : compact.substring(0, 157) + "...");
     }
 
     public void disableOptionalIntegration(@NotNull String integration, @NotNull Throwable throwable) {

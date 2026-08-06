@@ -5,7 +5,7 @@ auto-update: false
 language: en-US
 
 # Do not change this value unless you know what you are doing.
-config-version: 2.1.112-legacy-alpha4
+config-version: 2.1.112-legacy-alpha4.1
 
 # Do not change this value unless you know what you are doing.
 debug: false

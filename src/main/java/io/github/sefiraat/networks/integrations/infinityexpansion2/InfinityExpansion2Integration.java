@@ -1,6 +1,7 @@
 package io.github.sefiraat.networks.integrations.infinityexpansion2;
 
 import io.github.sefiraat.networks.network.barrel.InfinityExpansion2Barrel;
+import io.github.thebusybiscuit.slimefun4.api.Slimefun;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.blocks.BlockPosition;
 import org.bukkit.Location;
@@ -12,6 +13,10 @@ import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.lang.reflect.WildcardType;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -20,6 +25,11 @@ import java.util.Map;
  * <p>IE2 is deliberately not a compile dependency. This keeps the same Networks JAR loadable against
  * Slimefun Legacy, United and Gugu, and it lets an incompatible IE2 preview fail soft instead of preventing
  * Networks from starting. Cache access is read-only; item movement always uses IE2's live input/output slots.</p>
+ *
+ * <p>The bridge intentionally does not require IE2's main class to have one exact package name. Unofficial
+ * builds sometimes relocate or rename the plugin entry point while preserving the storage implementation.
+ * Networks first checks the official storage class, then discovers a compatible storage base class from the
+ * Slimefun registry using the IE2 plugin's own class loader.</p>
  */
 public final class InfinityExpansion2Integration {
 
@@ -29,27 +39,41 @@ public final class InfinityExpansion2Integration {
     public static final String STORAGE_CACHE_CLASS =
         "net.guizhanss.infinityexpansion2.implementation.items.storage.StorageCache";
 
+    private static final List<String> STORAGE_UNIT_CANDIDATES = List.of(
+        STORAGE_UNIT_CLASS,
+        "net.guizhanss.infinityexpansion2.items.storage.StorageUnit"
+    );
+    private static final List<String> STORAGE_CACHE_CANDIDATES = List.of(
+        STORAGE_CACHE_CLASS,
+        "net.guizhanss.infinityexpansion2.items.storage.StorageCache"
+    );
+
+    private final ClassLoader pluginClassLoader;
     private final Class<?> storageUnitClass;
     private final Method getCaches;
     private final Method getCapacity;
     private final Method getInputSlots;
     private final Method getOutputSlots;
-    private final Method getCacheItemStack;
-    private final Method getCacheAmount;
-    private final Method getCacheLimit;
+    private volatile @Nullable CacheAccessors cacheAccessors;
 
     public InfinityExpansion2Integration(@NotNull Plugin ie2Plugin) throws ReflectiveOperationException {
-        final ClassLoader loader = ie2Plugin.getClass().getClassLoader();
-        storageUnitClass = Class.forName(STORAGE_UNIT_CLASS, false, loader);
-        final Class<?> storageCacheClass = Class.forName(STORAGE_CACHE_CLASS, false, loader);
+        pluginClassLoader = ie2Plugin.getClass().getClassLoader();
+        storageUnitClass = resolveStorageUnitClass(ie2Plugin);
 
         getCaches = storageUnitClass.getMethod("getCaches");
         getCapacity = storageUnitClass.getMethod("getCapacity");
         getInputSlots = storageUnitClass.getMethod("getInputSlots");
         getOutputSlots = storageUnitClass.getMethod("getOutputSlots");
-        getCacheItemStack = storageCacheClass.getMethod("getItemStack");
-        getCacheAmount = storageCacheClass.getMethod("getAmount");
-        getCacheLimit = storageCacheClass.getMethod("getLimit");
+
+        final Class<?> cacheClass = resolveKnownClass(STORAGE_CACHE_CANDIDATES);
+        if (cacheClass != null) {
+            cacheAccessors = createCacheAccessors(cacheClass);
+        } else {
+            final Class<?> inferredCacheClass = inferMapValueClass(getCaches.getGenericReturnType());
+            if (inferredCacheClass != null && inferredCacheClass.getClassLoader() == pluginClassLoader) {
+                cacheAccessors = createCacheAccessors(inferredCacheClass);
+            }
+        }
     }
 
     public boolean isStorageUnit(@Nullable SlimefunItem item) {
@@ -68,6 +92,10 @@ public final class InfinityExpansion2Integration {
         return sanitizeSlots(invokeIntArray(getOutputSlots, storageUnit));
     }
 
+    public @NotNull String getResolvedStorageClassName() {
+        return storageUnitClass.getName();
+    }
+
     public @Nullable InfinityExpansion2Barrel getBarrel(
         @NotNull Location location,
         @NotNull SlimefunItem storageUnit,
@@ -78,10 +106,6 @@ public final class InfinityExpansion2Integration {
         }
 
         final StorageSnapshot snapshot = getSnapshot(location, storageUnit);
-        if (snapshot == null) {
-            return null;
-        }
-
         ItemStack template = snapshot.itemStack();
         long totalAmount = snapshot.amount();
 
@@ -129,7 +153,7 @@ public final class InfinityExpansion2Integration {
         @NotNull SlimefunItem storageUnit
     ) throws ReflectiveOperationException {
         final StorageSnapshot snapshot = getSnapshot(location, storageUnit);
-        if (snapshot != null && snapshot.itemStack() != null) {
+        if (snapshot.itemStack() != null) {
             return snapshot.itemStack();
         }
 
@@ -153,28 +177,170 @@ public final class InfinityExpansion2Integration {
         return null;
     }
 
-    private @Nullable StorageSnapshot getSnapshot(
+    private @NotNull StorageSnapshot getSnapshot(
         @NotNull Location location,
         @NotNull SlimefunItem storageUnit
     ) throws ReflectiveOperationException {
+        final int unitCapacity = Math.max(1, invokeNumber(getCapacity, storageUnit).intValue());
         final Object rawMap = invoke(getCaches, storageUnit);
+        if (rawMap == null) {
+            return new StorageSnapshot(null, 0, unitCapacity);
+        }
         if (!(rawMap instanceof Map<?, ?> caches)) {
-            return null;
+            throw new ReflectiveOperationException("Infinity Expansion 2 getCaches() did not return a Map");
         }
 
         final Object cache = caches.get(new BlockPosition(location.getBlock()));
         if (cache == null) {
-            return null;
+            return new StorageSnapshot(null, 0, unitCapacity);
         }
 
-        final Object rawItem = invoke(getCacheItemStack, cache);
+        final CacheAccessors accessors = getCacheAccessors(cache.getClass());
+        final Object rawItem = invoke(accessors.getItemStack(), cache);
         final ItemStack item = rawItem instanceof ItemStack stack && isUsable(stack) ? one(stack) : null;
-        final int amount = invokeNumber(getCacheAmount, cache).intValue();
-        final int cacheLimit = invokeNumber(getCacheLimit, cache).intValue();
-        final int unitCapacity = invokeNumber(getCapacity, storageUnit).intValue();
+        final int amount = invokeNumber(accessors.getAmount(), cache).intValue();
+        final int cacheLimit = invokeNumber(accessors.getLimit(), cache).intValue();
         final int limit = cacheLimit > 0 ? cacheLimit : unitCapacity;
 
         return new StorageSnapshot(item, Math.max(0, amount), Math.max(1, limit));
+    }
+
+    private @NotNull Class<?> resolveStorageUnitClass(@NotNull Plugin ie2Plugin)
+        throws ReflectiveOperationException {
+        final Class<?> knownClass = resolveKnownClass(STORAGE_UNIT_CANDIDATES);
+        if (knownClass != null && isStorageUnitShape(knownClass)) {
+            return knownClass;
+        }
+
+        for (SlimefunItem item : Slimefun.getRegistry().getAllSlimefunItems()) {
+            if (!belongsToPlugin(item, ie2Plugin)) {
+                continue;
+            }
+
+            final Class<?> compatibleClass = findStorageBaseClass(item.getClass());
+            if (compatibleClass != null) {
+                return compatibleClass;
+            }
+        }
+
+        throw new ClassNotFoundException(
+            "Infinity Expansion 2 storage implementation unavailable; checked official class names and "
+                + "registered IE2 Slimefun items. Plugin main class was not used as a compatibility gate."
+        );
+    }
+
+    private boolean belongsToPlugin(@NotNull SlimefunItem item, @NotNull Plugin plugin) {
+        return item.getAddon() == (Object) plugin || item.getClass().getClassLoader() == pluginClassLoader;
+    }
+
+    private @Nullable Class<?> resolveKnownClass(@NotNull List<String> candidates) {
+        for (String candidate : candidates) {
+            try {
+                return pluginClassLoader.loadClass(candidate);
+            } catch (ClassNotFoundException | LinkageError | SecurityException ignored) {
+                // Try the next official or legacy package, then use registry discovery.
+            }
+        }
+        return null;
+    }
+
+    private static @Nullable Class<?> findStorageBaseClass(@NotNull Class<?> itemClass) {
+        Class<?> current = itemClass;
+        while (current != null && SlimefunItem.class.isAssignableFrom(current)) {
+            if (isStorageUnitShape(current)) {
+                return current;
+            }
+            current = current.getSuperclass();
+        }
+        return null;
+    }
+
+    private static boolean isStorageUnitShape(@NotNull Class<?> type) {
+        try {
+            return Map.class.isAssignableFrom(type.getMethod("getCaches").getReturnType())
+                && Number.class.isAssignableFrom(box(type.getMethod("getCapacity").getReturnType()))
+                && type.getMethod("getInputSlots").getReturnType() == int[].class
+                && type.getMethod("getOutputSlots").getReturnType() == int[].class;
+        } catch (NoSuchMethodException | SecurityException ignored) {
+            return false;
+        }
+    }
+
+    private @NotNull CacheAccessors getCacheAccessors(@NotNull Class<?> cacheClass)
+        throws ReflectiveOperationException {
+        CacheAccessors current = cacheAccessors;
+        if (current != null && current.cacheClass().isAssignableFrom(cacheClass)) {
+            return current;
+        }
+
+        synchronized (this) {
+            current = cacheAccessors;
+            if (current == null || !current.cacheClass().isAssignableFrom(cacheClass)) {
+                current = createCacheAccessors(cacheClass);
+                cacheAccessors = current;
+            }
+            return current;
+        }
+    }
+
+    private static @NotNull CacheAccessors createCacheAccessors(@NotNull Class<?> cacheClass)
+        throws ReflectiveOperationException {
+        return new CacheAccessors(
+            cacheClass,
+            cacheClass.getMethod("getItemStack"),
+            cacheClass.getMethod("getAmount"),
+            cacheClass.getMethod("getLimit")
+        );
+    }
+
+    private static @Nullable Class<?> inferMapValueClass(@NotNull Type mapType) {
+        if (!(mapType instanceof ParameterizedType parameterizedType)) {
+            return null;
+        }
+        final Type[] arguments = parameterizedType.getActualTypeArguments();
+        return arguments.length < 2 ? null : rawClass(arguments[1]);
+    }
+
+    private static @Nullable Class<?> rawClass(@NotNull Type type) {
+        if (type instanceof Class<?> clazz) {
+            return clazz;
+        }
+        if (type instanceof ParameterizedType parameterizedType
+            && parameterizedType.getRawType() instanceof Class<?> clazz) {
+            return clazz;
+        }
+        if (type instanceof WildcardType wildcardType) {
+            final Type[] upperBounds = wildcardType.getUpperBounds();
+            if (upperBounds.length > 0) {
+                return rawClass(upperBounds[0]);
+            }
+        }
+        return null;
+    }
+
+    private static @NotNull Class<?> box(@NotNull Class<?> type) {
+        if (!type.isPrimitive()) {
+            return type;
+        }
+        if (type == int.class) {
+            return Integer.class;
+        }
+        if (type == long.class) {
+            return Long.class;
+        }
+        if (type == short.class) {
+            return Short.class;
+        }
+        if (type == byte.class) {
+            return Byte.class;
+        }
+        if (type == float.class) {
+            return Float.class;
+        }
+        if (type == double.class) {
+            return Double.class;
+        }
+        return type;
     }
 
     private static int @NotNull [] sanitizeSlots(int @Nullable [] slots) {
@@ -235,6 +401,14 @@ public final class InfinityExpansion2Integration {
         final ItemStack clone = stack.clone();
         clone.setAmount(1);
         return clone;
+    }
+
+    private record CacheAccessors(
+        @NotNull Class<?> cacheClass,
+        @NotNull Method getItemStack,
+        @NotNull Method getAmount,
+        @NotNull Method getLimit
+    ) {
     }
 
     private record StorageSnapshot(@Nullable ItemStack itemStack, int amount, int limit) {

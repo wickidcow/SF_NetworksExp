@@ -140,7 +140,7 @@ for optional_plugin in ["InfinityExpansion2", "SlimeHUDPlus", "JustEnoughGuide",
     require(optional_plugin in softdepend, f"optional integration is missing from softdepend: {optional_plugin}")
 
 # Java/Paper/exact-core build contract.
-require('version = "2.1.112-Legacy-Alpha4"' in build, "project version is not Alpha4")
+require('version = "2.1.112-Legacy-Alpha4.1"' in build, "project version is not Alpha4.1")
 require("options.release.set(21)" in build, "Java 21 release target is missing")
 require("languageVersion.set(JavaLanguageVersion.of(21))" in build, "Java 21 Gradle toolchain is missing")
 require("paper-api:1.21.11-R0.1-SNAPSHOT" in build, "Paper 1.21.11 API baseline is missing")
@@ -175,7 +175,7 @@ workflow_invariants = [
     "uses: ./.github/workflows/compatibility.yml",
     "needs: compatibility",
     "verify_universal_jar.py",
-    "Networks-Legacy-2.1.112-Alpha4",
+    "Networks-Legacy-2.1.112-Alpha4.1",
 ]
 for required in workflow_invariants:
     require(required in workflow, f"workflow invariant missing: {required}")
@@ -413,12 +413,21 @@ require('isEnabled("InfinityExpansion2")' in supported_plugins
         "InfinityExpansion2 initialization or detailed Doctor integration states are missing")
 require('net.guizhanss.infinityexpansion2.implementation.items.storage.StorageUnit' in ie2_integration,
         "InfinityExpansion2 StorageUnit API marker is missing")
+require('net.guizhanss.infinityexpansion2.InfinityExpansion2' not in supported_plugins
+        and 'net.guizhanss.infinityexpansion2.InfinityExpansion2' not in ie2_integration,
+        "InfinityExpansion2 must not be gated by one exact plugin main class")
+require('getAllSlimefunItems' in ie2_integration
+        and 'findStorageBaseClass' in ie2_integration
+        and 'pluginClassLoader.loadClass' in ie2_integration
+        and 'getResolvedStorageClassName' in supported_plugins,
+        "InfinityExpansion2 unofficial/relocated storage discovery hotfix is missing")
 require('getCaches' in ie2_integration
         and 'getCapacity' in ie2_integration
         and 'getInputSlots' in ie2_integration
         and 'getOutputSlots' in ie2_integration
-        and 'new BlockPosition(location.getBlock())' in ie2_integration,
-        "InfinityExpansion2 generic storage-unit cache discovery is missing")
+        and 'new BlockPosition(location.getBlock())' in ie2_integration
+        and 'getCacheAccessors(cache.getClass())' in ie2_integration,
+        "InfinityExpansion2 generic storage-unit/cache discovery is missing")
 require('BlockMenuUtil.pushItem' in ie2_barrel
         and 'BlockMenuUtil.consumeItem' in ie2_barrel
         and 'integration.isStorageUnitItem(incoming)' in ie2_barrel,
@@ -485,6 +494,6 @@ if ERRORS:
     sys.exit(1)
 
 print(
-    f"Networks Alpha4 verification passed: {len(current_ids)} item IDs, three-core matrix, "
-    "Java 21, Paper 1.21.11, database/runtime/storage/cargo/crafting/remote/doctor hardening plus IE2 storage integration."
+    f"Networks Alpha4.1 verification passed: {len(current_ids)} item IDs, three-core matrix, "
+    "Java 21, Paper 1.21.11, runtime hardening, IE2 storage integration, and unofficial IE2 detection hotfix."
 )

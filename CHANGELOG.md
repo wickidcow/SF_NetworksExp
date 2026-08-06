@@ -1,19 +1,16 @@
 # Changelog
 
-## 2.1.112-Legacy-Alpha4
+## 2.1.112-Legacy-Alpha4.1
 
-### Infinity Expansion 2
-- Added a reflection-backed adapter for every IE2 item implemented through its shared `StorageUnit` class.
-- Added input and output routing through IE2's real menu transport slots.
-- Added read-only cache discovery for the stored item, amount, and capacity.
-- Added empty-unit first-item deposits while preventing nested IE2 storage units.
-- Kept IE2 optional and fail-soft; no IE2 classes are bundled into the universal JAR.
+### Infinity Expansion 2 detection hotfix
 
-### Diagnostics and compatibility
-- Replaced ambiguous `inactive` integration results with `active`, `not-installed`, `detected`, `incompatible`, or `failed`, including detected plugin versions.
-- Kept Slimefun Legacy primary while retaining required United and Gugu build gates.
-- Preserved all 288 item IDs, guide organization, recipes, database paths, and world data.
-- Updated the flat GitHub artifact to `Networks-Legacy-2.1.112-Alpha4.jar`.
+- Removes the exact IE2 main-class package check that could reject unofficial or relocated builds even while the plugin was enabled.
+- Resolves IE2 storage support from the plugin's own class loader and, when needed, discovers the shared storage implementation from registered IE2 Slimefun items.
+- Supports the official storage package and compatible relocated storage implementations exposing the same cache/capacity/input/output contract.
+- Lazily resolves IE2 cache accessors from the live cache object, avoiding a hard requirement on one exact `StorageCache` package.
+- Keeps empty IE2 Storage Units available as network deposit targets even before a live cache entry is present.
+- Adds the resolved storage class to startup logging and includes the real exception message in Doctor failures.
+- Preserves the 288 Networks item IDs, guide layout, recipes, database formats, and the Legacy/United/Gugu release matrix.
 
 ## 2.1.112-Legacy-Alpha3
 
