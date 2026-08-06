@@ -98,7 +98,7 @@ jobs:
         run: python3 scripts/verify_java21_bytecode.py "$NETWORKS_JAR"
 
       - name: Verify core-independent universal JAR contract
-        run: python3 scripts/verify_universal_jar.py "$NETWORKS_JAR" "2.1.112-Legacy-Alpha4"
+        run: python3 scripts/verify_universal_jar.py "$NETWORKS_JAR" "2.1.112-Legacy-Alpha4.1"
 
   result:
     name: Compatibility result
