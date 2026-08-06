@@ -18,22 +18,19 @@ The fork preserves the Bukkit plugin name `Networks`, the main class, Java packa
 
 Unknown Slimefun cores fail closed by default. The override in `config.yml` is intended only for controlled testing.
 
-## Alpha 3: compatibility and lifecycle stability
+## 1.0 Legacy: production stability release
 
-`2.1.112-Legacy-Alpha4` keeps the working guide layout and adds runtime-safe Infinity Expansion 2 storage-unit support plus clearer integration diagnostics.
+`2.1.112-Legacy-1.0` consolidates the maintained fork's compatibility and safety work into the first 1.0 Legacy release.
 
-- Makes the three-core matrix a required release gate instead of a secondary informational build.
-- Builds the final universal JAR only after Legacy, United, and Gugu compile/test jobs pass.
-- Improves runtime fingerprinting for Legacy, United, and Gugu while failing closed for unknown forks.
-- Defers optional plugin API initialization and disables only the incompatible integration when an optional API fails.
-- Declares JustEnoughGuide, LogiTech, and SlimeHUDPlus as soft dependencies so Bukkit can establish safer load order.
-- Limits scheduled Doctor work to a rotating node budget instead of scanning the complete loaded registry in one tick.
-- Clears Doctor, localization, optional integration, shared ticker, and pending first-tick state during disable/re-enable lifecycles.
-- Revalidates first-tick node registration after chunk unload/reload without retaining every historical block location.
-- Adds a universal-JAR verifier that rejects accidentally bundled Slimefun-core or optional-plugin API classes.
-- Preserves all 288 item IDs, plugin identity, database paths, guide organization, recipes, and world records.
+- Gates one universal JAR on Slimefun Legacy, Slimefun United, and Slimefun Gugu.
+- Preserves the guide layout, all 288 item IDs, recipes, namespaces, placed blocks, and the existing drawer database schema.
+- Adds transfer rollback and post-deposit compensation diagnostics, including Control X block-cut compensation.
+- Adds transactional drawer amount snapshots, startup database backups, SQLite integrity checking, and an idempotent recovery journal.
+- Retains controller circuit breakers, atomic node registration, bounded Doctor maintenance, and chunk-lifecycle cleanup.
+- Supports official and relocated/unofficial Infinity Expansion 2 storage units through a fail-soft optional adapter.
+- Expands `/networks doctor` with database, transfer, controller, registry, and storage-adapter health details.
 
-Alpha 3 builds on the Alpha 2 database, cargo, transfer, crafting, quantum-storage, remote, and runtime safety work documented in [`RUNTIME_STABILITY.md`](RUNTIME_STABILITY.md).
+See [`RELEASE_1.0_LEGACY.md`](RELEASE_1.0_LEGACY.md) and [`RUNTIME_STABILITY.md`](RUNTIME_STABILITY.md) for the preserved-data contract and qualification checklist.
 
 ## Building
 
@@ -59,7 +56,7 @@ Back up the full server before replacing an existing Networks build. Test a copy
 
 Do not use `/reload`. Perform a complete stop and start when changing Slimefun or Networks JARs.
 
-See [`ALPHA3_COMPATIBILITY_STABILITY.md`](ALPHA3_COMPATIBILITY_STABILITY.md) for the release scope and validation order.
+See [`RELEASE_1.0_LEGACY.md`](RELEASE_1.0_LEGACY.md) for the current release scope and validation order.
 
 ## Credits
 

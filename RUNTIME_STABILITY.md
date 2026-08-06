@@ -2,7 +2,7 @@
 
 ## Scope
 
-The current release is `2.1.112-Legacy-Alpha4`. Slimefun Legacy is the primary and release-blocking target; United and Gugu remain required compatibility gates. Alpha 4 adds fail-soft Infinity Expansion 2 storage integration and precise integration diagnostics without changing item IDs, plugin identity, database paths, guide layout, or world format.
+The current release is `2.1.112-Legacy-1.0`. Slimefun Legacy is the primary and release-blocking target; United and Gugu remain required compatibility gates. 1.0 Legacy retains fail-soft Infinity Expansion 2 storage integration and adds transactional transfer diagnostics, database recovery journaling, startup backups, integrity checking, controller rebuild fault containment, atomic node registration, and chunk-unload root cleanup without changing item IDs, plugin identity, database paths, guide layout, or world format.
 
 ## Preserved data contract
 
@@ -19,7 +19,7 @@ The following identifiers and storage locations remain unchanged:
 - Existing guide organization from Alpha 2
 - Existing recipes and item definitions
 
-The Alpha 2 database migration remains intact: duplicate `(ContainerID, ItemID)` rows are merged transactionally before a permanent uniqueness index is created. Alpha 3 adds no new destructive database migration.
+The Alpha 2 database migration remains intact: duplicate `(ContainerID, ItemID)` rows are merged transactionally before a permanent uniqueness index is created. Alpha 3 through 1.0 Legacy add no destructive database migration. The 1.0 recovery journal stores pending absolute amounts outside SQLite and does not change the schema.
 
 ## Release compatibility gate
 
@@ -38,6 +38,29 @@ Runtime detection uses multiple independent signals:
 - Gugu metadata and its unique API marker class
 
 Unknown cores fail closed unless the explicit testing override is enabled.
+
+
+
+## 1.0 drawer durability and transfer diagnostics
+
+- Existing drawer amount snapshots are written as one SQLite transaction rather than independent queued row updates.
+- A startup backup copies `CargoStorageUnits.db` and any WAL/SHM sidecars before the database is opened.
+- `PRAGMA quick_check` runs before normal initialization and fails closed if SQLite reports corruption.
+- `CargoStorageUnits.recovery.tsv` records latest absolute pending amounts with atomic file replacement before queue submission.
+- Replay is idempotent, so a crash between SQLite commit and journal cleanup cannot apply a delta twice.
+- Shutdown checkpoints still-unsubmitted changes into the journal before the worker stops.
+- Transfer audit counters expose rollback and post-deposit compensation deficits without retaining player or item identity.
+- Doctor reports database integrity, backup location, journal state, queue telemetry, and transfer safety.
+
+## Alpha 5 controller and node lifecycle hardening
+
+- Controller rebuild failures are contained per location with a configurable threshold and exponential cooldown.
+- Failed partial roots are removed immediately, and successful rebuilds clear prior failure state.
+- Replacing a root clears assignments that still belong to the previous root while preserving loaded node registrations.
+- Chunk unload discards controller runtime trees before removing the chunk's node index.
+- Controller first-tick state is cleared on unload so persisted controller metadata is restored after reload.
+- Node registration uses an atomic map operation, avoids blind same-type replacement, and invalidates an old root after a type conflict.
+- Doctor reports controller failures, quarantines, circuit trips, duplicate registration attempts, and type conflicts.
 
 ## Alpha 3 lifecycle hardening
 
@@ -72,7 +95,7 @@ On compatible Slimefun Legacy builds, the reflective addon Doctor bridge remains
 
 ## Alpha 2 safety retained
 
-Alpha 3 retains the established protections for:
+Alpha 5 retains the established protections for:
 
 - Ordered SQLite work, bounded shutdown, duplicate-row merge, UPSERT writes, and counter recovery
 - Concurrent loaded-node/chunk indexes and stale runtime-state invalidation

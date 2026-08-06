@@ -8,8 +8,10 @@ import dev.sefiraat.sefilib.misc.ParticleUtils;
 import dev.sefiraat.sefilib.world.LocationUtils;
 import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.Networks;
+import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
@@ -185,16 +187,71 @@ public class NetworkControlX extends NetworkDirectional implements SoftCellBanna
             }
 
             final ItemStack resultStack = new ItemStack(material, 1);
-            currentDefinition.getNode().getRoot().addItemStack0(blockMenu.getLocation(), resultStack);
-
-            if (resultStack.getAmount() == 0) {
-                targetBlock.setType(Material.AIR, true);
-                this.blockCache.add(targetPosition);
-                ParticleUtils.displayParticleRandomly(
-                    LocationUtils.centre(targetBlock.getLocation()), 1, 5, DUST_OPTIONS);
-                currentDefinition.getNode().getRoot().removeRootPower(REQUIRED_POWER);
-                sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
+            final NetworkRoot root = currentDefinition.getNode().getRoot();
+            try {
+                root.addItemStack0(blockMenu.getLocation(), resultStack);
+            } catch (RuntimeException | LinkageError exception) {
+                final int committed = Math.min(1, Math.max(0, 1 - resultStack.getAmount()));
+                if (committed > 0) {
+                    NetworkTransferUtils.compensateCommittedDeposit(
+                        root,
+                        blockMenu.getLocation(),
+                        new ItemStack(material, 1),
+                        committed,
+                        targetBlock.getLocation(),
+                        "Control X network deposit",
+                        exception);
+                }
+                Networks.getInstance().getLogger().log(
+                    java.util.logging.Level.WARNING,
+                    "Control X could not deposit the cut block into its network.",
+                    exception);
+                sendFeedback(blockMenu.getLocation(), FeedbackType.ERROR_OCCURRED);
+                return;
             }
+
+            if (resultStack.getAmount() != 0) {
+                return;
+            }
+
+            Throwable removalFailure = null;
+            try {
+                targetBlock.setType(Material.AIR, true);
+            } catch (RuntimeException | LinkageError exception) {
+                // Verify the actual world state before compensating. A server implementation can throw after
+                // applying the block change; removing the network item in that case would cause item loss.
+                removalFailure = exception;
+            }
+
+            if (targetBlock.getType() != Material.AIR) {
+                Throwable failure = removalFailure != null
+                    ? removalFailure
+                    : new IllegalStateException("Target block remained " + targetBlock.getType());
+                NetworkTransferUtils.compensateCommittedDeposit(
+                    root,
+                    blockMenu.getLocation(),
+                    new ItemStack(material, 1),
+                    1,
+                    targetBlock.getLocation(),
+                    "Control X block removal verification",
+                    failure);
+                sendFeedback(blockMenu.getLocation(), FeedbackType.ERROR_OCCURRED);
+                return;
+            }
+
+            if (removalFailure != null) {
+                Networks.getInstance().getLogger().log(
+                    java.util.logging.Level.WARNING,
+                    "Control X removed its target block even though the server reported an exception; "
+                        + "the committed network item was retained.",
+                    removalFailure);
+            }
+
+            this.blockCache.add(targetPosition);
+            ParticleUtils.displayParticleRandomly(
+                LocationUtils.centre(targetBlock.getLocation()), 1, 5, DUST_OPTIONS);
+            root.removeRootPower(REQUIRED_POWER);
+            sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
         });
     }
 

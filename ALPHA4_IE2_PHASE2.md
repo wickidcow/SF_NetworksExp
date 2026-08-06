@@ -1,8 +1,8 @@
-# Networks Legacy 2.1.112 Alpha 4.1 — IE2 Integration Hotfix
+# Networks Legacy 2.1.112 Alpha 4 — IE2 Integration
 
 ## Scope completed
 
-Alpha 4.1 includes the completed Alpha 4 work and fixes IE2 detection for unofficial or relocated builds. Alpha 4 completed the planned Doctor/integration accuracy work and the Infinity Expansion 2 storage integration phase.
+Alpha 4 completes the planned Doctor/integration accuracy work and the Infinity Expansion 2 storage integration phase.
 
 ### Doctor integration states
 
@@ -31,10 +31,6 @@ Supported behavior:
 - IE2 void-excess and persistence behavior remain owned by IE2
 - Fail-soft behavior when IE2 is missing or its internal API changes
 
-## Alpha 4.1 detection correction
-
-The integration no longer checks for one exact IE2 plugin main class such as `net.guizhanss.infinityexpansion2.InfinityExpansion2`. The Bukkit plugin name and enabled state identify IE2, while the storage bridge resolves the actual storage implementation through IE2's own class loader or its registered Slimefun items. This is required for unofficial builds that retain compatible storage units but relocate or rename the entry point.
-
 ## Safety design
 
 IE2's storage ticker is asynchronous. Networks therefore treats IE2's cache as read-only and sends all writes through IE2's actual input and output slots. IE2 remains responsible for validating input, changing the cache, persisting block data, filling the output slot, and applying void-excess behavior.
@@ -53,7 +49,7 @@ This update does not change:
 
 ## Runtime test checklist
 
-1. Stop the server completely and install the Alpha 4.1 JAR.
+1. Stop the server completely and install the Alpha 4 JAR.
 2. Start with InfinityExpansion2 enabled.
 3. Run `/networks doctor` and confirm `InfinityExpansion2=active[version]`.
 4. Connect a populated IE2 Storage Unit to a Networks controller and withdraw its stored item.

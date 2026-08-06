@@ -24,6 +24,7 @@ import io.github.sefiraat.networks.managers.SupportedPluginManager;
 import io.github.sefiraat.networks.slimefun.network.AdminDebuggable;
 import io.github.sefiraat.networks.slimefun.network.NetworkController;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
+import io.github.sefiraat.networks.utils.TransferAudit;
 import io.github.thebusybiscuit.slimefun4.api.SlimefunAddon;
 import io.github.thebusybiscuit.slimefun4.core.guide.options.SlimefunGuideSettings;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
@@ -107,6 +108,7 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
         instance = this;
         startupComplete = false;
         NetworksDoctor.resetRuntimeState();
+        TransferAudit.reset();
 
         try {
             startupStage = "loading configuration and language";
@@ -130,6 +132,9 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
             getLogger().info(getLocalizationService().getString("messages.startup.getting-config"));
             getLogger().info(getLocalizationService().getString("messages.startup.trying-auto-update"));
 
+            startupStage = "configuring controller runtime safety";
+            NetworkController.configureRuntimeSafety(this);
+
             startupStage = "detecting optional integrations";
             supportedPluginManager = new SupportedPluginManager();
 
@@ -141,6 +146,7 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
             startupStage = "opening CargoStorageUnits.db";
             getLogger().info(getLocalizationService().getString("messages.startup.connecting-database"));
             dataSource = new DataSource();
+            DataStorage.replayRecoveryJournal();
             startAutoSave();
 
             startupStage = "registering Networks items and integrations";
@@ -209,6 +215,7 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
         if (dataSource != null && queryQueue != null && queryQueue.isAcceptingTasks()) {
             try {
                 DataStorage.saveAmountChange();
+                DataStorage.checkpointPendingChangesForShutdown();
             } catch (RuntimeException exception) {
                 Debug.trace(exception);
             }
@@ -247,6 +254,7 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
         NetworkController.getRecords().clear();
         NetworkController.getRecordFlow().clear();
         NetworkController.getCrayons().clear();
+        NetworkController.resetRuntimeSafety();
 
         if (localizationService != null) {
             getLogger().info(getLocalizationService().getString("messages.shutdown.saved-all-data"));
@@ -265,6 +273,7 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
         slimefunTickCount = 0L;
         LocalizationService.clearRuntimeCache();
         NetworksDoctor.resetRuntimeState();
+        TransferAudit.reset();
         instance = null;
     }
 

@@ -22,6 +22,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -29,6 +30,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -48,14 +50,24 @@ public final class DataSource implements AutoCloseable {
     private Connection connection;
     private int nextContainerId;
     private int nextItemId;
+    private Path databaseFile;
+    private Path recoveryJournalFile;
+    private String integrityStatus = "not-run";
+    private String lastBackup = "none";
 
     public DataSource() throws ClassNotFoundException, SQLException {
         logger = Networks.getInstance().getLogger();
-        connect();
-        createTable();
-        loadItemMap();
-        loadEnvironment();
-        initCounters();
+        try {
+            connect();
+            verifyIntegrity();
+            createTable();
+            loadItemMap();
+            loadEnvironment();
+            initCounters();
+        } catch (ClassNotFoundException | SQLException | RuntimeException exception) {
+            close();
+            throw exception;
+        }
     }
 
     @SuppressWarnings("deprecation")
@@ -247,6 +259,121 @@ public final class DataSource implements AutoCloseable {
         });
     }
 
+
+    /**
+     * Applies one delayed drawer snapshot in a single SQLite transaction. Every value is an absolute amount,
+     * making recovery-journal replay idempotent.
+     */
+    void applyAmountChanges(
+        @NotNull Map<Integer, ? extends Map<Integer, Integer>> changes,
+        @NotNull Consumer<Boolean> completion
+    ) {
+        Map<Integer, Map<Integer, Integer>> immutableSnapshot = new LinkedHashMap<>();
+        for (Map.Entry<Integer, ? extends Map<Integer, Integer>> container : changes.entrySet()) {
+            immutableSnapshot.put(container.getKey(), Map.copyOf(container.getValue()));
+        }
+
+        Networks.getQueryQueue().scheduleUpdate(new QueuedTask() {
+            private boolean success;
+
+            @Override
+            public boolean execute() {
+                try {
+                    success = applyAmountChangesTransaction(immutableSnapshot);
+                } catch (RuntimeException | LinkageError exception) {
+                    success = false;
+                    logger.warning("An unexpected error interrupted a Networks drawer amount transaction.");
+                    Debug.trace(exception);
+                }
+                return true;
+            }
+
+            @Override
+            public boolean callback() {
+                completion.accept(success);
+                return false;
+            }
+        });
+    }
+
+    public @NotNull String getIntegrityStatus() {
+        return integrityStatus;
+    }
+
+    public @NotNull String getLastBackup() {
+        return lastBackup;
+    }
+
+    public @NotNull Path getRecoveryJournalFile() {
+        return recoveryJournalFile;
+    }
+
+    private boolean applyAmountChangesTransaction(
+        @NotNull Map<Integer, ? extends Map<Integer, Integer>> changes
+    ) {
+        if (changes.isEmpty()) {
+            return true;
+        }
+
+        boolean previousAutoCommit;
+        try {
+            previousAutoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+        } catch (SQLException exception) {
+            logger.warning("Could not begin the Networks drawer amount transaction.");
+            Debug.trace(exception);
+            return false;
+        }
+
+        String upsert = "INSERT INTO " + DataTables.ITEM_STORED
+            + " (Amount, ContainerID, ItemID) VALUES(?,?,?) "
+            + "ON CONFLICT(ContainerID, ItemID) DO UPDATE SET Amount = excluded.Amount;";
+        String delete = "DELETE FROM " + DataTables.ITEM_STORED + " WHERE ContainerID = ? AND ItemID = ?;";
+
+        try (PreparedStatement upsertStatement = connection.prepareStatement(upsert);
+             PreparedStatement deleteStatement = connection.prepareStatement(delete)) {
+            for (Map.Entry<Integer, ? extends Map<Integer, Integer>> container : changes.entrySet()) {
+                int containerId = container.getKey();
+                for (Map.Entry<Integer, Integer> item : container.getValue().entrySet()) {
+                    int itemId = item.getKey();
+                    int amount = item.getValue();
+                    boolean deleteRow = (NetworksDrawer.isLocked(containerId) && amount < 0)
+                        || (!NetworksDrawer.isLocked(containerId) && amount <= 0);
+                    if (deleteRow) {
+                        deleteStatement.setInt(1, containerId);
+                        deleteStatement.setInt(2, itemId);
+                        deleteStatement.addBatch();
+                    } else {
+                        upsertStatement.setInt(1, amount);
+                        upsertStatement.setInt(2, containerId);
+                        upsertStatement.setInt(3, itemId);
+                        upsertStatement.addBatch();
+                    }
+                }
+            }
+            deleteStatement.executeBatch();
+            upsertStatement.executeBatch();
+            connection.commit();
+            return true;
+        } catch (SQLException exception) {
+            try {
+                connection.rollback();
+            } catch (SQLException rollbackException) {
+                exception.addSuppressed(rollbackException);
+            }
+            logger.warning(Lang.getString("messages.data-saving.error-occurred-when-updating-storage"));
+            Debug.trace(exception);
+            return false;
+        } finally {
+            try {
+                connection.setAutoCommit(previousAutoCommit);
+            } catch (SQLException exception) {
+                logger.warning("Could not restore SQLite auto-commit after a Networks drawer transaction.");
+                Debug.trace(exception);
+            }
+        }
+    }
+
     int getIdFromLocation(@NotNull Location location) {
         String sql = "SELECT ContainerID FROM " + DataTables.CONTAINER
             + " WHERE IsPlaced = 1 AND LastLocation = ?;";
@@ -291,13 +418,59 @@ public final class DataSource implements AutoCloseable {
             throw new IllegalStateException(
                 Lang.getString("messages.data-saving.error-occurred-when-creating-data-folder"));
         }
+
+        Path dataPath = dataFolder.toPath();
+        databaseFile = dataPath.resolve("CargoStorageUnits.db");
+        recoveryJournalFile = DrawerRecoveryJournal.pathFor(dataPath);
+        if (Networks.getInstance().getConfig().getBoolean("database.startup-backups.enabled", true)) {
+            int retained = Math.max(1,
+                Networks.getInstance().getConfig().getInt("database.startup-backups.retained", 5));
+            try {
+                Path backup = DatabaseBackupManager.createStartupBackup(dataPath, retained, logger);
+                if (backup != null) {
+                    lastBackup = dataPath.relativize(backup).toString();
+                    logger.info("Created Networks drawer database startup backup: " + lastBackup);
+                }
+            } catch (IOException exception) {
+                throw new SQLException("Could not create the required Networks drawer database startup backup", exception);
+            }
+        } else {
+            lastBackup = "disabled";
+        }
+
         Class.forName("org.sqlite.JDBC");
-        connection = DriverManager.getConnection("jdbc:sqlite:" + new File(dataFolder, "CargoStorageUnits.db"));
+        connection = DriverManager.getConnection("jdbc:sqlite:" + databaseFile);
         try (Statement statement = connection.createStatement()) {
             statement.execute("PRAGMA foreign_keys = ON;");
             statement.execute("PRAGMA busy_timeout = 10000;");
             statement.execute("PRAGMA journal_mode = WAL;");
             statement.execute("PRAGMA synchronous = NORMAL;");
+        }
+    }
+
+    private void verifyIntegrity() throws SQLException {
+        if (!Networks.getInstance().getConfig().getBoolean("database.integrity-check", true)) {
+            integrityStatus = "disabled";
+            return;
+        }
+
+        try (Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery("PRAGMA quick_check;")) {
+            StringBuilder problems = new StringBuilder();
+            while (result.next()) {
+                String status = result.getString(1);
+                if (status != null && !status.equalsIgnoreCase("ok")) {
+                    if (!problems.isEmpty()) {
+                        problems.append("; ");
+                    }
+                    problems.append(status);
+                }
+            }
+            if (!problems.isEmpty()) {
+                integrityStatus = "failed";
+                throw new SQLException("CargoStorageUnits.db failed PRAGMA quick_check: " + problems);
+            }
+            integrityStatus = "ok";
         }
     }
 

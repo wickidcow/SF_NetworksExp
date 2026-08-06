@@ -1,6 +1,8 @@
 package io.github.sefiraat.networks.integrations.infinityexpansion2;
 
+import io.github.sefiraat.networks.integrations.storage.StorageAdapter;
 import io.github.sefiraat.networks.network.barrel.InfinityExpansion2Barrel;
+import io.github.sefiraat.networks.network.stackcaches.BarrelIdentity;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import org.bukkit.Location;
@@ -32,7 +34,7 @@ import java.util.Map;
  * Networks first checks the official storage class, then discovers a compatible storage base class from the
  * Slimefun registry using the IE2 plugin's own class loader.</p>
  */
-public final class InfinityExpansion2Integration {
+public final class InfinityExpansion2Integration implements StorageAdapter {
 
     public static final String PLUGIN_NAME = "InfinityExpansion2";
     public static final String STORAGE_UNIT_CLASS =
@@ -81,6 +83,30 @@ public final class InfinityExpansion2Integration {
                 cacheAccessors = createCacheAccessors(inferredCacheClass);
             }
         }
+    }
+
+    @Override
+    public @NotNull String integrationName() {
+        return PLUGIN_NAME;
+    }
+
+    @Override
+    public @NotNull String implementationDescription() {
+        return storageUnitClass.getName();
+    }
+
+    @Override
+    public boolean supports(@Nullable SlimefunItem item) {
+        return isStorageUnit(item);
+    }
+
+    @Override
+    public @Nullable BarrelIdentity createBarrel(
+        @NotNull Location location,
+        @NotNull SlimefunItem item,
+        boolean includeEmpty
+    ) throws ReflectiveOperationException {
+        return getBarrel(location, item, includeEmpty);
     }
 
     public boolean isStorageUnit(@Nullable SlimefunItem item) {

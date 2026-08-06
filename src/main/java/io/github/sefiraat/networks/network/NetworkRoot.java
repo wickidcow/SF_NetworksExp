@@ -16,7 +16,6 @@ import com.ytdd9527.networksexpansion.implementation.machines.unit.NetworksDrawe
 import io.github.mooy1.infinityexpansion.items.storage.StorageCache;
 import io.github.mooy1.infinityexpansion.items.storage.StorageUnit;
 import io.github.sefiraat.networks.Networks;
-import io.github.sefiraat.networks.integrations.infinityexpansion2.InfinityExpansion2Integration;
 import io.github.sefiraat.networks.network.barrel.FluffyBarrel;
 import io.github.sefiraat.networks.network.barrel.InfinityBarrel;
 import io.github.sefiraat.networks.network.barrel.NetworkStorage;
@@ -440,16 +439,8 @@ public class NetworkRoot extends NetworkNode {
             return getInfinityBarrel(menu, storageUnit, includeEmpty);
         }
 
-        final InfinityExpansion2Integration ie2 =
-            Networks.getSupportedPluginManager().getInfinityExpansion2Integration();
-        if (ie2 != null && ie2.isStorageUnit(item)) {
-            try {
-                return ie2.getBarrel(barrelLocation, item, includeEmpty);
-            } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
-                Networks.getSupportedPluginManager().disableOptionalIntegration("InfinityExpansion2", exception);
-            }
-        }
-        return null;
+        return Networks.getSupportedPluginManager()
+            .findOptionalStorageBarrel(barrelLocation, item, includeEmpty);
     }
 
     @Nullable

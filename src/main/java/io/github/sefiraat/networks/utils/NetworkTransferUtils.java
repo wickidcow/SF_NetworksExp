@@ -64,11 +64,25 @@ public final class NetworkTransferUtils {
         }
 
         final int withdrawn = withdrawnStack.getAmount();
-        final ItemStack remainder = BlockMenuUtil.pushItem(destination, withdrawnStack, slots);
+        final ItemStack remainder;
+        try {
+            remainder = BlockMenuUtil.pushItem(destination, withdrawnStack, slots);
+        } catch (RuntimeException | LinkageError exception) {
+            TransferAudit.recordFailure();
+            rollbackNetworkWithdrawal(
+                root, accessor, withdrawnStack, destination.getLocation(), "menu transfer exception");
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.WARNING,
+                "A Networks menu transfer failed while committing; the withdrawn stack was rolled back.",
+                exception);
+            return 0;
+        }
+
         final int remainderAmount = validAmount(remainder);
         final int committed = Math.max(0, withdrawn - remainderAmount);
         if (committed > 0) {
             destination.markDirty();
+            TransferAudit.recordWithdrawalCommitted(committed);
         }
 
         if (remainderAmount > 0) {
@@ -96,7 +110,20 @@ public final class NetworkTransferUtils {
         }
 
         final int withdrawn = retrieved.getAmount();
-        final Map<Integer, ItemStack> remainders = InventoryUtil.addItem(player, retrieved);
+        final Map<Integer, ItemStack> remainders;
+        try {
+            remainders = InventoryUtil.addItem(player, retrieved);
+        } catch (RuntimeException | LinkageError exception) {
+            TransferAudit.recordFailure();
+            rollbackNetworkWithdrawal(
+                root, accessor, retrieved, player.getLocation(), "player inventory transfer exception");
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.WARNING,
+                "A Networks player-inventory transfer failed while committing; the withdrawn stack was rolled back.",
+                exception);
+            return 0;
+        }
+
         int remainderAmount = 0;
         for (ItemStack remainder : remainders.values()) {
             remainderAmount += validAmount(remainder);
@@ -104,7 +131,9 @@ public final class NetworkTransferUtils {
                 rollbackNetworkWithdrawal(root, accessor, remainder, player.getLocation(), "player inventory transfer");
             }
         }
-        return Math.max(0, withdrawn - remainderAmount);
+        final int committed = Math.max(0, withdrawn - remainderAmount);
+        TransferAudit.recordWithdrawalCommitted(committed);
+        return committed;
     }
 
     /**
@@ -138,15 +167,26 @@ public final class NetworkTransferUtils {
         }
 
         final int moved = retrieved.getAmount();
-        if (cursor == null || cursor.getType() == Material.AIR) {
-            player.setItemOnCursor(retrieved);
-        } else {
-            final ItemStack combined = cursor.clone();
-            combined.setAmount(cursor.getAmount() + moved);
-            player.setItemOnCursor(combined);
-            retrieved.setAmount(0);
+        try {
+            if (cursor == null || cursor.getType() == Material.AIR) {
+                player.setItemOnCursor(retrieved);
+            } else {
+                final ItemStack combined = cursor.clone();
+                combined.setAmount(cursor.getAmount() + moved);
+                player.setItemOnCursor(combined);
+                retrieved.setAmount(0);
+            }
+            TransferAudit.recordWithdrawalCommitted(moved);
+            return moved;
+        } catch (RuntimeException | LinkageError exception) {
+            TransferAudit.recordFailure();
+            rollbackNetworkWithdrawal(root, accessor, retrieved, player.getLocation(), "cursor transfer exception");
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.WARNING,
+                "A Networks cursor transfer failed while committing; the withdrawn stack was rolled back.",
+                exception);
+            return 0;
         }
-        return moved;
     }
 
     /** Moves items between two independent network roots with rollback to the source root. */
@@ -170,10 +210,22 @@ public final class NetworkTransferUtils {
         final int withdrawn = retrieved.getAmount();
         // A rollback/forwarding operation must not be rejected merely because the target was accessed earlier
         // in the same tick by another transport node.
-        target.uncontrolAccessInput(targetAccessor);
-        target.addItemStack0(targetAccessor, retrieved);
+        try {
+            target.uncontrolAccessInput(targetAccessor);
+            target.addItemStack0(targetAccessor, retrieved);
+        } catch (RuntimeException | LinkageError exception) {
+            TransferAudit.recordFailure();
+            rollbackNetworkWithdrawal(
+                source, sourceAccessor, retrieved, sourceAccessor, "network-to-network transfer exception");
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.WARNING,
+                "A Networks root-to-root transfer failed while committing; the withdrawn stack was rolled back.",
+                exception);
+            return 0;
+        }
         final int remainder = validAmount(retrieved);
         final int committed = Math.max(0, withdrawn - remainder);
+        TransferAudit.recordWithdrawalCommitted(committed);
         if (remainder > 0) {
             rollbackNetworkWithdrawal(source, sourceAccessor, retrieved, sourceAccessor, "network-to-network transfer");
         }
@@ -196,9 +248,19 @@ public final class NetworkTransferUtils {
         }
 
         final int beforeRollback = remainder.getAmount();
-        root.uncontrolAccessInput(accessor);
-        root.addItemStack0(accessor, remainder);
-        if (remainder.getAmount() <= 0) {
+        try {
+            root.uncontrolAccessInput(accessor);
+            root.addItemStack0(accessor, remainder);
+        } catch (RuntimeException | LinkageError exception) {
+            TransferAudit.recordFailure();
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.SEVERE,
+                "A Networks rollback failed while reinserting into its source network; using the safety-drop path.",
+                exception);
+        }
+        final int afterRollback = validAmount(remainder);
+        TransferAudit.recordRollback(beforeRollback, Math.max(0, beforeRollback - afterRollback));
+        if (afterRollback <= 0) {
             return;
         }
 
@@ -280,14 +342,27 @@ public final class NetworkTransferUtils {
         }
 
         final ItemStack source = sourceMenu.getItemInSlot(slot);
+        final ItemStack originalSource = source == null ? null : source.clone();
         final TransferResult result = offer(root, accessor, source, limit);
         if (result.moved() <= 0) {
             return 0;
         }
 
-        sourceMenu.replaceExistingItem(slot, result.remainingStack());
-        sourceMenu.markDirty();
-        return result.moved();
+        try {
+            sourceMenu.replaceExistingItem(slot, result.remainingStack());
+            sourceMenu.markDirty();
+            return result.moved();
+        } catch (RuntimeException | LinkageError exception) {
+            try {
+                sourceMenu.replaceExistingItem(slot, originalSource);
+                sourceMenu.markDirty();
+            } catch (RuntimeException | LinkageError restorationFailure) {
+                exception.addSuppressed(restorationFailure);
+            }
+            compensateCommittedDeposit(
+                root, accessor, originalSource, result.moved(), sourceMenu.getLocation(), "menu source commit", exception);
+            return 0;
+        }
     }
 
     /** Moves as much as possible from a Bukkit inventory slot. */
@@ -312,13 +387,25 @@ public final class NetworkTransferUtils {
         }
 
         final ItemStack source = sourceInventory.getItem(slot);
+        final ItemStack originalSource = source == null ? null : source.clone();
         final TransferResult result = offer(root, accessor, source, limit);
         if (result.moved() <= 0) {
             return 0;
         }
 
-        sourceInventory.setItem(slot, result.remainingStack());
-        return result.moved();
+        try {
+            sourceInventory.setItem(slot, result.remainingStack());
+            return result.moved();
+        } catch (RuntimeException | LinkageError exception) {
+            try {
+                sourceInventory.setItem(slot, originalSource);
+            } catch (RuntimeException | LinkageError restorationFailure) {
+                exception.addSuppressed(restorationFailure);
+            }
+            compensateCommittedDeposit(
+                root, accessor, originalSource, result.moved(), accessor, "inventory source commit", exception);
+            return 0;
+        }
     }
 
     /** Moves as much as possible from the item currently held on a player cursor. */
@@ -336,13 +423,27 @@ public final class NetworkTransferUtils {
         @NotNull Player player,
         int limit) {
 
-        final TransferResult result = offer(root, accessor, player.getItemOnCursor(), limit);
+        final ItemStack cursorSource = player.getItemOnCursor();
+        final ItemStack originalSource = cursorSource == null ? null : cursorSource.clone();
+        final TransferResult result = offer(root, accessor, cursorSource, limit);
         if (result.moved() <= 0) {
             return 0;
         }
 
-        player.setItemOnCursor(orAir(result.remainingStack()));
-        return result.moved();
+        try {
+            player.setItemOnCursor(orAir(result.remainingStack()));
+            return result.moved();
+        } catch (RuntimeException | LinkageError exception) {
+            try {
+                player.setItemOnCursor(orAir(originalSource));
+            } catch (RuntimeException | LinkageError restorationFailure) {
+                exception.addSuppressed(restorationFailure);
+            }
+            compensateCommittedDeposit(
+                root, accessor, originalSource, result.moved(), player.getLocation(),
+                "cursor source commit", exception);
+            return 0;
+        }
     }
 
     /** Moves as much as possible from the player's selected hotbar slot. */
@@ -371,14 +472,26 @@ public final class NetworkTransferUtils {
         @NotNull NetworkRoot root,
         @NotNull Location accessor,
         ItemStack source) {
+        final ItemStack originalSource = source == null ? null : source.clone();
         final TransferResult result = offer(root, accessor, source, Integer.MAX_VALUE);
         if (result.moved() <= 0 || source == null) {
             return 0;
         }
 
         final ItemStack remaining = result.remainingStack();
-        source.setAmount(remaining == null ? 0 : remaining.getAmount());
-        return result.moved();
+        try {
+            source.setAmount(remaining == null ? 0 : remaining.getAmount());
+            return result.moved();
+        } catch (RuntimeException | LinkageError exception) {
+            try {
+                source.setAmount(originalSource == null ? 0 : originalSource.getAmount());
+            } catch (RuntimeException | LinkageError restorationFailure) {
+                exception.addSuppressed(restorationFailure);
+            }
+            compensateCommittedDeposit(
+                root, accessor, originalSource, result.moved(), accessor, "stack-reference source commit", exception);
+            return 0;
+        }
     }
 
     private static ItemStack withdraw(
@@ -390,10 +503,22 @@ public final class NetworkTransferUtils {
         if (amount <= 0) {
             return null;
         }
+        TransferAudit.recordWithdrawalAttempt(amount);
         final ItemStack requestTemplate = template.clone();
         requestTemplate.setAmount(1);
-        final ItemStack retrieved = root.getItemStack0(accessor, new ItemRequest(requestTemplate, amount));
-        return validAmount(retrieved) <= 0 ? null : retrieved;
+        try {
+            final ItemStack retrieved = root.getItemStack0(accessor, new ItemRequest(requestTemplate, amount));
+            final int withdrawn = validAmount(retrieved);
+            TransferAudit.recordWithdrawn(withdrawn);
+            return withdrawn <= 0 ? null : retrieved;
+        } catch (RuntimeException | LinkageError exception) {
+            TransferAudit.recordFailure();
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.WARNING,
+                "A Networks withdrawal failed before commit.",
+                exception);
+            return null;
+        }
     }
 
     private static @NotNull TransferResult offer(
@@ -410,10 +535,21 @@ public final class NetworkTransferUtils {
         final int offeredAmount = Math.min(sourceAmount, limit);
         final ItemStack offered = source.clone();
         offered.setAmount(offeredAmount);
-        root.addItemStack0(accessor, offered);
+        TransferAudit.recordDepositAttempt(offeredAmount);
+        try {
+            root.addItemStack0(accessor, offered);
+        } catch (RuntimeException | LinkageError exception) {
+            TransferAudit.recordFailure();
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.WARNING,
+                "A Networks deposit failed before the source stack was committed.",
+                exception);
+            return TransferResult.NONE;
+        }
 
         final int offeredRemaining = Math.max(0, Math.min(offeredAmount, offered.getAmount()));
         final int moved = offeredAmount - offeredRemaining;
+        TransferAudit.recordDepositCommitted(moved);
         if (moved <= 0) {
             return TransferResult.NONE;
         }
@@ -426,6 +562,48 @@ public final class NetworkTransferUtils {
         final ItemStack committed = source.clone();
         committed.setAmount(sourceRemaining);
         return new TransferResult(moved, committed);
+    }
+
+    /**
+     * Removes an item amount that was accepted by a network before the source-side commit failed.
+     *
+     * @return the number of equivalent items removed from the network
+     */
+    public static int compensateCommittedDeposit(
+        @NotNull NetworkRoot root,
+        @NotNull Location accessor,
+        ItemStack template,
+        int committed,
+        @NotNull Location fallbackLocation,
+        @NotNull String operation,
+        @NotNull Throwable commitFailure
+    ) {
+        TransferAudit.recordFailure();
+        int recovered = 0;
+        if (template != null && template.getType() != Material.AIR && committed > 0) {
+            final ItemStack requestTemplate = template.clone();
+            requestTemplate.setAmount(1);
+            try {
+                root.uncontrolAccessOutput(accessor);
+                ItemStack compensation = root.getItemStack0(accessor, new ItemRequest(requestTemplate, committed));
+                recovered = validAmount(compensation);
+                if (compensation != null) {
+                    compensation.setAmount(0);
+                }
+            } catch (RuntimeException | LinkageError compensationFailure) {
+                commitFailure.addSuppressed(compensationFailure);
+            }
+        }
+        TransferAudit.recordDepositCompensation(committed, recovered);
+        java.util.logging.Level level = recovered >= committed
+            ? java.util.logging.Level.WARNING
+            : java.util.logging.Level.SEVERE;
+        Networks.getInstance().getLogger().log(
+            level,
+            "A Networks " + operation + " failed after the network accepted " + committed + " item(s). "
+                + recovered + " item(s) were removed from the network as compensation at " + fallbackLocation + '.',
+            commitFailure);
+        return recovered;
     }
 
     private static int validAmount(ItemStack stack) {
@@ -448,6 +626,7 @@ public final class NetworkTransferUtils {
         if (world != null) {
             final int dropped = remainder.getAmount();
             world.dropItemNaturally(dropLocation, remainder.clone());
+            TransferAudit.recordSafetyDrop(dropped);
             remainder.setAmount(0);
             Networks.getInstance().getLogger().severe(
                 "A Networks " + operation + " changed while committing. " + dropped + " of "

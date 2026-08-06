@@ -2,7 +2,7 @@
 
 ## Release
 
-`2.1.112-Legacy-Alpha4`
+`2.1.112-Legacy-1.0`
 
 ## Priority order
 
@@ -14,7 +14,7 @@ A universal release is not uploaded unless the same source compiles/tests agains
 
 ## Preserved world and addon identity
 
-Alpha 3 retains:
+1.0 Legacy retains:
 
 - Bukkit plugin name `Networks`
 - Main class `io.github.sefiraat.networks.Networks`
@@ -64,6 +64,15 @@ The release verifier rejects:
 - Chunk first-tick registration is revalidated and pending locations are cleared during shutdown.
 - Alpha 2 database, transfer, cargo, quantum, crafting, remote, and controller protections remain active.
 
+## 1.0 Legacy controller and node stability
+
+- Repeated controller rebuild failures are isolated per controller and paused with a configurable exponential cooldown.
+- Failed or replaced runtime roots clear only assignments that still belong to that root; loaded block registrations remain available for rebuilding.
+- Controller roots are discarded before their chunk registry is removed, preventing unloaded controllers from remaining globally active.
+- Node registration is atomic: same-type duplicate attempts retain the live definition, while type conflicts replace stale identity and invalidate the old root.
+- Doctor reports tracked failures, quarantines, circuit trips, duplicate registrations, and node-type conflicts without force-loading chunks.
+- All Alpha 2 transfer rollback, crafting rollback, database drain, and persistence protections remain active.
+
 ## Required staging checks
 
 1. Back up all worlds and Slimefun/Networks data.
@@ -78,3 +87,7 @@ The release verifier rejects:
 10. Test optional integrations individually and in the same combination used on production.
 
 Folia remains unclaimed because multi-chunk transactional networks are not inherently region-safe.
+
+## 1.0 persistence additions
+
+The database path and schema remain unchanged. The release adds startup backups, `PRAGMA quick_check`, transactional absolute amount snapshots, and an external `CargoStorageUnits.recovery.tsv` file used only for pending write recovery. Missing configuration keys use safe defaults.

@@ -9,6 +9,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.LongAdder;
 
 /**
  * Serial database task queue.
@@ -25,9 +26,15 @@ public final class QueryQueue {
     private final @NotNull AtomicBoolean started = new AtomicBoolean();
     private final @NotNull AtomicBoolean accepting = new AtomicBoolean(true);
     private final @NotNull AtomicInteger inFlight = new AtomicInteger();
+    private final @NotNull LongAdder scheduled = new LongAdder();
+    private final @NotNull LongAdder executed = new LongAdder();
+    private final @NotNull LongAdder failed = new LongAdder();
+    private final @NotNull LongAdder rejected = new LongAdder();
+    private final @NotNull LongAdder cancelled = new LongAdder();
     private final @NotNull Object lifecycleMonitor = new Object();
     private final @NotNull Object drainMonitor = new Object();
     private volatile Thread worker;
+    private volatile String lastFailure = "none";
 
     public void scheduleUpdate(@NotNull QueuedTask task) {
         schedule(task);
@@ -40,12 +47,15 @@ public final class QueryQueue {
     private void schedule(@NotNull QueuedTask task) {
         synchronized (lifecycleMonitor) {
             if (!accepting.get()) {
+                rejected.increment();
                 throw new IllegalStateException("Networks database queue is shutting down");
             }
             if (!tasks.offer(task)) {
+                rejected.increment();
                 throw new IllegalStateException(
                     Lang.getString("messages.unsupported-operation.comprehensive.invalid_queue"));
             }
+            scheduled.increment();
         }
         signalStateChanged();
     }
@@ -58,7 +68,11 @@ public final class QueryQueue {
         accepting.set(true);
         worker = new Thread(this::processTasks, "Networks-Database-Worker");
         worker.setDaemon(true);
-        worker.setUncaughtExceptionHandler((thread, throwable) -> Debug.trace(throwable));
+        worker.setUncaughtExceptionHandler((thread, throwable) -> {
+            failed.increment();
+            lastFailure = compactFailure(throwable);
+            Debug.trace(throwable);
+        });
         worker.start();
     }
 
@@ -75,9 +89,13 @@ public final class QueryQueue {
                     boolean callbackRequested = task.execute();
                     if (callbackRequested && task.callback()) {
                         accepting.set(false);
+                        executed.increment();
                         break;
                     }
+                    executed.increment();
                 } catch (Throwable throwable) {
+                    failed.increment();
+                    lastFailure = compactFailure(throwable);
                     Debug.trace(throwable);
                 } finally {
                     inFlight.decrementAndGet();
@@ -123,12 +141,21 @@ public final class QueryQueue {
         return getTaskAmount() == 0;
     }
 
-    /**
-     * Waits for all work queued before and during the wait to finish.
-     *
-     * @param timeoutMillis maximum wait; zero means do not wait
-     * @return whether the queue drained
-     */
+    public @NotNull QueueSnapshot snapshot() {
+        return new QueueSnapshot(
+            getQueuedTaskAmount(),
+            getInFlightTaskAmount(),
+            scheduled.sum(),
+            executed.sum(),
+            failed.sum(),
+            rejected.sum(),
+            cancelled.sum(),
+            accepting.get(),
+            isWorkerRunning(),
+            lastFailure);
+    }
+
+    /** Waits for all work queued before and during the wait to finish. */
     public boolean awaitDrained(long timeoutMillis) {
         long remainingNanos = TimeUnit.MILLISECONDS.toNanos(Math.max(0L, timeoutMillis));
         long deadline = System.nanoTime() + remainingNanos;
@@ -167,8 +194,7 @@ public final class QueryQueue {
 
         boolean drained = awaitDrained(safeTimeoutMillis);
         if (!drained) {
-            tasks.clear();
-            signalStateChanged();
+            cancelQueuedTasks();
         }
 
         tasks.offer(STOP_TASK);
@@ -182,7 +208,7 @@ public final class QueryQueue {
         joinUntil(currentWorker, deadlineNanos);
         if (currentWorker.isAlive()) {
             currentWorker.interrupt();
-            tasks.clear();
+            cancelQueuedTasks();
             tasks.offer(STOP_TASK);
             joinFor(currentWorker, 2000L);
         }
@@ -193,6 +219,15 @@ public final class QueryQueue {
     /** Compatibility bridge for older shutdown code. */
     public void scheduleAbort() {
         shutdown(0L);
+    }
+
+    private void cancelQueuedTasks() {
+        int before = getQueuedTaskAmount();
+        tasks.clear();
+        if (before > 0) {
+            cancelled.add(before);
+        }
+        signalStateChanged();
     }
 
     private static void joinUntil(@NotNull Thread thread, long deadlineNanos) {
@@ -215,5 +250,32 @@ public final class QueryQueue {
         synchronized (drainMonitor) {
             drainMonitor.notifyAll();
         }
+    }
+
+    private static @NotNull String compactFailure(@NotNull Throwable throwable) {
+        String type = throwable.getClass().getSimpleName();
+        String message = throwable.getMessage();
+        if (message == null || message.isBlank()) {
+            return type;
+        }
+        String compact = message.replace('\n', ' ').replace('\r', ' ').trim();
+        if (compact.length() > 160) {
+            compact = compact.substring(0, 157) + "...";
+        }
+        return type + ": " + compact;
+    }
+
+    public record QueueSnapshot(
+        int queued,
+        int inFlight,
+        long scheduled,
+        long executed,
+        long failed,
+        long rejected,
+        long cancelled,
+        boolean accepting,
+        boolean workerRunning,
+        @NotNull String lastFailure
+    ) {
     }
 }

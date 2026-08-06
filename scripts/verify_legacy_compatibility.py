@@ -105,6 +105,12 @@ localization_service = read("src/main/java/com/ytdd9527/networksexpansion/core/s
 network_object = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkObject.java")
 universal_verifier = read("scripts/verify_universal_jar.py")
 transfer_utils = read("src/main/java/io/github/sefiraat/networks/utils/NetworkTransferUtils.java")
+transfer_audit = read("src/main/java/io/github/sefiraat/networks/utils/TransferAudit.java")
+data_storage = read("src/main/java/com/ytdd9527/networksexpansion/utils/databases/DataStorage.java")
+recovery_journal = read("src/main/java/com/ytdd9527/networksexpansion/utils/databases/DrawerRecoveryJournal.java")
+backup_manager = read("src/main/java/com/ytdd9527/networksexpansion/utils/databases/DatabaseBackupManager.java")
+storage_adapter = read("src/main/java/io/github/sefiraat/networks/integrations/storage/StorageAdapter.java")
+storage_adapter_registry = read("src/main/java/io/github/sefiraat/networks/integrations/storage/StorageAdapterRegistry.java")
 control_x = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkControlX.java")
 quantum_storage = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkQuantumStorage.java")
 auto_crafter = read("src/main/java/com/ytdd9527/networksexpansion/core/items/machines/AutoCrafter.java")
@@ -140,7 +146,9 @@ for optional_plugin in ["InfinityExpansion2", "SlimeHUDPlus", "JustEnoughGuide",
     require(optional_plugin in softdepend, f"optional integration is missing from softdepend: {optional_plugin}")
 
 # Java/Paper/exact-core build contract.
-require('version = "2.1.112-Legacy-Alpha4.1"' in build, "project version is not Alpha4.1")
+require('version = "2.1.112-Legacy-1.0"' in build, "project version is not 1.0 Legacy")
+require('archiveVersion.set("2.1.112-1.0")' in build,
+        "Gradle output filename must be Networks-Legacy-2.1.112-1.0.jar without duplicate Legacy")
 require("options.release.set(21)" in build, "Java 21 release target is missing")
 require("languageVersion.set(JavaLanguageVersion.of(21))" in build, "Java 21 Gradle toolchain is missing")
 require("paper-api:1.21.11-R0.1-SNAPSHOT" in build, "Paper 1.21.11 API baseline is missing")
@@ -175,7 +183,7 @@ workflow_invariants = [
     "uses: ./.github/workflows/compatibility.yml",
     "needs: compatibility",
     "verify_universal_jar.py",
-    "Networks-Legacy-2.1.112-Alpha4.1",
+    "Networks-Legacy-2.1.112-1.0",
 ]
 for required in workflow_invariants:
     require(required in workflow, f"workflow invariant missing: {required}")
@@ -382,7 +390,7 @@ for path in (ROOT / "src/main/java").rglob("*.java"):
         require("import " + doctor_api_package not in text,
                 "RuntimeCompatibility must use only a non-linking Legacy marker string")
 
-# Alpha4 lifecycle, optional integration, and unload/reload stability.
+# Lifecycle, optional integration, and unload/reload stability.
 require("failStartup" in networks_java and "startupStage" in networks_java,
         "staged fail-safe startup handling is missing")
 require("SupportedPluginManager.shutdown()" in networks_java
@@ -443,9 +451,9 @@ require('BarrelType.INFINITY_2' in ie2_barrel and 'INFINITY_2' in barrel_type,
 require('canAccept' in barrel_identity
         and network_root.count('barrelIdentity.canAccept(incoming)') >= 3,
         "empty or matching external storage acceptance bridge is missing")
-require('ie2.getBarrel(barrelLocation, item, includeEmpty)' in network_root
+require('findOptionalStorageBarrel(barrelLocation, item, includeEmpty)' in network_root
         and 'getBarrel(testLocation, true)' in network_root,
-        "InfinityExpansion2 storage units are not included in network discovery and input routing")
+        "optional storage adapters are not included in network discovery and input routing")
 require('net.guizhanss.infinityexpansion2.' not in build,
         "InfinityExpansion2 must remain reflection-only and must not become a bundled/compile dependency")
 require("ConcurrentHashMap" in localization_service and "clearRuntimeCache" in localization_service,
@@ -465,6 +473,62 @@ require("FORBIDDEN_PREFIXES" in universal_verifier
         and "io/github/thebusybiscuit/slimefun4/" in universal_verifier
         and "com/bgsoftware/wildstacker/" in universal_verifier,
         "universal JAR bundled-class guard is missing")
+
+# 1.0 Legacy release safety foundation.
+require('version = "2.1.112-Legacy-1.0"' in build,
+        "1.0 Legacy project version is missing")
+require(config.get("config-version") == "2.1.112-legacy-1.0",
+        "1.0 Legacy config version is missing")
+require(config.get("database", {}).get("integrity-check") is True
+        and config.get("database", {}).get("recovery-journal") is True
+        and config.get("database", {}).get("startup-backups", {}).get("enabled") is True,
+        "1.0 Legacy database safety defaults are missing")
+require("PRAGMA quick_check" in data_source
+        and "DatabaseBackupManager.createStartupBackup" in data_source
+        and "applyAmountChangesTransaction" in data_source
+        and "connection.commit()" in data_source
+        and "connection.rollback()" in data_source,
+        "transactional drawer persistence, integrity checking, or startup backup is missing")
+require("CargoStorageUnits.recovery.tsv" in recovery_journal
+        and "ATOMIC_MOVE" in recovery_journal
+        and "channel.force(true)" in recovery_journal
+        and "directory.force(true)" in recovery_journal
+        and "removeCommitted" in recovery_journal
+        and "absolute amount" in recovery_journal,
+        "durable idempotent drawer recovery journal is missing")
+require("replayRecoveryJournal" in data_storage
+        and "checkpointPendingChangesForShutdown" in data_storage
+        and "SAVE_IN_FLIGHT" in data_storage
+        and "DrawerRecoveryJournal.merge" in data_storage
+        and "applyAmountChanges" in data_storage,
+        "serialized delayed drawer save/recovery flow is missing")
+require("QueueSnapshot" in query_queue
+        and "LongAdder" in query_queue
+        and "cancelled" in query_queue
+        and "lastFailure" in query_queue,
+        "database queue telemetry is missing")
+require("implements StorageAdapter" in ie2_integration
+        and "StorageAdapterRegistry" in supported_plugins
+        and "findOptionalStorageBarrel" in supported_plugins
+        and "findOptionalStorageBarrel" in network_root,
+        "optional storage adapter foundation is missing")
+require("recordDepositCompensation" in transfer_audit
+        and "outstandingRollbackItems" in transfer_audit
+        and "uncompensatedDepositItems" in transfer_audit
+        and "public static int compensateCommittedDeposit" in transfer_utils
+        and control_x.count("NetworkTransferUtils.compensateCommittedDeposit") >= 2,
+        "transaction compensation telemetry or Control X rollback protection is missing")
+require("Transfer safety:" in doctor
+        and "Database safety:" in doctor
+        and "Storage adapters:" in doctor,
+        "1.0 Doctor safety diagnostics are missing")
+require("DataStorage.replayRecoveryJournal()" in networks_java
+        and networks_java.count("TransferAudit.reset()") >= 2,
+        "startup recovery replay or transfer-audit lifecycle reset is missing")
+require("Networks-Legacy-2.1.112-1.0.jar" in build_workflow
+        and "Networks-Legacy-2.1.112-1.0" in build_workflow
+        and "2.1.112-Legacy-1.0" in compatibility_workflow,
+        "flat 1.0 Legacy artifact or three-core release gate is missing")
 
 # English locale and item-ID invariants.
 require("DisplayNameUtils.getDisplayName(" in java_sources, "Networks-owned item display-name bridge is not in use")
@@ -500,6 +564,6 @@ if ERRORS:
     sys.exit(1)
 
 print(
-    f"Networks Alpha4.1 verification passed: {len(current_ids)} item IDs, three-core matrix, "
-    "Java 21, Paper 1.21.11, runtime hardening, IE2 storage integration, and unofficial IE2 detection hotfix."
+    f"Networks 1.0 Legacy verification passed: {len(current_ids)} item IDs, three-core matrix, "
+    "Java 21, Paper 1.21.11, transaction safety, persistence recovery, controller hardening, and IE2 storage integration."
 )

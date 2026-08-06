@@ -1,16 +1,67 @@
 # Changelog
 
-## 2.1.112-Legacy-Alpha4.1
+## 2.1.112-Legacy-1.0
 
-### Infinity Expansion 2 detection hotfix
+### Universal compatibility and preserved world contract
+- Promoted the maintained fork to the first 1.0 Legacy release.
+- Kept Slimefun Legacy primary while requiring successful United and Gugu compile/test gates before artifact upload.
+- Preserved the `Networks` plugin identity, guide organization, all 288 item IDs, recipes, namespaces, placed blocks, and `CargoStorageUnits.db` schema/path.
+- Updated the flat artifact to `Networks-Legacy-2.1.112-1.0.jar`.
 
-- Removes the exact IE2 main-class package check that could reject unofficial or relocated builds even while the plugin was enabled.
-- Resolves IE2 storage support from the plugin's own class loader and, when needed, discovers the shared storage implementation from registered IE2 Slimefun items.
-- Supports the official storage package and compatible relocated storage implementations exposing the same cache/capacity/input/output contract.
-- Lazily resolves IE2 cache accessors from the live cache object, avoiding a hard requirement on one exact `StorageCache` package.
-- Keeps empty IE2 Storage Units available as network deposit targets even before a live cache entry is present.
-- Adds the resolved storage class to startup logging and includes the real exception message in Doctor failures.
-- Preserves the 288 Networks item IDs, guide layout, recipes, database formats, and the Legacy/United/Gugu release matrix.
+### Transaction and integration safety
+- Added lock-free transfer audit counters for withdrawals, deposits, rollbacks, compensation, safety drops, and failures.
+- Added compensating network withdrawals when a source inventory/menu/cursor commit fails after a deposit was accepted.
+- Added Control X compensation when a cut block deposit succeeds but block removal fails or cannot be verified.
+- Added a fail-soft internal storage adapter registry and moved Infinity Expansion 2 through that contract.
+- Retained official and relocated/unofficial IE2 storage discovery, empty-unit deposits, slot-based withdrawals, matching, capacity reporting, and nested-unit rejection.
+
+### Drawer database durability
+- Added bounded startup backups for `CargoStorageUnits.db` plus WAL/SHM sidecars.
+- Added startup `PRAGMA quick_check` validation with fail-closed corruption handling.
+- Replaced per-row delayed amount writes with one transactional absolute-value snapshot.
+- Added durable atomic `CargoStorageUnits.recovery.tsv` write-ahead journaling with forced writes and idempotent replay.
+- Added shutdown checkpointing for still-unsubmitted drawer amounts.
+- Added database queue telemetry for scheduled, completed, failed, rejected, and cancelled tasks.
+
+### Diagnostics and qualification
+- Expanded Networks Doctor with storage-adapter, database-integrity, backup, recovery-journal, queue, and transfer-safety details.
+- Added regression tests for the recovery journal, backup manager, queue lifecycle, and transfer audit.
+- Retained controller circuit breakers, atomic node registration, bounded rotating Doctor scans, and chunk unload/reload cleanup.
+
+## 2.1.112-Legacy-Alpha5
+
+### Controller fault containment
+- Added a configurable per-controller rebuild circuit breaker with exponential cooldowns.
+- Removed failed partial runtime trees immediately and cleared failure state after successful recovery.
+- Added compact failure diagnostics without retaining throwable instances.
+- Added regression tests for thresholds, cooldown backoff, recovery, and bounded failure descriptions.
+
+### Node and chunk lifecycle
+- Replaced unconditional node registration with atomic same-type duplicate and node-type conflict handling.
+- Clears assignments belonging to replaced roots without unregistering valid loaded blocks.
+- Discards controller runtime trees before chunk registry unload and reruns controller first-tick initialization after reload.
+- Added Doctor counters for controller failures, quarantines, circuit trips, duplicate registrations, and type conflicts.
+
+### Compatibility and preservation
+- Kept Slimefun Legacy primary with required United and Gugu build gates.
+- Retained Alpha 4 Infinity Expansion 2 storage-unit support.
+- Preserved all 288 item IDs, guide organization, recipes, database paths, plugin identity, and world records.
+- Updated the flat GitHub artifact to `Networks-Legacy-2.1.112-Alpha5.jar`.
+
+## 2.1.112-Legacy-Alpha4
+
+### Infinity Expansion 2
+- Added a reflection-backed adapter for every IE2 item implemented through its shared `StorageUnit` class.
+- Added input and output routing through IE2's real menu transport slots.
+- Added read-only cache discovery for the stored item, amount, and capacity.
+- Added empty-unit first-item deposits while preventing nested IE2 storage units.
+- Kept IE2 optional and fail-soft; no IE2 classes are bundled into the universal JAR.
+
+### Diagnostics and compatibility
+- Replaced ambiguous `inactive` integration results with `active`, `not-installed`, `detected`, `incompatible`, or `failed`, including detected plugin versions.
+- Kept Slimefun Legacy primary while retaining required United and Gugu build gates.
+- Preserved all 288 item IDs, guide organization, recipes, database paths, and world data.
+- Updated the flat GitHub artifact to `Networks-Legacy-2.1.112-Alpha4.jar`.
 
 ## 2.1.112-Legacy-Alpha3
 

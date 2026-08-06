@@ -16,6 +16,8 @@ import io.github.sefiraat.networks.slimefun.NetworksSlimefunItemStacks;
 import io.github.sefiraat.networks.slimefun.network.NetworkController;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
 import io.github.sefiraat.networks.slimefun.network.NetworkQuantumStorage;
+import io.github.sefiraat.networks.utils.FailureCircuitBreaker;
+import io.github.sefiraat.networks.utils.TransferAudit;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -111,6 +113,49 @@ public final class NetworksDoctor {
             }
         }
 
+        final long now = System.currentTimeMillis();
+        for (Map.Entry<Location, FailureCircuitBreaker.FailureSnapshot> entry
+            : NetworkController.getControllerFailures().entrySet()) {
+            final Location location = entry.getKey();
+            final FailureCircuitBreaker.FailureSnapshot failure = entry.getValue();
+            scanned++;
+
+            if (!isLoaded(location)) {
+                unloaded++;
+                issues++;
+                addSample(details, "Stale controller fault state in unloaded chunk: " + format(location));
+                if (repair) {
+                    NetworkController.clearControllerFailure(location);
+                    repaired++;
+                }
+                continue;
+            }
+
+            try {
+                final SlimefunItem item = StorageCacheUtils.getSfItem(location);
+                if (!(item instanceof NetworkController)) {
+                    issues++;
+                    addSample(details, "Stale controller fault state: " + format(location));
+                    if (repair) {
+                        NetworkController.clearControllerFailure(location);
+                        repaired++;
+                    }
+                    continue;
+                }
+
+                issues++;
+                String state = failure.isBlocked(now)
+                    ? "quarantined for " + Math.max(1L, failure.remainingCooldownMillis(now) / 1000L) + "s"
+                    : "awaiting a successful rebuild";
+                addSample(details, "Controller " + state + " at " + format(location)
+                    + ": " + failure.failureType() + " (" + failure.consecutiveFailures() + " failure(s))");
+            } catch (RuntimeException exception) {
+                failures++;
+                addSample(details, "Controller fault-state scan failed at " + format(location) + ": "
+                    + exception.getClass().getSimpleName());
+            }
+        }
+
         for (Map.Entry<Location, QuantumCache> entry : Map.copyOf(NetworkQuantumStorage.getCaches()).entrySet()) {
             final Location location = entry.getKey();
             final QuantumCache cache = entry.getValue();
@@ -186,20 +231,51 @@ public final class NetworksDoctor {
             issues++;
             addSample(details, "Drawer database connection is closed");
         }
+        if (DataStorage.getRecoveryEntryCount() > 0 && !DataStorage.isSaveInFlight()) {
+            issues++;
+            addSample(details, "Drawer recovery journal still contains "
+                + DataStorage.getRecoveryEntryCount() + " unapplied amount update(s)");
+        }
+        TransferAudit.Snapshot transfer = TransferAudit.snapshot();
+        if (transfer.outstandingRollbackItems() > 0 || transfer.uncompensatedDepositItems() > 0) {
+            issues++;
+            addSample(details, "Transfer compensation is incomplete: rollback="
+                + transfer.outstandingRollbackItems() + ", deposit=" + transfer.uncompensatedDepositItems());
+        }
 
         addRuntimeDetails(details);
         details.add("Registry: " + nodeCount + " nodes across "
-            + NetworkStorage.getIndexedChunkCount() + " loaded chunk indexes");
+            + NetworkStorage.getIndexedChunkCount() + " loaded chunk indexes; duplicate registrations="
+            + NetworkStorage.getDuplicateRegistrationAttemptCount() + ", type conflicts="
+            + NetworkStorage.getConflictingRegistrationReplacementCount());
+        details.add("Controller safety: " + NetworkController.getTrackedControllerFailureCount() + " tracked, "
+            + NetworkController.getQuarantinedControllerCount(now) + " quarantined, "
+            + NetworkController.getTotalControllerFailureCount() + " total rebuild failures, "
+            + NetworkController.getTotalControllerTripCount() + " circuit trips");
         details.add("Drawers: " + DataStorage.getCachedContainerCount() + " cached, "
             + DataStorage.getLoadingContainerCount() + " loading, "
-            + DataStorage.getPendingContainerChangeCount() + " pending change sets");
+            + DataStorage.getPendingContainerChangeCount() + " pending containers/"
+            + DataStorage.getPendingAmountChangeCount() + " amount updates, save="
+            + DataStorage.getLastSaveStatus() + ", recovery entries=" + DataStorage.getRecoveryEntryCount());
         details.add("Quantum storage: " + NetworkQuantumStorage.getCaches().size() + " loaded cache(s)");
         details.add("Drawer hot caches: " + StorageUnitData.observingAccessHistory.size() + " observing, "
             + StorageUnitData.persistentAccessHistory.size() + " persistent");
         if (queue != null) {
-            details.add("Database queue: " + queue.getQueuedTaskAmount() + " queued, "
-                + queue.getInFlightTaskAmount() + " executing");
+            QueryQueue.QueueSnapshot queueSnapshot = queue.snapshot();
+            details.add("Database queue: " + queueSnapshot.queued() + " queued, "
+                + queueSnapshot.inFlight() + " executing, " + queueSnapshot.executed() + " completed, "
+                + queueSnapshot.failed() + " failed, " + queueSnapshot.rejected() + " rejected, "
+                + queueSnapshot.cancelled() + " cancelled; last failure=" + queueSnapshot.lastFailure());
         }
+        if (source != null) {
+            details.add("Database safety: integrity=" + source.getIntegrityStatus()
+                + ", startup backup=" + source.getLastBackup());
+        }
+        details.add("Transfer safety: withdrawals=" + transfer.withdrawalCommitted() + '/' + transfer.withdrawn()
+            + " committed, deposits=" + transfer.depositCommitted() + '/' + transfer.depositOffered()
+            + " committed, rollback outstanding=" + transfer.outstandingRollbackItems()
+            + ", deposit compensation outstanding=" + transfer.uncompensatedDepositItems()
+            + ", safety-dropped=" + transfer.safetyDropped() + ", failures=" + transfer.failures());
         if (unloaded > 0L) {
             details.add("Skipped " + unloaded + " entries in unloaded chunks; Doctor never force-loads chunks");
         }
@@ -224,6 +300,7 @@ public final class NetworksDoctor {
         long failures = 0L;
         long unloaded = 0L;
         List<String> details = new ArrayList<>();
+        final long now = System.currentTimeMillis();
 
         Map<Location, NodeDefinition> nodes = NetworkStorage.getAllNetworkObjects();
         List<Location> locations = new ArrayList<>(nodes.keySet());
@@ -283,6 +360,13 @@ public final class NetworksDoctor {
         }
 
         addRuntimeDetails(details);
+        details.add("Controller safety: " + NetworkController.getTrackedControllerFailureCount() + " tracked, "
+            + NetworkController.getQuarantinedControllerCount(now) + " quarantined, "
+            + NetworkController.getTotalControllerFailureCount() + " total rebuild failures, "
+            + NetworkController.getTotalControllerTripCount() + " circuit trips");
+        details.add("Node registration history: duplicates="
+            + NetworkStorage.getDuplicateRegistrationAttemptCount() + ", type conflicts="
+            + NetworkStorage.getConflictingRegistrationReplacementCount());
         details.add("Automatic scan window: " + processed + '/' + totalNodes
             + " loaded registry entries; next cursor=" + automaticNodeCursor);
         if (unloaded > 0L) {
@@ -304,6 +388,9 @@ public final class NetworksDoctor {
         SupportedPluginManager integrations = Networks.getSupportedPluginManager();
         if (integrations != null) {
             details.add("Integrations: " + String.join(", ", integrations.getIntegrationSummary()));
+            List<String> storageAdapters = integrations.getStorageAdapterSummary();
+            details.add("Storage adapters: " + (storageAdapters.isEmpty()
+                ? "native-only" : String.join(", ", storageAdapters)));
         }
     }
 

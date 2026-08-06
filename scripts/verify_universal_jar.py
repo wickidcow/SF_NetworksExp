@@ -26,6 +26,10 @@ REQUIRED_ENTRIES = (
     "config.yml",
     "lang/en-US.yml",
     "io/github/sefiraat/networks/Networks.class",
+    "io/github/sefiraat/networks/utils/TransferAudit.class",
+    "io/github/sefiraat/networks/integrations/storage/StorageAdapter.class",
+    "io/github/sefiraat/networks/integrations/infinityexpansion2/InfinityExpansion2Integration.class",
+    "com/ytdd9527/networksexpansion/utils/databases/DrawerRecoveryJournal.class",
 )
 
 
@@ -82,8 +86,14 @@ def main() -> int:
                 )
 
             config_version = str(config.get("config-version", ""))
-            if "alpha4" not in config_version.lower():
-                raise SystemExit(f"config.yml is not the Alpha4 configuration: {config_version!r}")
+            if config_version.lower() != "2.1.112-legacy-1.0":
+                raise SystemExit(f"config.yml is not the 1.0 Legacy configuration: {config_version!r}")
+            database = config.get("database") or {}
+            startup_backups = database.get("startup-backups") or {}
+            if database.get("integrity-check") is not True or database.get("recovery-journal") is not True:
+                raise SystemExit("1.0 Legacy database integrity/recovery defaults are missing")
+            if startup_backups.get("enabled") is not True or int(startup_backups.get("retained", 0)) < 1:
+                raise SystemExit("1.0 Legacy startup database backup defaults are missing")
 
             item_ids = sorted((locale.get("items") or {}).keys())
             if len(item_ids) != 288:

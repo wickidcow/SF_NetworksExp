@@ -5,6 +5,10 @@ import com.bgsoftware.wildstacker.api.WildStackerAPI;
 import dev.rosewood.rosestacker.api.RoseStackerAPI;
 import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.integrations.infinityexpansion2.InfinityExpansion2Integration;
+import io.github.sefiraat.networks.integrations.storage.StorageAdapterRegistry;
+import io.github.sefiraat.networks.network.stackcaches.BarrelIdentity;
+import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
+import org.bukkit.Location;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Item;
 import org.bukkit.plugin.Plugin;
@@ -45,10 +49,12 @@ public final class SupportedPluginManager {
     private volatile @Nullable LogitechIntegration logitechIntegration;
     private volatile @Nullable InfinityExpansion2Integration infinityExpansion2Integration;
     private final Map<String, String> integrationFailures = new ConcurrentHashMap<>();
+    private final StorageAdapterRegistry storageAdapters;
     private volatile @Nullable BukkitTask deferredRegistrationTask;
 
     public SupportedPluginManager() {
         this.plugin = Networks.getInstance();
+        this.storageAdapters = new StorageAdapterRegistry(this::disableIntegration);
         synchronized (SupportedPluginManager.class) {
             if (instance != null) {
                 throw new IllegalStateException("SupportedPluginManager is already initialized");
@@ -107,6 +113,7 @@ public final class SupportedPluginManager {
             current.roseStackerAPI = null;
             current.logitechIntegration = null;
             current.infinityExpansion2Integration = null;
+            current.storageAdapters.clear();
             current.integrationFailures.clear();
         }
     }
@@ -196,12 +203,10 @@ public final class SupportedPluginManager {
                 if (ie2 == null || !ie2.isEnabled()) {
                     infinityExpansion2 = false;
                 } else {
-                    final InfinityExpansion2Integration integration = new InfinityExpansion2Integration(ie2);
-                    infinityExpansion2Integration = integration;
-                    integrationFailures.remove("InfinityExpansion2");
-                    plugin.getLogger().info(
-                        "Infinity Expansion 2 storage integration enabled using "
-                            + integration.getResolvedStorageClassName() + '.');
+                    infinityExpansion2Integration = new InfinityExpansion2Integration(ie2);
+                    storageAdapters.register(infinityExpansion2Integration);
+                    plugin.getLogger().info("Infinity Expansion 2 storage adapter enabled using "
+                        + infinityExpansion2Integration.getResolvedStorageClassName() + ".");
                 }
             } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
                 disableIntegration("InfinityExpansion2", exception);
@@ -254,11 +259,12 @@ public final class SupportedPluginManager {
 
     private void disableIntegration(@NotNull String integration, @NotNull Throwable throwable) {
         final boolean firstFailure = integrationFailures.putIfAbsent(
-            integration, describeFailure(throwable)) == null;
+            integration, throwable.getClass().getSimpleName()) == null;
         switch (integration) {
             case "InfinityExpansion2" -> {
                 infinityExpansion2 = false;
                 infinityExpansion2Integration = null;
+                storageAdapters.unregister("InfinityExpansion2");
             }
             case "SlimeHUD" -> slimeHud = false;
             case "Netheopoiesis" -> netheopoiesis = false;
@@ -282,17 +288,6 @@ public final class SupportedPluginManager {
                 integration + " integration was disabled after an API compatibility failure. Networks will continue running.",
                 throwable);
         }
-    }
-
-
-    private static @NotNull String describeFailure(@NotNull Throwable throwable) {
-        final String simpleName = throwable.getClass().getSimpleName();
-        final String message = throwable.getMessage();
-        if (message == null || message.isBlank()) {
-            return simpleName;
-        }
-        final String compact = message.replace('\n', ' ').replace('\r', ' ').trim();
-        return simpleName + ": " + (compact.length() <= 160 ? compact : compact.substring(0, 157) + "...");
     }
 
     public void disableOptionalIntegration(@NotNull String integration, @NotNull Throwable throwable) {
@@ -362,6 +357,18 @@ public final class SupportedPluginManager {
 
     public @Nullable InfinityExpansion2Integration getInfinityExpansion2Integration() {
         return infinityExpansion2Integration;
+    }
+
+    public @Nullable BarrelIdentity findOptionalStorageBarrel(
+        @NotNull Location location,
+        @Nullable SlimefunItem item,
+        boolean includeEmpty
+    ) {
+        return storageAdapters.findBarrel(location, item, includeEmpty);
+    }
+
+    public @NotNull List<String> getStorageAdapterSummary() {
+        return storageAdapters.descriptions();
     }
 
     public boolean isFluffyMachines() {

@@ -22,6 +22,9 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.LongAdder;
 
 /** Runtime index of loaded Networks nodes. */
 @UtilityClass
@@ -29,6 +32,8 @@ public class NetworkStorage {
 
     private static final Map<ChunkPosition, Set<Location>> ALL_NETWORK_OBJECTS_BY_CHUNK = new ConcurrentHashMap<>();
     private static final Map<Location, NodeDefinition> ALL_NETWORK_OBJECTS = new ConcurrentHashMap<>();
+    private static final LongAdder DUPLICATE_REGISTRATION_ATTEMPTS = new LongAdder();
+    private static final LongAdder CONFLICTING_REGISTRATION_REPLACEMENTS = new LongAdder();
 
     /**
      * Removes a node and every child currently attached to its runtime network tree.
@@ -132,12 +137,72 @@ public class NetworkStorage {
         }
     }
 
+    /**
+     * Registers a loaded node without blindly replacing a live definition. Same-type duplicate attempts retain
+     * the definition that already carries a runtime assignment; type conflicts replace the stale definition and
+     * invalidate its previously built controller tree so no root can keep using the old node identity.
+     */
     public static void registerNode(@NotNull Location location, @NotNull NodeDefinition nodeDefinition) {
         Location key = normalize(location);
-        ALL_NETWORK_OBJECTS.put(key, nodeDefinition);
+        AtomicBoolean acceptedIncoming = new AtomicBoolean();
+        AtomicReference<NetworkRoot> conflictingRoot = new AtomicReference<>();
+
+        ALL_NETWORK_OBJECTS.compute(key, (ignored, existing) -> {
+            if (existing == null || existing == nodeDefinition) {
+                acceptedIncoming.set(true);
+                return nodeDefinition;
+            }
+
+            if (existing.getType() == nodeDefinition.getType()) {
+                DUPLICATE_REGISTRATION_ATTEMPTS.increment();
+                if (existing.getNode() == null && nodeDefinition.getNode() != null) {
+                    acceptedIncoming.set(true);
+                    return nodeDefinition;
+                }
+                return existing;
+            }
+
+            CONFLICTING_REGISTRATION_REPLACEMENTS.increment();
+            NetworkNode oldNode = existing.getNode();
+            if (oldNode != null) {
+                conflictingRoot.set(oldNode.getRoot());
+            }
+            acceptedIncoming.set(true);
+            return nodeDefinition;
+        });
+
         ALL_NETWORK_OBJECTS_BY_CHUNK
             .computeIfAbsent(new ChunkPosition(key), ignored -> ConcurrentHashMap.newKeySet())
             .add(key);
+
+        NetworkRoot oldRoot = conflictingRoot.get();
+        if (acceptedIncoming.get() && oldRoot != null) {
+            NetworkController.discardRuntimeNetwork(oldRoot.getNodePosition());
+        }
+    }
+
+    /** Clears node-to-root assignments belonging to one discarded runtime tree without unregistering blocks. */
+    public static int clearRuntimeAssignments(@NotNull NetworkRoot root) {
+        int cleared = 0;
+        for (Location location : root.getNodeLocations()) {
+            NodeDefinition definition = ALL_NETWORK_OBJECTS.get(normalize(location));
+            NetworkNode assigned = definition == null ? null : definition.getNode();
+            if (assigned != null && assigned.getRoot() == root) {
+                definition.setNode(null);
+                cleared++;
+            }
+            NetworkRoot.clearAccessHistory(location);
+            StorageUnitData.clearAccessHistory(location);
+        }
+        return cleared;
+    }
+
+    public static long getDuplicateRegistrationAttemptCount() {
+        return DUPLICATE_REGISTRATION_ATTEMPTS.sum();
+    }
+
+    public static long getConflictingRegistrationReplacementCount() {
+        return CONFLICTING_REGISTRATION_REPLACEMENTS.sum();
     }
 
     /**
@@ -187,6 +252,8 @@ public class NetworkStorage {
     public static void clear() {
         ALL_NETWORK_OBJECTS.clear();
         ALL_NETWORK_OBJECTS_BY_CHUNK.clear();
+        DUPLICATE_REGISTRATION_ATTEMPTS.reset();
+        CONFLICTING_REGISTRATION_REPLACEMENTS.reset();
         NetworkRoot.clearAllAccessHistory();
         StorageUnitData.clearAllAccessHistory();
     }
