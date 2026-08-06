@@ -127,11 +127,13 @@ public class NetworkController extends NetworkObject {
                     }
                     Bukkit.getPluginManager().callEvent(new NetworkRootReadyEvent(candidate));
 
-                    FailureCircuitBreaker.FailureSnapshot previous = controllerCircuitBreaker.recordSuccess(location);
-                    if (previous != null && previous.consecutiveFailures() > 0) {
+                    FailureCircuitBreaker.FailureSnapshot recoverySnapshot =
+                        controllerCircuitBreaker.recordSuccess(location);
+                    if (recoverySnapshot != null && recoverySnapshot.consecutiveFailures() > 0) {
                         Networks.getInstance().getLogger().info(
                             "Network controller recovered at " + format(location)
-                                + " after " + previous.consecutiveFailures() + " failed rebuild attempt(s).");
+                                + " after " + recoverySnapshot.consecutiveFailures()
+                                + " failed rebuild attempt(s).");
                     }
                 } catch (RuntimeException | LinkageError exception) {
                     discardFailedBuild(location, candidate);

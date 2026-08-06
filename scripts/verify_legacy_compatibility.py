@@ -308,6 +308,10 @@ require("super(!Bukkit.isPrimaryThread())" in root_ready_event,
 require("block.getType() == Material.AIR" in network_controller
         and "!getId().equals(data.getSfId())" in network_controller,
         "stale controller ticker records are not rejected before root rebuild")
+require("NetworkRoot previous = NETWORKS.put(location, candidate);" in network_controller
+        and "FailureCircuitBreaker.FailureSnapshot recoverySnapshot" in network_controller
+        and "FailureCircuitBreaker.FailureSnapshot previous =" not in network_controller,
+        "controller rebuild success handling reuses the previous local variable name")
 require("World world = dropLocation.getWorld()" in transfer_utils
         and "no loaded world was" in transfer_utils,
         "last-resort transfer rollback can still clear an undropped remainder")
