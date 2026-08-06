@@ -416,6 +416,9 @@ require('net.guizhanss.infinityexpansion2.implementation.items.storage.StorageUn
 require('net.guizhanss.infinityexpansion2.InfinityExpansion2' not in supported_plugins
         and 'net.guizhanss.infinityexpansion2.InfinityExpansion2' not in ie2_integration,
         "InfinityExpansion2 must not be gated by one exact plugin main class")
+require('import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;' in ie2_integration
+        and 'import io.github.thebusybiscuit.slimefun4.api.Slimefun;' not in ie2_integration,
+        "InfinityExpansion2 integration must use the cross-core Slimefun implementation package")
 require('getAllSlimefunItems' in ie2_integration
         and 'findStorageBaseClass' in ie2_integration
         and 'pluginClassLoader.loadClass' in ie2_integration
