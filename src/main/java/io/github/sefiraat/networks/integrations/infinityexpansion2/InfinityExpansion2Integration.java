@@ -1,7 +1,7 @@
 package io.github.sefiraat.networks.integrations.infinityexpansion2;
 
 import io.github.sefiraat.networks.network.barrel.InfinityExpansion2Barrel;
-import io.github.thebusybiscuit.slimefun4.api.Slimefun;
+import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import org.bukkit.Location;
 import org.bukkit.Material;
