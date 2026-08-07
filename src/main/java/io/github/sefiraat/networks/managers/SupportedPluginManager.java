@@ -205,8 +205,13 @@ public final class SupportedPluginManager {
                 } else {
                     infinityExpansion2Integration = new InfinityExpansion2Integration(ie2);
                     storageAdapters.register(infinityExpansion2Integration);
-                    plugin.getLogger().info("Infinity Expansion 2 storage adapter enabled using "
-                        + infinityExpansion2Integration.getResolvedStorageClassName() + ".");
+                    if (infinityExpansion2Integration.hasResolvedStorageClass()) {
+                        plugin.getLogger().info("Infinity Expansion 2 storage adapter enabled using "
+                            + infinityExpansion2Integration.getResolvedStorageClassName() + ".");
+                    } else {
+                        plugin.getLogger().info("Infinity Expansion 2 storage adapter enabled with lazy runtime discovery. "
+                            + "The storage implementation will be learned from the first IE2 Storage Unit encountered.");
+                    }
                 }
             } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
                 disableIntegration("InfinityExpansion2", exception);

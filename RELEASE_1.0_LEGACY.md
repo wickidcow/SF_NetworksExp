@@ -84,6 +84,8 @@ The optional IE2 bridge supports every storage tier implemented through IE2's sh
 
 Networks reads IE2 cache state but moves items through IE2's real input/output slots. IE2 remains responsible for its own asynchronous cache, blacklist, void-excess, and persistence rules.
 
+The 1.0 runtime hotfix no longer loads the IE2 storage implementation by class name during Networks startup. The adapter registers lazily and learns the storage contract from the first real IE2 storage item encountered. Cache access is optional; if a preview build changes or hides its cache API, Networks falls back to IE2's persisted `stored_amount` value for read-only quantity discovery instead of disabling the integration.
+
 Optional storage support now uses an internal adapter registry so an integration API failure removes only that adapter and leaves native Networks storage operational.
 
 ## Doctor diagnostics

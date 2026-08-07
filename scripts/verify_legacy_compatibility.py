@@ -424,28 +424,34 @@ require('isEnabled("InfinityExpansion2")' in supported_plugins
         and '"=failed"' in supported_plugins,
         "InfinityExpansion2 initialization or detailed Doctor integration states are missing")
 require('net.guizhanss.infinityexpansion2.implementation.items.storage.StorageUnit' in ie2_integration,
-        "InfinityExpansion2 StorageUnit API marker is missing")
+        "InfinityExpansion2 StorageUnit diagnostic marker is missing")
 require('net.guizhanss.infinityexpansion2.InfinityExpansion2' not in supported_plugins
         and 'net.guizhanss.infinityexpansion2.InfinityExpansion2' not in ie2_integration,
         "InfinityExpansion2 must not be gated by one exact plugin main class")
-require('import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;' in ie2_integration
-        and 'import io.github.thebusybiscuit.slimefun4.api.Slimefun;' not in ie2_integration,
-        "InfinityExpansion2 integration must use the cross-core Slimefun implementation package")
-require('getAllSlimefunItems' in ie2_integration
-        and 'findStorageBaseClass' in ie2_integration
-        and 'pluginClassLoader.loadClass' in ie2_integration
-        and 'getResolvedStorageClassName' in supported_plugins,
-        "InfinityExpansion2 unofficial/relocated storage discovery hotfix is missing")
+require('import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;' not in ie2_integration
+        and 'import io.github.thebusybiscuit.slimefun4.api.Slimefun;' not in ie2_integration
+        and 'getAllSlimefunItems' not in ie2_integration,
+        "InfinityExpansion2 runtime discovery must not depend on a startup Slimefun registry scan")
+require('lazy-runtime-discovery' in ie2_integration
+        and 'looksLikeStorageCandidate' in ie2_integration
+        and 'createStorageAccessors(itemClass)' in ie2_integration
+        and 'hasResolvedStorageClass' in supported_plugins
+        and 'first IE2 Storage Unit encountered' in supported_plugins,
+        "InfinityExpansion2 lazy item-instance discovery is missing")
 require('getCaches' in ie2_integration
         and 'getCapacity' in ie2_integration
         and 'getInputSlots' in ie2_integration
         and 'getOutputSlots' in ie2_integration
-        and 'findCache(caches, location)' in ie2_integration
-        and 'POSITION_KEY_CANDIDATES' in ie2_integration
+        and 'persistedSnapshot' in ie2_integration
+        and 'stored_amount' in ie2_integration
+        and 'createPositionKeyFactory' in ie2_integration
         and 'new BlockPosition(' not in ie2_integration
-        and 'import io.github.thebusybiscuit.slimefun4.libraries.dough.blocks.BlockPosition' not in ie2_integration
-        and 'getCacheAccessors(cache.getClass())' in ie2_integration,
-        "InfinityExpansion2 generic storage-unit/cache discovery is missing or directly links a core-specific BlockPosition")
+        and 'import io.github.thebusybiscuit.slimefun4.libraries.dough.blocks.BlockPosition' not in ie2_integration,
+        "InfinityExpansion2 cache/persistence fallback is missing or directly links a core-specific BlockPosition")
+require('pluginClassLoader.loadClass' not in ie2_integration
+        and 'Class.forName(' not in ie2_integration
+        and 'resolveStorageUnitClass' not in ie2_integration,
+        "InfinityExpansion2 must not load its storage implementation by class name during startup")
 require('BlockMenuUtil.pushItem' in ie2_barrel
         and 'BlockMenuUtil.consumeItem' in ie2_barrel
         and 'integration.isStorageUnitItem(incoming)' in ie2_barrel,

@@ -14,6 +14,8 @@
 - Added Control X compensation when a cut block deposit succeeds but block removal fails or cannot be verified.
 - Added a fail-soft internal storage adapter registry and moved Infinity Expansion 2 through that contract.
 - Retained official and relocated/unofficial IE2 storage discovery, empty-unit deposits, slot-based withdrawals, matching, capacity reporting, and nested-unit rejection.
+- Hotfix: changed IE2 discovery to lazy item-instance discovery so preview/unofficial builds are not disabled merely because their `StorageUnit` class cannot be loaded externally by name during Networks startup.
+- Hotfix: made IE2 cache reflection optional with a read-only `stored_amount` persistence fallback; all writes still flow through IE2 menu slots.
 
 ### Drawer database durability
 - Added bounded startup backups for `CargoStorageUnits.db` plus WAL/SHM sidecars.
