@@ -1,5 +1,4 @@
 package com.ytdd9527.networksexpansion.core.items.machines;
-
 import com.balugaq.netex.api.enums.CraftType;
 import com.balugaq.netex.api.enums.FeedbackType;
 import com.balugaq.netex.api.helpers.Icon;
@@ -33,12 +32,10 @@ import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
 public class BlueprintEncoder extends NetworkObject implements CraftTyped, RecipeCompletableWithGuide {
     private static final int[] BACKGROUND = new int[]{
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 15, 17, 18, 20, 24, 25, 27, 28, 29, 33, 36, 37, 38, 39, 40, 41,
@@ -52,7 +49,6 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
     private static final int ITEM_TARGET_DESC_SLOT = 26;
     private static final int ITEM_TARGET_SLOT = 35;
     private static final int CHARGE_COST = 2000;
-
     public BlueprintEncoder(
         @NotNull ItemGroup itemGroup,
         @NotNull SlimefunItemStack item,
@@ -65,7 +61,6 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
         this.getSlotsToDrop().add(BLANK_BLUEPRINT_SLOT);
         this.getSlotsToDrop().add(OUTPUT_SLOT);
     }
-
     @Override
     public void postRegister() {
         new BlockMenuPreset(this.getId(), this.getItemName()) {
@@ -74,11 +69,9 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
             public void init() {
                 drawBackground(BACKGROUND);
                 drawBackground(Icon.BLUEPRINT_BACK_STACK, BLUEPRINT_BACK);
-
                 addItem(ENCODE_SLOT, Icon.ENCODE_STACK, (player, i, itemStack, clickAction) -> false);
                 addItem(ITEM_TARGET_DESC_SLOT, Icon.ITEM_TARGET_DESC_STACK, (player, i, itemStack, clickAction) -> false);
             }
-
             @Override
             public void newInstance(@NotNull BlockMenu menu, @NotNull Block b) {
                 menu.addMenuClickHandler(ENCODE_SLOT, (player, s, itemStack, clickAction) -> {
@@ -96,7 +89,6 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
                     menu.replaceExistingItem(ITEM_TARGET_SLOT, null);
                 }
             }
-
             @Override
             public boolean canOpen(@NotNull Block block, @NotNull Player player) {
                 return player.hasPermission("slimefun.inventory.bypass")
@@ -104,7 +96,6 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
                     && Slimefun.getProtectionManager()
                     .hasPermission(player, block.getLocation(), Interaction.INTERACT_BLOCK));
             }
-
             @Override
             public int[] getSlotsAccessedByItemTransport(ItemTransportFlow flow) {
                 if (flow == ItemTransportFlow.WITHDRAW) {
@@ -113,7 +104,6 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
 
                 return new int[0];
             }
-
             @Override
             public int[] getSlotsAccessedByItemTransport(DirtyChestMenu menu, ItemTransportFlow flow, ItemStack itemStack) {
                 if (flow == ItemTransportFlow.WITHDRAW) return new int[]{OUTPUT_SLOT};
@@ -122,7 +112,6 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
                 if (StackUtils.itemsMatch(itemStack, menu.getItemInSlot(BLANK_BLUEPRINT_SLOT))) {
                     slots.add(BLANK_BLUEPRINT_SLOT);
                 }
-
                 for (int slot : RECIPE_SLOTS) {
                     if (StackUtils.itemsMatch(itemStack, menu.getItemInSlot(slot))) {
                         slots.add(slot);
@@ -135,20 +124,17 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
 
     public boolean tryEncode(@NotNull Player player, @NotNull BlockMenu blockMenu) {
         final NodeDefinition definition = NetworkStorage.getNode(blockMenu.getLocation());
-
         if (definition == null || definition.getNode() == null) {
             sendFeedback(blockMenu.getLocation(), FeedbackType.NO_NETWORK_FOUND);
             player.sendMessage(Lang.getString("messages.feedback.no_network_found"));
             return false;
         }
-
         final NetworkRoot root = definition.getNode().getRoot();
         if (root.getRootPower() < CHARGE_COST) {
             player.sendMessage(Lang.getString("messages.unsupported-operation.encoder.not_enough_power"));
             sendFeedback(blockMenu.getLocation(), FeedbackType.NOT_ENOUGH_POWER);
             return false;
         }
-
         ItemStack blueprint = blockMenu.getItemInSlot(BLANK_BLUEPRINT_SLOT);
         if (blueprint == null || blueprint.getType() == Material.AIR || blueprint.getAmount() <= 0) {
             final ItemStack template = NetworkSlimefunItems.CRAFTING_BLUEPRINT.getItem();
@@ -166,20 +152,17 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
                 return false;
             }
         }
-
         final SlimefunItem blueprintItem = SlimefunItem.getByItem(blueprint);
         if (blueprintItem != null && blueprintItem.isDisabled()) {
             player.sendMessage(Lang.getString("messages.unsupported-operation.encoder.disabled_blueprint"));
             sendFeedback(blockMenu.getLocation(), FeedbackType.DISABLED_BLUEPRINT);
             return false;
         }
-
         if (!isValidBlueprint(blueprintItem)) {
             player.sendMessage(Lang.getString("messages.unsupported-operation.encoder.invalid_blueprint"));
             sendFeedback(blockMenu.getLocation(), FeedbackType.INVALID_BLUEPRINT);
             return false;
         }
-
         final ItemStack[] inputs = new ItemStack[RECIPE_SLOTS.length];
         for (int index = 0; index < RECIPE_SLOTS.length; index++) {
             final ItemStack stackInSlot = blockMenu.getItemInSlot(RECIPE_SLOTS[index]);
@@ -187,14 +170,12 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
                 inputs[index] = ItemStackUtil.getCleanItem(stackInSlot.clone());
             }
         }
-
         ItemStack crafted = null;
         ItemStack[] consumptionRecipe = null;
         ItemStack target = blockMenu.getItemInSlot(ITEM_TARGET_SLOT);
         if (target == null || target.getType() == Material.AIR) {
             target = null;
         }
-
         for (var recipes : CraftType.map().entrySet()) {
             boolean found = false;
             for (Map.Entry<ItemStack[], ItemStack> recipe : recipes.getValue()) {
@@ -205,7 +186,6 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
                 if (target != null && !StackUtils.itemsMatch(candidate, target)) {
                     continue;
                 }
-
                 crafted = candidate.clone();
                 consumptionRecipe = cleanRecipe(recipe.getKey());
                 found = true;
@@ -215,7 +195,6 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
                 break;
             }
         }
-
         if (crafted == null && canTestVanillaRecipe(inputs)) {
             crafted = Bukkit.craftItem(copyRecipe(inputs), player.getWorld(), player);
             consumptionRecipe = new ItemStack[RECIPE_SLOTS.length];
@@ -225,7 +204,6 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
                 }
             }
         }
-
         if (crafted == null
             || crafted.getType() == Material.AIR
             || crafted.getAmount() <= 0
@@ -235,14 +213,12 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
             sendFeedback(blockMenu.getLocation(), FeedbackType.INVALID_RECIPE);
             return false;
         }
-
         final SlimefunItem outputItem = SlimefunItem.getByItem(crafted);
         if (outputItem != null && outputItem.isDisabled()) {
             player.sendMessage(Lang.getString("messages.unsupported-operation.encoder.disabled_output"));
             sendFeedback(blockMenu.getLocation(), FeedbackType.DISABLED_OUTPUT);
             return false;
         }
-
         final ItemStack encodedBlueprint = StackUtils.getAsQuantity(blueprint, 1);
         blueprintSetter(encodedBlueprint, copyRecipe(consumptionRecipe), crafted.clone());
         if (!BlockMenuUtil.fits(blockMenu, encodedBlueprint, OUTPUT_SLOT)) {
@@ -250,7 +226,6 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
             sendFeedback(blockMenu.getLocation(), FeedbackType.OUTPUT_FULL);
             return false;
         }
-
         // Commit only after all validation and capacity checks have succeeded.
         BlockMenuUtil.consumeItem(blockMenu, BLANK_BLUEPRINT_SLOT, 1, false);
         for (int index = 0; index < RECIPE_SLOTS.length; index++) {
@@ -260,7 +235,6 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
             }
             BlockMenuUtil.consumeItem(blockMenu, RECIPE_SLOTS[index], Math.max(1, required.getAmount()), true);
         }
-
         final ItemStack outputRemainder = BlockMenuUtil.pushItem(blockMenu, encodedBlueprint, OUTPUT_SLOT);
         if (outputRemainder != null && outputRemainder.getType() != Material.AIR && outputRemainder.getAmount() > 0) {
             NetworkTransferUtils.rollbackNetworkWithdrawal(
@@ -270,7 +244,6 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
                 blockMenu.getLocation(),
                 "blueprint output commit");
         }
-
         // Keep the encoder stocked without reserving an entire stack before the craft commits.
         final ItemStack remainingBlueprints = blockMenu.getItemInSlot(BLANK_BLUEPRINT_SLOT);
         if (remainingBlueprints == null
@@ -285,13 +258,11 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
                 template.getMaxStackSize(),
                 BLANK_BLUEPRINT_SLOT);
         }
-
         blockMenu.markDirty();
         root.removeRootPower(CHARGE_COST);
         sendFeedback(blockMenu.getLocation(), FeedbackType.SUCCESS);
         return true;
     }
-
     private static ItemStack[] cleanRecipe(ItemStack[] recipe) {
         final ItemStack[] copy = new ItemStack[recipe.length];
         for (int index = 0; index < recipe.length; index++) {
@@ -301,7 +272,6 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
         }
         return copy;
     }
-
     private static ItemStack[] copyRecipe(ItemStack[] recipe) {
         final ItemStack[] copy = new ItemStack[recipe.length];
         for (int index = 0; index < recipe.length; index++) {
@@ -309,7 +279,6 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
         }
         return copy;
     }
-
     private static boolean hasExactIngredients(BlockMenu menu, ItemStack[] recipe) {
         for (int index = 0; index < RECIPE_SLOTS.length; index++) {
             final ItemStack required = index < recipe.length ? recipe[index] : null;
@@ -320,7 +289,6 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
             final boolean suppliedEmpty = supplied == null
                 || supplied.getType() == Material.AIR
                 || supplied.getAmount() <= 0;
-
             if (requiredEmpty || suppliedEmpty) {
                 if (requiredEmpty != suppliedEmpty) {
                     return false;
@@ -335,7 +303,6 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
         }
         return true;
     }
-
     public void blueprintSetter(ItemStack itemStack, ItemStack @NotNull [] inputs, ItemStack crafted) {
         craftType().blueprintSetter(itemStack, inputs, crafted);
     }
@@ -347,12 +314,11 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
     public Set<Map.Entry<ItemStack[], ItemStack>> getRecipeEntries() {
         return craftType().getRecipeEntries();
     }
-
     public boolean testRecipe(CraftType craftType, ItemStack[] inputs, ItemStack[] recipe) {
         return craftType.testRecipe(inputs, recipe);
     }
     public boolean canTestVanillaRecipe(ItemStack[] inputs) {
-        return false;
+        return true;
     }
 
     @Override
