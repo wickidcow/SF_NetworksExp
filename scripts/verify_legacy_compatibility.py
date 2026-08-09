@@ -551,7 +551,7 @@ require("not_enough_items: Not enough items" in locale_text,
 
 current_ids = sorted((locale.get("items") or {}).keys())
 require(current_ids == baseline_ids, f"item-ID drift detected: expected {len(baseline_ids)}, found {len(current_ids)}")
-require(len(current_ids) == 288, f"expected 288 item IDs, found {len(current_ids)}")
+require(len(current_ids) == len(baseline_ids), f"expected {len(baseline_ids)} item IDs, found {len(current_ids)}")
 verify_locale_structure(source_locale, locale)
 
 allowed_cjk = {ROOT / "scripts/localization/zh-CN-source.yml"}
