@@ -8,6 +8,9 @@ import sys
 import zipfile
 import yaml
 
+ROOT = Path(__file__).resolve().parents[1]
+ITEM_ID_BASELINE = ROOT / "compatibility" / "item-ids-2.1.111.txt"
+
 FORBIDDEN_PREFIXES = (
     # Slimefun core families must always be supplied by the server.
     "io/github/thebusybiscuit/slimefun4/",
@@ -42,6 +45,22 @@ def read_yaml(archive: zipfile.ZipFile, name: str):
         raise SystemExit(f"invalid YAML in {name}: {exc}") from exc
 
 
+def read_item_id_baseline() -> list[str]:
+    if not ITEM_ID_BASELINE.is_file():
+        raise SystemExit(f"item-ID baseline is missing: {ITEM_ID_BASELINE.relative_to(ROOT)}")
+
+    baseline = sorted(
+        line.strip()
+        for line in ITEM_ID_BASELINE.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    )
+    if not baseline:
+        raise SystemExit("item-ID baseline is empty")
+    if len(baseline) != len(set(baseline)):
+        raise SystemExit("item-ID baseline contains duplicate IDs")
+    return baseline
+
+
 def main() -> int:
     if len(sys.argv) not in (2, 3):
         print("usage: verify_universal_jar.py <networks.jar> [expected-version]", file=sys.stderr)
@@ -53,15 +72,19 @@ def main() -> int:
         print(f"JAR not found: {jar}", file=sys.stderr)
         return 1
 
+    baseline_ids = read_item_id_baseline()
+
     try:
         with zipfile.ZipFile(jar) as archive:
             names = set(archive.namelist())
+
             for required in REQUIRED_ENTRIES:
                 if required not in names:
                     raise SystemExit(f"required JAR entry is missing: {required}")
 
             forbidden = sorted(
-                name for name in names
+                name
+                for name in names
                 if name.endswith(".class") and name.startswith(FORBIDDEN_PREFIXES)
             )
             if forbidden:
@@ -87,7 +110,10 @@ def main() -> int:
 
             config_version = str(config.get("config-version", ""))
             if config_version.lower() != "2.1.112-legacy-1.0":
-                raise SystemExit(f"config.yml is not the 1.0 Legacy configuration: {config_version!r}")
+                raise SystemExit(
+                    f"config.yml is not the 1.0 Legacy configuration: {config_version!r}"
+                )
+
             database = config.get("database") or {}
             startup_backups = database.get("startup-backups") or {}
             if database.get("integrity-check") is not True or database.get("recovery-journal") is not True:
@@ -96,15 +122,24 @@ def main() -> int:
                 raise SystemExit("1.0 Legacy startup database backup defaults are missing")
 
             item_ids = sorted((locale.get("items") or {}).keys())
-            if len(item_ids) != 288:
-                raise SystemExit(f"expected 288 preserved item IDs, found {len(item_ids)}")
+            if item_ids != baseline_ids:
+                missing = sorted(set(baseline_ids) - set(item_ids))
+                unexpected = sorted(set(item_ids) - set(baseline_ids))
+                details = [
+                    f"item-ID drift detected: expected {len(baseline_ids)}, found {len(item_ids)}"
+                ]
+                if missing:
+                    details.append("missing IDs: " + ", ".join(missing[:20]))
+                if unexpected:
+                    details.append("unexpected IDs: " + ", ".join(unexpected[:20]))
+                raise SystemExit("\n".join(details))
 
     except zipfile.BadZipFile as exc:
         print(f"invalid JAR/ZIP file: {jar}: {exc}", file=sys.stderr)
         return 1
 
     print(
-        f"Universal JAR verification passed: {jar.name}, 288 item IDs, "
+        f"Universal JAR verification passed: {jar.name}, {len(baseline_ids)} item IDs, "
         "no bundled Slimefun or optional-plugin API classes."
     )
     return 0
