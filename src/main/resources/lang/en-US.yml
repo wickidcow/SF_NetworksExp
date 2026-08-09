@@ -1108,6 +1108,11 @@ items:
     lore:
     - A Networks administration tool for
     - configuring and inspecting devices.
+  NTW_EXPANSION_WORLD_EDIT_AXE:
+    name: Network Expansion World Edit Axe
+    lore:
+    - A Networks administration tool for
+    - selecting and editing network areas.
   NTW_EXPANSION_ADVANCED_IMPORT:
     name: Network Expansion Advanced Importer
     lore:
