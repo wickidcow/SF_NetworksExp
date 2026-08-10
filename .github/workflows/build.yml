@@ -11,6 +11,9 @@ on:
 permissions:
   contents: write
 
+env:
+  LEGACY_ARTIFACT_VERSION: "1.0.0"
+
 jobs:
   compatibility:
     name: Gate universal release on all supported cores
@@ -91,23 +94,23 @@ jobs:
       - name: Verify universal JAR contents
         run: python3 scripts/verify_universal_jar.py "$NETWORKS_JAR" "2.1.112-Legacy-1.0"
 
-      - name: Stage SF_NetworksLegacy.jar
+      - name: Stage versioned Legacy JAR
         shell: bash
         run: |
           set -euo pipefail
           rm -rf dist
           mkdir -p dist
-          cp "$NETWORKS_JAR" dist/SF_NetworksLegacy.jar
-          test -s dist/SF_NetworksLegacy.jar
-          sha256sum dist/SF_NetworksLegacy.jar
+          OUTPUT="dist/SF_Networks_Legacy_v${LEGACY_ARTIFACT_VERSION}.jar"
+          cp "$NETWORKS_JAR" "$OUTPUT"
+          test -s "$OUTPUT"
+          sha256sum "$OUTPUT"
 
-      - name: Upload SF_NetworksLegacy.jar
+      - name: Upload direct versioned Legacy JAR
         uses: actions/upload-artifact@v7
         with:
-          name: SF_NetworksLegacy
-          path: dist/SF_NetworksLegacy.jar
+          path: dist/SF_Networks_Legacy_v${{ env.LEGACY_ARTIFACT_VERSION }}.jar
+          archive: false
           if-no-files-found: error
-          compression-level: 0
 
       - name: Upload compatibility manifest
         uses: actions/upload-artifact@v7
@@ -123,7 +126,7 @@ jobs:
         shell: bash
         run: |
           TAG="$GITHUB_REF_NAME"
-          JAR="dist/SF_NetworksLegacy.jar"
+          JAR="dist/SF_Networks_Legacy_v${LEGACY_ARTIFACT_VERSION}.jar"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$JAR" --clobber
           else
