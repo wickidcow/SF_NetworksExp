@@ -12,7 +12,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Thread-safe amount state for Network Quantum Storage. */
+/** Thread-safe amount and stored-item state for Network Quantum Storage. */
 @SuppressWarnings("deprecation")
 public class QuantumCache extends ItemStackCache {
 
@@ -136,9 +136,20 @@ public class QuantumCache extends ItemStackCache {
     }
 
     @Nullable
-    public ItemStack withdrawItem() {
+    public synchronized ItemStack withdrawItem() {
         final ItemStack stored = this.getItemStack();
         return stored == null ? null : withdrawItem(stored.getMaxStackSize());
+    }
+
+    @Override
+    @Nullable
+    public synchronized ItemStack getItemStack() {
+        return super.getItemStack();
+    }
+
+    @Override
+    public synchronized void setItemStack(@Nullable ItemStack itemStack) {
+        super.setItemStack(itemStack);
     }
 
     @Nullable
