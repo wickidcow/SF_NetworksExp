@@ -518,7 +518,7 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
         StorageCacheUtils.setData(location, "quickTransferMode", mode.name());
     }
 
-    private static void quickTransfer(
+    private static synchronized void quickTransfer(
         @NotNull BlockMenu blockMenu, @NotNull Location location, @NotNull Player player) {
         final ItemStack itemStack = blockMenu.getItemInSlot(QUANTUM_SLOT);
         if (itemStack == null || itemStack.getType() == Material.AIR) {

@@ -183,38 +183,40 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
     @ParametersAreNonnullByDefault
     @Nullable
     public static ItemStack getItemStack(@NotNull QuantumCache cache, @NotNull BlockMenu blockMenu, int amount) {
-        if (cache.getAmountLong() < amount) {
-            // Storage has no content or not enough, mix and match!
-            ItemStack output = blockMenu.getItemInSlot(OUTPUT_SLOT);
-            ItemStack fetched = cache.withdrawItem(amount);
+        synchronized (cache) {
+            if (cache.getAmountLong() < amount) {
+                // Storage has no content or not enough, mix and match!
+                ItemStack output = blockMenu.getItemInSlot(OUTPUT_SLOT);
+                ItemStack fetched = cache.withdrawItem(amount);
 
-            if (output != null && output.getType() != Material.AIR && StackUtils.itemsMatch(cache, output)) {
-                // We have an output item we can use also
-                if (fetched == null || fetched.getType() == Material.AIR) {
-                    // Storage is totally empty - just use output slot
-                    fetched = output.clone();
-                    if (fetched.getAmount() > amount) {
-                        fetched.setAmount(amount);
+                if (output != null && output.getType() != Material.AIR && StackUtils.itemsMatch(cache, output)) {
+                    // We have an output item we can use also
+                    if (fetched == null || fetched.getType() == Material.AIR) {
+                        // Storage is totally empty - just use output slot
+                        fetched = output.clone();
+                        if (fetched.getAmount() > amount) {
+                            fetched.setAmount(amount);
+                        }
+                        output.setAmount(output.getAmount() - fetched.getAmount());
+                    } else {
+                        // Storage has content, lets add on top of it
+                        int additional = Math.min(amount - fetched.getAmount(), output.getAmount());
+                        output.setAmount(output.getAmount() - additional);
+                        fetched.setAmount(fetched.getAmount() + additional);
                     }
-                    output.setAmount(output.getAmount() - fetched.getAmount());
-                } else {
-                    // Storage has content, lets add on top of it
-                    int additional = Math.min(amount - fetched.getAmount(), output.getAmount());
-                    output.setAmount(output.getAmount() - additional);
-                    fetched.setAmount(fetched.getAmount() + additional);
                 }
+                if (output != null && output.getType() != Material.AIR) {
+                    blockMenu.markDirty();
+                }
+                syncBlock(blockMenu.getLocation(), cache);
+                return fetched;
+            } else {
+                // Netex - wtf reversed syncBlock
+                // Storage has everything we need
+                ItemStack fetched = cache.withdrawItem(amount);
+                syncBlock(blockMenu.getLocation(), cache);
+                return fetched;
             }
-            if (output != null && output.getType() != Material.AIR) {
-                blockMenu.markDirty();
-            }
-            syncBlock(blockMenu.getLocation(), cache);
-            return fetched;
-        } else {
-            // Netex - wtf reversed syncBlock
-            // Storage has everything we need
-            ItemStack fetched = cache.withdrawItem(amount);
-            syncBlock(blockMenu.getLocation(), cache);
-            return fetched;
         }
     }
 

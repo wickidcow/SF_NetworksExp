@@ -260,13 +260,13 @@ public class StorageUnitData {
         }
     }
 
-    public void removeItem(int itemId) {
+    public synchronized void removeItem(int itemId) {
         if (storedItems.remove(itemId) != null) {
             DataStorage.deleteStoredItem(id, itemId);
         }
     }
 
-    public void setItemAmount(int itemId, int amount) {
+    public synchronized void setItemAmount(int itemId, int amount) {
         if (amount < 0) {
             // Directly remove
             removeItem(itemId);
@@ -279,7 +279,7 @@ public class StorageUnitData {
         }
     }
 
-    public void removeAmount(int itemId, int amount) {
+    public synchronized void removeAmount(int itemId, int amount) {
         ItemContainer container = storedItems.get(itemId);
         if (container != null) {
             container.removeAmount(amount);
@@ -449,7 +449,7 @@ public class StorageUnitData {
         return result;
     }
 
-    public void depositItemStacks0(
+    public synchronized void depositItemStacks0(
         @NotNull Location accessor, @NotNull Map<ItemStack, Long> itemsToDeposit, boolean contentLocked) {
         for (Map.Entry<ItemStack, Long> entry : itemsToDeposit.entrySet()) {
             if (entry.getValue() > Integer.MAX_VALUE) {
@@ -468,7 +468,7 @@ public class StorageUnitData {
         }
     }
 
-    public void depositItemStack0(
+    public synchronized void depositItemStack0(
         @NotNull Location accessor, @NotNull Map.Entry<ItemStack, Integer> entry, boolean contentLocked) {
         ItemStack item = StackUtils.getAsQuantity(entry.getKey(), entry.getValue());
         depositItemStack0(accessor, item, contentLocked);
@@ -476,21 +476,21 @@ public class StorageUnitData {
         entry.setValue(leftover);
     }
 
-    public void depositItemStack0(
+    public synchronized void depositItemStack0(
         @NotNull Location accessor, @NotNull Map<ItemStack, Integer> itemsToDeposit, boolean contentLocked) {
         for (Map.Entry<ItemStack, Integer> entry : itemsToDeposit.entrySet()) {
             depositItemStack0(accessor, entry, contentLocked);
         }
     }
 
-    public void depositItemStack0(
+    public synchronized void depositItemStack0(
         @NotNull Location accessor, @NotNull ItemStack @NotNull [] itemsToDeposit, boolean contentLocked) {
         for (ItemStack item : itemsToDeposit) {
             depositItemStack0(accessor, item, contentLocked);
         }
     }
 
-    public void depositItemStack0(
+    public synchronized void depositItemStack0(
         @NotNull Location accessor, @Nullable ItemStack itemsToDeposit, boolean contentLocked, boolean force) {
         if (itemsToDeposit == null
             || itemsToDeposit.getType().isAir()
@@ -510,7 +510,7 @@ public class StorageUnitData {
         }
     }
 
-    public void depositItemStack0(@NotNull Location accessor, ItemStack item, boolean contentLocked) {
+    public synchronized void depositItemStack0(@NotNull Location accessor, ItemStack item, boolean contentLocked) {
         depositItemStack0(accessor, item, contentLocked, false);
     }
 
