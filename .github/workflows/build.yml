@@ -3,12 +3,13 @@ name: Build Networks Universal
 on:
   push:
     branches: [master]
+    tags: ['v*']
   pull_request:
     branches: [master]
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   compatibility:
@@ -90,26 +91,41 @@ jobs:
       - name: Verify universal JAR contents
         run: python3 scripts/verify_universal_jar.py "$NETWORKS_JAR" "2.1.112-Legacy-1.0"
 
-      - name: Stage flat release artifact
+      - name: Stage SF_NetworksLegacy.jar
         shell: bash
         run: |
-          rm -rf release-artifact
-          mkdir -p release-artifact
+          set -euo pipefail
+          rm -rf dist
+          mkdir -p dist
+          cp "$NETWORKS_JAR" dist/SF_NetworksLegacy.jar
+          test -s dist/SF_NetworksLegacy.jar
+          sha256sum dist/SF_NetworksLegacy.jar
 
-          RELEASE_NAME="Networks-Legacy-2.1.112-1.0.jar"
-          cp "$NETWORKS_JAR" "release-artifact/$RELEASE_NAME"
-          cp compatibility-manifest.txt release-artifact/
-
-          test -f "release-artifact/$RELEASE_NAME"
-          test -f release-artifact/compatibility-manifest.txt
-
-          echo "Release artifact ZIP root will contain:"
-          find release-artifact -maxdepth 1 -type f -printf ' - %f\n' | sort
-
-      - name: Upload universal Networks JAR
+      - name: Upload SF_NetworksLegacy.jar
         uses: actions/upload-artifact@v7
         with:
-          name: Networks-Legacy-2.1.112-1.0
-          path: "release-artifact/*"
+          name: SF_NetworksLegacy
+          path: dist/SF_NetworksLegacy.jar
           if-no-files-found: error
           compression-level: 0
+
+      - name: Upload compatibility manifest
+        uses: actions/upload-artifact@v7
+        with:
+          name: Networks-compatibility-manifest
+          path: compatibility-manifest.txt
+          if-no-files-found: error
+
+      - name: Publish direct JAR release asset
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          TAG="$GITHUB_REF_NAME"
+          JAR="dist/SF_NetworksLegacy.jar"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$JAR" --clobber
+          else
+            gh release create "$TAG" "$JAR" --generate-notes --title "Networks Legacy $TAG"
+          fi
