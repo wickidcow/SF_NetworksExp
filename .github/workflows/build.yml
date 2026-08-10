@@ -20,8 +20,9 @@ jobs:
     uses: ./.github/workflows/compatibility.yml
 
   build:
-    name: Build universal Networks JAR
+    name: Build Networks Legacy JAR
     needs: compatibility
+    if: always()
     runs-on: ubuntu-latest
 
     steps:
@@ -120,7 +121,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish direct JAR release asset
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && needs.compatibility.result == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
