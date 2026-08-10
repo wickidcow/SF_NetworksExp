@@ -53,6 +53,9 @@ jobs:
           java-version: "25"
           cache: gradle
 
+      # build.gradle.kts intentionally keeps the internal Gradle artifact identity
+      # Networks-Legacy-2.1.112-1.0.jar. The player-facing copy is renamed later
+      # to SF_Networks_Legacy_v1.0.0.jar without changing plugin/runtime identity.
       - name: Verify Networks source contract
         run: python3 scripts/verify_legacy_compatibility.py
 
