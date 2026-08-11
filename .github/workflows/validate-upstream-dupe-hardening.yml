@@ -59,7 +59,7 @@ jobs:
           chmod +x gradlew
           ./gradlew clean test shadowJar --no-daemon -PslimefunCoreJar="$SLIMEFUN_CORE_JAR"
 
-      - name: Verify Java 21 bytecode
+      - name: Verify Java 21 bytecode and universal JAR
         shell: bash
         run: |
           NETWORKS_JAR="$(find build/libs -name 'Networks-Legacy-*.jar' ! -name '*-sources.jar' -print -quit)"
@@ -67,14 +67,21 @@ jobs:
           python3 scripts/verify_java21_bytecode.py "$NETWORKS_JAR"
           python3 scripts/verify_universal_jar.py "$NETWORKS_JAR" '2.1.112-Legacy-1.0'
 
-      - name: Record successful validation
+      - name: Record validation result
+        if: always()
         shell: bash
         run: |
-          printf 'Validated commit: %s\nSlimefun Legacy: %s\n' \
+          CORE_SHA="unavailable"
+          if [[ -d .ci/slimefun-core/.git ]]; then
+            CORE_SHA="$(git -C .ci/slimefun-core rev-parse HEAD)"
+          fi
+          printf 'Result: %s\nRun ID: %s\nValidated commit: %s\nSlimefun Legacy: %s\n' \
+            '${{ job.status }}' \
+            "$GITHUB_RUN_ID" \
             "$(git rev-parse HEAD)" \
-            "$(git -C .ci/slimefun-core rev-parse HEAD)" > .ci-hardening-validation-success
+            "$CORE_SHA" > .ci-hardening-validation-result
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add .ci-hardening-validation-success
-          git commit -m 'Record quantum hardening validation'
+          git add .ci-hardening-validation-result
+          git commit -m 'Record quantum hardening validation result'
           git push origin HEAD:master
