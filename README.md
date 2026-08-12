@@ -44,10 +44,11 @@ Do **not** use `/reload` when changing Slimefun or Networks JARs.
 Networks Legacy stands on work from several branches of the Networks family:
 
 - **Sefiraat** — creator of the original **Networks** project and its classic English gameplay/wording.
-- **Sefiraat/Networks** — original Networks project lineage.
-- **SlimefunGuguProject contributors** — later Slimefun compatibility and maintenance work.
-- **ytdd9527, balugaq, yitoudaidai, tinalness, and other contributors** — important NetworksExpansion development and maintenance.
-- **NetworksExpansion community forks** — additional fixes and compatibility ideas reviewed during maintenance.
+- **Sefiraat/Networks** — original source repository and root of this fork chain.
+- **SlimefunGuguProject contributors** — later Slimefun compatibility and maintenance work used throughout the wider Networks family.
+- **ytdd9527/NetworksExpansion** — the **immediate upstream fork** from which `wickidcow/SF_NetworksExp` was created.
+- **ytdd9527, balugaq, yitoudaidai, tinalness, and other NetworksExpansion contributors** — important later development and maintenance.
+- **Other Networks/NetworksExpansion community forks** — additional fixes and compatibility ideas reviewed during maintenance.
 - **wickidcow / Slimefun Legacy** — current preservation, storage-safety, and compatibility maintenance for modern servers and albionmc.com.
 
 This fork intentionally preserves those credits and does not claim ownership of the original Networks design or community work.
@@ -66,7 +67,7 @@ The software is supplied **without warranty** as described by GPLv3.
 
 Networks, Slimefun Legacy, and this maintenance fork are independent community projects. They are not sponsored, endorsed, approved, or operated by Mojang Studios or Microsoft. Minecraft-related names, brands, and assets remain the property of their respective rights holders.
 
-This fork is also not represented as an official release of Sefiraat, the SlimefunGuguProject, NetworksExpansion contributors, or the original Slimefun team unless explicitly stated by those parties.
+This fork is also not represented as an official release of Sefiraat, the SlimefunGuguProject, ytdd9527, NetworksExpansion contributors, or the original Slimefun team unless explicitly stated by those parties.
 
 ---
 
