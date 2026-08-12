@@ -1,68 +1,77 @@
-# Networks Legacy
+<div align="center">
 
-**Networks Legacy** is an English-first, actively maintained continuation of the original **Networks** addon. Slimefun Legacy is the primary and release-blocking target. The same source is also compiled against Slimefun United and Slimefun Gugu before a universal release artifact can be published.
+# 🌐📦 Networks — Slimefun Legacy
 
-The fork preserves the Bukkit plugin name `Networks`, the main class, Java package names, Slimefun item IDs, persistent-data namespaces, placed machines, and the existing `CargoStorageUnits.db` location so established worlds can upgrade without an intentional format migration.
+**Storage networks, remote access, automation, crafting, and high-capacity item movement for Slimefun.**
 
-## Compatibility
+![Slimefun Legacy](https://img.shields.io/badge/Slimefun-Legacy-6bd425?style=for-the-badge)
+![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue?style=for-the-badge)
+![Maintained for AlbionMC.com](https://img.shields.io/badge/Maintained%20for-albionmc.com-7b68ee?style=for-the-badge)
 
-| Component | Support |
-|---|---|
-| Slimefun Legacy | Primary and release-blocking (`master`) |
-| Slimefun United | Required compatibility target (`dev`) |
-| Slimefun Gugu | Required compatibility target (`master`) |
-| Minecraft | 1.21.11 and newer |
-| Java runtime | 21 and newer |
-| Paper / Purpur | Supported target |
-| Folia | Not claimed; cross-region network transactions need a separate design audit |
+</div>
 
-Unknown Slimefun cores fail closed by default. The override in `config.yml` is intended only for controlled testing.
+> [!IMPORTANT]
+> Networks Legacy is an **unofficial community-maintained continuation** with Slimefun Legacy as its primary target. It is developed and maintained for use on **albionmc.com**, while preserving the Networks/NetworksExpansion project history and saved-world identity.
 
-## 1.0 Legacy: production stability release
+## 🌐 What does Networks do?
 
-`2.1.112-Legacy-1.0` consolidates the maintained fork's compatibility and safety work into the first 1.0 Legacy release.
+Networks creates a powerful Slimefun **digital storage and logistics system**. Players can connect storage, move items through network nodes, access inventories through Grids, use Drawers and Quantum Storage, import/export items, automate crafting, and build larger Cargo-style logistics systems.
 
-- Gates one universal JAR on Slimefun Legacy, Slimefun United, and Slimefun Gugu.
-- Preserves the guide layout, all 288 item IDs, recipes, namespaces, placed blocks, and the existing drawer database schema.
-- Adds transfer rollback and post-deposit compensation diagnostics, including Control X block-cut compensation.
-- Adds transactional drawer amount snapshots, startup database backups, SQLite integrity checking, and an idempotent recovery journal.
-- Retains controller circuit breakers, atomic node registration, bounded Doctor maintenance, and chunk-lifecycle cleanup.
-- Supports official and relocated/unofficial Infinity Expansion 2 storage units through a fail-soft optional adapter.
-- Expands `/networks doctor` with database, transfer, controller, registry, and storage-adapter health details.
+The maintained fork preserves the Bukkit plugin name `Networks`, existing Slimefun item IDs, persistent-data namespaces, placed machines, and established storage/database locations wherever practical so existing worlds can upgrade without an intentional format reset.
 
-See [`RELEASE_1.0_LEGACY.md`](RELEASE_1.0_LEGACY.md) and [`RUNTIME_STABILITY.md`](RUNTIME_STABILITY.md) for the preserved-data contract and qualification checklist.
+## 🛡️ Slimefun Legacy maintenance
 
-## Building
+Current stability work includes:
 
-Compile against the exact Slimefun core JAR being tested:
+- Slimefun Legacy as the primary/release-blocking target;
+- compatibility checks against other Slimefun API-family implementations where useful;
+- preservation of hundreds of existing item IDs, recipes, namespaces, and placed blocks;
+- transfer rollback and post-deposit compensation diagnostics;
+- transactional drawer amount snapshots;
+- startup database backups and SQLite integrity checks;
+- recovery journaling for critical storage operations;
+- controller circuit breakers and bounded Doctor maintenance;
+- chunk-lifecycle cleanup and safer node registration;
+- optional Infinity Expansion 2 storage-unit integration through a fail-soft adapter;
+- `/networks doctor` diagnostics for databases, transfers, controllers, registries, and storage adapters.
 
-```bash
-./gradlew clean build -PslimefunCoreJar=/path/to/Slimefun.jar
-```
+Back up the complete server before replacing an established Networks build. Test Controllers, Grids, Drawers, storage units, Importers/Exporters, Pushers/Grabbers, wireless links, blueprints, autocrafters, chunk unload/reload, and a clean restart before moving a new build into production.
 
-Supported aliases are `SLIMEFUN_CORE_JAR`, `slimefunLegacyJar`, `SLIMEFUN_LEGACY_JAR`, and `SLIMEFUN_COMPATIBILITY_JAR`.
+Do **not** use `/reload` when changing Slimefun or Networks JARs.
 
-The GitHub Actions flow performs these release gates:
+## ❤️ Credits & project lineage
 
-1. Build exact current JARs from Slimefun Legacy, Slimefun United, and Slimefun Gugu.
-2. Compile and test the same Networks source against each exact JAR on Java 21.
-3. Verify the static compatibility contract and Java 21 bytecode.
-4. Verify that the shaded artifact contains Networks and its intended libraries, but no Slimefun core or optional-plugin APIs.
-5. Build/upload the universal JAR from the Legacy compiler target only after all three compatibility targets pass.
+Networks Legacy stands on work from several branches of the Networks family:
 
-## Upgrade safety
+- **Sefiraat** — creator of the original **Networks** project and its classic English gameplay/wording.
+- **Sefiraat/Networks** — original Networks project lineage.
+- **SlimefunGuguProject contributors** — later Slimefun compatibility and maintenance work.
+- **ytdd9527, balugaq, yitoudaidai, tinalness, and other contributors** — important NetworksExpansion development and maintenance.
+- **NetworksExpansion community forks** — additional fixes and compatibility ideas reviewed during maintenance.
+- **wickidcow / Slimefun Legacy** — current preservation, storage-safety, and compatibility maintenance for modern servers and albionmc.com.
 
-Back up the full server before replacing an existing Networks build. Test a copy of the world first, including old Controllers, Grids, Drawers, Quantum Storage, Importers, Exporters, Pushers, Grabbers, wireless/P2P links, encoded blueprints, automatic crafters, chunk unload/reload, a clean restart, and `/networks doctor scan`.
+This fork intentionally preserves those credits and does not claim ownership of the original Networks design or community work.
 
-Do not use `/reload`. Perform a complete stop and start when changing Slimefun or Networks JARs.
+## 📜 GNU General Public License v3.0
 
-See [`RELEASE_1.0_LEGACY.md`](RELEASE_1.0_LEGACY.md) for the current release scope and validation order.
+Networks Legacy is licensed under the **GNU General Public License v3.0 (GPLv3)**. See `LICENSE` for the complete terms.
 
-## Credits
+If you distribute Networks or a modified GPL-covered version, comply with GPLv3, including preserving applicable notices, identifying modified versions, licensing covered modified source under GPLv3, and making the required Corresponding Source available when distributing object code.
 
-- **Sefiraat** — original Networks project and classic English wording
-- **SlimefunGuguProject contributors** — continued compatibility work
-- **ytdd9527, balugaq, yitoudaidai, tinalness, and contributors** — NetworksExpansion development
-- **wickidcow** — Slimefun Legacy maintenance and Albion compatibility
+The software is supplied **without warranty** as described by GPLv3.
 
-Networks Legacy remains licensed under the GNU General Public License v3.0.
+## ⚖️ Independence & trademark notice
+
+**NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.**
+
+Networks, Slimefun Legacy, and this maintenance fork are independent community projects. They are not sponsored, endorsed, approved, or operated by Mojang Studios or Microsoft. Minecraft-related names, brands, and assets remain the property of their respective rights holders.
+
+This fork is also not represented as an official release of Sefiraat, the SlimefunGuguProject, NetworksExpansion contributors, or the original Slimefun team unless explicitly stated by those parties.
+
+---
+
+<div align="center">
+
+**🌐 Connect it. Store it. Craft it. Move it. 📦**
+
+</div>
