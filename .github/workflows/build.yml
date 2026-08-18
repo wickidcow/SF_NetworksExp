@@ -2,10 +2,10 @@ name: Build Networks Universal
 
 on:
   push:
-    branches: [master]
+    branches: ['**']
     tags: ['v*']
   pull_request:
-    branches: [master]
+    branches: ['**']
   workflow_dispatch:
 
 permissions:
@@ -91,6 +91,12 @@ jobs:
           cp "$NETWORKS_JAR" "dist/${OUTPUT_NAME}"
           test -s "dist/${OUTPUT_NAME}"
           sha256sum "dist/${OUTPUT_NAME}"
+      - name: Upload raw JAR artifact
+        uses: actions/upload-artifact@v7
+        with:
+          path: dist/${{ env.OUTPUT_NAME }}
+          archive: false
+          if-no-files-found: error
       - name: Publish raw JAR release asset
         if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.compatibility.result == 'success'
         env:
