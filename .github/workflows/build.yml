@@ -43,6 +43,7 @@ jobs:
             echo "Branch: master"
             echo "Commit: $(git -C .ci/slimefun-core rev-parse HEAD)"
           } | tee compatibility-manifest.txt
+          cat compatibility-manifest.txt >> "$GITHUB_STEP_SUMMARY"
       - name: Set up Java 25 for Slimefun Legacy
         uses: actions/setup-java@v5
         with:
@@ -90,18 +91,6 @@ jobs:
           cp "$NETWORKS_JAR" "dist/${OUTPUT_NAME}"
           test -s "dist/${OUTPUT_NAME}"
           sha256sum "dist/${OUTPUT_NAME}"
-      - name: Upload CI artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: SF_NetworksExp${{ env.LEGACY_ARTIFACT_VERSION }}
-          path: dist/${{ env.OUTPUT_NAME }}
-          if-no-files-found: error
-      - name: Upload compatibility manifest
-        uses: actions/upload-artifact@v7
-        with:
-          name: Networks-compatibility-manifest
-          path: compatibility-manifest.txt
-          if-no-files-found: error
       - name: Publish raw JAR release asset
         if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.compatibility.result == 'success'
         env:
