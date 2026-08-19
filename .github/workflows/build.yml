@@ -15,6 +15,9 @@ env:
   LEGACY_ARTIFACT_VERSION: "1.0.0"
   OUTPUT_NAME: "SF_NetworksExp1.0.0.jar"
 
+# Gradle's internal shaded output remains Networks-Legacy-2.1.112-1.0.jar.
+# CI stages that internal JAR as the public raw artifact SF_NetworksExp1.0.0.jar.
+
 jobs:
   compatibility:
     name: Gate universal release on all supported cores
