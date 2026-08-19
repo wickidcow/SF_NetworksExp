@@ -46,7 +46,7 @@ repositories {
     maven("https://repo.bg-software.com/repository/api/")
     maven("https://repo.rosewooddev.io/repository/public/")
     maven("https://hub.spigotmc.org/nexus/content/repositories/snapshots/")
-    maven("https://s01.oss.sonatype.org/repositories/snapshots/")
+    maven("https://s01.oss.sonatype.org/content/repositories/snapshots/")
     maven("https://repo.codemc.org/repository/maven-public/")
     maven("https://oss.sonatype.org/content/groups/public/")
     maven("https://repo.alessiodp.com/releases/")
