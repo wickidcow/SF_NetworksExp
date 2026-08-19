@@ -21,8 +21,6 @@ public class ExpansionItemStacks {
         Theme.random(Lang.getItem("NTW_EXPANSION_WORKBENCH", Material.BAMBOO_BLOCK), Theme.MACHINE);
 
     // Tools
-    public static final SlimefunItemStack WORLDEDIT_AXE =
-        Theme.random(Lang.getItem("NTW_EXPANSION_WORLD_EDIT_AXE", Material.DIAMOND_AXE), Theme.TOOL);
     public static final SlimefunItemStack INFO_TOOL =
         Theme.random(Lang.getItem("NTW_EXPANSION_INFO_TOOL", Material.FEATHER), Theme.TOOL);
     // Advanced Networks Machines

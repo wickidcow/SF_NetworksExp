@@ -46,7 +46,7 @@ repositories {
     maven("https://repo.bg-software.com/repository/api/")
     maven("https://repo.rosewooddev.io/repository/public/")
     maven("https://hub.spigotmc.org/nexus/content/repositories/snapshots/")
-    maven("https://s01.oss.sonatype.org/content/repositories/snapshots/")
+    maven("https://s01.oss.sonatype.org/repositories/snapshots/")
     maven("https://repo.codemc.org/repository/maven-public/")
     maven("https://oss.sonatype.org/content/groups/public/")
     maven("https://repo.alessiodp.com/releases/")
@@ -79,10 +79,10 @@ dependencies {
     compileOnly("com.github.SlimefunGuguProject:InfinityExpansion:3c5db3650a")
     compileOnly("com.github.Sefiraat:Netheopoiesis:8d1af6c570")
     compileOnly("com.github.schntgaispock:SlimeHUD:1.2.7")
-    compileOnly("com.bgsoftware:WildChestsAPI:2024.1")
-    compileOnly("com.bgsoftware:WildStackerAPI:2023.2")
+    compileOnly("com.bgsoftware:WildChestsAPI:2026.2")
+    compileOnly("com.bgsoftware:WildStackerAPI:2026.2")
     compileOnly("dev.rosewood:rosestacker:1.5.23")
-    compileOnly("com.gmail.nossr50.mcMMO:mcMMO:2.2.017") {
+    compileOnly("com.gmail.nossr50.mcMMO:mcMMO:2.3.000") {
         exclude("com.sk89q.worldedit", "worldedit-bukkit")
         exclude("com.sk89q.worldedit", "worldedit-core")
         exclude("com.sk89q.worldguard", "worldguard-legacy")
