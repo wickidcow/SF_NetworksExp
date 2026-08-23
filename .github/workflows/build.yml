@@ -12,11 +12,11 @@ permissions:
   contents: write
 
 env:
-  LEGACY_ARTIFACT_VERSION: "1.0.0"
-  OUTPUT_NAME: "SF_NetworksExp1.0.0.jar"
+  LEGACY_ARTIFACT_VERSION: "1.0.1"
+  OUTPUT_NAME: "SF_NetworksExp1.0.1.jar"
 
 # Gradle's internal shaded output remains Networks-Legacy-2.1.112-1.0.jar.
-# CI stages that internal JAR as the public raw artifact SF_NetworksExp1.0.0.jar.
+# CI stages that internal JAR as the public versioned Legacy artifact.
 
 jobs:
   compatibility:
@@ -112,5 +112,5 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$JAR" --clobber
           else
-            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --generate-notes --title "SF_NetworksExp $TAG"
+            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Legacy safety update: grabbers, pushers, and wireless transmitters no longer mutate foreign player-viewed menus from async network ticks. Async performance is preserved whenever those menus are not actively viewed."
           fi
