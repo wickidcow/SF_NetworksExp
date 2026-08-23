@@ -19,6 +19,7 @@ import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
@@ -39,11 +40,9 @@ public class NetworkWirelessTransmitter extends NetworkObject {
         new int[]{0, 1, 2, 6, 7, 8, 9, 10, 11, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26};
 
     private static final int[] BACKGROUND_SLOTS_TEMPLATE = new int[]{3, 4, 5, 12, 14, 21, 22, 23};
-
     private static final String LINKED_LOCATION_KEY_X = "linked-location-x";
     private static final String LINKED_LOCATION_KEY_Y = "linked-location-y";
     private static final String LINKED_LOCATION_KEY_Z = "linked-location-z";
-
     private static final int REQUIRED_POWER = 500;
     private static final int TICKS_PER = 2;
 
@@ -125,7 +124,6 @@ public class NetworkWirelessTransmitter extends NetworkObject {
         }
 
         final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(linkedLocation);
-
         if (!(slimefunItem instanceof NetworkWirelessReceiver)) {
             linkedLocations.remove(location);
             return;
@@ -134,6 +132,11 @@ public class NetworkWirelessTransmitter extends NetworkObject {
         final BlockMenu linkedBlockMenu = StorageCacheUtils.getMenu(linkedLocation);
         if (linkedBlockMenu == null) {
             sendFeedback(location, FeedbackType.NO_LINKED_BLOCK_MENU_FOUND);
+            return;
+        }
+
+        // Preserve async ticking when safe, but never write a foreign menu off-thread while it is viewed.
+        if (!Bukkit.isPrimaryThread() && linkedBlockMenu.hasViewer()) {
             return;
         }
 
@@ -180,7 +183,6 @@ public class NetworkWirelessTransmitter extends NetworkObject {
     @Override
     public void postRegister() {
         new BlockMenuPreset(this.getId(), this.getItemName()) {
-
             @Override
             public void init() {
                 drawBackground(BACKGROUND_SLOTS);
@@ -191,8 +193,7 @@ public class NetworkWirelessTransmitter extends NetworkObject {
             public boolean canOpen(@NotNull Block block, @NotNull Player player) {
                 return player.hasPermission("slimefun.inventory.bypass")
                     || (NetworkSlimefunItems.NETWORK_WIRELESS_TRANSMITTER.canUse(player, false)
-                    && Slimefun.getProtectionManager()
-                    .hasPermission(player, block.getLocation(), Interaction.INTERACT_BLOCK));
+                    && Slimefun.getProtectionManager().hasPermission(player, block.getLocation(), Interaction.INTERACT_BLOCK));
             }
 
             @Override
