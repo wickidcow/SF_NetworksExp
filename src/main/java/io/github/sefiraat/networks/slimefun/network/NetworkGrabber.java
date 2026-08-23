@@ -13,6 +13,7 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
+import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Material;
 import org.bukkit.Particle;
@@ -62,8 +63,13 @@ public class NetworkGrabber extends NetworkDirectional implements SoftCellBannab
             return;
         }
 
-        int[] slots =
-            BlockMenuUtil.getSafeTransportSlots(targetMenu, ItemTransportFlow.WITHDRAW);
+        // Legacy does not expose SF5's mutateInventorySafely helper. Preserve the async fast path,
+        // but pause the transfer while a foreign menu is actively viewed rather than racing clicks.
+        if (!Bukkit.isPrimaryThread() && targetMenu.hasViewer()) {
+            return;
+        }
+
+        int[] slots = BlockMenuUtil.getSafeTransportSlots(targetMenu, ItemTransportFlow.WITHDRAW);
 
         for (int slot : slots) {
             final ItemStack itemStack = targetMenu.getItemInSlot(slot);
