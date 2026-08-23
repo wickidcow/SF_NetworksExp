@@ -15,6 +15,7 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
+import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Material;
 import org.bukkit.Particle;
@@ -70,6 +71,11 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
 
         if (targetMenu == null) {
             sendFeedback(blockMenu.getLocation(), FeedbackType.NO_TARGET_BLOCK);
+            return;
+        }
+
+        // Do not mutate a foreign menu off-thread while a player is interacting with it.
+        if (!Bukkit.isPrimaryThread() && targetMenu.hasViewer()) {
             return;
         }
 
