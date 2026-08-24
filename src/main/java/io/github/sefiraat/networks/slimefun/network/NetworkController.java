@@ -30,11 +30,16 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.logging.Level;
 
 @Getter
@@ -53,6 +58,10 @@ public class NetworkController extends NetworkObject {
     private static final Map<Location, NetworkRoot> NETWORKS = new ConcurrentHashMap<>();
     private static final Set<Location> CRAYONS = ConcurrentHashMap.newKeySet();
     private static final Map<Location, Boolean> INITIALIZED_CONTROLLERS = new ConcurrentHashMap<>();
+    private static final Set<Location> DIRTY_CONTROLLERS = ConcurrentHashMap.newKeySet();
+    private static final LongAdder FULL_TOPOLOGY_REBUILDS = new LongAdder();
+    private static final LongAdder CACHED_TOPOLOGY_COPIES = new LongAdder();
+    private static final LongAdder CACHED_TOPOLOGY_FALLBACKS = new LongAdder();
 
     private static volatile boolean circuitBreakerEnabled = true;
     private static volatile FailureCircuitBreaker<Location> controllerCircuitBreaker = new FailureCircuitBreaker<>(
@@ -104,20 +113,48 @@ public class NetworkController extends NetworkObject {
                     }
 
                     addToRegistry(block);
+
+                    final int currentMaxNodes = maxNodes.getValue();
+                    final Location controllerKey = normalizeControllerLocation(location);
+                    final boolean markedDirty = DIRTY_CONTROLLERS.remove(controllerKey);
+                    final NetworkRoot cachedRoot = NETWORKS.get(location);
+                    boolean fullDiscovery = cachedRoot == null
+                        || markedDirty
+                        || cachedRoot.getMaxNodes() != currentMaxNodes;
+
+                    Map<Location, NodeDefinition> cachedTopology = null;
+                    if (!fullDiscovery) {
+                        cachedTopology = snapshotTopology(cachedRoot);
+                        if (cachedTopology == null) {
+                            fullDiscovery = true;
+                            DIRTY_CONTROLLERS.remove(controllerKey);
+                            CACHED_TOPOLOGY_FALLBACKS.increment();
+                        }
+                    }
+
                     candidate = new NetworkRoot(
                         location,
                         NodeType.CONTROLLER,
-                        maxNodes.getValue(),
+                        currentMaxNodes,
                         recordFlow.getOrDefault(location, false),
                         records.get(location));
-                    candidate.addAllChildren();
+
+                    if (fullDiscovery) {
+                        candidate.addAllChildren();
+                        FULL_TOPOLOGY_REBUILDS.increment();
+                    } else {
+                        copyTopology(cachedRoot, candidate, cachedTopology);
+                        CACHED_TOPOLOGY_COPIES.increment();
+                    }
 
                     if (CRAYONS.contains(location)) {
                         candidate.setDisplayParticles(true);
                     }
 
                     NetworkRoot previous = NETWORKS.put(location, candidate);
-                    if (previous != null && previous != candidate) {
+                    if (fullDiscovery && previous != null && previous != candidate) {
+                        // A real topology change may strand definitions that were part of the old tree but are no
+                        // longer reachable. Clean those assignments only on dirty/full rebuilds, not every tick.
                         NetworkStorage.clearRuntimeAssignments(previous);
                     }
 
@@ -171,6 +208,10 @@ public class NetworkController extends NetworkObject {
     public static void resetRuntimeSafety() {
         controllerCircuitBreaker.clearAll();
         INITIALIZED_CONTROLLERS.clear();
+        DIRTY_CONTROLLERS.clear();
+        FULL_TOPOLOGY_REBUILDS.reset();
+        CACHED_TOPOLOGY_COPIES.reset();
+        CACHED_TOPOLOGY_FALLBACKS.reset();
         circuitBreakerEnabled = true;
     }
 
@@ -194,8 +235,29 @@ public class NetworkController extends NetworkObject {
         return controllerCircuitBreaker.getTotalTrips();
     }
 
+    public static long getFullTopologyRebuildCount() {
+        return FULL_TOPOLOGY_REBUILDS.sum();
+    }
+
+    public static long getCachedTopologyCopyCount() {
+        return CACHED_TOPOLOGY_COPIES.sum();
+    }
+
+    public static long getCachedTopologyFallbackCount() {
+        return CACHED_TOPOLOGY_FALLBACKS.sum();
+    }
+
+    public static int getDirtyControllerCount() {
+        return DIRTY_CONTROLLERS.size();
+    }
+
     public static void clearControllerFailure(@NotNull Location location) {
         controllerCircuitBreaker.clear(location);
+    }
+
+    /** Marks one loaded controller for a real neighbour-discovery pass on its next Slimefun tick. */
+    public static void markTopologyDirty(@NotNull Location controllerLocation) {
+        DIRTY_CONTROLLERS.add(normalizeControllerLocation(controllerLocation));
     }
 
     public static void enableRecord(Location root) {
@@ -240,6 +302,7 @@ public class NetworkController extends NetworkObject {
                 NetworkStorage.removeNode(node.getNodePosition());
             }
         }
+        DIRTY_CONTROLLERS.remove(normalizeControllerLocation(location));
     }
 
     /**
@@ -251,6 +314,7 @@ public class NetworkController extends NetworkObject {
         if (root != null) {
             NetworkStorage.clearRuntimeAssignments(root);
         }
+        DIRTY_CONTROLLERS.remove(normalizeControllerLocation(location));
     }
 
     public static void onChunkUnload(@NotNull Chunk chunk) {
@@ -273,6 +337,7 @@ public class NetworkController extends NetworkObject {
         recordFlow.remove(location);
         CRAYONS.remove(location);
         INITIALIZED_CONTROLLERS.remove(location);
+        DIRTY_CONTROLLERS.remove(normalizeControllerLocation(location));
         controllerCircuitBreaker.clear(location);
     }
 
@@ -298,6 +363,59 @@ public class NetworkController extends NetworkObject {
         }
     }
 
+    /**
+     * Snapshots the already-discovered topology using only cheap runtime-registry lookups. Returning null means
+     * at least one member disappeared or unloaded, so the caller must perform a real neighbour discovery pass.
+     */
+    private static @Nullable Map<Location, NodeDefinition> snapshotTopology(@NotNull NetworkRoot previous) {
+        Map<Location, NodeDefinition> definitions = new HashMap<>(Math.max(16, previous.getNodeLocations().size()));
+        for (Location nodeLocation : previous.getNodeLocations()) {
+            NodeDefinition definition = NetworkStorage.getNode(nodeLocation);
+            if (definition == null) {
+                return null;
+            }
+            definitions.put(nodeLocation, definition);
+        }
+        return definitions;
+    }
+
+    /**
+     * Rebuilds the per-tick NetworkRoot object from the last known tree without scanning six neighbours for every
+     * node. The tree shape is preserved so removal semantics remain identical, while power values and all root
+     * item caches are naturally refreshed because every NetworkNode/NetworkRoot object is still newly created.
+     */
+    private static void copyTopology(
+        @NotNull NetworkRoot previous,
+        @NotNull NetworkRoot candidate,
+        @NotNull Map<Location, NodeDefinition> definitions) {
+        Deque<NetworkNode> oldNodes = new ArrayDeque<>();
+        Deque<NetworkNode> newParents = new ArrayDeque<>();
+
+        for (NetworkNode oldChild : previous.getChildrenNodes()) {
+            oldNodes.addLast(oldChild);
+            newParents.addLast(candidate);
+        }
+
+        while (!oldNodes.isEmpty()) {
+            NetworkNode oldNode = oldNodes.removeFirst();
+            NetworkNode newParent = newParents.removeFirst();
+            NodeDefinition definition = definitions.get(oldNode.getNodePosition());
+            if (definition == null || definition.getType() != oldNode.getNodeType()) {
+                throw new IllegalStateException(
+                    "Cached network topology changed while rebuilding at " + format(oldNode.getNodePosition()));
+            }
+
+            NetworkNode newNode = new NetworkNode(oldNode.getNodePosition(), definition.getType());
+            newParent.addChild(newNode);
+            definition.setNode(newNode);
+
+            for (NetworkNode oldChild : oldNode.getChildrenNodes()) {
+                oldNodes.addLast(oldChild);
+                newParents.addLast(newNode);
+            }
+        }
+    }
+
     private static void discardFailedBuild(@NotNull Location location, NetworkRoot candidate) {
         NetworkRoot installed = NETWORKS.remove(location);
         if (installed != null) {
@@ -306,6 +424,7 @@ public class NetworkController extends NetworkObject {
         if (candidate != null && candidate != installed) {
             NetworkStorage.clearRuntimeAssignments(candidate);
         }
+        DIRTY_CONTROLLERS.add(normalizeControllerLocation(location));
     }
 
     private static long secondsToMillis(long seconds) {
@@ -319,6 +438,16 @@ public class NetworkController extends NetworkObject {
             && world.getUID().equals(chunk.getWorld().getUID())
             && (location.getBlockX() >> 4) == chunk.getX()
             && (location.getBlockZ() >> 4) == chunk.getZ();
+    }
+
+    private static @NotNull Location normalizeControllerLocation(@NotNull Location location) {
+        Location normalized = location.clone();
+        normalized.setX(location.getBlockX());
+        normalized.setY(location.getBlockY());
+        normalized.setZ(location.getBlockZ());
+        normalized.setYaw(0.0F);
+        normalized.setPitch(0.0F);
+        return normalized;
     }
 
     private static @NotNull String format(@NotNull Location location) {

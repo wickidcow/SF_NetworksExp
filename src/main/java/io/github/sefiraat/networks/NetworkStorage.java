@@ -42,6 +42,7 @@ public class NetworkStorage {
     public static void removeNode(@NotNull Location location) {
         ArrayDeque<Location> pending = new ArrayDeque<>();
         Set<Location> visited = new HashSet<>();
+        Set<Location> affectedControllers = new HashSet<>();
         pending.add(normalize(location));
 
         while (!pending.isEmpty()) {
@@ -54,6 +55,10 @@ public class NetworkStorage {
             if (definition != null) {
                 NetworkNode node = definition.getNode();
                 if (node != null) {
+                    NetworkRoot root = node.getRoot();
+                    if (root != null) {
+                        affectedControllers.add(root.getNodePosition());
+                    }
                     for (NetworkNode child : node.getChildrenNodes()) {
                         Location childLocation = child.getNodePosition();
                         if (childLocation != null) {
@@ -64,6 +69,8 @@ public class NetworkStorage {
             }
             removeNodeOnly(current);
         }
+
+        affectedControllers.forEach(NetworkController::markTopologyDirty);
     }
 
     /** Removes only this runtime entry, without traversing children. */
@@ -87,6 +94,13 @@ public class NetworkStorage {
         return getNode(location) != null;
     }
 
+    /**
+     * Returns the loaded runtime definition for a network node.
+     *
+     * <p>This method is intentionally a cheap registry lookup because it is called for every neighbour visited
+     * during network topology discovery. Stale Slimefun block validation is handled by lifecycle events and the
+     * bounded Networks Doctor maintenance pass instead of performing a storage lookup for every graph edge.</p>
+     */
     public static @Nullable NodeDefinition getNode(@NotNull Location location) {
         final Location key = normalize(location);
         final NodeDefinition definition = ALL_NETWORK_OBJECTS.get(key);
@@ -96,22 +110,31 @@ public class NetworkStorage {
 
         final World world = key.getWorld();
         if (world == null || !world.isChunkLoaded(key.getBlockX() >> 4, key.getBlockZ() >> 4)) {
+            markAssignedRootDirty(definition);
             removeNodeOnly(key);
             return null;
         }
 
-        /*
-         * Network members can be destroyed without a normal BlockBreakEvent (explosions, withers,
-         * programmable machines or other plugins). Validate the cached entry lazily so deleted Slimefun
-         * data can never continue masquerading as a live cell, bridge or controller.
-         */
+        return definition;
+    }
+
+    /**
+     * Explicit physical-node validation for diagnostics and repair paths that need to verify Slimefun storage.
+     * Normal graph traversal deliberately uses {@link #getNode(Location)} to avoid a storage lookup per edge.
+     */
+    public static @Nullable NodeDefinition getValidatedNode(@NotNull Location location) {
+        final Location key = normalize(location);
+        final NodeDefinition definition = getNode(key);
+        if (definition == null) {
+            return null;
+        }
+
         final var slimefunItem = StorageCacheUtils.getSfItem(key);
         if (!(slimefunItem instanceof NetworkObject networkObject)
             || networkObject.getNodeType() != definition.getType()) {
             invalidateStaleNode(key, definition);
             return null;
         }
-
         return definition;
     }
 
@@ -145,10 +168,17 @@ public class NetworkStorage {
     public static void registerNode(@NotNull Location location, @NotNull NodeDefinition nodeDefinition) {
         Location key = normalize(location);
         AtomicBoolean acceptedIncoming = new AtomicBoolean();
+        AtomicBoolean topologyChanged = new AtomicBoolean();
         AtomicReference<NetworkRoot> conflictingRoot = new AtomicReference<>();
 
         ALL_NETWORK_OBJECTS.compute(key, (ignored, existing) -> {
-            if (existing == null || existing == nodeDefinition) {
+            if (existing == null) {
+                acceptedIncoming.set(true);
+                topologyChanged.set(true);
+                return nodeDefinition;
+            }
+
+            if (existing == nodeDefinition) {
                 acceptedIncoming.set(true);
                 return nodeDefinition;
             }
@@ -168,6 +198,7 @@ public class NetworkStorage {
                 conflictingRoot.set(oldNode.getRoot());
             }
             acceptedIncoming.set(true);
+            topologyChanged.set(true);
             return nodeDefinition;
         });
 
@@ -178,6 +209,8 @@ public class NetworkStorage {
         NetworkRoot oldRoot = conflictingRoot.get();
         if (acceptedIncoming.get() && oldRoot != null) {
             NetworkController.discardRuntimeNetwork(oldRoot.getNodePosition());
+        } else if (topologyChanged.get()) {
+            markAdjacentRootsDirty(key);
         }
     }
 
@@ -207,7 +240,7 @@ public class NetworkStorage {
 
     /**
      * Discards only nodes in the unloading chunk. Descendants in other loaded chunks remain indexed
-     * and will reconnect on their next Slimefun tick.
+     * and will reconnect when the controller performs its next dirty topology rebuild.
      */
     public static void unregisterChunk(@NotNull Chunk chunk) {
         ChunkPosition chunkPosition = new ChunkPosition(chunk);
@@ -215,12 +248,23 @@ public class NetworkStorage {
         if (locations == null) {
             return;
         }
+
+        Set<Location> affectedControllers = new HashSet<>();
         for (Location location : new HashSet<>(locations)) {
+            NodeDefinition definition = ALL_NETWORK_OBJECTS.get(location);
+            if (definition != null) {
+                NetworkNode node = definition.getNode();
+                NetworkRoot root = node == null ? null : node.getRoot();
+                if (root != null) {
+                    affectedControllers.add(root.getNodePosition());
+                }
+            }
             ALL_NETWORK_OBJECTS.remove(location);
             NetworkRoot.clearAccessHistory(location);
             StorageUnitData.clearAccessHistory(location);
         }
         locations.clear();
+        affectedControllers.forEach(NetworkController::markTopologyDirty);
     }
 
     public static @NotNull Map<Location, NodeDefinition> getAllNetworkObjects() {
@@ -256,6 +300,31 @@ public class NetworkStorage {
         CONFLICTING_REGISTRATION_REPLACEMENTS.reset();
         NetworkRoot.clearAllAccessHistory();
         StorageUnitData.clearAllAccessHistory();
+    }
+
+    private static void markAssignedRootDirty(@NotNull NodeDefinition definition) {
+        NetworkNode node = definition.getNode();
+        NetworkRoot root = node == null ? null : node.getRoot();
+        if (root != null) {
+            NetworkController.markTopologyDirty(root.getNodePosition());
+        }
+    }
+
+    private static void markAdjacentRootsDirty(@NotNull Location location) {
+        Set<Location> controllers = new HashSet<>();
+        for (var face : NetworkNode.VALID_FACES) {
+            Location adjacentLocation = normalize(location.clone().add(face.getDirection()));
+            NodeDefinition adjacentDefinition = ALL_NETWORK_OBJECTS.get(adjacentLocation);
+            if (adjacentDefinition == null) {
+                continue;
+            }
+            NetworkNode adjacentNode = adjacentDefinition.getNode();
+            NetworkRoot root = adjacentNode == null ? null : adjacentNode.getRoot();
+            if (root != null) {
+                controllers.add(root.getNodePosition());
+            }
+        }
+        controllers.forEach(NetworkController::markTopologyDirty);
     }
 
     private static @NotNull Location normalize(@NotNull Location location) {
