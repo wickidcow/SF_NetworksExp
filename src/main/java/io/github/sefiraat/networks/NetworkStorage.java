@@ -16,12 +16,16 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.LongAdder;
@@ -32,6 +36,8 @@ public class NetworkStorage {
 
     private static final Map<ChunkPosition, Set<Location>> ALL_NETWORK_OBJECTS_BY_CHUNK = new ConcurrentHashMap<>();
     private static final Map<Location, NodeDefinition> ALL_NETWORK_OBJECTS = new ConcurrentHashMap<>();
+    private static final Queue<Location> MAINTENANCE_QUEUE = new ConcurrentLinkedQueue<>();
+    private static final Set<Location> MAINTENANCE_QUEUED = ConcurrentHashMap.newKeySet();
     private static final LongAdder DUPLICATE_REGISTRATION_ATTEMPTS = new LongAdder();
     private static final LongAdder CONFLICTING_REGISTRATION_REPLACEMENTS = new LongAdder();
 
@@ -71,6 +77,29 @@ public class NetworkStorage {
         }
 
         affectedControllers.forEach(NetworkController::markTopologyDirty);
+    }
+
+    /**
+     * Removes only the changed physical node, discards its live root, and preserves every other loaded node
+     * registration. This avoids forcing an entire downstream subtree through first-tick registration again after
+     * a cable or machine is broken while still preventing the old root from being used for transfers.
+     */
+    public static void detachNode(@NotNull Location location) {
+        final Location key = normalize(location);
+        final NodeDefinition definition = ALL_NETWORK_OBJECTS.get(key);
+        if (definition == null) {
+            return;
+        }
+
+        final NetworkNode assignedNode = definition.getNode();
+        final NetworkRoot root = assignedNode == null ? null : assignedNode.getRoot();
+        final Location controllerLocation = root == null ? null : root.getNodePosition();
+
+        removeNodeOnly(key);
+        if (controllerLocation != null) {
+            NetworkController.discardRuntimeNetwork(controllerLocation);
+            NetworkController.markTopologyDirty(controllerLocation);
+        }
     }
 
     /** Removes only this runtime entry, without traversing children. */
@@ -205,6 +234,9 @@ public class NetworkStorage {
         ALL_NETWORK_OBJECTS_BY_CHUNK
             .computeIfAbsent(new ChunkPosition(key), ignored -> ConcurrentHashMap.newKeySet())
             .add(key);
+        if (MAINTENANCE_QUEUED.add(key)) {
+            MAINTENANCE_QUEUE.add(key);
+        }
 
         NetworkRoot oldRoot = conflictingRoot.get();
         if (acceptedIncoming.get() && oldRoot != null) {
@@ -236,6 +268,45 @@ public class NetworkStorage {
 
     public static long getConflictingRegistrationReplacementCount() {
         return CONFLICTING_REGISTRATION_REPLACEMENTS.sum();
+    }
+
+    /**
+     * Returns a rotating, bounded maintenance window without copying the complete loaded-node registry.
+     */
+    public static @NotNull List<Location> getMaintenanceLocations(int maximumEntries) {
+        final int target = Math.min(Math.max(1, maximumEntries), ALL_NETWORK_OBJECTS.size());
+        if (target == 0) {
+            return List.of();
+        }
+
+        List<Location> selected = new ArrayList<>(target);
+        Set<Location> seen = new HashSet<>(target);
+        int maximumPolls = Math.max(target, target * 4);
+
+        for (int poll = 0; poll < maximumPolls && selected.size() < target; poll++) {
+            Location location = MAINTENANCE_QUEUE.poll();
+            if (location == null) {
+                break;
+            }
+
+            MAINTENANCE_QUEUED.remove(location);
+            if (!ALL_NETWORK_OBJECTS.containsKey(location)) {
+                continue;
+            }
+
+            if (seen.add(location)) {
+                selected.add(location);
+            }
+            if (MAINTENANCE_QUEUED.add(location)) {
+                MAINTENANCE_QUEUE.add(location);
+            }
+        }
+
+        return selected;
+    }
+
+    public static int getRegisteredNodeCount() {
+        return ALL_NETWORK_OBJECTS.size();
     }
 
     /**
@@ -296,6 +367,8 @@ public class NetworkStorage {
     public static void clear() {
         ALL_NETWORK_OBJECTS.clear();
         ALL_NETWORK_OBJECTS_BY_CHUNK.clear();
+        MAINTENANCE_QUEUE.clear();
+        MAINTENANCE_QUEUED.clear();
         DUPLICATE_REGISTRATION_ATTEMPTS.reset();
         CONFLICTING_REGISTRATION_REPLACEMENTS.reset();
         NetworkRoot.clearAllAccessHistory();
