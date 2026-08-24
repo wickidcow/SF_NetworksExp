@@ -193,7 +193,7 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
 
                 HangingBlock.loadHangingBlocks(liveData);
                 HangingBlock.doFirstTick(liveData);
-                addToRegistry(location.getBlock());
+                registerNow(location.getBlock());
             } finally {
                 PENDING_FIRST_TICK_LOCATIONS.remove(location);
             }
@@ -204,7 +204,23 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
         }
     }
 
+    /**
+     * Registration requests from subclass tickers are also routed through warmup so directional machines cannot
+     * bypass the shared budget. Controllers remain immediate because their own ticker must establish root identity
+     * before building topology; every other node may safely become available over the next few server ticks.
+     */
     protected void addToRegistry(@NotNull Block block) {
+        if (NetworkStorage.containsKey(block.getLocation())) {
+            return;
+        }
+        if (nodeType == NodeType.CONTROLLER) {
+            registerNow(block);
+        } else {
+            scheduleFirstTick(block.getLocation());
+        }
+    }
+
+    private void registerNow(@NotNull Block block) {
         if (!NetworkStorage.containsKey(block.getLocation())) {
             final NodeDefinition nodeDefinition = new NodeDefinition(nodeType);
             NetworkStorage.registerNode(block.getLocation(), nodeDefinition);
