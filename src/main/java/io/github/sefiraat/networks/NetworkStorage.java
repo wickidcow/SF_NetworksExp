@@ -1,11 +1,13 @@
 package io.github.sefiraat.networks;
 
 import com.balugaq.netex.api.data.StorageUnitData;
+import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import io.github.bakedlibs.dough.blocks.ChunkPosition;
 import io.github.sefiraat.networks.network.NetworkNode;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.slimefun.network.NetworkController;
+import io.github.sefiraat.networks.slimefun.network.NetworkObject;
 import lombok.experimental.UtilityClass;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
@@ -113,6 +115,26 @@ public class NetworkStorage {
             return null;
         }
 
+        return definition;
+    }
+
+    /**
+     * Explicit physical-node validation for diagnostics and repair paths that need to verify Slimefun storage.
+     * Normal graph traversal deliberately uses {@link #getNode(Location)} to avoid a storage lookup per edge.
+     */
+    public static @Nullable NodeDefinition getValidatedNode(@NotNull Location location) {
+        final Location key = normalize(location);
+        final NodeDefinition definition = getNode(key);
+        if (definition == null) {
+            return null;
+        }
+
+        final var slimefunItem = StorageCacheUtils.getSfItem(key);
+        if (!(slimefunItem instanceof NetworkObject networkObject)
+            || networkObject.getNodeType() != definition.getType()) {
+            invalidateStaleNode(key, definition);
+            return null;
+        }
         return definition;
     }
 
