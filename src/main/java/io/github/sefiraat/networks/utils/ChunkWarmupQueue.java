@@ -63,9 +63,11 @@ public final class ChunkWarmupQueue {
         BUDGET_YIELDS.reset();
 
         workerTask = Bukkit.getScheduler().runTaskTimer(plugin, ChunkWarmupQueue::drainOneTick, 1L, 1L);
+        TopologyDirtyQueue.start();
     }
 
     public static void stop() {
+        TopologyDirtyQueue.stop();
         BukkitTask task = workerTask;
         if (task != null) {
             task.cancel();
