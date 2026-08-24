@@ -11,6 +11,7 @@ import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
+import io.github.sefiraat.networks.utils.ChunkWarmupQueue;
 import io.github.sefiraat.networks.utils.StackUtils;
 import io.github.thebusybiscuit.slimefun4.api.exceptions.IncompatibleItemHandlerException;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
@@ -59,7 +60,7 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
     private final NodeType nodeType;
     private final List<Integer> slotsToDrop = new ArrayList<>();
 
-    /** Starts the shared hanging-block ticker after the plugin instance is fully initialized. */
+    /** Starts the shared hanging-block ticker and bounded chunk-warmup worker after plugin initialization. */
     public static void startSharedTicker() {
         if (!SHARED_TICKER_STARTED.compareAndSet(false, true)) {
             return;
@@ -77,15 +78,17 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
             },
             1L,
             Slimefun.getTickerTask().getTickRate());
+        ChunkWarmupQueue.start();
     }
 
-    /** Stops and clears the shared ticker during plugin shutdown or failed startup. */
+    /** Stops and clears shared runtime workers during plugin shutdown or failed startup. */
     public static void stopSharedTicker() {
         BukkitTask task = sharedTickerTask;
         if (task != null) {
             task.cancel();
             sharedTickerTask = null;
         }
+        ChunkWarmupQueue.stop();
         scheduledHangingTick.clear();
         PENDING_FIRST_TICK_LOCATIONS.clear();
         SHARED_TICKER_STARTED.set(false);
@@ -166,44 +169,58 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
             });
     }
 
-
     /**
-     * Initializes a node once per loaded-chunk lifecycle. The old permanent first-tick set retained every
-     * location until the block was broken, which leaked locations across chunk unload/reload cycles.
+     * Initializes a node once per loaded-chunk lifecycle through the shared warmup queue. The location guard
+     * prevents duplicate first ticks while the shared worker spreads initialization across server ticks.
      */
     private void scheduleFirstTick(@NotNull Location location) {
         if (!PENDING_FIRST_TICK_LOCATIONS.add(location)) {
             return;
         }
 
-        try {
-            Bukkit.getScheduler().runTask(Networks.getInstance(), () -> {
-                try {
-                    final World world = location.getWorld();
-                    if (world == null || !world.isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
-                        return;
-                    }
-
-                    final SlimefunBlockData liveData = StorageCacheUtils.getBlock(location);
-                    final SlimefunItem liveItem = liveData == null ? null : SlimefunItem.getById(liveData.getSfId());
-                    if (liveData == null || liveItem != NetworkObject.this) {
-                        return;
-                    }
-
-                    HangingBlock.loadHangingBlocks(liveData);
-                    HangingBlock.doFirstTick(liveData);
-                    addToRegistry(location.getBlock());
-                } finally {
-                    PENDING_FIRST_TICK_LOCATIONS.remove(location);
+        boolean queued = ChunkWarmupQueue.enqueue(location, () -> {
+            try {
+                final World world = location.getWorld();
+                if (world == null || !world.isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
+                    return;
                 }
-            });
-        } catch (RuntimeException exception) {
+
+                final SlimefunBlockData liveData = StorageCacheUtils.getBlock(location);
+                final SlimefunItem liveItem = liveData == null ? null : SlimefunItem.getById(liveData.getSfId());
+                if (liveData == null || liveItem != NetworkObject.this) {
+                    return;
+                }
+
+                HangingBlock.loadHangingBlocks(liveData);
+                HangingBlock.doFirstTick(liveData);
+                registerNow(location.getBlock());
+            } finally {
+                PENDING_FIRST_TICK_LOCATIONS.remove(location);
+            }
+        });
+
+        if (!queued) {
             PENDING_FIRST_TICK_LOCATIONS.remove(location);
-            throw exception;
         }
     }
 
+    /**
+     * Registration requests from subclass tickers are also routed through warmup so directional machines cannot
+     * bypass the shared budget. Controllers remain immediate because their own ticker must establish root identity
+     * before building topology; every other node may safely become available over the next few server ticks.
+     */
     protected void addToRegistry(@NotNull Block block) {
+        if (NetworkStorage.containsKey(block.getLocation())) {
+            return;
+        }
+        if (nodeType == NodeType.CONTROLLER) {
+            registerNow(block);
+        } else {
+            scheduleFirstTick(block.getLocation());
+        }
+    }
+
+    private void registerNow(@NotNull Block block) {
         if (!NetworkStorage.containsKey(block.getLocation())) {
             final NodeDefinition nodeDefinition = new NodeDefinition(nodeType);
             NetworkStorage.registerNode(block.getLocation(), nodeDefinition);
@@ -211,7 +228,11 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
     }
 
     protected void tickHangingBlocks(@NotNull Block block) {
-        scheduledHangingTick.add(block.getLocation());
+        // The first-tick loader populates this registry for real attachments. Ordinary Network blocks should not
+        // churn through the shared queue every Slimefun tick just to discover that there is nothing to update.
+        if (!HangingBlock.getHangingBlocks(block.getLocation()).isEmpty()) {
+            scheduledHangingTick.add(block.getLocation());
+        }
     }
 
     @OverridingMethodsMustInvokeSuper

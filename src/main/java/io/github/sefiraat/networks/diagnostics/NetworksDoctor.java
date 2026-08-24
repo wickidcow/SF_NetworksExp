@@ -16,7 +16,9 @@ import io.github.sefiraat.networks.slimefun.NetworksSlimefunItemStacks;
 import io.github.sefiraat.networks.slimefun.network.NetworkController;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
 import io.github.sefiraat.networks.slimefun.network.NetworkQuantumStorage;
+import io.github.sefiraat.networks.utils.ChunkWarmupQueue;
 import io.github.sefiraat.networks.utils.FailureCircuitBreaker;
+import io.github.sefiraat.networks.utils.TopologyDirtyQueue;
 import io.github.sefiraat.networks.utils.TransferAudit;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import org.bukkit.Bukkit;
@@ -57,6 +59,7 @@ public final class NetworksDoctor {
         List<String> details = new ArrayList<>();
         Set<Location> staleLocations = new HashSet<>();
 
+        // Manual Doctor remains intentionally exhaustive. Only the scheduled automatic pass is work-budgeted.
         Map<Location, NodeDefinition> nodes = NetworkStorage.getAllNetworkObjects();
         for (Location location : nodes.keySet()) {
             scanned++;
@@ -209,7 +212,7 @@ public final class NetworksDoctor {
             }
         }
 
-        int nodeCount = NetworkStorage.getAllNetworkObjects().size();
+        int nodeCount = NetworkStorage.getRegisteredNodeCount();
         int indexedCount = NetworkStorage.getIndexedLocationCount();
         if (nodeCount != indexedCount) {
             issues++;
@@ -252,6 +255,7 @@ public final class NetworksDoctor {
             + NetworkController.getQuarantinedControllerCount(now) + " quarantined, "
             + NetworkController.getTotalControllerFailureCount() + " total rebuild failures, "
             + NetworkController.getTotalControllerTripCount() + " circuit trips");
+        addPerformanceDetails(details);
         details.add("Drawers: " + DataStorage.getCachedContainerCount() + " cached, "
             + DataStorage.getLoadingContainerCount() + " loading, "
             + DataStorage.getPendingContainerChangeCount() + " pending containers/"
@@ -285,8 +289,8 @@ public final class NetworksDoctor {
 
     /**
      * Rotating, bounded stale-node repair for the scheduled maintenance task. Manual Doctor commands still
-     * run the complete node/controller/storage scan, while automatic maintenance never walks the entire
-     * loaded registry in one server tick.
+     * run the complete node/controller/storage scan, while automatic maintenance never copies or walks the
+     * complete loaded registry before applying its configured scan budget.
      */
     public static @NotNull NetworksDoctorReport runAutomaticRepair(int maximumEntries) {
         if (!Bukkit.isPrimaryThread()) {
@@ -302,17 +306,17 @@ public final class NetworksDoctor {
         List<String> details = new ArrayList<>();
         final long now = System.currentTimeMillis();
 
-        Map<Location, NodeDefinition> nodes = NetworkStorage.getAllNetworkObjects();
-        List<Location> locations = new ArrayList<>(nodes.keySet());
-        int totalNodes = locations.size();
-        int processed = Math.min(budget, totalNodes);
+        int totalNodes = NetworkStorage.getRegisteredNodeCount();
+        List<Location> locations = NetworkStorage.getMaintenanceLocations(budget);
+        int processed = locations.size();
 
+        // Keep the cursor as a diagnostic/lifecycle sequence while the storage queue owns the actual O(budget)
+        // rotation. This preserves deterministic rollover semantics without constructing a full key snapshot.
         if (totalNodes == 0) {
             automaticNodeCursor = 0;
         } else {
             int start = Math.floorMod(automaticNodeCursor, totalNodes);
-            for (int offset = 0; offset < processed; offset++) {
-                Location location = locations.get((start + offset) % totalNodes);
+            for (Location location : locations) {
                 scanned++;
                 if (!isLoaded(location)) {
                     unloaded++;
@@ -338,7 +342,7 @@ public final class NetworksDoctor {
             automaticNodeCursor = (start + processed) % totalNodes;
         }
 
-        int nodeCount = NetworkStorage.getAllNetworkObjects().size();
+        int nodeCount = NetworkStorage.getRegisteredNodeCount();
         int indexedCount = NetworkStorage.getIndexedLocationCount();
         if (nodeCount != indexedCount) {
             issues++;
@@ -364,6 +368,7 @@ public final class NetworksDoctor {
             + NetworkController.getQuarantinedControllerCount(now) + " quarantined, "
             + NetworkController.getTotalControllerFailureCount() + " total rebuild failures, "
             + NetworkController.getTotalControllerTripCount() + " circuit trips");
+        addPerformanceDetails(details);
         details.add("Node registration history: duplicates="
             + NetworkStorage.getDuplicateRegistrationAttemptCount() + ", type conflicts="
             + NetworkStorage.getConflictingRegistrationReplacementCount());
@@ -392,6 +397,24 @@ public final class NetworksDoctor {
             details.add("Storage adapters: " + (storageAdapters.isEmpty()
                 ? "native-only" : String.join(", ", storageAdapters)));
         }
+    }
+
+    private static void addPerformanceDetails(@NotNull List<String> details) {
+        details.add("Topology performance: full rebuilds=" + NetworkController.getFullTopologyRebuildCount()
+            + ", cached copies=" + NetworkController.getCachedTopologyCopyCount()
+            + ", cache fallbacks=" + NetworkController.getCachedTopologyFallbackCount()
+            + ", dirty controllers=" + NetworkController.getDirtyControllerCount());
+        details.add("Chunk warmup: pending=" + ChunkWarmupQueue.getPendingCount()
+            + ", peak=" + ChunkWarmupQueue.getPeakPendingCount()
+            + ", processed=" + ChunkWarmupQueue.getProcessedCount()
+            + ", budget yields=" + ChunkWarmupQueue.getBudgetYieldCount()
+            + ", budget=" + ChunkWarmupQueue.getMaxInitializationsPerTick() + " nodes/"
+            + ChunkWarmupQueue.getMaxWorkMillisPerTick() + "ms per tick");
+        details.add("Topology debounce: pending=" + TopologyDirtyQueue.getPendingCount()
+            + ", marks=" + TopologyDirtyQueue.getMarkCount()
+            + ", coalesced=" + TopologyDirtyQueue.getCoalescedCount()
+            + ", flushed=" + TopologyDirtyQueue.getFlushedCount()
+            + ", window=" + TopologyDirtyQueue.getDebounceSfTicks() + " SF tick(s)");
     }
 
     private static boolean isLoaded(@NotNull Location location) {

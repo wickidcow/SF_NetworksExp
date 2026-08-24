@@ -8,6 +8,7 @@ import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.slimefun.network.NetworkController;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
+import io.github.sefiraat.networks.utils.TopologyDirtyQueue;
 import lombok.experimental.UtilityClass;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
@@ -16,9 +17,12 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,6 +36,7 @@ public class NetworkStorage {
 
     private static final Map<ChunkPosition, Set<Location>> ALL_NETWORK_OBJECTS_BY_CHUNK = new ConcurrentHashMap<>();
     private static final Map<Location, NodeDefinition> ALL_NETWORK_OBJECTS = new ConcurrentHashMap<>();
+    private static Iterator<Location> maintenanceIterator = Collections.emptyIterator();
     private static final LongAdder DUPLICATE_REGISTRATION_ATTEMPTS = new LongAdder();
     private static final LongAdder CONFLICTING_REGISTRATION_REPLACEMENTS = new LongAdder();
 
@@ -71,6 +76,29 @@ public class NetworkStorage {
         }
 
         affectedControllers.forEach(NetworkController::markTopologyDirty);
+    }
+
+    /**
+     * Removes only the changed physical node, discards its live root, and preserves every other loaded node
+     * registration. This avoids forcing an entire downstream subtree through first-tick registration again after
+     * a cable or machine is broken while still preventing the old root from being used for transfers.
+     */
+    public static void detachNode(@NotNull Location location) {
+        final Location key = normalize(location);
+        final NodeDefinition definition = ALL_NETWORK_OBJECTS.get(key);
+        if (definition == null) {
+            return;
+        }
+
+        final NetworkNode assignedNode = definition.getNode();
+        final NetworkRoot root = assignedNode == null ? null : assignedNode.getRoot();
+        final Location controllerLocation = root == null ? null : root.getNodePosition();
+
+        removeNodeOnly(key);
+        if (controllerLocation != null) {
+            NetworkController.discardRuntimeNetwork(controllerLocation);
+            NetworkController.markTopologyDirty(controllerLocation);
+        }
     }
 
     /** Removes only this runtime entry, without traversing children. */
@@ -239,6 +267,42 @@ public class NetworkStorage {
     }
 
     /**
+     * Returns a rotating, bounded maintenance window without copying the complete loaded-node registry or keeping
+     * a second per-location queue. ConcurrentHashMap iterators are weakly consistent, so node registration/removal
+     * can continue without throwing or force-loading chunks while Doctor advances through at most O(budget) keys.
+     */
+    public static synchronized @NotNull List<Location> getMaintenanceLocations(int maximumEntries) {
+        final int target = Math.min(Math.max(1, maximumEntries), ALL_NETWORK_OBJECTS.size());
+        if (target == 0) {
+            return List.of();
+        }
+
+        List<Location> selected = new ArrayList<>(target);
+        Set<Location> seen = new HashSet<>(target);
+        int maximumSteps = Math.max(16, target * 4);
+
+        for (int step = 0; step < maximumSteps && selected.size() < target; step++) {
+            if (!maintenanceIterator.hasNext()) {
+                maintenanceIterator = ALL_NETWORK_OBJECTS.keySet().iterator();
+                if (!maintenanceIterator.hasNext()) {
+                    break;
+                }
+            }
+
+            Location location = maintenanceIterator.next();
+            if (ALL_NETWORK_OBJECTS.containsKey(location) && seen.add(location)) {
+                selected.add(location);
+            }
+        }
+
+        return selected;
+    }
+
+    public static int getRegisteredNodeCount() {
+        return ALL_NETWORK_OBJECTS.size();
+    }
+
+    /**
      * Discards only nodes in the unloading chunk. Descendants in other loaded chunks remain indexed
      * and will reconnect when the controller performs its next dirty topology rebuild.
      */
@@ -296,6 +360,7 @@ public class NetworkStorage {
     public static void clear() {
         ALL_NETWORK_OBJECTS.clear();
         ALL_NETWORK_OBJECTS_BY_CHUNK.clear();
+        maintenanceIterator = Collections.emptyIterator();
         DUPLICATE_REGISTRATION_ATTEMPTS.reset();
         CONFLICTING_REGISTRATION_REPLACEMENTS.reset();
         NetworkRoot.clearAllAccessHistory();
@@ -324,7 +389,7 @@ public class NetworkStorage {
                 controllers.add(root.getNodePosition());
             }
         }
-        controllers.forEach(NetworkController::markTopologyDirty);
+        controllers.forEach(TopologyDirtyQueue::mark);
     }
 
     private static @NotNull Location normalize(@NotNull Location location) {
