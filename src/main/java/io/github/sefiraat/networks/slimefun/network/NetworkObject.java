@@ -43,6 +43,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -54,6 +55,7 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
 
     private static final AtomicBoolean SHARED_TICKER_STARTED = new AtomicBoolean();
     private static volatile BukkitTask sharedTickerTask;
+    private static final Set<Location> PENDING_FIRST_TICK_LOCATIONS = ConcurrentHashMap.newKeySet();
 
     private final NodeType nodeType;
     private final List<Integer> slotsToDrop = new ArrayList<>();
@@ -88,6 +90,7 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
         }
         ChunkWarmupQueue.stop();
         scheduledHangingTick.clear();
+        PENDING_FIRST_TICK_LOCATIONS.clear();
         SHARED_TICKER_STARTED.set(false);
     }
 
@@ -167,26 +170,38 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
     }
 
     /**
-     * Initializes a node once per loaded-chunk lifecycle through the shared warmup queue. This keeps all Bukkit,
-     * entity, Slimefun storage, and inventory work on the server thread while preventing one task per waking block.
+     * Initializes a node once per loaded-chunk lifecycle through the shared warmup queue. The location guard
+     * prevents duplicate first ticks while the shared worker spreads initialization across server ticks.
      */
     private void scheduleFirstTick(@NotNull Location location) {
-        ChunkWarmupQueue.enqueue(location, () -> {
-            final World world = location.getWorld();
-            if (world == null || !world.isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
-                return;
-            }
+        if (!PENDING_FIRST_TICK_LOCATIONS.add(location)) {
+            return;
+        }
 
-            final SlimefunBlockData liveData = StorageCacheUtils.getBlock(location);
-            final SlimefunItem liveItem = liveData == null ? null : SlimefunItem.getById(liveData.getSfId());
-            if (liveData == null || liveItem != NetworkObject.this) {
-                return;
-            }
+        boolean queued = ChunkWarmupQueue.enqueue(location, () -> {
+            try {
+                final World world = location.getWorld();
+                if (world == null || !world.isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
+                    return;
+                }
 
-            HangingBlock.loadHangingBlocks(liveData);
-            HangingBlock.doFirstTick(liveData);
-            addToRegistry(location.getBlock());
+                final SlimefunBlockData liveData = StorageCacheUtils.getBlock(location);
+                final SlimefunItem liveItem = liveData == null ? null : SlimefunItem.getById(liveData.getSfId());
+                if (liveData == null || liveItem != NetworkObject.this) {
+                    return;
+                }
+
+                HangingBlock.loadHangingBlocks(liveData);
+                HangingBlock.doFirstTick(liveData);
+                addToRegistry(location.getBlock());
+            } finally {
+                PENDING_FIRST_TICK_LOCATIONS.remove(location);
+            }
         });
+
+        if (!queued) {
+            PENDING_FIRST_TICK_LOCATIONS.remove(location);
+        }
     }
 
     protected void addToRegistry(@NotNull Block block) {
@@ -217,6 +232,7 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
             }
         }
 
+        PENDING_FIRST_TICK_LOCATIONS.remove(location);
         NetworkStorage.removeNode(location);
         Slimefun.getDatabaseManager().getBlockDataController().removeBlock(location);
     }
