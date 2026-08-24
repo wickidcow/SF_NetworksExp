@@ -212,7 +212,11 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
     }
 
     protected void tickHangingBlocks(@NotNull Block block) {
-        scheduledHangingTick.add(block.getLocation());
+        // The first-tick loader populates this registry for real attachments. Ordinary Network blocks should not
+        // churn through the shared queue every Slimefun tick just to discover that there is nothing to update.
+        if (!HangingBlock.getHangingBlocks(block.getLocation()).isEmpty()) {
+            scheduledHangingTick.add(block.getLocation());
+        }
     }
 
     @OverridingMethodsMustInvokeSuper
