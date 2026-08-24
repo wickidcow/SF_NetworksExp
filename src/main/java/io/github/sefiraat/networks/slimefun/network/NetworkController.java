@@ -115,16 +115,19 @@ public class NetworkController extends NetworkObject {
                     addToRegistry(block);
 
                     final int currentMaxNodes = maxNodes.getValue();
-                    final NetworkRoot previous = NETWORKS.get(location);
-                    boolean fullDiscovery = previous == null
-                        || DIRTY_CONTROLLERS.remove(normalizeControllerLocation(location))
-                        || previous.getMaxNodes() != currentMaxNodes;
+                    final Location controllerKey = normalizeControllerLocation(location);
+                    final boolean markedDirty = DIRTY_CONTROLLERS.remove(controllerKey);
+                    final NetworkRoot cachedRoot = NETWORKS.get(location);
+                    boolean fullDiscovery = cachedRoot == null
+                        || markedDirty
+                        || cachedRoot.getMaxNodes() != currentMaxNodes;
 
                     Map<Location, NodeDefinition> cachedTopology = null;
                     if (!fullDiscovery) {
-                        cachedTopology = snapshotTopology(previous);
+                        cachedTopology = snapshotTopology(cachedRoot);
                         if (cachedTopology == null) {
                             fullDiscovery = true;
+                            DIRTY_CONTROLLERS.remove(controllerKey);
                             CACHED_TOPOLOGY_FALLBACKS.increment();
                         }
                     }
@@ -140,7 +143,7 @@ public class NetworkController extends NetworkObject {
                         candidate.addAllChildren();
                         FULL_TOPOLOGY_REBUILDS.increment();
                     } else {
-                        copyTopology(previous, candidate, cachedTopology);
+                        copyTopology(cachedRoot, candidate, cachedTopology);
                         CACHED_TOPOLOGY_COPIES.increment();
                     }
 
@@ -148,11 +151,11 @@ public class NetworkController extends NetworkObject {
                         candidate.setDisplayParticles(true);
                     }
 
-                    NetworkRoot installed = NETWORKS.put(location, candidate);
-                    if (fullDiscovery && installed != null && installed != candidate) {
+                    NetworkRoot previous = NETWORKS.put(location, candidate);
+                    if (fullDiscovery && previous != null && previous != candidate) {
                         // A real topology change may strand definitions that were part of the old tree but are no
                         // longer reachable. Clean those assignments only on dirty/full rebuilds, not every tick.
-                        NetworkStorage.clearRuntimeAssignments(installed);
+                        NetworkStorage.clearRuntimeAssignments(previous);
                     }
 
                     NodeDefinition definition = NetworkStorage.getNode(location);
