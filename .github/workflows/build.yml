@@ -12,8 +12,8 @@ permissions:
   contents: write
 
 env:
-  LEGACY_ARTIFACT_VERSION: "1.0.1"
-  OUTPUT_NAME: "SF_NetworksExp1.0.1.jar"
+  LEGACY_ARTIFACT_VERSION: "1.0.2"
+  OUTPUT_NAME: "SF_NetworksExp1.0.2.jar"
 
 # Gradle's internal shaded output remains Networks-Legacy-2.1.112-1.0.jar.
 # CI stages that internal JAR as the public versioned Legacy artifact.
@@ -112,5 +112,5 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$JAR" --clobber
           else
-            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Legacy safety update: grabbers, pushers, and wireless transmitters no longer mutate foreign player-viewed menus from async network ticks. Async performance is preserved whenever those menus are not actively viewed."
+            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Performance update for large Networks installations. Stable controller topologies are now reused between ticks instead of rediscovering every neighboring node each cycle. Full topology discovery only runs when the network is dirty, newly loaded, missing cached members, or its node limit changes. Fresh NetworkRoot state is still created each tick so power, storage caches, and events remain current, while synchronized Paper/Slimefun safety is preserved."
           fi
