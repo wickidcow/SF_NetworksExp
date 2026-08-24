@@ -8,6 +8,7 @@ import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.slimefun.network.NetworkController;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
+import io.github.sefiraat.networks.utils.TopologyDirtyQueue;
 import lombok.experimental.UtilityClass;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
@@ -397,7 +398,7 @@ public class NetworkStorage {
                 controllers.add(root.getNodePosition());
             }
         }
-        controllers.forEach(NetworkController::markTopologyDirty);
+        controllers.forEach(TopologyDirtyQueue::mark);
     }
 
     private static @NotNull Location normalize(@NotNull Location location) {
