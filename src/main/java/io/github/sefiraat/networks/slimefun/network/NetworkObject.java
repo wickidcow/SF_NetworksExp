@@ -11,6 +11,7 @@ import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
+import io.github.sefiraat.networks.utils.ChunkWarmupQueue;
 import io.github.sefiraat.networks.utils.StackUtils;
 import io.github.thebusybiscuit.slimefun4.api.exceptions.IncompatibleItemHandlerException;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
@@ -42,7 +43,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -54,12 +54,11 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
 
     private static final AtomicBoolean SHARED_TICKER_STARTED = new AtomicBoolean();
     private static volatile BukkitTask sharedTickerTask;
-    private static final Set<Location> PENDING_FIRST_TICK_LOCATIONS = ConcurrentHashMap.newKeySet();
 
     private final NodeType nodeType;
     private final List<Integer> slotsToDrop = new ArrayList<>();
 
-    /** Starts the shared hanging-block ticker after the plugin instance is fully initialized. */
+    /** Starts the shared hanging-block ticker and bounded chunk-warmup worker after plugin initialization. */
     public static void startSharedTicker() {
         if (!SHARED_TICKER_STARTED.compareAndSet(false, true)) {
             return;
@@ -77,17 +76,18 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
             },
             1L,
             Slimefun.getTickerTask().getTickRate());
+        ChunkWarmupQueue.start();
     }
 
-    /** Stops and clears the shared ticker during plugin shutdown or failed startup. */
+    /** Stops and clears shared runtime workers during plugin shutdown or failed startup. */
     public static void stopSharedTicker() {
         BukkitTask task = sharedTickerTask;
         if (task != null) {
             task.cancel();
             sharedTickerTask = null;
         }
+        ChunkWarmupQueue.stop();
         scheduledHangingTick.clear();
-        PENDING_FIRST_TICK_LOCATIONS.clear();
         SHARED_TICKER_STARTED.set(false);
     }
 
@@ -166,41 +166,27 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
             });
     }
 
-
     /**
-     * Initializes a node once per loaded-chunk lifecycle. The old permanent first-tick set retained every
-     * location until the block was broken, which leaked locations across chunk unload/reload cycles.
+     * Initializes a node once per loaded-chunk lifecycle through the shared warmup queue. This keeps all Bukkit,
+     * entity, Slimefun storage, and inventory work on the server thread while preventing one task per waking block.
      */
     private void scheduleFirstTick(@NotNull Location location) {
-        if (!PENDING_FIRST_TICK_LOCATIONS.add(location)) {
-            return;
-        }
+        ChunkWarmupQueue.enqueue(location, () -> {
+            final World world = location.getWorld();
+            if (world == null || !world.isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
+                return;
+            }
 
-        try {
-            Bukkit.getScheduler().runTask(Networks.getInstance(), () -> {
-                try {
-                    final World world = location.getWorld();
-                    if (world == null || !world.isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
-                        return;
-                    }
+            final SlimefunBlockData liveData = StorageCacheUtils.getBlock(location);
+            final SlimefunItem liveItem = liveData == null ? null : SlimefunItem.getById(liveData.getSfId());
+            if (liveData == null || liveItem != NetworkObject.this) {
+                return;
+            }
 
-                    final SlimefunBlockData liveData = StorageCacheUtils.getBlock(location);
-                    final SlimefunItem liveItem = liveData == null ? null : SlimefunItem.getById(liveData.getSfId());
-                    if (liveData == null || liveItem != NetworkObject.this) {
-                        return;
-                    }
-
-                    HangingBlock.loadHangingBlocks(liveData);
-                    HangingBlock.doFirstTick(liveData);
-                    addToRegistry(location.getBlock());
-                } finally {
-                    PENDING_FIRST_TICK_LOCATIONS.remove(location);
-                }
-            });
-        } catch (RuntimeException exception) {
-            PENDING_FIRST_TICK_LOCATIONS.remove(location);
-            throw exception;
-        }
+            HangingBlock.loadHangingBlocks(liveData);
+            HangingBlock.doFirstTick(liveData);
+            addToRegistry(location.getBlock());
+        });
     }
 
     protected void addToRegistry(@NotNull Block block) {
@@ -231,7 +217,6 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
             }
         }
 
-        PENDING_FIRST_TICK_LOCATIONS.remove(location);
         NetworkStorage.removeNode(location);
         Slimefun.getDatabaseManager().getBlockDataController().removeBlock(location);
     }
