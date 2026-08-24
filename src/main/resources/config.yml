@@ -32,6 +32,10 @@ stability:
   chunk-warmup:
     max-node-initializations-per-tick: 128
     max-work-millis-per-tick: 2
+  # New nodes often register in batches while a chunk warms up. Wait briefly for registration activity to settle
+  # before marking an already-live controller dirty. Removals and chunk unloads are still handled immediately.
+  topology:
+    rebuild-debounce-sf-ticks: 2
 
 # Drawer database safety. Existing CargoStorageUnits.db paths and schemas are preserved.
 database:
