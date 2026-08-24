@@ -102,11 +102,15 @@ public class NetworkUtils {
 
         NetworkNode node = definition.getNode();
 
-        if (node != null && node.getNodeType() == NodeType.CONTROLLER) {
+        if (node.getNodeType() == NodeType.CONTROLLER) {
             NetworkController.wipeNetwork(location);
+            NetworkStorage.removeNodeOnly(location);
+            return;
         }
 
-        NetworkStorage.removeNode(location);
+        // Keep the remaining loaded node definitions indexed. Only the changed block is removed; its live root is
+        // discarded so transfers cannot use stale connectivity while the controller prepares a fresh topology.
+        NetworkStorage.detachNode(location);
     }
 
     public static void clearNearbyNetworks(@NotNull Location location) {
