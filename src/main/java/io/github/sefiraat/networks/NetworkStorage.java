@@ -21,12 +21,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.LongAdder;
@@ -37,8 +36,7 @@ public class NetworkStorage {
 
     private static final Map<ChunkPosition, Set<Location>> ALL_NETWORK_OBJECTS_BY_CHUNK = new ConcurrentHashMap<>();
     private static final Map<Location, NodeDefinition> ALL_NETWORK_OBJECTS = new ConcurrentHashMap<>();
-    private static final Queue<Location> MAINTENANCE_QUEUE = new ConcurrentLinkedQueue<>();
-    private static final Set<Location> MAINTENANCE_QUEUED = ConcurrentHashMap.newKeySet();
+    private static Iterator<Location> maintenanceIterator = Collections.emptyIterator();
     private static final LongAdder DUPLICATE_REGISTRATION_ATTEMPTS = new LongAdder();
     private static final LongAdder CONFLICTING_REGISTRATION_REPLACEMENTS = new LongAdder();
 
@@ -235,9 +233,6 @@ public class NetworkStorage {
         ALL_NETWORK_OBJECTS_BY_CHUNK
             .computeIfAbsent(new ChunkPosition(key), ignored -> ConcurrentHashMap.newKeySet())
             .add(key);
-        if (MAINTENANCE_QUEUED.add(key)) {
-            MAINTENANCE_QUEUE.add(key);
-        }
 
         NetworkRoot oldRoot = conflictingRoot.get();
         if (acceptedIncoming.get() && oldRoot != null) {
@@ -272,9 +267,11 @@ public class NetworkStorage {
     }
 
     /**
-     * Returns a rotating, bounded maintenance window without copying the complete loaded-node registry.
+     * Returns a rotating, bounded maintenance window without copying the complete loaded-node registry or keeping
+     * a second per-location queue. ConcurrentHashMap iterators are weakly consistent, so node registration/removal
+     * can continue without throwing or force-loading chunks while Doctor advances through at most O(budget) keys.
      */
-    public static @NotNull List<Location> getMaintenanceLocations(int maximumEntries) {
+    public static synchronized @NotNull List<Location> getMaintenanceLocations(int maximumEntries) {
         final int target = Math.min(Math.max(1, maximumEntries), ALL_NETWORK_OBJECTS.size());
         if (target == 0) {
             return List.of();
@@ -282,24 +279,19 @@ public class NetworkStorage {
 
         List<Location> selected = new ArrayList<>(target);
         Set<Location> seen = new HashSet<>(target);
-        int maximumPolls = Math.max(target, target * 4);
+        int maximumSteps = Math.max(16, target * 4);
 
-        for (int poll = 0; poll < maximumPolls && selected.size() < target; poll++) {
-            Location location = MAINTENANCE_QUEUE.poll();
-            if (location == null) {
-                break;
+        for (int step = 0; step < maximumSteps && selected.size() < target; step++) {
+            if (!maintenanceIterator.hasNext()) {
+                maintenanceIterator = ALL_NETWORK_OBJECTS.keySet().iterator();
+                if (!maintenanceIterator.hasNext()) {
+                    break;
+                }
             }
 
-            MAINTENANCE_QUEUED.remove(location);
-            if (!ALL_NETWORK_OBJECTS.containsKey(location)) {
-                continue;
-            }
-
-            if (seen.add(location)) {
+            Location location = maintenanceIterator.next();
+            if (ALL_NETWORK_OBJECTS.containsKey(location) && seen.add(location)) {
                 selected.add(location);
-            }
-            if (MAINTENANCE_QUEUED.add(location)) {
-                MAINTENANCE_QUEUE.add(location);
             }
         }
 
@@ -368,8 +360,7 @@ public class NetworkStorage {
     public static void clear() {
         ALL_NETWORK_OBJECTS.clear();
         ALL_NETWORK_OBJECTS_BY_CHUNK.clear();
-        MAINTENANCE_QUEUE.clear();
-        MAINTENANCE_QUEUED.clear();
+        maintenanceIterator = Collections.emptyIterator();
         DUPLICATE_REGISTRATION_ATTEMPTS.reset();
         CONFLICTING_REGISTRATION_REPLACEMENTS.reset();
         NetworkRoot.clearAllAccessHistory();
