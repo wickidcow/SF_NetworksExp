@@ -19,6 +19,85 @@ env:
 # CI stages that internal JAR as the public versioned Legacy artifact.
 
 jobs:
+  # REFORK_REPAIR_BEGIN
+  repair_refork:
+    name: Repair refork merge artifacts
+    if: github.event_name == 'push' && github.ref == 'refs/heads/refork-merge'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out migration branch
+        uses: actions/checkout@v6
+        with:
+          ref: refork-merge
+          fetch-depth: 0
+      - name: Repair and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin legacy-1.0.2-pre-refork
+
+          git checkout origin/legacy-1.0.2-pre-refork -- \
+            src/main/java/com/balugaq/netex/utils/InventoryUtil.java \
+            src/main/java/io/github/sefiraat/networks/network/stackcaches/QuantumCache.java
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('src/main/java/io/github/sefiraat/networks/network/NetworkRoot.java')
+          text = root.read_text()
+          old_advanced = '''        for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
+'''
+          new_advanced = '''        for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {
+            final ItemStack template = blockMenu.getItemInSlot(AdvancedGreedyBlock.TEMPLATE_SLOT);
+            if (template == null || template.getType() == Material.AIR) {
+                continue;
+            }
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
+'''
+          old_greedy = '''        for (BlockMenu blockMenu : getGreedyBlockMenus()) {
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
+            if (slots.length == 0) {
+'''
+          new_greedy = '''        for (BlockMenu blockMenu : getGreedyBlockMenus()) {
+            final ItemStack template = blockMenu.getItemInSlot(NetworkGreedyBlock.TEMPLATE_SLOT);
+            if (template == null || template.getType() == Material.AIR) {
+                continue;
+            }
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
+            if (slots.length == 0) {
+'''
+          if text.count(old_advanced) != 1:
+              raise SystemExit(f'Expected one advanced greedy merge site, found {text.count(old_advanced)}')
+          if text.count(old_greedy) != 1:
+              raise SystemExit(f'Expected one greedy merge site, found {text.count(old_greedy)}')
+          root.write_text(text.replace(old_advanced, new_advanced, 1).replace(old_greedy, new_greedy, 1))
+
+          workflow = Path('.github/workflows/build.yml')
+          wf = workflow.read_text()
+          begin = '  # REFORK_REPAIR_BEGIN\n'
+          end = '  # REFORK_REPAIR_END\n'
+          if wf.count(begin) != 1 or wf.count(end) != 1:
+              raise SystemExit('Repair markers are missing or duplicated')
+          start = wf.index(begin)
+          finish = wf.index(end) + len(end)
+          workflow.write_text(wf[:start] + wf[finish:])
+          PY
+
+          rm -f .github/workflows/refork-repair.yml
+          git diff --check
+          grep -q 'return result;' src/main/java/com/balugaq/netex/utils/InventoryUtil.java
+          test "$(grep -c 'public synchronized ItemStack getItemStack()' src/main/java/io/github/sefiraat/networks/network/stackcaches/QuantumCache.java)" -eq 1
+          grep -q 'AdvancedGreedyBlock.TEMPLATE_SLOT' src/main/java/io/github/sefiraat/networks/network/NetworkRoot.java
+          grep -q 'NetworkGreedyBlock.TEMPLATE_SLOT' src/main/java/io/github/sefiraat/networks/network/NetworkRoot.java
+
+          git add -A
+          git commit -m "fix(refork): resolve upstream merge compile artifacts"
+          git push origin HEAD:refork-merge
+  # REFORK_REPAIR_END
+
   compatibility:
     name: Gate universal release on all supported cores
     uses: ./.github/workflows/compatibility.yml
