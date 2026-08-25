@@ -1,0 +1,32 @@
+name: Refork Merge Upstream
+
+on:
+  push:
+    branches:
+      - refork-merge
+    paths:
+      - '.github/workflows/refork-merge.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  merge-upstream:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out migration branch
+        uses: actions/checkout@v4
+        with:
+          ref: refork-merge
+          fetch-depth: 0
+
+      - name: Merge latest upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/ytdd9527/NetworksExpansion.git || true
+          git fetch upstream master
+          git merge --no-ff -X ours upstream/master -m "merge: refork onto latest NetworksExpansion upstream"
+          git push origin HEAD:refork-merge
