@@ -588,6 +588,10 @@ public class NetworkRoot extends NetworkNode {
         }
 
         for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {
+            final ItemStack template = blockMenu.getItemInSlot(AdvancedGreedyBlock.TEMPLATE_SLOT);
+            if (template == null || template.getType() == Material.AIR) {
+                continue;
+            }
             int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
             for (int slot : slots) {
                 final ItemStack itemStack = blockMenu.getItemInSlot(slot);
@@ -597,6 +601,10 @@ public class NetworkRoot extends NetworkNode {
         }
 
         for (BlockMenu blockMenu : getGreedyBlockMenus()) {
+            final ItemStack template = blockMenu.getItemInSlot(NetworkGreedyBlock.TEMPLATE_SLOT);
+            if (template == null || template.getType() == Material.AIR) {
+                continue;
+            }
             int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
             if (slots.length == 0) {
                 continue;

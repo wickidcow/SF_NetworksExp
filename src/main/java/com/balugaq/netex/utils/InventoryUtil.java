@@ -9,8 +9,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
-import org.jspecify.annotations.NullMarked;
-import org.jspecify.annotations.Nullable;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;
 
@@ -29,10 +28,11 @@ public class InventoryUtil {
     public static @NotNull HashMap<Integer, ItemStack> addItem(@NotNull Player player, ItemStack... toAdd) {
         HashMap<Integer, ItemStack> result = addItem(player.getInventory(), toAdd);
         player.updateInventory();
+        return result;
     }
 
-    public static void addItem(InventoryHolder holder, @Nullable ItemStack... toAdds) {
-        addItem(holder.getInventory(), toAdds);
+    public static @NotNull HashMap<Integer, ItemStack> addItem(@NotNull InventoryHolder holder, ItemStack... toAdds) {
+        return addItem(holder.getInventory(), toAdds);
     }
 
     public static @NotNull HashMap<Integer, ItemStack> addItem(
@@ -88,11 +88,11 @@ public class InventoryUtil {
         return leftovers;
     }
 
-    public static int firstSimilar(@Nullable ItemStack [] storage, ItemStack item) {
+    public static int firstSimilar(ItemStack @NotNull [] storage, ItemStack item) {
         return firstSimilar(storage, item, true);
     }
 
-    public static int firstSimilar(@Nullable ItemStack[] storage, ItemStack item, boolean withoutAmount) {
+    public static int firstSimilar(ItemStack @NotNull [] storage, ItemStack item, boolean withoutAmount) {
         for (int i = 0; i < storage.length; i++) {
             if (storage[i] != null
                 && storage[i].getAmount() < storage[i].getMaxStackSize()
@@ -103,10 +103,9 @@ public class InventoryUtil {
         return -1;
     }
 
-    public static int firstEmpty(@Nullable ItemStack[] storage) {
+    public static int firstEmpty(ItemStack @NotNull [] storage) {
         for (int i = 0; i < storage.length; i++) {
-            var stack = storage[i];
-            if (stack == null || stack.getType() == Material.AIR) {
+            if (storage[i] == null || storage[i].getType() == Material.AIR) {
                 return i;
             }
         }

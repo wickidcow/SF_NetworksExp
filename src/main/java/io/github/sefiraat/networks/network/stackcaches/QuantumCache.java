@@ -8,7 +8,6 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.annotations.UnknownNullability;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -220,15 +219,5 @@ public class QuantumCache extends ItemStackCache {
 
     private static long clampAmount(long value, long limit) {
         return Math.max(0L, Math.min(value, Math.max(1L, limit)));
-    }
-
-    @Nullable
-    public ItemStack getItemStack() {
-        return super.getItemStack();
-    }
-
-    @Override
-    public synchronized void setItemStack(ItemStack itemStack) {
-        super.setItemStack(itemStack);
     }
 }
