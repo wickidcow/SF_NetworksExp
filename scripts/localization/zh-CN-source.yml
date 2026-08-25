@@ -50,6 +50,7 @@ messages:
     no_valid_recipe_found: "未找到有效配方"
     not_allowed_block: "不被允许的方块"
     not_blueprint: "不是蓝图"
+    not_enough_items: "没有足够的物品"
     not_enough_items_in_network: "网络中没有足够的物品"
     not_enough_power: "没有足够的网络能源"
     not_enough_resources: "网络中没有足够的原材料"

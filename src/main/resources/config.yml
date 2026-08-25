@@ -177,55 +177,42 @@ items:
   CARGO_STORAGE_UNIT_1_MODEL:
     use-special-model:
       enable: true
-      type: "1"
   CARGO_STORAGE_UNIT_2_MODEL:
     use-special-model:
       enable: true
-      type: "2"
   CARGO_STORAGE_UNIT_3_MODEL:
     use-special-model:
       enable: true
-      type: "3"
   CARGO_STORAGE_UNIT_4_MODEL:
     use-special-model:
       enable: true
-      type: "4"
   CARGO_STORAGE_UNIT_5_MODEL:
     use-special-model:
       enable: true
-      type: "5"
   CARGO_STORAGE_UNIT_6_MODEL:
     use-special-model:
       enable: true
-      type: "6"
   CARGO_STORAGE_UNIT_7_MODEL:
     use-special-model:
       enable: true
-      type: "7"
   CARGO_STORAGE_UNIT_8_MODEL:
     use-special-model:
       enable: true
-      type: "8"
   CARGO_STORAGE_UNIT_9_MODEL:
     use-special-model:
       enable: true
-      type: "9"
   CARGO_STORAGE_UNIT_10_MODEL:
     use-special-model:
       enable: true
-      type: "10"
   CARGO_STORAGE_UNIT_11_MODEL:
     use-special-model:
       enable: true
-      type: "11"
   CARGO_STORAGE_UNIT_12_MODEL:
     use-special-model:
       enable: true
-      type: "12"
   CARGO_STORAGE_UNIT_13_MODEL:
     use-special-model:
       enable: true
-      type: "13"
   NTW_EXPANSION_LINE_POWER_OUTLET_1:
     max-distance: 32
     rate: 64

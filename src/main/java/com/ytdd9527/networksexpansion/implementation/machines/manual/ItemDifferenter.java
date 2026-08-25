@@ -121,7 +121,7 @@ public class ItemDifferenter extends NetworkObject {
     public static ItemStack getResultIcon(String result, boolean isSimilar) {
         ItemStack i = Icon.DIFF_RESULT_ICON.clone();
         ItemMeta meta = i.getItemMeta();
-        meta.setDisplayName((result.equals("no-item") ? "" : ("isSimilar: " + isSimilar + " | ")) + meta.getDisplayName() + ": " + result);
+        meta.setDisplayName((result.equals("no-item") ? "" : ("isSimilar: " + isSimilar + " | ")) + meta.getDisplayName() + result);
         i.setItemMeta(meta);
         return i;
     }

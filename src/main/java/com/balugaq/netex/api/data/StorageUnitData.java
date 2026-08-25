@@ -369,7 +369,7 @@ public class StorageUnitData {
     }
 
     @Nullable
-    public ItemStack requestItem0(@NotNull Location accessor, @NotNull ItemRequest itemRequest) {
+    public synchronized ItemStack requestItem0(@NotNull Location accessor, @NotNull ItemRequest itemRequest) {
         return requestItem0(accessor, itemRequest, true);
     }
 

@@ -576,38 +576,14 @@ public class NetworkRoot extends NetworkNode {
 
         // Barrels
         for (BarrelIdentity barrelIdentity : getOutputAbleBarrels()) {
-            final Long currentAmount = itemStacks.get(barrelIdentity.getItemStack());
-            final long newAmount;
-            if (currentAmount == null) {
-                newAmount = barrelIdentity.getAmount();
-            } else {
-                long newLong = currentAmount + barrelIdentity.getAmount();
-                if (newLong < 0) {
-                    newAmount = 0;
-                } else {
-                    newAmount = currentAmount + barrelIdentity.getAmount();
-                }
-            }
-            itemStacks.put(barrelIdentity.getItemStack(), newAmount);
+            addAmount(itemStacks, barrelIdentity.getItemStack(), barrelIdentity.getAmount());
         }
 
         // Cargo storage units
         Map<StorageUnitData, Location> cacheMap = getOutputAbleCargoStorageUnitDatas();
         for (StorageUnitData cache : cacheMap.keySet()) {
             for (ItemContainer itemContainer : cache.getStoredItems()) {
-                final Long currentAmount = itemStacks.get(itemContainer.getSample());
-                long newAmount;
-                if (currentAmount == null) {
-                    newAmount = itemContainer.getAmount();
-                } else {
-                    long newLong = currentAmount + (long) itemContainer.getAmount();
-                    if (newLong < 0) {
-                        newAmount = 0;
-                    } else {
-                        newAmount = currentAmount + itemContainer.getAmount();
-                    }
-                }
-                itemStacks.put(itemContainer.getSample(), newAmount);
+                addAmount(itemStacks, itemContainer.getSample(), itemContainer.getAmount());
             }
         }
 
@@ -615,23 +591,8 @@ public class NetworkRoot extends NetworkNode {
             int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
             for (int slot : slots) {
                 final ItemStack itemStack = blockMenu.getItemInSlot(slot);
-                if (itemStack == null || itemStack.getType() == Material.AIR) {
-                    continue;
-                }
-                final ItemStack clone = StackUtils.getAsQuantity(itemStack, 1);
-                final Long currentAmount = itemStacks.get(clone);
-                final long newAmount;
-                if (currentAmount == null) {
-                    newAmount = itemStack.getAmount();
-                } else {
-                    long newLong = currentAmount + (long) itemStack.getAmount();
-                    if (newLong < 0) {
-                        newAmount = 0;
-                    } else {
-                        newAmount = currentAmount + itemStack.getAmount();
-                    }
-                }
-                itemStacks.put(clone, newAmount);
+                final ItemStack clone = StackUtils.getAsQuantity(itemStack == null || itemStack.getType() == Material.AIR ? template : itemStack, 1);
+                addAmount(itemStacks, clone, itemStack);
             }
         }
 
@@ -641,46 +602,18 @@ public class NetworkRoot extends NetworkNode {
                 continue;
             }
             final ItemStack itemStack = blockMenu.getItemInSlot(slots[0]);
-            if (itemStack == null || itemStack.getType() == Material.AIR) {
-                continue;
-            }
-            final ItemStack clone = StackUtils.getAsQuantity(itemStack, 1);
-            final Long currentAmount = itemStacks.get(clone);
-            final long newAmount;
-            if (currentAmount == null) {
-                newAmount = itemStack.getAmount();
-            } else {
-                long newLong = currentAmount + (long) itemStack.getAmount();
-                if (newLong < 0) {
-                    newAmount = 0;
-                } else {
-                    newAmount = currentAmount + itemStack.getAmount();
-                }
-            }
-            itemStacks.put(clone, newAmount);
+            final ItemStack clone = StackUtils.getAsQuantity(itemStack == null || itemStack.getType() == Material.AIR ? template : itemStack, 1);
+            addAmount(itemStacks, clone, itemStack);
         }
 
         for (BlockMenu blockMenu : getCrafterOutputs()) {
             int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
             for (int slot : slots) {
                 final ItemStack itemStack = blockMenu.getItemInSlot(slot);
-                if (itemStack == null || itemStack.getType() == Material.AIR) {
-                    continue;
+                if (itemStack != null && itemStack.getType() != Material.AIR) {
+                    final ItemStack clone = StackUtils.getAsQuantity(itemStack, 1);
+                    addAmount(itemStacks, clone, itemStack);
                 }
-                final ItemStack clone = StackUtils.getAsQuantity(itemStack, 1);
-                final Long currentAmount = itemStacks.get(clone);
-                final long newAmount;
-                if (currentAmount == null) {
-                    newAmount = itemStack.getAmount();
-                } else {
-                    long newLong = currentAmount + (long) itemStack.getAmount();
-                    if (newLong < 0) {
-                        newAmount = 0;
-                    } else {
-                        newAmount = currentAmount + itemStack.getAmount();
-                    }
-                }
-                itemStacks.put(clone, newAmount);
             }
         }
 
@@ -689,25 +622,8 @@ public class NetworkRoot extends NetworkNode {
             for (int slot : CELL_AVAILABLE_SLOTS) {
                 final ItemStack itemStack = blockMenu.getItemInSlot(slot);
                 if (itemStack != null && itemStack.getType() != Material.AIR) {
-                    final ItemStack clone = itemStack.clone();
-
-                    clone.setAmount(1);
-
-                    final Long currentAmount = itemStacks.get(clone);
-                    long newAmount;
-
-                    if (currentAmount == null) {
-                        newAmount = itemStack.getAmount();
-                    } else {
-                        long newLong = currentAmount + (long) itemStack.getAmount();
-                        if (newLong < 0) {
-                            newAmount = 0;
-                        } else {
-                            newAmount = currentAmount + itemStack.getAmount();
-                        }
-                    }
-
-                    itemStacks.put(clone, newAmount);
+                    final ItemStack clone = StackUtils.getAsQuantity(itemStack, 1);
+                    addAmount(itemStacks, clone, itemStack);
                 }
             }
         }
@@ -1056,6 +972,16 @@ public class NetworkRoot extends NetworkNode {
         }
 
         return stackToReturn;
+    }
+
+    public static void addAmount(Map<ItemStack, Long> all, ItemStack key, @Nullable ItemStack item) {
+        if (item == null || item.getType() == Material.AIR) return;
+        long current = all.getOrDefault(key, 0L);
+        all.put(key, current + item.getAmount());
+    }
+
+    public static void addAmount(Map<ItemStack, Long> all, ItemStack key, long amount) {
+        all.put(key, all.getOrDefault(key, 0L) + amount);
     }
 
     public boolean contains(@NotNull ItemStack itemStack) {
