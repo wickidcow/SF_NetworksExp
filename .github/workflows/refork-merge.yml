@@ -28,5 +28,24 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote add upstream https://github.com/ytdd9527/NetworksExpansion.git || true
           git fetch upstream master
+
+          set +e
           git merge --no-ff -X ours upstream/master -m "merge: refork onto latest NetworksExpansion upstream"
+          merge_status=$?
+          set -e
+
+          if [ "$merge_status" -ne 0 ]; then
+            conflicts="$(git diff --name-only --diff-filter=U)"
+            expected="src/main/java/com/balugaq/netex/api/data/SimpleRecipeChoice.java"
+            if [ "$conflicts" != "$expected" ]; then
+              echo "Unexpected merge conflicts:"
+              printf '%s\n' "$conflicts"
+              exit 1
+            fi
+
+            # Networks Legacy intentionally retains its compatibility implementation.
+            git add "$expected"
+            git commit --no-edit
+          fi
+
           git push origin HEAD:refork-merge
