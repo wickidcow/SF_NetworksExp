@@ -35,34 +35,16 @@ jobs:
           from pathlib import Path
           path = Path('src/main/java/io/github/sefiraat/networks/network/NetworkRoot.java')
           text = path.read_text()
-          old_a = """        for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {
-            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
-"""
-          new_a = """        for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {
-            final ItemStack template = blockMenu.getItemInSlot(AdvancedGreedyBlock.TEMPLATE_SLOT);
-            if (template == null || template.getType() == Material.AIR) {
-                continue;
-            }
-            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
-"""
-          old_g = """        for (BlockMenu blockMenu : getGreedyBlockMenus()) {
-            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
-            if (slots.length == 0) {
-"""
-          new_g = """        for (BlockMenu blockMenu : getGreedyBlockMenus()) {
-            final ItemStack template = blockMenu.getItemInSlot(NetworkGreedyBlock.TEMPLATE_SLOT);
-            if (template == null || template.getType() == Material.AIR) {
-                continue;
-            }
-            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
-            if (slots.length == 0) {
-"""
+          old_a = "        for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {\n            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);\n"
+          new_a = "        for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {\n            final ItemStack template = blockMenu.getItemInSlot(AdvancedGreedyBlock.TEMPLATE_SLOT);\n            if (template == null || template.getType() == Material.AIR) {\n                continue;\n            }\n            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);\n"
+          old_g = "        for (BlockMenu blockMenu : getGreedyBlockMenus()) {\n            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);\n            if (slots.length == 0) {\n"
+          new_g = "        for (BlockMenu blockMenu : getGreedyBlockMenus()) {\n            final ItemStack template = blockMenu.getItemInSlot(NetworkGreedyBlock.TEMPLATE_SLOT);\n            if (template == null || template.getType() == Material.AIR) {\n                continue;\n            }\n            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);\n            if (slots.length == 0) {\n"
           assert text.count(old_a) == 1, text.count(old_a)
           assert text.count(old_g) == 1, text.count(old_g)
           path.write_text(text.replace(old_a, new_a, 1).replace(old_g, new_g, 1))
           PY
 
-          rm -f .github/workflows/refork-repair.yml
+          rm -f .github/workflows/refork-repair.yml .refork-trigger
           git diff --check
           grep -q 'return result;' src/main/java/com/balugaq/netex/utils/InventoryUtil.java
           test "$(grep -c 'public synchronized ItemStack getItemStack()' src/main/java/io/github/sefiraat/networks/network/stackcaches/QuantumCache.java)" -eq 1
