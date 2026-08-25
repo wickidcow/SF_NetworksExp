@@ -62,10 +62,7 @@ public class Calculator {
             char c = expr.charAt(i);
 
             if (Character.isDigit(c) || c == '.') {
-                int j = i;
-                while (j < n && (Character.isDigit(expr.charAt(j)) || expr.charAt(j) == '.')) {
-                    j++;
-                }
+                int j = readNumberEnd(expr, i);
 
                 boolean isPercentage = false;
                 if (j < n && expr.charAt(j) == '%') {
@@ -118,10 +115,7 @@ public class Calculator {
                         throw new NumberFormatException("Invalid positive signature: " + expression);
                     }
 
-                    int j = i + 1;
-                    while (j < n && (Character.isDigit(expr.charAt(j)) || expr.charAt(j) == '.')) {
-                        j++;
-                    }
+                    int j = readNumberEnd(expr, i + 1);
 
                     boolean isPercentage = false;
                     if (j < n && expr.charAt(j) == '%') {
@@ -144,10 +138,7 @@ public class Calculator {
                         throw new NumberFormatException("Invalid negative signature: " + expression);
                     }
 
-                    int j = i + 1;
-                    while (j < n && (Character.isDigit(expr.charAt(j)) || expr.charAt(j) == '.')) {
-                        j++;
-                    }
+                    int j = readNumberEnd(expr, i + 1);
 
                     boolean isPercentage = false;
                     if (j < n && expr.charAt(j) == '%') {
@@ -229,6 +220,33 @@ public class Calculator {
         }
 
         return expr;
+    }
+
+    private static int readNumberEnd(String expr, int start) {
+        int j = start;
+        int n = expr.length();
+
+        while (j < n && (Character.isDigit(expr.charAt(j)) || expr.charAt(j) == '.')) {
+            j++;
+        }
+
+        if (j < n && (expr.charAt(j) == 'e' || expr.charAt(j) == 'E')) {
+            int k = j + 1;
+            if (k < n && (expr.charAt(k) == '+' || expr.charAt(k) == '-')) {
+                k++;
+            }
+
+            int exponentStart = k;
+            while (k < n && Character.isDigit(expr.charAt(k))) {
+                k++;
+            }
+
+            if (k > exponentStart) {
+                j = k;
+            }
+        }
+
+        return j;
     }
 
     private static BigDecimal parseNumber(String numStr) throws NumberFormatException {

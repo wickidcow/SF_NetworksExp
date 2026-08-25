@@ -7,6 +7,7 @@ import com.balugaq.netex.utils.InventoryUtil;
 import com.balugaq.netex.utils.NetworksVersionedEnchantment;
 import com.ytdd9527.networksexpansion.utils.TextUtil;
 import io.github.sefiraat.networks.utils.StackUtils;
+import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.collections.Pair;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.items.nms.ItemNameAdapter;
 import io.github.thebusybiscuit.slimefun4.utils.itemstack.ItemStackWrapper;
@@ -25,6 +26,8 @@ import org.bukkit.persistence.PersistentDataType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -77,6 +80,51 @@ public final class ItemStackUtil {
         ItemStack itemStack = item instanceof ItemStackWrapper ? ItemStackUtil.getCleanItem(item) : item.clone();
         itemStack.setAmount(amount);
         return itemStack;
+    }
+
+    private static final @Nullable VarHandle API_ITEM_STACK_CRAFT_DELEGATE_FIELD;
+    static {
+        if (StackUtils.IS_1_21) {
+            try {
+                API_ITEM_STACK_CRAFT_DELEGATE_FIELD = MethodHandles.privateLookupIn(
+                    ItemStack.class,
+                    MethodHandles.lookup()
+                ).findVarHandle(ItemStack.class, "craftDelegate", ItemStack.class);
+            } catch (final IllegalAccessException | NoSuchFieldException exception) {
+                throw new RuntimeException(exception);
+            }
+        } else {
+            API_ITEM_STACK_CRAFT_DELEGATE_FIELD = null;
+        }
+    }
+
+    private static ItemStack getDelegate(ItemStack bukkit) {
+        if (StackUtils.IS_1_21) {
+            return (ItemStack) API_ITEM_STACK_CRAFT_DELEGATE_FIELD.get(bukkit);
+        } else {
+            return bukkit;
+        }
+    }
+
+    public static @NotNull ItemStack asCraftItemStack(@NotNull ItemStack stack) {
+        if (StackUtils.IS_1_21) {
+            if (stack instanceof SlimefunItemStack) {
+                return ItemStackUtil.getCleanItem(stack);
+            }
+            if (stack instanceof ItemStackWrapper) {
+                return ItemStackUtil.getCleanItem(stack);
+            }
+
+            var delegate = getDelegate(stack);
+            if (delegate instanceof SlimefunItemStack) {
+                return ItemStackUtil.getCleanItem(stack);
+            }
+            if (delegate instanceof ItemStackWrapper) {
+                return ItemStackUtil.getCleanItem(stack);
+            }
+        }
+
+        return stack;
     }
 
     /**
@@ -1026,9 +1074,9 @@ public final class ItemStackUtil {
             ItemStack incoming = toGive.clone();
             incoming.setAmount(Math.min(toGive.getMaxStackSize(), toGive.getAmount()));
             toGive.setAmount(toGive.getAmount() - incoming.getAmount());
-            Collection<ItemStack> leftover = InventoryUtil.addItem(p, incoming).values();
-            for (ItemStack itemStack : leftover) {
-                p.getWorld().dropItemNaturally(p.getLocation(), itemStack);
+            InventoryUtil.addItem(p, incoming);
+            if (incoming.getAmount() > 0) {
+                p.getWorld().dropItemNaturally(p.getLocation(), incoming);
             }
         }
     }
