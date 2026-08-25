@@ -139,33 +139,6 @@ tasks {
         dependsOn(shadowJar)
     }
 
-    runServer {
-        dependsOn(shadowJar)
-        val run = file(providers.gradleProperty("server.run.dir").orElse("run"))
-        runDirectory.set(run)
-
-        doFirst {
-            run.resolve("eula.txt").writeText("eula=true")
-
-            val pl = run.resolve("plugins")
-            pl.mkdirs()
-            copy {
-                from(projectDir.resolve("build/libs")) {
-                    include("${name}-${version}.jar")
-                }
-                into(pl)
-            }
-        }
-
-        jvmArgs(
-            "-Dfile.encoding=UTF-8",
-            "-Dsun.jnu.encoding=UTF-8",
-            "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5001",
-            "-Dnet.kyori.adventure.text.warn_when_legacy_formatting_detected=false"
-        )
-        maxHeapSize = "4G"
-        minecraftVersion("1.20.1")
-    }
 }
 
 defaultTasks("clean", "build")
