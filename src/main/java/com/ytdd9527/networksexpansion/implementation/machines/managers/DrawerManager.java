@@ -7,8 +7,6 @@ import com.balugaq.netex.api.enums.FeedbackType;
 import com.balugaq.netex.api.events.NetworkRootLocateStorageEvent;
 import com.balugaq.netex.api.helpers.Icon;
 import com.balugaq.netex.utils.Lang;
-import com.github.houbb.pinyin.constant.enums.PinyinStyleEnum;
-import com.github.houbb.pinyin.util.PinyinHelper;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import com.ytdd9527.networksexpansion.implementation.ExpansionItems;
@@ -36,7 +34,7 @@ import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
-import net.guizhanss.guizhanlib.minecraft.helper.inventory.ItemStackHelper;
+import io.github.sefiraat.networks.utils.DisplayNameUtils;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -108,7 +106,7 @@ public class DrawerManager extends NetworkObject {
 
             @Override
             public boolean isSynchronized() {
-                return false;
+                return io.github.sefiraat.networks.Networks.getConfigManager().useSynchronizedMachineTickers();
             }
 
             @Override
@@ -221,16 +219,8 @@ public class DrawerManager extends NetworkObject {
                 }
 
                 String name = TextUtil.stripColor(
-                    ItemStackHelper.getDisplayName(itemStack).toLowerCase(Locale.ROOT));
-                if (cache.getFilter().matches("^[a-zA-Z]+$")) {
-                    final String pinyinName = PinyinHelper.toPinyin(name, PinyinStyleEnum.INPUT, "");
-                    final String pinyinFirstLetter = PinyinHelper.toPinyin(name, PinyinStyleEnum.FIRST_LETTER, "");
-                    return name.contains(cache.getFilter())
-                        || pinyinName.contains(cache.getFilter())
-                        || pinyinFirstLetter.contains(cache.getFilter());
-                } else {
-                    return name.contains(cache.getFilter());
-                }
+                    DisplayNameUtils.getDisplayName(itemStack).toLowerCase(Locale.ROOT));
+                return name.contains(cache.getFilter());
             })
             .sorted(SORT_MAP.get(cache.getSortOrder()))
             .toList();
@@ -381,7 +371,7 @@ public class DrawerManager extends NetworkObject {
                     displayStack = new CustomItemStack(displayStack, TextUtil.color(name));
                 } else if (!isEmpty) {
                     displayStack = new CustomItemStack(
-                        displayStack, TextUtil.GRAY + ItemStackHelper.getDisplayName(dataItemStack));
+                        displayStack, TextUtil.GRAY + DisplayNameUtils.getDisplayName(dataItemStack));
                 } else {
                     SlimefunItem sf = StorageCacheUtils.getSfItem(dataLocation);
                     if (sf == null) {

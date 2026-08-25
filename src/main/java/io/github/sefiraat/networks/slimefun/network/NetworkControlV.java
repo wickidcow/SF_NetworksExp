@@ -9,6 +9,7 @@ import dev.sefiraat.sefilib.world.LocationUtils;
 import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.managers.SupportedPluginManager;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
 import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
@@ -19,7 +20,6 @@ import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.blocks.BlockPosition;
 import io.github.thebusybiscuit.slimefun4.utils.tags.SlimefunTag;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
-import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Material;
 import org.bukkit.Particle;
@@ -158,20 +158,45 @@ public class NetworkControlV extends NetworkDirectional implements SoftCellBanna
             return;
         }
 
-        this.blockCache.add(targetPosition);
-        Bukkit.getScheduler().runTask(Networks.getInstance(), bukkitTask -> {
+        try {
             targetBlock.setType(fetchedStack.getType(), true);
-            if (SupportedPluginManager.getInstance().isMcMMO()) {
-                try {
-                    mcMMO.getChunkManager().setTrue(targetBlock);
-                } catch (NoClassDefFoundError e) {
-                    mcMMO.getPlaceStore().setTrue(targetBlock);
-                }
+        } catch (RuntimeException exception) {
+            NetworkTransferUtils.rollbackNetworkWithdrawal(
+                definition.getNode().getRoot(),
+                blockMenu.getLocation(),
+                fetchedStack,
+                blockMenu.getLocation(),
+                "Control V block placement");
+            Networks.getInstance().getLogger().warning(
+                "Control V could not place " + fetchedStack.getType() + " at " + targetBlock.getLocation()
+                    + ": " + exception.getMessage());
+            sendFeedback(blockMenu.getLocation(), FeedbackType.ERROR_OCCURRED);
+            return;
+        }
+
+        if (targetBlock.getType() != fetchedStack.getType()) {
+            NetworkTransferUtils.rollbackNetworkWithdrawal(
+                definition.getNode().getRoot(),
+                blockMenu.getLocation(),
+                fetchedStack,
+                blockMenu.getLocation(),
+                "Control V block placement");
+            sendFeedback(blockMenu.getLocation(), FeedbackType.ERROR_OCCURRED);
+            return;
+        }
+
+        fetchedStack.setAmount(0);
+        this.blockCache.add(targetPosition);
+        if (SupportedPluginManager.getInstance().isMcMMO()) {
+            try {
+                mcMMO.getChunkManager().setTrue(targetBlock);
+            } catch (NoClassDefFoundError e) {
+                mcMMO.getPlaceStore().setTrue(targetBlock);
             }
-            ParticleUtils.displayParticleRandomly(
-                LocationUtils.centre(targetBlock.getLocation()), Particle.ELECTRIC_SPARK, 1, 5);
-            sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
-        });
+        }
+        ParticleUtils.displayParticleRandomly(
+            LocationUtils.centre(targetBlock.getLocation()), Particle.ELECTRIC_SPARK, 1, 5);
+        sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
     }
 
     @Override

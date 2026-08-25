@@ -27,7 +27,7 @@ import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
-import net.guizhanss.guizhanlib.minecraft.helper.MaterialHelper;
+import io.github.sefiraat.networks.utils.DisplayNameUtils;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -160,7 +160,7 @@ public abstract class NetworkDirectional extends NetworkObject {
                 String.format(
                     Lang.getString("messages.normal-operation.directional.display_name"),
                     blockFace.name(),
-                    MaterialHelper.getName(blockMaterial)));
+                    DisplayNameUtils.getMaterialName(blockMaterial)));
             final ItemMeta itemMeta = displayStack.getItemMeta();
             itemMeta.setLore(Lang.getStringList("messages.normal-operation.directional.display_lore"));
             if (active) {
@@ -366,7 +366,7 @@ public abstract class NetworkDirectional extends NetworkObject {
             @Override
             public boolean canOpen(@NotNull Block block, @NotNull Player player) {
                 return player.hasPermission("slimefun.inventory.bypass")
-                    || (this.getSlimefunItem().canUse(player, false)
+                    || (NetworkDirectional.this.canUse(player, false)
                     && Slimefun.getProtectionManager()
                     .hasPermission(player, block.getLocation(), Interaction.INTERACT_BLOCK));
             }
@@ -400,9 +400,10 @@ public abstract class NetworkDirectional extends NetworkObject {
             final Location location = targetMenu.getLocation();
             final SlimefunItem item = StorageCacheUtils.getSfItem(location);
             if (item != null
-                && item.canUse(player, true)
-                && Slimefun.getProtectionManager()
-                .hasPermission(player, blockMenu.getLocation(), Interaction.INTERACT_BLOCK)) {
+                && (player.hasPermission("slimefun.inventory.bypass") || item.canUse(player, true))
+                && (player.hasPermission("slimefun.inventory.bypass")
+                || Slimefun.getProtectionManager()
+                .hasPermission(player, location, Interaction.INTERACT_BLOCK))) {
                 targetMenu.open(player);
             }
         }

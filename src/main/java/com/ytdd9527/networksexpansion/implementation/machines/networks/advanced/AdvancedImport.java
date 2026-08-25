@@ -6,6 +6,7 @@ import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
 import com.ytdd9527.networksexpansion.implementation.ExpansionItems;
 import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.network.NetworkRoot;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
@@ -62,7 +63,7 @@ public class AdvancedImport extends NetworkObject implements RecipeDisplayItem {
 
             @Override
             public boolean isSynchronized() {
-                return false;
+                return io.github.sefiraat.networks.Networks.getConfigManager().useSynchronizedMachineTickers();
             }
 
             @Override
@@ -99,9 +100,11 @@ public class AdvancedImport extends NetworkObject implements RecipeDisplayItem {
             if (itemStack == null || itemStack.getType() == Material.AIR) {
                 continue;
             }
-            root.addItemStack0(blockMenu.getLocation(), itemStack);
+            if (NetworkTransferUtils.moveMenuSlotIntoNetwork(
+                root, blockMenu.getLocation(), blockMenu, inputSlot) > 0) {
+                sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
+            }
         }
-        sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
     }
 
     @Override

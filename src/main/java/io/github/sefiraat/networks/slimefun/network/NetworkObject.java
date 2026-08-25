@@ -1,5 +1,6 @@
 package io.github.sefiraat.networks.slimefun.network;
 
+import com.balugaq.netex.api.data.StorageUnitData;
 import com.balugaq.netex.api.interfaces.HangingBlock;
 import com.balugaq.netex.utils.Lang;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
@@ -10,6 +11,7 @@ import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
+import io.github.sefiraat.networks.utils.ChunkWarmupQueue;
 import io.github.sefiraat.networks.utils.StackUtils;
 import io.github.thebusybiscuit.slimefun4.api.exceptions.IncompatibleItemHandlerException;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
@@ -24,23 +26,26 @@ import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Range;
 
 import javax.annotation.OverridingMethodsMustInvokeSuper;
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Getter
 public abstract class NetworkObject extends SpecialSlimefunItem implements AdminDebuggable {
@@ -48,24 +53,46 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
     protected static final Set<BlockFace> CHECK_FACES =
         Set.of(BlockFace.UP, BlockFace.DOWN, BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST);
 
-    static {
-        Bukkit.getScheduler()
-            .runTaskTimer(
-                Networks.getInstance(),
-                () -> {
-                    while (!scheduledHangingTick.isEmpty()) {
-                        final Location location = scheduledHangingTick.poll();
-                        final Block block = location.getBlock();
-                        HangingBlock.tickHangingBlocks(block);
-                    }
-                },
-                1L,
-                Slimefun.getTickerTask().getTickRate());
-    }
+    private static final AtomicBoolean SHARED_TICKER_STARTED = new AtomicBoolean();
+    private static volatile BukkitTask sharedTickerTask;
+    private static final Set<Location> PENDING_FIRST_TICK_LOCATIONS = ConcurrentHashMap.newKeySet();
 
     private final NodeType nodeType;
     private final List<Integer> slotsToDrop = new ArrayList<>();
-    private final Set<Location> firstTickLocations = new HashSet<>();
+
+    /** Starts the shared hanging-block ticker and bounded chunk-warmup worker after plugin initialization. */
+    public static void startSharedTicker() {
+        if (!SHARED_TICKER_STARTED.compareAndSet(false, true)) {
+            return;
+        }
+        sharedTickerTask = Bukkit.getScheduler().runTaskTimer(
+            Networks.getInstance(),
+            () -> {
+                Location location;
+                while ((location = scheduledHangingTick.poll()) != null) {
+                    World world = location.getWorld();
+                    if (world != null && world.isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
+                        HangingBlock.tickHangingBlocks(location.getBlock());
+                    }
+                }
+            },
+            1L,
+            Slimefun.getTickerTask().getTickRate());
+        ChunkWarmupQueue.start();
+    }
+
+    /** Stops and clears shared runtime workers during plugin shutdown or failed startup. */
+    public static void stopSharedTicker() {
+        BukkitTask task = sharedTickerTask;
+        if (task != null) {
+            task.cancel();
+            sharedTickerTask = null;
+        }
+        ChunkWarmupQueue.stop();
+        scheduledHangingTick.clear();
+        PENDING_FIRST_TICK_LOCATIONS.clear();
+        SHARED_TICKER_STARTED.set(false);
+    }
 
     protected NetworkObject(
         @NotNull ItemGroup itemGroup,
@@ -106,18 +133,12 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
 
                 @Override
                 public void tick(@NotNull Block b, SlimefunItem item, @NotNull SlimefunBlockData data) {
-                    if (!firstTickLocations.contains(b.getLocation())) {
-                        // Netex - Hanging patch start
-                        Bukkit.getScheduler().runTask(Networks.getInstance(), () -> {
-                            HangingBlock.loadHangingBlocks(data);
-                            HangingBlock.doFirstTick(data);
-                        });
-                        // Netex - Hanging patch end
-                        firstTickLocations.add(b.getLocation());
+                    final Location location = b.getLocation();
+                    if (!NetworkStorage.containsKey(location)) {
+                        scheduleFirstTick(location);
                         return;
                     }
 
-                    addToRegistry(b);
                     tickHangingBlocks(b);
                 }
 
@@ -148,7 +169,58 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
             });
     }
 
+    /**
+     * Initializes a node once per loaded-chunk lifecycle through the shared warmup queue. The location guard
+     * prevents duplicate first ticks while the shared worker spreads initialization across server ticks.
+     */
+    private void scheduleFirstTick(@NotNull Location location) {
+        if (!PENDING_FIRST_TICK_LOCATIONS.add(location)) {
+            return;
+        }
+
+        boolean queued = ChunkWarmupQueue.enqueue(location, () -> {
+            try {
+                final World world = location.getWorld();
+                if (world == null || !world.isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
+                    return;
+                }
+
+                final SlimefunBlockData liveData = StorageCacheUtils.getBlock(location);
+                final SlimefunItem liveItem = liveData == null ? null : SlimefunItem.getById(liveData.getSfId());
+                if (liveData == null || liveItem != NetworkObject.this) {
+                    return;
+                }
+
+                HangingBlock.loadHangingBlocks(liveData);
+                HangingBlock.doFirstTick(liveData);
+                registerNow(location.getBlock());
+            } finally {
+                PENDING_FIRST_TICK_LOCATIONS.remove(location);
+            }
+        });
+
+        if (!queued) {
+            PENDING_FIRST_TICK_LOCATIONS.remove(location);
+        }
+    }
+
+    /**
+     * Registration requests from subclass tickers are also routed through warmup so directional machines cannot
+     * bypass the shared budget. Controllers remain immediate because their own ticker must establish root identity
+     * before building topology; every other node may safely become available over the next few server ticks.
+     */
     protected void addToRegistry(@NotNull Block block) {
+        if (NetworkStorage.containsKey(block.getLocation())) {
+            return;
+        }
+        if (nodeType == NodeType.CONTROLLER) {
+            registerNow(block);
+        } else {
+            scheduleFirstTick(block.getLocation());
+        }
+    }
+
+    private void registerNow(@NotNull Block block) {
         if (!NetworkStorage.containsKey(block.getLocation())) {
             final NodeDefinition nodeDefinition = new NodeDefinition(nodeType);
             NetworkStorage.registerNode(block.getLocation(), nodeDefinition);
@@ -156,13 +228,17 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
     }
 
     protected void tickHangingBlocks(@NotNull Block block) {
-        scheduledHangingTick.add(block.getLocation());
+        // The first-tick loader populates this registry for real attachments. Ordinary Network blocks should not
+        // churn through the shared queue every Slimefun tick just to discover that there is nothing to update.
+        if (!HangingBlock.getHangingBlocks(block.getLocation()).isEmpty()) {
+            scheduledHangingTick.add(block.getLocation());
+        }
     }
 
     @OverridingMethodsMustInvokeSuper
     protected void preBreak(@NotNull BlockBreakEvent event) {
-        NetworkRoot.removePersistentAccessHistory(event.getBlock().getLocation());
-        NetworkRoot.removeCountObservingAccessHistory(event.getBlock().getLocation());
+        NetworkRoot.clearAccessHistory(event.getBlock().getLocation());
+        StorageUnitData.clearAccessHistory(event.getBlock().getLocation());
     }
 
     @OverridingMethodsMustInvokeSuper
@@ -176,6 +252,8 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
             }
         }
 
+        PENDING_FIRST_TICK_LOCATIONS.remove(location);
+        NetworkStorage.removeNode(location);
         Slimefun.getDatabaseManager().getBlockDataController().removeBlock(location);
     }
 
@@ -208,6 +286,6 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
     }
 
     public boolean runSync() {
-        return false;
+        return Networks.getConfigManager().useSynchronizedMachineTickers();
     }
 }

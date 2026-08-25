@@ -5,6 +5,7 @@ import com.balugaq.netex.api.events.NetworksBlockPlaceEvent;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.Networks;
+import io.github.sefiraat.networks.slimefun.network.NetworkController;
 import io.github.sefiraat.networks.utils.NetworkUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import org.bukkit.Bukkit;
@@ -60,6 +61,7 @@ public class SyncListener implements Listener {
                 e.getWorld().getName(),
                 e.getChunk().getX(),
                 e.getChunk().getZ()));
+        NetworkController.onChunkUnload(e.getChunk());
         NetworkStorage.unregisterChunk(e.getChunk());
     }
 }

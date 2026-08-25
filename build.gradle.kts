@@ -1,16 +1,41 @@
 plugins {
     java
-    id("com.gradleup.shadow") version "9.0.0"
-    id("xyz.jpenilla.run-paper") version "3.0.2"
+    id("com.gradleup.shadow") version "9.3.2"
 }
 
-group = "com.ytdd9527.networksexpansion"
-version = "2.1.119"
+group = "com.wickidcow.networks"
+version = "2.1.112-Legacy-1.0"
+
+val slimefunCoreJarPath = providers.gradleProperty("slimefunCoreJar")
+    .orElse(providers.environmentVariable("SLIMEFUN_CORE_JAR"))
+    // Backward-compatible aliases used by Slimefun Legacy's addon compatibility harness.
+    .orElse(providers.gradleProperty("slimefunLegacyJar"))
+    .orElse(providers.environmentVariable("SLIMEFUN_LEGACY_JAR"))
+    .orElse(providers.environmentVariable("SLIMEFUN_COMPATIBILITY_JAR"))
+    .orElse(layout.projectDirectory.file("lib/Slimefun-Core.jar").asFile.absolutePath)
+val slimefunCoreJar = file(slimefunCoreJarPath.get())
+
+if (!slimefunCoreJar.isFile) {
+    throw GradleException(
+        "Slimefun core JAR not found at '${slimefunCoreJar.absolutePath}'. " +
+            "Pass -PslimefunCoreJar=/path/to/Slimefun-*.jar or set SLIMEFUN_CORE_JAR. " +
+            "The older slimefunLegacyJar/SLIMEFUN_LEGACY_JAR aliases remain supported."
+    )
+}
 
 java {
     toolchain {
         languageVersion.set(JavaLanguageVersion.of(21))
     }
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+    withSourcesJar()
+}
+
+configurations.configureEach {
+    exclude(group = "com.github.SlimefunGuguProject", module = "Slimefun4")
+    exclude(group = "com.github.slimefun", module = "Slimefun4")
+    exclude(group = "io.github.thebusybiscuit", module = "Slimefun4")
 }
 
 repositories {
@@ -26,20 +51,17 @@ repositories {
     maven("https://oss.sonatype.org/content/groups/public/")
     maven("https://repo.alessiodp.com/releases/")
     maven("https://maven.enginehub.org/repo/")
-    maven("https://repo.alessiodp.com/releases")
     maven("https://repo.jeff-media.com/public")
 }
 
 dependencies {
-    // Core
+    // Core server APIs. CI compiles the same source against exact Legacy, United, and Gugu JARs.
     compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
-    compileOnly("com.github.SlimefunGuguProject:Slimefun4:2025.1")
+    compileOnly(files(slimefunCoreJar))
 
-    // Tools etc.
     implementation("org.bstats:bstats-bukkit:3.2.1")
     implementation("com.jeff-media:MorePersistentDataTypes:2.4.0")
     implementation("dev.sefiraat:SefiLib:0.2.6")
-    implementation("net.byteflux:libby-bukkit:1.3.2")
 
     compileOnly("com.google.code.findbugs:annotations:3.0.1u2") {
         exclude("net.jcip", "jcip-annotations")
@@ -47,9 +69,13 @@ dependencies {
     }
     compileOnly("org.projectlombok:lombok:1.18.46")
     annotationProcessor("org.projectlombok:lombok:1.18.46")
-    compileOnly("com.github.houbb:pinyin:0.4.0")
+    testCompileOnly("org.projectlombok:lombok:1.18.46")
+    testAnnotationProcessor("org.projectlombok:lombok:1.18.46")
+    testImplementation(platform("org.junit:junit-bom:5.14.1"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
-    // Supported Plugins
+    // Optional integrations. These remain compile-only and are never bundled.
     compileOnly("com.github.SlimefunGuguProject:InfinityExpansion:3c5db3650a")
     compileOnly("com.github.Sefiraat:Netheopoiesis:8d1af6c570")
     compileOnly("com.github.schntgaispock:SlimeHUD:1.2.7")
@@ -62,11 +88,9 @@ dependencies {
         exclude("com.sk89q.worldguard", "worldguard-legacy")
         exclude("com.comphenix.protocol", "ProtocolLib")
     }
-    compileOnly("net.guizhanss:GuizhanLibPlugin:1.7.6")
     compileOnly("com.github.balugaq:FluffyMachines:43d7444e4c")
     compileOnly("com.github.TimetownDev:GuguSlimefunLib:45627c6f8e")
     compileOnly("com.github.balugaq:JustEnoughGuide:7f21e113a2")
-    // System-scoped local JARs
     compileOnly(fileTree(mapOf("dir" to "lib", "include" to listOf("*.jar"))))
 }
 
@@ -78,6 +102,8 @@ tasks.withType<JavaExec>().configureEach {
 
 tasks {
     compileJava {
+        options.release.set(21)
+        options.encoding = "UTF-8"
         options.compilerArgs.add("-Xlint:-removal")
     }
 
@@ -87,57 +113,32 @@ tasks {
         }
     }
 
+    test {
+        useJUnitPlatform()
+    }
+
     shadowJar {
-        archiveBaseName.set("NetworksExpansion")
-        archiveVersion.set(project.version.toString())
+        archiveBaseName.set("Networks-Legacy")
+        // Keep plugin metadata descriptive while making the actual output filename non-redundant.
+        archiveVersion.set("2.1.112-1.0")
         archiveClassifier.set("")
 
         minimize()
-
-        // Relocations
         relocate("org.bstats", "io.github.sefiraat.networks.bstats")
         relocate("io.papermc.lib", "dev.sefiraat.cultivation.paperlib")
-        relocate("net.byteflux.libby", "com.balugaq.netex.libraries.libby")
-
-        // Exclude META-INF
         exclude("META-INF/*")
-
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE
         mergeServiceFiles()
+    }
+
+    jar {
+        enabled = false
     }
 
     build {
         dependsOn(shadowJar)
     }
 
-    runServer {
-        dependsOn(shadowJar)
-        val run = file(providers.gradleProperty("server.run.dir").orElse("run"))
-        runDirectory.set(run)
-
-        doFirst {
-            run.resolve("eula.txt").writeText("eula=true")
-
-            val pl = run.resolve("plugins")
-            pl.mkdirs()
-            copy {
-                from(projectDir.resolve("build/libs")) {
-                    include("${name}-${version}.jar")
-                }
-                into(pl)
-            }
-        }
-
-        jvmArgs(
-            "-Dfile.encoding=UTF-8",
-            "-Dsun.jnu.encoding=UTF-8",
-            "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5001",
-            "-Dnet.kyori.adventure.text.warn_when_legacy_formatting_detected=false"
-        )
-        maxHeapSize = "4G"
-        minecraftVersion("1.20.1")
-    }
 }
 
-// Set default tasks
 defaultTasks("clean", "build")

@@ -71,21 +71,20 @@ public class Keys {
 
     @Nullable
     public static BlueprintInstance getBlueprintInstance(ItemMeta meta) {
-        BlueprintInstance instance;
-        instance = DataTypeMethods.getCustom(
+        BlueprintInstance instance = DataTypeMethods.getCustomSafely(
             meta, Keys.BLUEPRINT_INSTANCE, PersistentCraftingBlueprintType.TYPE);
 
         if (instance == null) {
-            instance = DataTypeMethods.getCustom(
+            instance = DataTypeMethods.getCustomSafely(
                 meta, Keys.BLUEPRINT_INSTANCE2, PersistentCraftingBlueprintType.TYPE);
         }
 
         if (instance == null) {
-            instance = DataTypeMethods.getCustom(
+            instance = DataTypeMethods.getCustomSafely(
                 meta, Keys.BLUEPRINT_INSTANCE3, PersistentCraftingBlueprintType.TYPE);
         }
 
-        return instance;
+        return instance == BlueprintInstance.INVALID ? null : instance;
     }
 
     public static final NamespacedKey FACE = newKey("face");

@@ -11,7 +11,7 @@ import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.attributes.DistinctiveItem;
-import net.guizhanss.guizhanlib.minecraft.helper.inventory.ItemStackHelper;
+import io.github.sefiraat.networks.utils.DisplayNameUtils;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.jetbrains.annotations.NotNull;
@@ -47,13 +47,13 @@ public class Blueprint extends UnusableSlimefunItem implements DistinctiveItem, 
                 lore.add(Theme.PASSIVE + "- " + Lang.getString("messages.blueprint.empty"));
                 continue;
             }
-            lore.add(Theme.PASSIVE + "- " + ItemStackHelper.getDisplayName(item));
+            lore.add(Theme.PASSIVE + "- " + DisplayNameUtils.getDisplayName(item));
         }
 
         lore.add("");
         lore.add(Lang.getString("messages.blueprint.output"));
 
-        lore.add(Theme.PASSIVE + "- " + ItemStackHelper.getDisplayName(output));
+        lore.add(Theme.PASSIVE + "- " + DisplayNameUtils.getDisplayName(output));
 
         itemMeta.setLore(lore);
 

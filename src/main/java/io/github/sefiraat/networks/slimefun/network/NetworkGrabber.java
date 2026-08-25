@@ -1,16 +1,19 @@
 package io.github.sefiraat.networks.slimefun.network;
 
+import com.balugaq.netex.utils.BlockMenuUtil;
 import com.balugaq.netex.api.enums.FeedbackType;
 import com.balugaq.netex.api.interfaces.SoftCellBannable;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
+import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Material;
 import org.bukkit.Particle;
@@ -60,20 +63,27 @@ public class NetworkGrabber extends NetworkDirectional implements SoftCellBannab
             return;
         }
 
-        int[] slots =
-            targetMenu.getPreset().getSlotsAccessedByItemTransport(targetMenu, ItemTransportFlow.WITHDRAW, null);
+        // Legacy does not expose SF5's mutateInventorySafely helper. Preserve the async fast path,
+        // but pause the transfer while a foreign menu is actively viewed rather than racing clicks.
+        if (!Bukkit.isPrimaryThread() && targetMenu.hasViewer()) {
+            return;
+        }
+
+        int[] slots = BlockMenuUtil.getSafeTransportSlots(targetMenu, ItemTransportFlow.WITHDRAW);
 
         for (int slot : slots) {
             final ItemStack itemStack = targetMenu.getItemInSlot(slot);
 
             if (itemStack != null && itemStack.getType() != Material.AIR) {
-                int before = itemStack.getAmount();
-                definition.getNode().getRoot().addItemStack0(blockMenu.getLocation(), itemStack);
-                sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
-                if (definition.getNode().getRoot().isDisplayParticles() && itemStack.getAmount() < before) {
-                    showParticle(blockMenu.getLocation(), direction);
+                final int moved = NetworkTransferUtils.moveMenuSlotIntoNetwork(
+                    definition.getNode().getRoot(), blockMenu.getLocation(), targetMenu, slot);
+                if (moved > 0) {
+                    sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
+                    if (definition.getNode().getRoot().isDisplayParticles()) {
+                        showParticle(blockMenu.getLocation(), direction);
+                    }
+                    break;
                 }
-                break;
             }
         }
     }

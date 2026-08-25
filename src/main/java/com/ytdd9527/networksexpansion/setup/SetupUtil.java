@@ -5,7 +5,6 @@ import com.ytdd9527.networksexpansion.implementation.ExpansionItemsMenus;
 import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.slimefun.NetworkSlimefunItems;
 import net.guizhanss.slimefun4.utils.WikiUtils;
-import org.bukkit.Bukkit;
 
 public class SetupUtil {
 
@@ -256,57 +255,12 @@ public class SetupUtil {
             ExpansionItems.NTW_EXPANSION_ANNOUNCE_10.registerThis());
     }
 
-    private static void setupMenu() {
-        Networks networks = Networks.getInstance();
-
-        ExpansionItemsMenus.MAIN_MENU.setTier(0);
-
-        ExpansionItemsMenus.MENU_ITEMS.setTier(0);
-        ExpansionItemsMenus.MENU_CARGO_SYSTEM.setTier(0);
-        ExpansionItemsMenus.MENU_FUNCTIONAL_MACHINE.setTier(0);
-        ExpansionItemsMenus.MENU_TROPHY.setTier(0);
-
-        ExpansionItemsMenus.MAIN_ITEM_GROUP.addTo(
-            ExpansionItemsMenus.MAIN_MENU_ITEM,
-            ExpansionItemsMenus.SUB_MENU_TOOL,
-            ExpansionItemsMenus.SUB_MENU_BLUEPRINT);
-        ExpansionItemsMenus.MAIN_MENU_ITEM.addFrom(
-            ExpansionItemsMenus.SUB_MENU_TOOL, ExpansionItemsMenus.SUB_MENU_BLUEPRINT);
-
-        ExpansionItemsMenus.MAIN_ITEM_GROUP.addTo(
-            ExpansionItemsMenus.MAIN_MENU_CARGO_SYSTEM,
-            ExpansionItemsMenus.SUB_MENU_ADVANCED_STORAGE,
-            ExpansionItemsMenus.SUB_MENU_NETWORKS_DRAWERS,
-            ExpansionItemsMenus.SUB_MENU_CARGO);
-        ExpansionItemsMenus.MAIN_MENU_CARGO_SYSTEM.addFrom(
-            ExpansionItemsMenus.SUB_MENU_ADVANCED_STORAGE,
-            ExpansionItemsMenus.SUB_MENU_NETWORKS_DRAWERS,
-            ExpansionItemsMenus.SUB_MENU_CARGO);
-
-        ExpansionItemsMenus.MAIN_ITEM_GROUP.addTo(
-            ExpansionItemsMenus.MAIN_MENU_FUNCTIONAL_MACHINE,
-            ExpansionItemsMenus.SUB_MENU_CORE_MACHINE,
-            ExpansionItemsMenus.SUB_MENU_ADVANCED_NETWORKS,
-            ExpansionItemsMenus.SUB_MENU_BRIDGE);
-        ExpansionItemsMenus.MAIN_MENU_FUNCTIONAL_MACHINE.addFrom(
-            ExpansionItemsMenus.SUB_MENU_CORE_MACHINE,
-            ExpansionItemsMenus.SUB_MENU_ADVANCED_NETWORKS,
-            ExpansionItemsMenus.SUB_MENU_BRIDGE);
-
-        ExpansionItemsMenus.MAIN_ITEM_GROUP.addTo(
-            ExpansionItemsMenus.MAIN_MENU_TROPHY,
-            ExpansionItemsMenus.SUB_MENU_AUTHOR,
-            ExpansionItemsMenus.SUB_MENU_ANNOUNCE);
-        ExpansionItemsMenus.MAIN_MENU_TROPHY.addFrom(
-            ExpansionItemsMenus.SUB_MENU_AUTHOR, ExpansionItemsMenus.SUB_MENU_ANNOUNCE);
-
-        ExpansionItemsMenus.MAIN_ITEM_GROUP.addTo(
-            ExpansionItemsMenus.SUB_MENU_DEPRECATED);
-
-        ExpansionItemsMenus.MAIN_ITEM_GROUP.setTier(0);
-        ExpansionItemsMenus.MAIN_ITEM_GROUP.register(networks);
-    }
-
+    /**
+     * Expansion items already register their native Slimefun SubItemGroups when
+     * the first enabled item is registered. The old custom MainItemGroup was a
+     * second root guide category and is intentionally no longer registered.
+     * MainFlexGroup links to the native groups from the single Networks folder.
+     */
     public static void setupWiki() {
         WikiUtils.setupJson(Networks.getInstance());
     }
@@ -319,8 +273,5 @@ public class SetupUtil {
         setupItem();
         setupWiki();
         setupIntegration();
-
-        // wait for logitech integration
-        Bukkit.getScheduler().runTaskLaterAsynchronously(Networks.getInstance(), SetupUtil::setupMenu, 2L);
     }
 }

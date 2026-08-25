@@ -43,7 +43,7 @@ import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
-import net.guizhanss.guizhanlib.minecraft.helper.inventory.ItemStackHelper;
+import io.github.sefiraat.networks.utils.DisplayNameUtils;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -62,19 +62,20 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 @SuppressWarnings({"deprecation", "DuplicatedCode"})
 public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveItem, ModellableItem {
-    private static final Map<Location, StorageUnitData> storages = new HashMap<>();
-    private static final Map<Location, QuickTransferMode> quickTransferModes = new HashMap<>();
-    private static final Set<Location> locked = new HashSet<>();
-    private static final Set<Location> voidExcesses = new HashSet<>();
+    private static final boolean DEFAULT_USE_SPECIAL_MODEL = false;
+    private static final Map<Location, StorageUnitData> storages = new ConcurrentHashMap<>();
+    private static final Map<Location, QuickTransferMode> quickTransferModes = new ConcurrentHashMap<>();
+    private static final Set<Location> locked = ConcurrentHashMap.newKeySet();
+    private static final Set<Location> voidExcesses = ConcurrentHashMap.newKeySet();
     private static final String KEY_UUID = "display-uuid";
     private static final int[] DISPLAY_SLOTS = {
         10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 28, 29, 30, 31, 32, 33, 34, 37, 38, 39, 40, 41, 42, 43,
@@ -675,7 +676,7 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
             }
             player.sendMessage(String.format(
                 Lang.getString("messages.unsupported-operation.drawer.not_found_chosen_item"),
-                ItemStackHelper.getDisplayName(toTransfer)));
+                DisplayNameUtils.getDisplayName(toTransfer)));
         } else if (isMover) {
             ItemStack moverStored = ItemMover.getStoredItemStack(itemStack);
             if (mode == QuickTransferMode.FROM_QUANTUM) {
@@ -710,7 +711,7 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
                                     Lang.getString("messages.unsupported-operation.drawer.item_mover_empty"));
                             }
                             int before = stored.getAmount();
-                            String name = ItemStackHelper.getDisplayName(stored);
+                            String name = DisplayNameUtils.getDisplayName(stored);
                             thisStorage.depositItemStack0(location, stored, true);
                             int left = stored.getAmount();
                             ItemMover.setStoredAmount(itemStack, exist - (before - left));
@@ -724,7 +725,7 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
                             int before = each.getAmount();
                             ItemStack fetched = thisStorage.requestItem0(location, itemRequest, false);
                             if (fetched != null) {
-                                String name = ItemStackHelper.getDisplayName(fetched);
+                                String name = DisplayNameUtils.getDisplayName(fetched);
                                 ItemMover.depositItem(itemStack, fetched);
                                 int left = fetched.getAmount();
                                 if (fetched.getAmount() > 0) {
@@ -743,7 +744,7 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
             }
             player.sendMessage(String.format(
                 Lang.getString("messages.unsupported-operation.drawer.not_found_chosen_item"),
-                ItemStackHelper.getDisplayName(toTransfer)));
+                DisplayNameUtils.getDisplayName(toTransfer)));
         } else {
             player.sendMessage(Lang.getString("messages.unsupported-operation.drawer.invalid_container"));
         }
@@ -926,7 +927,7 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
         addItemHandler(new BlockTicker() {
             @Override
             public boolean isSynchronized() {
-                return false;
+                return io.github.sefiraat.networks.Networks.getConfigManager().useSynchronizedMachineTickers();
             }
 
             @Override

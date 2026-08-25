@@ -141,59 +141,77 @@ public class NetworkVanillaGrabber extends NetworkDirectional implements SoftCel
         sendDebugMessage(block.getLocation(), Lang.getString("messages.debug.wildchests-trigger-success"));
         final Inventory inventory = holder.getInventory();
 
-        if (inventory instanceof FurnaceInventory furnaceInventory) {
-            final ItemStack furnaceInventoryResult = furnaceInventory.getResult();
-            final ItemStack furnaceInventoryFuel = furnaceInventory.getFuel();
-            grabItem(blockMenu, furnaceInventoryResult);
-
-            if (furnaceInventoryFuel != null && furnaceInventoryFuel.getType() == Material.BUCKET) {
-                grabItem(blockMenu, furnaceInventoryFuel);
+        if (inventory instanceof FurnaceInventory) {
+            if (!grabInventoryItem(blockMenu, inventory, 2)) {
+                final ItemStack fuel = inventory.getItem(1);
+                if (fuel != null && fuel.getType() == Material.BUCKET) {
+                    grabInventoryItem(blockMenu, inventory, 1);
+                }
+            }
+        } else if (inventory instanceof BrewerInventory) {
+            if (!(blockState instanceof BrewingStand brewingStand) || brewingStand.getBrewingTime() > 0) {
+                return;
             }
 
-        } else if (inventory instanceof BrewerInventory brewerInventory) {
-            if (!(blockState instanceof BrewingStand brewingStand)) return;
-            if (brewingStand.getBrewingTime() > 0) return;
+            for (int slot = 0; slot < 3; slot++) {
+                final ItemStack stack = inventory.getItem(slot);
+                if (stack == null || stack.getType() == Material.AIR) {
+                    continue;
+                }
 
-            for (int i = 0; i < 3; i++) {
-                final ItemStack stack = brewerInventory.getContents()[i];
-                if (stack != null && stack.getType() != Material.AIR) {
-                    if (stack.getItemMeta() instanceof PotionMeta potionMeta) {
-                        if (Networks.getInstance().getMCVersion().isAtLeast(MinecraftVersion.V1_20_5)) {
-                            if (potionMeta.getBasePotionType() != PotionType.WATER) {
-                                grabItem(blockMenu, stack);
-                                break;
-                            }
-                        } else {
-                            PotionData bpd = potionMeta.getBasePotionData();
-                            if (bpd != null && bpd.getType() != PotionType.WATER) {
-                                grabItem(blockMenu, stack);
-                                break;
-                            }
+                if (stack.getItemMeta() instanceof PotionMeta potionMeta) {
+                    if (Networks.getInstance().getMCVersion().isAtLeast(MinecraftVersion.V1_20_5)) {
+                        if (potionMeta.getBasePotionType() != PotionType.WATER) {
+                            grabInventoryItem(blockMenu, inventory, slot);
+                            break;
                         }
                     } else {
-                        grabItem(blockMenu, stack);
-                        break;
+                        PotionData bpd = potionMeta.getBasePotionData();
+                        if (bpd != null && bpd.getType() != PotionType.WATER) {
+                            grabInventoryItem(blockMenu, inventory, slot);
+                            break;
+                        }
                     }
+                } else {
+                    grabInventoryItem(blockMenu, inventory, slot);
+                    break;
                 }
             }
         } else {
-            for (ItemStack stack : inventory.getContents()) {
-                if (grabItem(blockMenu, stack)) {
+            for (int slot = 0; slot < inventory.getSize(); slot++) {
+                if (grabInventoryItem(blockMenu, inventory, slot)) {
                     break;
                 }
             }
         }
     }
 
-    private boolean grabItem(@NotNull BlockMenu blockMenu, @Nullable ItemStack stack) {
-        if (stack != null && stack.getType() != Material.AIR) {
-            blockMenu.replaceExistingItem(OUTPUT_SLOT, stack.clone());
-            stack.setAmount(0);
-            sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
-            return true;
-        } else {
+    private boolean grabInventoryItem(
+        @NotNull BlockMenu blockMenu, @NotNull Inventory inventory, int sourceSlot) {
+        if (sourceSlot < 0 || sourceSlot >= inventory.getSize()) {
             return false;
         }
+
+        final ItemStack stack = inventory.getItem(sourceSlot);
+        if (stack == null || stack.getType() == Material.AIR || stack.getAmount() <= 0) {
+            return false;
+        }
+
+        // Clone first and verify the destination before committing the source removal. This keeps vanilla
+        // and third-party inventories loss-safe if a menu implementation rejects or rewrites the output.
+        final ItemStack transfer = stack.clone();
+        blockMenu.replaceExistingItem(OUTPUT_SLOT, transfer);
+        final ItemStack committed = blockMenu.getItemInSlot(OUTPUT_SLOT);
+        if (!io.github.sefiraat.networks.utils.StackUtils.itemsMatch(committed, transfer, true, true)) {
+            blockMenu.replaceExistingItem(OUTPUT_SLOT, null);
+            blockMenu.markDirty();
+            return false;
+        }
+
+        blockMenu.markDirty();
+        inventory.setItem(sourceSlot, null);
+        sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
+        return true;
     }
 
     @Override

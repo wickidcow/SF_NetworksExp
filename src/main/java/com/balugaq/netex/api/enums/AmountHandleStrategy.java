@@ -23,11 +23,11 @@ public enum AmountHandleStrategy {
     STACK((player, itemStack) -> itemStack.getMaxStackSize()),
     CUSTOM((player, itemStack) -> GridNewStyleCustomAmountGuideOption.get(player)),
     ASK((location, player, itemStack, consumer) -> ChatUtils.awaitInput(player, input -> {
-        player.sendMessage(ChatColors.color("&e输入取出数量"));
+        player.sendMessage(ChatColors.color("&eEnter the withdrawal amount"));
         try {
             int value = Calculator.calculate(input).intValue();
             if (value <= 0 || value >= GRID_NEW_STYLE_MAX_CUSTOM_AMOUNT) {
-                player.sendMessage("请输入 1 ~ " + GRID_NEW_STYLE_MAX_CUSTOM_AMOUNT + " 之间的正整数");
+                player.sendMessage("Enter a positive whole number between 1 and " + GRID_NEW_STYLE_MAX_CUSTOM_AMOUNT);
 
                 BlockMenu menu = StorageCacheUtils.getMenu(location);
                 if (menu != null) {
@@ -39,7 +39,7 @@ public enum AmountHandleStrategy {
 
             consumer.accept(value);
         } catch (NumberFormatException e) {
-            player.sendMessage("请输入 1 ~ " + GRID_NEW_STYLE_MAX_CUSTOM_AMOUNT + " 之间的正整数");
+            player.sendMessage("Enter a positive whole number between 1 and " + GRID_NEW_STYLE_MAX_CUSTOM_AMOUNT);
             player.sendMessage(e.getMessage());
         }
     }));

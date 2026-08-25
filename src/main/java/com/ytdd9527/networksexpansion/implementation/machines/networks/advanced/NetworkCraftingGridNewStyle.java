@@ -16,6 +16,7 @@ import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.slimefun.network.grid.AbstractGrid;
 import io.github.sefiraat.networks.slimefun.network.grid.GridCache;
 import io.github.sefiraat.networks.slimefun.network.grid.GridCache.DisplayMode;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
@@ -36,7 +37,7 @@ import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jspecify.annotations.NullMarked;
 
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -65,7 +66,7 @@ public class NetworkCraftingGridNewStyle extends AbstractGridNewStyle implements
     private static final int CRAFT_BUTTON_SLOT = 33;
     private static final int OUTPUT_SLOT = 34;
     private static final int[] INGREDIENT_SLOTS = {6, 7, 8, 15, 16, 17, 24, 25, 26};
-    private static final Map<Location, GridCache> CACHE_MAP = new HashMap<>();
+    private static final Map<Location, GridCache> CACHE_MAP = new ConcurrentHashMap<>();
 
     public NetworkCraftingGridNewStyle(
         @NotNull ItemGroup itemGroup,
@@ -214,93 +215,163 @@ public class NetworkCraftingGridNewStyle extends AbstractGridNewStyle implements
     }
 
     @SuppressWarnings("deprecation")
-    private synchronized void tryCraft(@NotNull BlockMenu menu, @NotNull Player player, @NotNull ClickAction action) {
-        int times = 1;
-        if (action.isRightClicked()) {
-            times = 64;
-        }
+    private synchronized void tryCraft(
+        @NotNull BlockMenu menu, @NotNull Player player, @NotNull ClickAction action) {
+        int times = action.isRightClicked() ? 64 : 1;
 
-        // Get node and, if it doesn't exist - escape
         final NodeDefinition definition = NetworkStorage.getNode(menu.getLocation());
-        if (definition.getNode() == null) {
+        if (definition == null || definition.getNode() == null) {
             return;
         }
 
-        NetworkRoot root = definition.getNode().getRoot();
+        final NetworkRoot root = definition.getNode().getRoot();
         root.refreshRootItems();
 
-        for (int k = 0; k < times; k++) {
-            // Get the recipe input
-            final ItemStack[] inputs = new ItemStack[INGREDIENT_SLOTS.length];
-            int i = 0;
-            for (int recipeSlot : INGREDIENT_SLOTS) {
-                ItemStack stack = menu.getItemInSlot(recipeSlot);
-                inputs[i] = stack;
-                i++;
-            }
+        final ItemStack[] displayedRecipe = snapshotRecipe(menu);
+        ItemStack[] consumptionRecipe = displayedRecipe;
 
-            ItemStack crafted = null;
+        SupportedCraftingTableRecipes.RecipeMatch slimefunMatch =
+            SupportedCraftingTableRecipes.findRecipe(displayedRecipe);
+        ItemStack crafted;
+        if (slimefunMatch != null) {
+            consumptionRecipe = slimefunMatch.recipe();
+            crafted = slimefunMatch.output();
+        } else {
+            crafted = Bukkit.craftItem(copyStacks(displayedRecipe), player.getWorld(), player);
+        }
 
-            // Go through each slimefun recipe, trigger and set the ItemStack if found
-            for (Map.Entry<ItemStack[], ItemStack> entry :
-                SupportedCraftingTableRecipes.getRecipes().entrySet()) {
-                if (SupportedCraftingTableRecipes.testRecipe(inputs, entry.getKey())) {
-                    crafted = entry.getValue();
-                    break;
-                }
-            }
+        if (crafted == null || crafted.getType() == Material.AIR || crafted.getAmount() <= 0) {
+            return;
+        }
 
-            if (crafted != null) {
-                final SlimefunItem sfi2 = SlimefunItem.getByItem(crafted);
-                if (sfi2 != null && sfi2.isDisabled()) {
-                    player.sendMessage(Lang.getString("messages.unsupported-operation.encoder.disabled_output"));
-                    return;
-                }
-            }
+        SlimefunItem outputItem = SlimefunItem.getByItem(crafted);
+        if (outputItem != null && outputItem.isDisabled()) {
+            player.sendMessage(Lang.getString("messages.unsupported-operation.encoder.disabled_output"));
+            return;
+        }
 
-            // If no slimefun recipe found, try a vanilla one
-            if (crafted == null) {
-                crafted = Bukkit.craftItem(inputs, player.getWorld(), player);
-            }
-
-            // If no item crafted OR result doesn't fit, escape
-            if (crafted.getType() == Material.AIR || !BlockMenuUtil.fits(menu, crafted, OUTPUT_SLOT)) {
+        for (int craft = 0; craft < times; craft++) {
+            refillMissingIngredients(menu, player, root, consumptionRecipe);
+            if (!hasExactIngredients(menu, consumptionRecipe)) {
                 return;
             }
 
-            // fire craft event
-            NetworkCraftEvent event = new NetworkCraftEvent(player, this, inputs, crafted);
+            NetworkCraftEvent event =
+                new NetworkCraftEvent(player, this, copyStacks(consumptionRecipe), crafted.clone());
             Bukkit.getPluginManager().callEvent(event);
             if (event.isCancelled()) {
                 return;
             }
-            crafted = event.getOutput();
 
-            // Push item
-            if (crafted != null) {
-                BlockMenuUtil.pushItem(menu, crafted.clone(), OUTPUT_SLOT);
+            ItemStack eventOutput = event.getOutput();
+            if (eventOutput == null
+                || eventOutput.getType() == Material.AIR
+                || eventOutput.getAmount() <= 0
+                || !BlockMenuUtil.fits(menu, eventOutput, OUTPUT_SLOT)) {
+                return;
             }
 
-            // Let's clear down all the items
-            for (int recipeSlot : INGREDIENT_SLOTS) {
-                final ItemStack itemInSlot = menu.getItemInSlot(recipeSlot);
-                if (itemInSlot != null) {
-                    // Grab a clone for potential retrieval
-                    final ItemStack itemInSlotClone = itemInSlot.clone();
-                    itemInSlotClone.setAmount(1);
-                    BlockMenuUtil.consumeItem(menu, recipeSlot, 1, true);
-                    // We have consumed a slot item and now the slot is empty - try to refill
-                    if (menu.getItemInSlot(recipeSlot) == null) {
-                        // Process item request
-                        final GridItemRequest request = new GridItemRequest(itemInSlotClone, 1, player);
-                        final ItemStack requestingStack = root.getItemStack(request);
-                        if (requestingStack != null) {
-                            menu.replaceExistingItem(recipeSlot, requestingStack);
-                        }
-                    }
+            // Consume the complete exact matrix before adding the result.
+            for (int slotIndex = 0; slotIndex < INGREDIENT_SLOTS.length; slotIndex++) {
+                ItemStack required = slotIndex < consumptionRecipe.length ? consumptionRecipe[slotIndex] : null;
+                if (required == null || required.getType() == Material.AIR || required.getAmount() <= 0) {
+                    continue;
                 }
+                BlockMenuUtil.consumeItem(
+                    menu, INGREDIENT_SLOTS[slotIndex], Math.max(1, required.getAmount()), true);
+            }
+
+            final ItemStack outputRemainder = BlockMenuUtil.pushItem(menu, eventOutput.clone(), OUTPUT_SLOT);
+            if (outputRemainder != null
+                && outputRemainder.getType() != Material.AIR
+                && outputRemainder.getAmount() > 0) {
+                NetworkTransferUtils.rollbackNetworkWithdrawal(
+                    root,
+                    menu.getLocation(),
+                    outputRemainder,
+                    menu.getLocation(),
+                    "new-style crafting-grid output commit");
+            }
+            menu.markDirty();
+            root.refreshRootItems();
+        }
+    }
+
+    private ItemStack[] snapshotRecipe(BlockMenu menu) {
+        ItemStack[] recipe = new ItemStack[INGREDIENT_SLOTS.length];
+        for (int i = 0; i < INGREDIENT_SLOTS.length; i++) {
+            ItemStack stack = menu.getItemInSlot(INGREDIENT_SLOTS[i]);
+            if (stack != null && stack.getType() != Material.AIR && stack.getAmount() > 0) {
+                recipe[i] = stack.clone();
+                recipe[i].setAmount(1);
             }
         }
+        return recipe;
+    }
+
+    private void refillMissingIngredients(
+        BlockMenu menu, Player player, NetworkRoot root, ItemStack[] recipe) {
+        for (int i = 0; i < INGREDIENT_SLOTS.length; i++) {
+            ItemStack required = i < recipe.length ? recipe[i] : null;
+            if (required == null || required.getType() == Material.AIR || required.getAmount() <= 0) {
+                continue;
+            }
+
+            int menuSlot = INGREDIENT_SLOTS[i];
+            ItemStack supplied = menu.getItemInSlot(menuSlot);
+            if (supplied != null
+                && supplied.getType() != Material.AIR
+                && supplied.getAmount() >= Math.max(1, required.getAmount())
+                && io.github.sefiraat.networks.utils.StackUtils.itemsMatch(supplied, required)) {
+                continue;
+            }
+
+            if (supplied != null && supplied.getType() != Material.AIR && supplied.getAmount() > 0) {
+                return;
+            }
+
+            NetworkTransferUtils.moveNetworkItemIntoMenu(
+                root,
+                menu.getLocation(),
+                menu,
+                required,
+                Math.max(1, required.getAmount()),
+                menuSlot);
+        }
+    }
+
+    private boolean hasExactIngredients(BlockMenu menu, ItemStack[] recipe) {
+        for (int i = 0; i < INGREDIENT_SLOTS.length; i++) {
+            ItemStack required = i < recipe.length ? recipe[i] : null;
+            ItemStack supplied = menu.getItemInSlot(INGREDIENT_SLOTS[i]);
+
+            boolean requiredEmpty = required == null
+                || required.getType() == Material.AIR
+                || required.getAmount() <= 0;
+            boolean suppliedEmpty = supplied == null
+                || supplied.getType() == Material.AIR
+                || supplied.getAmount() <= 0;
+            if (requiredEmpty || suppliedEmpty) {
+                if (requiredEmpty != suppliedEmpty) {
+                    return false;
+                }
+                continue;
+            }
+
+            if (supplied.getAmount() < Math.max(1, required.getAmount())
+                || !io.github.sefiraat.networks.utils.StackUtils.itemsMatch(supplied, required)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private ItemStack[] copyStacks(ItemStack[] stacks) {
+        ItemStack[] copy = new ItemStack[stacks.length];
+        for (int i = 0; i < stacks.length; i++) {
+            copy[i] = stacks[i] == null ? null : stacks[i].clone();
+        }
+        return copy;
     }
 
     @Override

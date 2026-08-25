@@ -67,7 +67,7 @@ public class SuperTrash extends NetworkObject implements RecipeDisplayItem {
 
             @Override
             public boolean isSynchronized() {
-                return false;
+                return io.github.sefiraat.networks.Networks.getConfigManager().useSynchronizedMachineTickers();
             }
 
             @Override

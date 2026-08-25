@@ -141,8 +141,10 @@ public class NetworkNode {
                 public void run() {
                     // fix #99
                     NetworkController.wipeNetwork(location);
-                    location.getWorld().dropItemNaturally(location, sfItem.getItem());
-                    location.getBlock().setType(Material.AIR);
+                    if (location.getWorld() != null) {
+                        location.getWorld().dropItemNaturally(location, sfItem.getItem());
+                        location.getBlock().setType(Material.AIR);
+                    }
                 }
             };
             runnable.runTask(Networks.getInstance());

@@ -11,6 +11,7 @@ import io.github.sefiraat.networks.network.GridItemRequest;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.slimefun.network.grid.GridCache;
 import io.github.sefiraat.networks.utils.Keys;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.sefiraat.networks.utils.StackUtils;
 import me.mrCookieSlime.CSCoreLibPlugin.general.Inventory.ClickAction;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
@@ -50,7 +51,8 @@ public interface BaseGrid {
                     NodeDefinition definition = NetworkStorage.getNode(menu.getLocation());
                     if (definition == null || definition.getNode() == null)
                         return ActionResult.of(MultiActionHandle.CONTINUE, false);
-                    definition.getNode().getRoot().addItemStack(player.getItemOnCursor());
+                    NetworkTransferUtils.movePlayerCursorIntoNetwork(
+                        definition.getNode().getRoot(), menu.getLocation(), player);
                     return ActionResult.of(MultiActionHandle.BREAK, false);
                 });
 
@@ -103,7 +105,12 @@ public interface BaseGrid {
                 );
 
                 Action storeItem = Action.of(Keys.newKey("store-item"), (p, s, i, a, menu) -> {
-                    receiveItem(p, i, a, menu);
+                    NodeDefinition definition = NetworkStorage.getNode(menu.getLocation());
+                    if (definition == null || definition.getNode() == null) {
+                        return ActionResult.of(MultiActionHandle.CONTINUE, false);
+                    }
+                    NetworkTransferUtils.moveInventorySlotIntoNetwork(
+                        definition.getNode().getRoot(), menu.getLocation(), p.getInventory(), s);
                     return ActionResult.of(MultiActionHandle.BREAK, false);
                 });
 

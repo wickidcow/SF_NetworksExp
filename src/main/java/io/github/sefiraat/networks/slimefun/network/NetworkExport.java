@@ -2,14 +2,13 @@ package io.github.sefiraat.networks.slimefun.network;
 
 import com.balugaq.netex.api.enums.FeedbackType;
 import com.balugaq.netex.api.helpers.Icon;
-import com.balugaq.netex.utils.BlockMenuUtil;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
-import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
 import io.github.sefiraat.networks.slimefun.NetworkSlimefunItems;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemSetting;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
@@ -64,7 +63,7 @@ public class NetworkExport extends NetworkObject {
 
                 @Override
                 public boolean isSynchronized() {
-                    return false;
+                    return io.github.sefiraat.networks.Networks.getConfigManager().useSynchronizedMachineTickers();
                 }
 
                 @Override
@@ -102,7 +101,7 @@ public class NetworkExport extends NetworkObject {
     private void tryFetchItem(@NotNull BlockMenu blockMenu) {
         final NodeDefinition definition = NetworkStorage.getNode(blockMenu.getLocation());
 
-        if (definition.getNode() == null) {
+        if (definition == null || definition.getNode() == null) {
             sendFeedback(blockMenu.getLocation(), FeedbackType.NO_NETWORK_FOUND);
             return;
         }
@@ -115,14 +114,17 @@ public class NetworkExport extends NetworkObject {
             return;
         }
 
-        ItemStack clone = testItem.clone();
+        final int moved = NetworkTransferUtils.moveNetworkItemIntoMenu(
+            definition.getNode().getRoot(),
+            blockMenu.getLocation(),
+            blockMenu,
+            testItem,
+            testItem.getMaxStackSize(),
+            OUTPUT_ITEM_SLOT);
 
-        ItemRequest itemRequest = new ItemRequest(clone, clone.getMaxStackSize());
-        ItemStack retrieved = definition.getNode().getRoot().getItemStack0(blockMenu.getLocation(), itemRequest);
-        if (retrieved != null) {
-            BlockMenuUtil.pushItem(blockMenu, retrieved, OUTPUT_ITEM_SLOT);
-        }
-        sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
+        sendFeedback(
+            blockMenu.getLocation(),
+            moved > 0 ? FeedbackType.WORKING : FeedbackType.NO_ITEM_FOUND);
     }
 
     @Override

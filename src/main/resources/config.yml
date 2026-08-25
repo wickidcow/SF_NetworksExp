@@ -1,14 +1,59 @@
-# Auto update from Guizhan Build is enabled by default.
-auto-update: true
+# Automatic JAR replacement is disabled in the Slimefun Legacy edition.
+auto-update: false
 
 # Language
-language: zh-CN
+language: en-US
 
 # Do not change this value unless you know what you are doing.
-config-version: 2.1.68
+config-version: 2.1.112-legacy-1.0
 
 # Do not change this value unless you know what you are doing.
 debug: false
+
+# Runtime compatibility policy. Legacy is the primary target; United and Gugu are accepted
+# through their stable Slimefun API surface. Unknown cores fail closed by default.
+compatibility:
+  allow-unknown-slimefun-core: false
+  allow-unsupported-runtime: false
+  # Safe default for Paper 1.21.11+: keep Bukkit inventory/world access on the owning server thread.
+  # Turning this off restores the old asynchronous ticker behavior and is not recommended.
+  synchronized-machine-tickers: true
+
+
+# Runtime fault containment and chunk-load smoothing.
+stability:
+  controller-circuit-breaker:
+    enabled: true
+    failure-threshold: 3
+    cooldown-seconds: 30
+    maximum-cooldown-seconds: 300
+  # Dense Network chunks can wake hundreds of Slimefun block tickers together. Keep initialization on
+  # the main thread, but spread it across server ticks so chunk activation cannot monopolize one tick.
+  chunk-warmup:
+    max-node-initializations-per-tick: 128
+    max-work-millis-per-tick: 2
+  # New nodes often register in batches while a chunk warms up. Wait briefly for registration activity to settle
+  # before marking an already-live controller dirty. Removals and chunk unloads are still handled immediately.
+  topology:
+    rebuild-debounce-sf-ticks: 2
+
+# Drawer database safety. Existing CargoStorageUnits.db paths and schemas are preserved.
+database:
+  shutdown-timeout-seconds: 15
+  # Refuse startup when SQLite reports structural corruption.
+  integrity-check: true
+  # Persist delayed absolute drawer amounts before they enter the SQLite worker queue.
+  recovery-journal: true
+  startup-backups:
+    enabled: true
+    retained: 5
+
+# Loaded-state integrity checks. These never force-load chunks or rewrite world block data.
+doctor:
+  auto-repair-stale-runtime-state: true
+  auto-scan-period-ticks: 1200
+  # Prevent the scheduled Doctor pass from scanning every loaded node in one server tick.
+  max-auto-scan-entries: 512
 
 grid-new-style-max-custom-amount: 2304
 

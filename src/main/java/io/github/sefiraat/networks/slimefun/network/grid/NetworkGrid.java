@@ -1,5 +1,8 @@
 package io.github.sefiraat.networks.slimefun.network.grid;
 
+import io.github.sefiraat.networks.NetworkStorage;
+import io.github.sefiraat.networks.network.NodeDefinition;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.sefiraat.networks.slimefun.NetworkSlimefunItems;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
@@ -16,7 +19,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 
 @SuppressWarnings("DuplicatedCode")
@@ -40,7 +43,7 @@ public class NetworkGrid extends AbstractGrid {
     private static final int PAGE_PREVIOUS = 44;
     private static final int PAGE_NEXT = 53;
 
-    private static final Map<Location, GridCache> CACHE_MAP = new HashMap<>();
+    private static final Map<Location, GridCache> CACHE_MAP = new ConcurrentHashMap<>();
 
     public NetworkGrid(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe);
@@ -123,8 +126,13 @@ public class NetworkGrid extends AbstractGrid {
                         return true;
                     }
 
-                    // Shift+Left-click
-                    receiveItem(p, i, a, menu);
+                    // Shift+Left-click: commit from the exact player inventory slot.
+                    NodeDefinition definition = NetworkStorage.getNode(menu.getLocation());
+                    if (definition == null || definition.getNode() == null) {
+                        return false;
+                    }
+                    NetworkTransferUtils.moveInventorySlotIntoNetwork(
+                        definition.getNode().getRoot(), menu.getLocation(), p.getInventory(), s);
                     return false;
                 });
             }

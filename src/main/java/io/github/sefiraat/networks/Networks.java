@@ -6,8 +6,6 @@ import com.balugaq.netex.api.enums.MinecraftVersion;
 import com.balugaq.netex.api.keybind.Keybinds;
 import com.balugaq.netex.core.guide.GridNewStyleCustomAmountGuideOption;
 import com.balugaq.netex.utils.Debug;
-import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
-import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import com.ytdd9527.networksexpansion.core.managers.ConfigManager;
 import com.ytdd9527.networksexpansion.core.services.LocalizationService;
 import com.ytdd9527.networksexpansion.setup.SetupUtil;
@@ -15,27 +13,26 @@ import com.ytdd9527.networksexpansion.utils.databases.DataSource;
 import com.ytdd9527.networksexpansion.utils.databases.DataStorage;
 import com.ytdd9527.networksexpansion.utils.databases.QueryQueue;
 import io.github.sefiraat.networks.commands.NetworksMain;
+import io.github.sefiraat.networks.compatibility.CompatibilityReport;
+import io.github.sefiraat.networks.compatibility.RuntimeCompatibility;
+import io.github.sefiraat.networks.diagnostics.LegacyDoctorBridge;
+import io.github.sefiraat.networks.diagnostics.NetworksDoctor;
 import io.github.sefiraat.networks.integrations.HudCallbacks;
 import io.github.sefiraat.networks.integrations.NetheoPlants;
 import io.github.sefiraat.networks.managers.ListenerManager;
 import io.github.sefiraat.networks.managers.SupportedPluginManager;
-import io.github.sefiraat.networks.slimefun.NetworksSlimefunItemStacks;
 import io.github.sefiraat.networks.slimefun.network.AdminDebuggable;
 import io.github.sefiraat.networks.slimefun.network.NetworkController;
-import io.github.sefiraat.networks.utils.NetworkUtils;
+import io.github.sefiraat.networks.slimefun.network.NetworkObject;
+import io.github.sefiraat.networks.utils.TransferAudit;
 import io.github.thebusybiscuit.slimefun4.api.SlimefunAddon;
 import io.github.thebusybiscuit.slimefun4.core.guide.options.SlimefunGuideSettings;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.libraries.paperlib.PaperLib;
 import lombok.Getter;
-import net.byteflux.libby.BukkitLibraryManager;
-import net.byteflux.libby.Library;
-import net.byteflux.libby.LibraryManager;
-import net.guizhanss.guizhanlibplugin.updater.GuizhanUpdater;
 import org.bstats.bukkit.Metrics;
 import org.bstats.charts.AdvancedPie;
 import org.bukkit.Bukkit;
-import org.bukkit.Location;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -45,16 +42,14 @@ import org.jetbrains.annotations.Nullable;
 import org.yaml.snakeyaml.error.YAMLException;
 
 import java.sql.SQLException;
-import java.text.MessageFormat;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.logging.Level;
 
 public class Networks extends JavaPlugin implements SlimefunAddon {
-    private static final String DEFAULT_LANGUAGE = "zh-CN";
+
+    private static final String DEFAULT_LANGUAGE = "en-US";
     private static Networks instance;
 
     @Getter
@@ -63,24 +58,21 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
     @Getter
     private static QueryQueue queryQueue;
 
+    /** Kept under its historical name for binary compatibility with existing integrations. */
     @Getter
     private static BukkitRunnable autoSaveThread;
 
+    @Getter
+    private static CompatibilityReport compatibilityReport;
+
     private static MinecraftVersion minecraftVersion = MinecraftVersion.UNKNOWN;
-    private final @NotNull String username;
-    private final @NotNull String repo;
-    private final @NotNull String branch;
     private ConfigManager configManager;
     private ListenerManager listenerManager;
     private SupportedPluginManager supportedPluginManager;
     private LocalizationService localizationService;
     private long slimefunTickCount;
-
-    public Networks() {
-        this.username = "ytdd9527";
-        this.repo = "NetworksExpansion";
-        this.branch = "master";
-    }
+    private boolean startupComplete;
+    private String startupStage = "not started";
 
     public static ConfigManager getConfigManager() {
         return Networks.getInstance().configManager;
@@ -114,158 +106,255 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
     @Override
     public void onEnable() {
         instance = this;
+        startupComplete = false;
+        NetworksDoctor.resetRuntimeState();
+        TransferAudit.reset();
 
-        loadLibraries();
+        try {
+            startupStage = "loading configuration and language";
+            saveDefaultConfig();
+            LocalizationService.clearRuntimeCache();
+            loadLanguage();
+            superHead();
 
+            startupStage = "checking Slimefun core and runtime compatibility";
+            compatibilityReport = RuntimeCompatibility.inspect(this);
+            logCompatibility(compatibilityReport);
+            if (!compatibilityReport.isSupported()) {
+                getLogger().severe(
+                    "Networks cannot start on this runtime. Correct the errors above or use the explicit unsupported-runtime override.");
+                getServer().getPluginManager().disablePlugin(this);
+                return;
+            }
+
+            environmentCheck();
+            getLogger().info(getLocalizationService().getString("messages.startup.loaded-language"));
+            getLogger().info(getLocalizationService().getString("messages.startup.getting-config"));
+            getLogger().info(getLocalizationService().getString("messages.startup.trying-auto-update"));
+
+            startupStage = "configuring controller runtime safety";
+            NetworkController.configureRuntimeSafety(this);
+
+            startupStage = "detecting optional integrations";
+            supportedPluginManager = new SupportedPluginManager();
+
+            startupStage = "starting the ordered drawer database worker";
+            getLogger().info(getLocalizationService().getString("messages.startup.creating-query-queue"));
+            queryQueue = new QueryQueue();
+            queryQueue.startThread();
+
+            startupStage = "opening CargoStorageUnits.db";
+            getLogger().info(getLocalizationService().getString("messages.startup.connecting-database"));
+            dataSource = new DataSource();
+            DataStorage.replayRecoveryJournal();
+            startAutoSave();
+
+            startupStage = "registering Networks items and integrations";
+            getLogger().info(getLocalizationService().getString("messages.startup.registering-items"));
+            SetupUtil.setupAll();
+            NetworkObject.startSharedTicker();
+
+            startupStage = "registering listeners";
+            getLogger().info(getLocalizationService().getString("messages.startup.registering-listeners"));
+            listenerManager = new ListenerManager();
+
+            startupStage = "registering commands";
+            getLogger().info(getLocalizationService().getString("messages.startup.registering-commands"));
+            PluginCommand command = getCommand("networks");
+            if (command == null) {
+                throw new IllegalStateException("The networks command is missing from plugin.yml.");
+            }
+            NetworksMain executor = new NetworksMain();
+            command.setExecutor(executor);
+            command.setTabCompleter(executor);
+
+            startupStage = "starting metrics and maintenance services";
+            setupMetrics();
+            startMaintenanceTasks();
+
+            AdminDebuggable.load();
+            SlimefunGuideSettings.addOption(GridNewStyleCustomAmountGuideOption.instance());
+            LegacyDoctorBridge.register(this);
+
+            Bukkit.getScheduler().runTaskLater(this, Keybinds::distinctAll, 1L);
+            ID.fetchId();
+            Keybinds.fetchScripts();
+
+            startupComplete = true;
+            startupStage = "complete";
+            getLogger().info(getLocalizationService().getString("messages.startup.enabled-successfully"));
+        } catch (ClassNotFoundException | SQLException exception) {
+            failStartup(exception);
+        } catch (RuntimeException | LinkageError exception) {
+            failStartup(exception);
+        }
+    }
+
+    @Override
+    public void onDisable() {
+        LegacyDoctorBridge.unregister(this);
+        NetworkObject.stopSharedTicker();
+
+        if (autoSaveThread != null) {
+            autoSaveThread.cancel();
+            autoSaveThread = null;
+        }
+
+        try {
+            if (localizationService != null) {
+                getLogger().info(getLocalizationService().getString("messages.shutdown.saving-config"));
+            }
+            ID.saveId();
+            if (configManager != null) {
+                configManager.saveAll();
+            }
+        } catch (Throwable throwable) {
+            Debug.trace(throwable);
+        }
+
+        if (dataSource != null && queryQueue != null && queryQueue.isAcceptingTasks()) {
+            try {
+                DataStorage.saveAmountChange();
+                DataStorage.checkpointPendingChangesForShutdown();
+            } catch (RuntimeException exception) {
+                Debug.trace(exception);
+            }
+        }
+
+        long timeoutMillis = Math.max(1000L, getConfig().getLong("database.shutdown-timeout-seconds", 15L) * 1000L);
+        boolean databaseWorkerStopped = true;
+        if (queryQueue != null) {
+            int pending = queryQueue.getTaskAmount();
+            if (pending > 0) {
+                getLogger().info("Waiting for " + pending + " Networks database task(s) to finish.");
+            }
+            boolean drained = queryQueue.shutdown(timeoutMillis);
+            databaseWorkerStopped = !queryQueue.isWorkerRunning();
+            if (!drained) {
+                getLogger().warning("Networks database shutdown exceeded its drain deadline. "
+                    + "Unstarted tasks were cancelled to prevent writes after disable.");
+            }
+            if (!databaseWorkerStopped) {
+                getLogger().severe("Networks database worker did not stop after interruption. "
+                    + "The SQLite connection will not be closed concurrently; make a backup before restarting.");
+            }
+        }
+
+        if (dataSource != null && databaseWorkerStopped) {
+            dataSource.close();
+            dataSource = null;
+        }
+        if (databaseWorkerStopped) {
+            queryQueue = null;
+        }
+        SupportedPluginManager.shutdown();
+        DataStorage.clearRuntimeCache();
+        NetworkStorage.clear();
+        NetworkController.getNetworks().clear();
+        NetworkController.getRecords().clear();
+        NetworkController.getRecordFlow().clear();
+        NetworkController.getCrayons().clear();
+        NetworkController.resetRuntimeSafety();
+
+        if (localizationService != null) {
+            getLogger().info(getLocalizationService().getString("messages.shutdown.saved-all-data"));
+            getLogger().info(getLocalizationService().getString("messages.shutdown.disabled-successfully"));
+        } else if (startupComplete) {
+            getLogger().info("Networks disabled.");
+        }
+        startupComplete = false;
+        startupStage = "disabled";
+        listenerManager = null;
+        supportedPluginManager = null;
+        configManager = null;
+        localizationService = null;
+        compatibilityReport = null;
+        minecraftVersion = MinecraftVersion.UNKNOWN;
+        slimefunTickCount = 0L;
+        LocalizationService.clearRuntimeCache();
+        NetworksDoctor.resetRuntimeState();
+        TransferAudit.reset();
+        instance = null;
+    }
+
+    private void failStartup(@NotNull Throwable throwable) {
+        getLogger().log(
+            Level.SEVERE,
+            "Networks failed during " + startupStage + ". The plugin is disabling and will preserve existing world/data formats.",
+            throwable);
+        getServer().getPluginManager().disablePlugin(this);
+    }
+
+    private void loadLanguage() {
         getLogger().info("Loading language");
-        this.configManager = new ConfigManager();
-        this.localizationService = new LocalizationService(this);
+        configManager = new ConfigManager();
+        localizationService = new LocalizationService(this);
         String language = configManager.getLanguage();
         try {
             localizationService.addLanguage(language);
             getLogger().info("Language " + language + " loaded successfully.");
-        } catch (ClassCastException | IllegalArgumentException | YAMLException e) {
-            getLogger().log(Level.WARNING, "Failed to load language " + language, e);
+        } catch (ClassCastException | IllegalArgumentException | YAMLException exception) {
+            getLogger().log(Level.WARNING, "Failed to load language " + language, exception);
         }
 
-        localizationService.addDefaultLanguage(DEFAULT_LANGUAGE);
-        getLogger().info("Default language " + DEFAULT_LANGUAGE + " loaded successfully.");
-
-        superHead();
-        environmentCheck();
-        getLogger().info(getLocalizationService().getString("messages.startup.loaded-language"));
-        getLogger().info(getLocalizationService().getString("messages.startup.getting-config"));
-        saveDefaultConfig();
-
-        getLogger().info(getLocalizationService().getString("messages.startup.trying-auto-update"));
-        tryUpdate();
-
-        this.supportedPluginManager = new SupportedPluginManager();
-
-        // Try to connect database
-        getLogger().info(getLocalizationService().getString("messages.startup.connecting-database"));
-        try {
-            dataSource = new DataSource();
-        } catch (ClassNotFoundException | SQLException e) {
-            getLogger().warning(getLocalizationService().getString("messages.startup.failed-to-connect-database"));
-            Debug.trace(e);
-            onDisable();
+        if (!DEFAULT_LANGUAGE.equals(language)) {
+            localizationService.addDefaultLanguage(DEFAULT_LANGUAGE);
+            getLogger().info("Default language " + DEFAULT_LANGUAGE + " loaded successfully.");
         }
+    }
 
-        getLogger().info(getLocalizationService().getString("messages.startup.creating-query-queue"));
-        queryQueue = new QueryQueue();
-        queryQueue.startThread();
+    private void logCompatibility(@NotNull CompatibilityReport report) {
+        getLogger().info("Compatibility target: " + report.getCoreVariant().getDisplayName()
+            + " " + report.getCoreVersion()
+            + ", Minecraft " + report.getMinecraftVersion()
+            + ", Java " + report.getJavaFeature());
+        for (String warning : report.getWarnings()) {
+            getLogger().warning(warning);
+        }
+    }
 
+    private void startAutoSave() {
         getLogger().info(getLocalizationService().getString("messages.startup.creating-auto-save-thread"));
         autoSaveThread = new BukkitRunnable() {
             @Override
             public void run() {
-                DataStorage.saveAmountChange();
+                if (queryQueue != null && queryQueue.isAcceptingTasks()) {
+                    DataStorage.saveAmountChange();
+                }
             }
         };
         int seconds = getConfig().getInt("drawer-auto-save-period");
         seconds = seconds <= 0 ? 300 : seconds;
         long period = 20L * seconds;
-        autoSaveThread.runTaskTimerAsynchronously(this, 2 * period, period);
-
-        getLogger().info(getLocalizationService().getString("messages.startup.registering-items"));
-        SetupUtil.setupAll();
-
-        getLogger().info(getLocalizationService().getString("messages.startup.registering-listeners"));
-        this.listenerManager = new ListenerManager();
-        getLogger().info(getLocalizationService().getString("messages.startup.registering-commands"));
-        PluginCommand c = this.getCommand("networks");
-        if (c != null) {
-            c.setExecutor(new NetworksMain());
-        }
-
-        setupMetrics();
-
-        Bukkit.getScheduler()
-            .runTaskTimer(
-                this,
-                () -> slimefunTickCount++,
-                1,
-                Slimefun.getTickerTask().getTickRate());
-
-        // Fix dupe bug where player breaks the network controller data without player interaction
-        Bukkit.getScheduler()
-            .runTaskTimer(
-                this,
-                () -> {
-                    Set<Location> wrongs = new HashSet<>();
-                    Set<Location> controllers = new HashSet<>(
-                        NetworkController.getNetworks().keySet());
-                    for (Location controller : controllers) {
-                        SlimefunBlockData data = StorageCacheUtils.getBlock(controller);
-                        if (data == null
-                            || !NetworksSlimefunItemStacks.NETWORK_CONTROLLER
-                            .getItemId()
-                            .equals(data.getSfId())) {
-                            wrongs.add(controller);
-                        }
-                    }
-
-                    for (Location wrong : wrongs) {
-                        NetworkUtils.clearNetwork(wrong);
-                    }
-                },
-                1,
-                Slimefun.getTickerTask().getTickRate());
-
-        Bukkit.getScheduler()
-            .runTaskTimer(
-                this,
-                () -> NetworkController.getRecords().values().forEach(ItemFlowRecord::gc),
-                1,
-                Slimefun.getTickerTask().getTickRate());
-
-        AdminDebuggable.load();
-        SlimefunGuideSettings.addOption(GridNewStyleCustomAmountGuideOption.instance());
-        Bukkit.getScheduler().runTaskLaterAsynchronously(this, Keybinds::distinctAll, 1L);
-        ID.fetchId();
-        Keybinds.fetchScripts();
-        getLogger().info(getLocalizationService().getString("messages.startup.enabled-successfully"));
+        autoSaveThread.runTaskTimer(this, 2L * period, period);
     }
 
-    @Override
-    public void onDisable() {
-        try {
-            getLogger().info(getLocalizationService().getString("messages.shutdown.saving-config"));
-            ID.saveId();
-            this.configManager.saveAll();
-            getLogger().info(getLocalizationService().getString("messages.shutdown.disconnecting-database"));
-        } catch (Exception e) {
-            Debug.trace(e);
-        }
+    private void startMaintenanceTasks() {
+        long tickRate = Math.max(1L, Slimefun.getTickerTask().getTickRate());
+        Bukkit.getScheduler().runTaskTimer(this, () -> slimefunTickCount++, 1L, tickRate);
 
-        if (autoSaveThread != null) {
-            autoSaveThread.cancel();
-        }
-        DataStorage.saveAmountChange();
-        if (queryQueue != null) {
-            while (!queryQueue.isAllDone()) {
-                getLogger()
-                    .info(String.format(
-                        getLocalizationService().getString("messages.shutdown.saving-data"),
-                        queryQueue.getTaskAmount()));
+        long doctorPeriod = Math.max(200L, getConfig().getLong("doctor.auto-scan-period-ticks", 1200L));
+        int doctorBudget = Math.max(1, getConfig().getInt("doctor.max-auto-scan-entries", 512));
+        if (getConfig().getBoolean("doctor.auto-repair-stale-runtime-state", true)) {
+            Bukkit.getScheduler().runTaskTimer(this, () -> {
                 try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    Debug.trace(e);
+                    var report = NetworksDoctor.runAutomaticRepair(doctorBudget);
+                    if (report.getRepairedEntries() > 0 || report.getFailures() > 0) {
+                        getLogger().info("Networks Doctor scanned " + report.getScannedEntries()
+                            + " entry/entries and repaired " + report.getRepairedEntries()
+                            + "; failures=" + report.getFailures());
+                    }
+                } catch (RuntimeException exception) {
+                    getLogger().log(Level.WARNING, "Automatic Networks Doctor pass failed.", exception);
                 }
-            }
-            queryQueue.scheduleAbort();
+            }, doctorPeriod, doctorPeriod);
         }
-        getLogger().info(getLocalizationService().getString("messages.shutdown.saved-all-data"));
-        getLogger().info(getLocalizationService().getString("messages.shutdown.disabled-successfully"));
-    }
 
-    @SuppressWarnings("deprecation")
-    public void tryUpdate() {
-        if (configManager.isAutoUpdate() && getDescription().getVersion().startsWith("Build")) {
-            GuizhanUpdater.start(this, getFile(), username, repo, branch);
-        }
+        Bukkit.getScheduler().runTaskTimer(
+            this,
+            () -> NetworkController.getRecords().values().forEach(ItemFlowRecord::gc),
+            tickRate,
+            tickRate);
     }
 
     public void superHead() {
@@ -276,26 +365,17 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
     }
 
     public void environmentCheck() {
-        if (!getServer().getPluginManager().isPluginEnabled("GuizhanLibPlugin")) {
-            getLogger().log(Level.SEVERE, getLocalizationService().getString("messages.depend.not-found-guizhanlib"));
-            getLogger()
-                .log(
-                    Level.SEVERE,
-                    getLocalizationService().getString("messages.depend.suggest-download-guizhanlib"));
-            return;
-        }
         try {
             minecraftVersion = MinecraftVersion.current();
-        } catch (NoClassDefFoundError | NoSuchFieldError e) {
+        } catch (NoClassDefFoundError | NoSuchFieldError error) {
             for (int i = 0; i < 20; i++) {
-                getLogger()
-                    .severe(getLocalizationService().getString("messages.depend.suggest-download-newer-slimefun"));
+                getLogger().severe(getLocalizationService().getString("messages.depend.suggest-download-newer-slimefun"));
             }
         }
 
         if (minecraftVersion == MinecraftVersion.UNKNOWN) {
-            final int major = PaperLib.getMinecraftVersion();
-            final int minor = PaperLib.getMinecraftPatchVersion();
+            int major = PaperLib.getMinecraftVersion();
+            int minor = PaperLib.getMinecraftPatchVersion();
             minecraftVersion = MinecraftVersion.of(major, minor);
         }
     }
@@ -305,56 +385,20 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
             getLogger().info(getLocalizationService().getString("messages.integrations.found-slimehud"));
             try {
                 HudCallbacks.setup();
-            } catch (NoClassDefFoundError e) {
+            } catch (RuntimeException | LinkageError exception) {
                 getLogger().warning(getLocalizationService().getString("messages.integrations.not-found-slimehud"));
+                supportedPluginManager.disableOptionalIntegration("SlimeHUD", exception);
             }
         }
         if (supportedPluginManager.isNetheopoiesis()) {
             getLogger().info(getLocalizationService().getString("messages.integrations.found-netheopoiesis"));
             try {
                 NetheoPlants.setup();
-            } catch (NoClassDefFoundError e) {
-                getLogger()
-                    .warning(getLocalizationService().getString("messages.integrations.not-found-netheopoiesis"));
+            } catch (RuntimeException | LinkageError exception) {
+                getLogger().warning(getLocalizationService().getString("messages.integrations.not-found-netheopoiesis"));
+                supportedPluginManager.disableOptionalIntegration("Netheopoiesis", exception);
             }
         }
-    }
-
-    private void loadLibraries() {
-        LibraryManager libraryManager = new BukkitLibraryManager(this);
-        libraryManager.addMavenCentral();
-
-        getLogger().info("正在加载 Pinyin");
-        Library pinyin = Library.builder()
-            .groupId("com{}github{}houbb")
-            .artifactId("pinyin")
-            .version("0.4.0")
-            .build();
-        libraryManager.loadLibrary(pinyin);
-
-        getLogger().info("正在加载 opencc4j");
-        Library opencc4j = Library.builder()
-            .groupId("com{}github{}houbb")
-            .artifactId("opencc4j")
-            .version("1.14.0")
-            .build();
-        libraryManager.loadLibrary(opencc4j);
-
-        getLogger().info("正在加载 heaven");
-        Library heaven = Library.builder()
-            .groupId("com{}github{}houbb")
-            .artifactId("heaven")
-            .version("0.13.0")
-            .build();
-        libraryManager.loadLibrary(heaven);
-
-        getLogger().info("正在加载 nlp-common");
-        Library nlp = Library.builder()
-            .groupId("com{}github{}houbb")
-            .artifactId("nlp-common")
-            .version("0.0.5")
-            .build();
-        libraryManager.loadLibrary(nlp);
     }
 
     public MinecraftVersion getMCVersion() {
@@ -362,16 +406,17 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
     }
 
     public void setupMetrics() {
-        final Metrics metrics = new Metrics(this, 13644);
-
-        AdvancedPie networksChart = new AdvancedPie("networks", () -> {
-            Map<String, Integer> networksMap = new HashMap<>();
-            networksMap.put(
-                "Number of networks", NetworkController.getNetworks().size());
-            return networksMap;
-        });
-
-        metrics.addCustomChart(networksChart);
+        try {
+            Metrics metrics = new Metrics(this, 13644);
+            AdvancedPie networksChart = new AdvancedPie("networks", () -> {
+                Map<String, Integer> networksMap = new HashMap<>();
+                networksMap.put("Number of networks", NetworkController.getNetworks().size());
+                return networksMap;
+            });
+            metrics.addCustomChart(networksChart);
+        } catch (RuntimeException | LinkageError exception) {
+            getLogger().log(Level.WARNING, "bStats metrics could not start; Networks will continue without metrics.", exception);
+        }
     }
 
     @NotNull
@@ -383,13 +428,12 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
     @Nullable
     @Override
     public String getBugTrackerURL() {
-        return MessageFormat.format("https://github.com/{0}/{1}/issues/", this.username, this.repo);
+        return "https://github.com/wickidcow/SF_NetworksExp/issues";
     }
 
     @NotNull
     public String getWikiURL() {
-        return MessageFormat.format(
-            "https://slimefun-addons-wiki.guizhanss.cn/networks/{0}/{1}", this.username, this.repo);
+        return "https://github.com/wickidcow/SF_NetworksExp#readme";
     }
 
     public void debug(String message) {

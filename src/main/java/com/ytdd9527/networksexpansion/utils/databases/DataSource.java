@@ -22,339 +22,631 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Base64;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 
+/** SQLite persistence for Networks drawers. All runtime calls are serialized by {@link QueryQueue}. */
 @SuppressWarnings("SqlSourceToSinkFlow")
-public class DataSource {
+public final class DataSource implements AutoCloseable {
 
-    private final String ITEM_ID_KEY = "NEXT_ITEM_ID";
-    private final String CONTAINER_ID_KEY = "NEXT_CONTAINER_ID";
+    private static final String ITEM_ID_KEY = "NEXT_ITEM_ID";
+    private static final String CONTAINER_ID_KEY = "NEXT_CONTAINER_ID";
+
     private final @NotNull Logger logger;
-    private final @NotNull Map<Integer, ItemStack> itemMap;
-    private final @NotNull Map<String, String> environment;
-    private Connection conn;
-    private int nextContainerId = 0;
-    private int nextItemId = 0;
+    private final @NotNull Map<Integer, ItemStack> itemMap = new ConcurrentHashMap<>();
+    private final @NotNull Map<String, String> environment = new ConcurrentHashMap<>();
+    private Connection connection;
+    private int nextContainerId;
+    private int nextItemId;
+    private Path databaseFile;
+    private Path recoveryJournalFile;
+    private String integrityStatus = "not-run";
+    private String lastBackup = "none";
 
     public DataSource() throws ClassNotFoundException, SQLException {
-
-        connect();
-        createTable();
         logger = Networks.getInstance().getLogger();
-        // Load item ids
-        itemMap = new HashMap<>();
-        loadItemMap();
-        // Load environment variables
-        environment = new HashMap<>();
-        loadEnvironment();
-
-        init();
+        try {
+            connect();
+            verifyIntegrity();
+            createTable();
+            loadItemMap();
+            loadEnvironment();
+            initCounters();
+        } catch (ClassNotFoundException | SQLException | RuntimeException exception) {
+            close();
+            throw exception;
+        }
     }
 
     @SuppressWarnings("deprecation")
-    public static @NotNull String getBase64String(ItemStack item) throws IOException {
-        ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        BukkitObjectOutputStream bs = new BukkitObjectOutputStream(stream);
-        bs.writeObject(item);
-
-        bs.close();
-        return Base64.getEncoder().encodeToString(stream.toByteArray());
+    public static @NotNull String getBase64String(@NotNull ItemStack item) throws IOException {
+        try (ByteArrayOutputStream stream = new ByteArrayOutputStream();
+             BukkitObjectOutputStream output = new BukkitObjectOutputStream(stream)) {
+            output.writeObject(item);
+            output.flush();
+            return Base64.getEncoder().encodeToString(stream.toByteArray());
+        }
     }
 
     @SuppressWarnings("deprecation")
-    public static ItemStack getItemStack(@NotNull String base64Str) throws IOException, ClassNotFoundException {
-        ByteArrayInputStream stream = new ByteArrayInputStream(Base64.getMimeDecoder().decode(base64Str));
-        BukkitObjectInputStream bs = new BukkitObjectInputStream(stream);
-        ItemStack re = (ItemStack) bs.readObject();
-        bs.close();
-        return re;
+    public static @NotNull ItemStack getItemStack(@NotNull String base64) throws IOException, ClassNotFoundException {
+        byte[] bytes = Base64.getMimeDecoder().decode(base64);
+        try (ByteArrayInputStream stream = new ByteArrayInputStream(bytes);
+             BukkitObjectInputStream input = new BukkitObjectInputStream(stream)) {
+            Object value = input.readObject();
+            if (!(value instanceof ItemStack itemStack)) {
+                throw new IOException("Stored Networks item is not an ItemStack");
+            }
+            return itemStack;
+        }
     }
 
     void saveNewStorageData(@NotNull StorageUnitData storageData) {
-        String sql = "INSERT INTO " + DataTables.CONTAINER + " VALUES(" + storageData.getId()
-            + ",'" + storageData.getOwner().getUniqueId()
-            + "'," + storageData.getSizeType().ordinal()
-            + "," + (storageData.isPlaced() ? 1 : 0)
-            + ",'" + DataStorage.formatLocation(storageData.getLastLocation())
-            + "');";
-        scheduleExecute(sql, Lang.getString("messages.data-saving.error-occurred-when-saving-new-data"));
-    }
-
-    int getNextContainerId() {
-        int re = nextContainerId++;
-
-        String sql = "UPDATE " + DataTables.ENVIRONMENT + " SET VarValue = " + nextContainerId + " WHERE VarName = '"
-            + CONTAINER_ID_KEY + "';";
-        if (!environment.containsKey(CONTAINER_ID_KEY)) {
-            sql = "INSERT INTO " + DataTables.ENVIRONMENT + " VALUES ('" + CONTAINER_ID_KEY + "'," + nextContainerId
-                + ");";
-            environment.put(CONTAINER_ID_KEY, "" + nextContainerId);
-        }
-        scheduleExecute(sql, Lang.getString("messages.data-saving.error-occurred-when-updating-environment-var"));
-
-        return re;
-    }
-
-    @Nullable
-    public StorageUnitData getStorageData(int id) {
-        StorageUnitData re = null;
-
-        String sql = "SELECT * FROM " + DataTables.CONTAINER + " WHERE ContainerID = " + id + ";";
-        try (Statement stat = conn.createStatement();
-             ResultSet result = stat.executeQuery(sql)) {
-            if (result.next()) {
-                String[] locStr = result.getString("LastLocation").split(";");
-                Location l = null;
-
-                if (locStr.length == 4) {
-                    World w = Bukkit.getWorld(UUID.fromString(locStr[0]));
-                    if (w != null) {
-                        l = new Location(
-                            w,
-                            Integer.parseInt(locStr[1]),
-                            Integer.parseInt(locStr[2]),
-                            Integer.parseInt(locStr[3]));
-                    }
-                }
-
-                re = new StorageUnitData(
-                    result.getInt("ContainerID"),
-                    result.getString("PlayerUUID"),
-                    StorageUnitType.values()[result.getInt("SizeType") % 13],
-                    result.getBoolean("IsPlaced"),
-                    l,
-                    getStoredItem(id));
-            }
-        } catch (SQLException e) {
-            logger.warning(Lang.getString("messages.data-saving.error-occurred-when-loading-data"));
-            Debug.trace(e);
-        }
-        return re;
-    }
-
-    int getItemId(@NotNull ItemStack item) {
-        ItemStack clone = item.clone();
-        ItemStackWrapper wrapper = ItemStackWrapper.wrap(item);
-        for (Map.Entry<Integer, ItemStack> each : itemMap.entrySet()) {
-            if (StackUtils.itemsMatch(each.getValue(), wrapper)) {
-                return each.getKey();
-            }
-        }
-
-        // Not found, return new one and
-        int re = nextItemId++;
-
         Networks.getQueryQueue().scheduleUpdate(() -> {
-            try (Statement stat = conn.createStatement()) {
-                // Update environment data
-                String sql = "UPDATE " + DataTables.ENVIRONMENT + " SET VarValue = " + nextItemId + " WHERE VarName = '"
-                    + ITEM_ID_KEY + "';";
-                if (!environment.containsKey(ITEM_ID_KEY)) {
-                    sql = "INSERT INTO " + DataTables.ENVIRONMENT + " VALUES ('" + ITEM_ID_KEY + "'," + nextItemId
-                        + ");";
-                    environment.put(ITEM_ID_KEY, "" + nextItemId);
-                }
-                stat.execute(sql);
-
-                // Save item map
-                stat.execute("INSERT INTO " + DataTables.ITEM_STACK + " VALUES (" + re + ",'" + getBase64String(clone)
-                    + "');");
+            String sql = "INSERT INTO " + DataTables.CONTAINER + " VALUES(?,?,?,?,?);";
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, storageData.getId());
+                statement.setString(2, storageData.getOwner().getUniqueId().toString());
+                statement.setInt(3, storageData.getSizeType().ordinal());
+                statement.setInt(4, storageData.isPlaced() ? 1 : 0);
+                statement.setString(5, DataStorage.formatLocation(storageData.getLastLocation()));
+                statement.executeUpdate();
                 return true;
-            } catch (SQLException | IOException e) {
-                logger.warning(Lang.getString("messages.data-saving.error-occurred-when-saving-itemstack"));
-                Debug.trace(e);
+            } catch (SQLException exception) {
+                logger.warning(Lang.getString("messages.data-saving.error-occurred-when-saving-new-data"));
+                Debug.trace(exception);
                 return false;
             }
         });
-
-        return re;
     }
 
-    void updateContainer(int id, String key, String value) {
-        String sql =
-            "UPDATE " + DataTables.CONTAINER + " SET " + key + " = '" + value + "' WHERE ContainerID = " + id + ";";
-        scheduleExecute(sql, Lang.getString("messages.data-saving.error-occurred-when-updating-container-data"));
+    synchronized int getNextContainerId() {
+        int id = nextContainerId++;
+        persistCounter(CONTAINER_ID_KEY, nextContainerId);
+        return id;
+    }
+
+    @Nullable
+    StorageUnitData getStorageData(int id) {
+        String sql = "SELECT * FROM " + DataTables.CONTAINER + " WHERE ContainerID = ?;";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, id);
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) {
+                    return null;
+                }
+
+                Location location = parseLocation(result.getString("LastLocation"));
+                StorageUnitType[] types = StorageUnitType.values();
+                int ordinal = Math.floorMod(result.getInt("SizeType"), types.length);
+                return new StorageUnitData(
+                    result.getInt("ContainerID"),
+                    result.getString("PlayerUUID"),
+                    types[ordinal],
+                    result.getBoolean("IsPlaced"),
+                    location,
+                    loadStoredItems(id));
+            }
+        } catch (SQLException exception) {
+            logger.warning(Lang.getString("messages.data-saving.error-occurred-when-loading-data"));
+            Debug.trace(exception);
+            return null;
+        }
+    }
+
+    synchronized int getItemId(@NotNull ItemStack item) {
+        ItemStack clone = item.clone();
+        ItemStackWrapper wrapper = ItemStackWrapper.wrap(clone);
+        for (Map.Entry<Integer, ItemStack> entry : itemMap.entrySet()) {
+            if (StackUtils.itemsMatch(entry.getValue(), wrapper)) {
+                return entry.getKey();
+            }
+        }
+
+        int id = nextItemId++;
+        // Publish immediately so simultaneous deposits cannot assign multiple IDs to the same item.
+        itemMap.put(id, clone);
+        persistCounter(ITEM_ID_KEY, nextItemId);
+
+        Networks.getQueryQueue().scheduleUpdate(() -> {
+            String sql = "INSERT INTO " + DataTables.ITEM_STACK + " VALUES (?,?);";
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, id);
+                statement.setString(2, getBase64String(clone));
+                statement.executeUpdate();
+                return true;
+            } catch (SQLException | IOException exception) {
+                logger.warning(Lang.getString("messages.data-saving.error-occurred-when-saving-itemstack"));
+                Debug.trace(exception);
+                return false;
+            }
+        });
+        return id;
+    }
+
+    void updateContainer(int id, @NotNull String key, @NotNull String value) {
+        if (!key.equals("IsPlaced") && !key.equals("SizeType") && !key.equals("LastLocation")) {
+            throw new IllegalArgumentException("Unsupported drawer column: " + key);
+        }
+        Networks.getQueryQueue().scheduleUpdate(() -> {
+            String sql = "UPDATE " + DataTables.CONTAINER + " SET " + key + " = ? WHERE ContainerID = ?;";
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setString(1, value);
+                statement.setInt(2, id);
+                statement.executeUpdate();
+                return true;
+            } catch (SQLException exception) {
+                logger.warning(Lang.getString("messages.data-saving.error-occurred-when-updating-container-data"));
+                Debug.trace(exception);
+                return false;
+            }
+        });
     }
 
     void addStoredItem(int containerId, int itemId, int amount) {
-        if (amount <= 0) return;
-        String sql =
-            "INSERT INTO " + DataTables.ITEM_STORED + " VALUES(" + containerId + "," + itemId + "," + amount + ");";
-        scheduleExecute(sql, Lang.getString("messages.data-saving.error-occurred-when-updating-storage"));
+        if (amount <= 0) {
+            return;
+        }
+        Networks.getQueryQueue().scheduleUpdate(() -> {
+            String sql = "INSERT INTO " + DataTables.ITEM_STORED
+                + " (ContainerID, ItemID, Amount) VALUES(?,?,?) "
+                + "ON CONFLICT(ContainerID, ItemID) DO UPDATE SET "
+                + "Amount = CAST(Amount AS INTEGER) + CAST(excluded.Amount AS INTEGER);";
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, containerId);
+                statement.setInt(2, itemId);
+                statement.setInt(3, amount);
+                statement.executeUpdate();
+                return true;
+            } catch (SQLException exception) {
+                logger.warning(Lang.getString("messages.data-saving.error-occurred-when-updating-storage"));
+                Debug.trace(exception);
+                return false;
+            }
+        });
     }
 
     void updateItemAmount(int containerId, int itemId, int amount) {
-        if (NetworksDrawer.isLocked(containerId)) {
-            if (amount < 0) {
-                deleteStoredItem(containerId, itemId);
-                return;
-            }
-        } else if (amount <= 0) {
+        if ((NetworksDrawer.isLocked(containerId) && amount < 0)
+            || (!NetworksDrawer.isLocked(containerId) && amount <= 0)) {
             deleteStoredItem(containerId, itemId);
             return;
         }
-        String sql = "UPDATE " + DataTables.ITEM_STORED + " SET Amount = " + amount + " WHERE ContainerID = "
-            + containerId + " AND ItemID = " + itemId + ";";
-        scheduleExecute(sql, Lang.getString("messages.data-saving.error-occurred-when-updating-storage"));
+
+        Networks.getQueryQueue().scheduleUpdate(() -> {
+            String sql = "INSERT INTO " + DataTables.ITEM_STORED
+                + " (Amount, ContainerID, ItemID) VALUES(?,?,?) "
+                + "ON CONFLICT(ContainerID, ItemID) DO UPDATE SET Amount = excluded.Amount;";
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, amount);
+                statement.setInt(2, containerId);
+                statement.setInt(3, itemId);
+                statement.executeUpdate();
+                return true;
+            } catch (SQLException exception) {
+                logger.warning(Lang.getString("messages.data-saving.error-occurred-when-updating-storage"));
+                Debug.trace(exception);
+                return false;
+            }
+        });
     }
 
     void deleteStoredItem(int containerId, int itemId) {
-        String sql = "DELETE FROM " + DataTables.ITEM_STORED + " WHERE ContainerID = " + containerId + " AND ItemID = "
-            + itemId + ";";
-        scheduleExecute(sql, Lang.getString("messages.data-saving.error-occurred-when-updating-storage"));
+        Networks.getQueryQueue().scheduleUpdate(() -> {
+            String sql = "DELETE FROM " + DataTables.ITEM_STORED + " WHERE ContainerID = ? AND ItemID = ?;";
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setInt(1, containerId);
+                statement.setInt(2, itemId);
+                statement.executeUpdate();
+                return true;
+            } catch (SQLException exception) {
+                logger.warning(Lang.getString("messages.data-saving.error-occurred-when-updating-storage"));
+                Debug.trace(exception);
+                return false;
+            }
+        });
     }
 
-    int getIdFromLocation(@NotNull Location l) {
-        String sql = "SELECT ContainerID FROM " + DataTables.CONTAINER + " WHERE IsPlaced = 1 AND LastLocation = '"
-            + DataStorage.formatLocation(l) + "';";
-        try (Statement stat = conn.createStatement();
-             ResultSet resultSet = stat.executeQuery(sql)) {
-            if (resultSet.next()) {
-                return resultSet.getInt(1);
-            }
-        } catch (SQLException e) {
-            logger.warning(Lang.getString("messages.data-saving.error-occurred-when-fixing-data"));
-            Debug.trace(e);
+
+    /**
+     * Applies one delayed drawer snapshot in a single SQLite transaction. Every value is an absolute amount,
+     * making recovery-journal replay idempotent.
+     */
+    void applyAmountChanges(
+        @NotNull Map<Integer, ? extends Map<Integer, Integer>> changes,
+        @NotNull Consumer<Boolean> completion
+    ) {
+        Map<Integer, Map<Integer, Integer>> immutableSnapshot = new LinkedHashMap<>();
+        for (Map.Entry<Integer, ? extends Map<Integer, Integer>> container : changes.entrySet()) {
+            immutableSnapshot.put(container.getKey(), Map.copyOf(container.getValue()));
         }
-        return -1;
+
+        Networks.getQueryQueue().scheduleUpdate(new QueuedTask() {
+            private boolean success;
+
+            @Override
+            public boolean execute() {
+                try {
+                    success = applyAmountChangesTransaction(immutableSnapshot);
+                } catch (RuntimeException | LinkageError exception) {
+                    success = false;
+                    logger.warning("An unexpected error interrupted a Networks drawer amount transaction.");
+                    Debug.trace(exception);
+                }
+                return true;
+            }
+
+            @Override
+            public boolean callback() {
+                completion.accept(success);
+                return false;
+            }
+        });
+    }
+
+    public @NotNull String getIntegrityStatus() {
+        return integrityStatus;
+    }
+
+    public @NotNull String getLastBackup() {
+        return lastBackup;
+    }
+
+    public @NotNull Path getRecoveryJournalFile() {
+        return recoveryJournalFile;
+    }
+
+    private boolean applyAmountChangesTransaction(
+        @NotNull Map<Integer, ? extends Map<Integer, Integer>> changes
+    ) {
+        if (changes.isEmpty()) {
+            return true;
+        }
+
+        boolean previousAutoCommit;
+        try {
+            previousAutoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+        } catch (SQLException exception) {
+            logger.warning("Could not begin the Networks drawer amount transaction.");
+            Debug.trace(exception);
+            return false;
+        }
+
+        String upsert = "INSERT INTO " + DataTables.ITEM_STORED
+            + " (Amount, ContainerID, ItemID) VALUES(?,?,?) "
+            + "ON CONFLICT(ContainerID, ItemID) DO UPDATE SET Amount = excluded.Amount;";
+        String delete = "DELETE FROM " + DataTables.ITEM_STORED + " WHERE ContainerID = ? AND ItemID = ?;";
+
+        try (PreparedStatement upsertStatement = connection.prepareStatement(upsert);
+             PreparedStatement deleteStatement = connection.prepareStatement(delete)) {
+            for (Map.Entry<Integer, ? extends Map<Integer, Integer>> container : changes.entrySet()) {
+                int containerId = container.getKey();
+                for (Map.Entry<Integer, Integer> item : container.getValue().entrySet()) {
+                    int itemId = item.getKey();
+                    int amount = item.getValue();
+                    boolean deleteRow = (NetworksDrawer.isLocked(containerId) && amount < 0)
+                        || (!NetworksDrawer.isLocked(containerId) && amount <= 0);
+                    if (deleteRow) {
+                        deleteStatement.setInt(1, containerId);
+                        deleteStatement.setInt(2, itemId);
+                        deleteStatement.addBatch();
+                    } else {
+                        upsertStatement.setInt(1, amount);
+                        upsertStatement.setInt(2, containerId);
+                        upsertStatement.setInt(3, itemId);
+                        upsertStatement.addBatch();
+                    }
+                }
+            }
+            deleteStatement.executeBatch();
+            upsertStatement.executeBatch();
+            connection.commit();
+            return true;
+        } catch (SQLException exception) {
+            try {
+                connection.rollback();
+            } catch (SQLException rollbackException) {
+                exception.addSuppressed(rollbackException);
+            }
+            logger.warning(Lang.getString("messages.data-saving.error-occurred-when-updating-storage"));
+            Debug.trace(exception);
+            return false;
+        } finally {
+            try {
+                connection.setAutoCommit(previousAutoCommit);
+            } catch (SQLException exception) {
+                logger.warning("Could not restore SQLite auto-commit after a Networks drawer transaction.");
+                Debug.trace(exception);
+            }
+        }
+    }
+
+    int getIdFromLocation(@NotNull Location location) {
+        String sql = "SELECT ContainerID FROM " + DataTables.CONTAINER
+            + " WHERE IsPlaced = 1 AND LastLocation = ?;";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, DataStorage.formatLocation(location));
+            try (ResultSet result = statement.executeQuery()) {
+                return result.next() ? result.getInt(1) : -1;
+            }
+        } catch (SQLException exception) {
+            logger.warning(Lang.getString("messages.data-saving.error-occurred-when-fixing-data"));
+            Debug.trace(exception);
+            return -1;
+        }
+    }
+
+    public boolean isOpen() {
+        try {
+            return connection != null && !connection.isClosed();
+        } catch (SQLException exception) {
+            return false;
+        }
+    }
+
+    @Override
+    public synchronized void close() {
+        if (connection == null) {
+            return;
+        }
+        try {
+            connection.close();
+        } catch (SQLException exception) {
+            logger.warning("Failed to close the Networks drawer database cleanly.");
+            Debug.trace(exception);
+        } finally {
+            connection = null;
+        }
     }
 
     private void connect() throws SQLException, ClassNotFoundException {
         File dataFolder = Networks.getInstance().getDataFolder();
-        if (!dataFolder.exists() || !dataFolder.isDirectory()) {
-            if (!dataFolder.mkdir()) {
-                throw new IllegalStateException(
-                    Lang.getString("messages.data-saving.error-occurred-when-creating-data-folder"));
-            }
+        if (!dataFolder.exists() && !dataFolder.mkdirs()) {
+            throw new IllegalStateException(
+                Lang.getString("messages.data-saving.error-occurred-when-creating-data-folder"));
         }
+
+        Path dataPath = dataFolder.toPath();
+        databaseFile = dataPath.resolve("CargoStorageUnits.db");
+        recoveryJournalFile = DrawerRecoveryJournal.pathFor(dataPath);
+        if (Networks.getInstance().getConfig().getBoolean("database.startup-backups.enabled", true)) {
+            int retained = Math.max(1,
+                Networks.getInstance().getConfig().getInt("database.startup-backups.retained", 5));
+            try {
+                Path backup = DatabaseBackupManager.createStartupBackup(dataPath, retained, logger);
+                if (backup != null) {
+                    lastBackup = dataPath.relativize(backup).toString();
+                    logger.info("Created Networks drawer database startup backup: " + lastBackup);
+                }
+            } catch (IOException exception) {
+                throw new SQLException("Could not create the required Networks drawer database startup backup", exception);
+            }
+        } else {
+            lastBackup = "disabled";
+        }
+
         Class.forName("org.sqlite.JDBC");
-        this.conn = DriverManager.getConnection("jdbc:sqlite:" + dataFolder.getPath() + "/CargoStorageUnits.db");
+        connection = DriverManager.getConnection("jdbc:sqlite:" + databaseFile);
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("PRAGMA foreign_keys = ON;");
+            statement.execute("PRAGMA busy_timeout = 10000;");
+            statement.execute("PRAGMA journal_mode = WAL;");
+            statement.execute("PRAGMA synchronous = NORMAL;");
+        }
+    }
+
+    private void verifyIntegrity() throws SQLException {
+        if (!Networks.getInstance().getConfig().getBoolean("database.integrity-check", true)) {
+            integrityStatus = "disabled";
+            return;
+        }
+
+        try (Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery("PRAGMA quick_check;")) {
+            StringBuilder problems = new StringBuilder();
+            while (result.next()) {
+                String status = result.getString(1);
+                if (status != null && !status.equalsIgnoreCase("ok")) {
+                    if (!problems.isEmpty()) {
+                        problems.append("; ");
+                    }
+                    problems.append(status);
+                }
+            }
+            if (!problems.isEmpty()) {
+                integrityStatus = "failed";
+                throw new SQLException("CargoStorageUnits.db failed PRAGMA quick_check: " + problems);
+            }
+            integrityStatus = "ok";
+        }
     }
 
     private void createTable() throws SQLException {
-        try (Statement stat = conn.createStatement()) {
-            stat.execute(DataTables.CONTAINER_CREATION);
-            stat.execute(DataTables.ITEM_STACK_CREATION);
-            stat.execute(DataTables.ITEM_STORED_CREATION);
-            stat.execute(DataTables.ENVIRONMENT_CREATION);
+        boolean previousAutoCommit = connection.getAutoCommit();
+        connection.setAutoCommit(false);
+        try (Statement statement = connection.createStatement()) {
+            statement.execute(DataTables.CONTAINER_CREATION);
+            statement.execute(DataTables.ITEM_STACK_CREATION);
+            statement.execute(DataTables.ITEM_STORED_CREATION);
+            statement.execute(DataTables.ENVIRONMENT_CREATION);
+
+            if (!hasIndex(DataTables.ITEM_STORED_UNIQUE_INDEX)) {
+                // Older Networks builds could write duplicate rows for one container/item pair.
+                // Merge them transactionally before adding the uniqueness guarantee.
+                statement.execute("DROP TABLE IF EXISTS Networks_ItemStored_Merged;");
+                statement.execute("CREATE TEMP TABLE Networks_ItemStored_Merged AS "
+                    + "SELECT ContainerID, ItemID, SUM(CAST(Amount AS INTEGER)) AS Amount "
+                    + "FROM " + DataTables.ITEM_STORED + " GROUP BY ContainerID, ItemID;");
+                statement.execute("DELETE FROM " + DataTables.ITEM_STORED + ";");
+                statement.execute("INSERT INTO " + DataTables.ITEM_STORED
+                    + " (ContainerID, ItemID, Amount) SELECT ContainerID, ItemID, Amount "
+                    + "FROM Networks_ItemStored_Merged;");
+                statement.execute("DROP TABLE Networks_ItemStored_Merged;");
+            }
+
+            statement.execute("CREATE UNIQUE INDEX IF NOT EXISTS " + DataTables.ITEM_STORED_UNIQUE_INDEX
+                + " ON " + DataTables.ITEM_STORED + " (ContainerID, ItemID);");
+            statement.execute("CREATE INDEX IF NOT EXISTS " + DataTables.CONTAINER_LOCATION_INDEX
+                + " ON " + DataTables.CONTAINER + " (IsPlaced, LastLocation);");
+            connection.commit();
+        } catch (SQLException exception) {
+            connection.rollback();
+            throw exception;
+        } finally {
+            connection.setAutoCommit(previousAutoCommit);
+        }
+    }
+
+    private boolean hasIndex(@NotNull String indexName) throws SQLException {
+        String sql = "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ? LIMIT 1;";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, indexName);
+            try (ResultSet result = statement.executeQuery()) {
+                return result.next();
+            }
         }
     }
 
     private void loadItemMap() {
-
-        String sql = "SELECT Item, ItemID FROM " + DataTables.ITEM_STACK + ";";
-        executeQuery(sql, result -> {
+        executeQuery("SELECT Item, ItemID FROM " + DataTables.ITEM_STACK + ";", result -> {
             try {
                 while (result.next()) {
                     itemMap.put(result.getInt("ItemID"), getItemStack(result.getString("Item")));
                 }
-            } catch (SQLException | IOException | ClassNotFoundException e) {
+            } catch (SQLException | IOException | ClassNotFoundException exception) {
                 logger.warning(Lang.getString("messages.data-saving.error-occurred-when-loading-itemstack"));
-                Debug.trace(e);
+                Debug.trace(exception);
             }
         });
     }
 
     private void loadEnvironment() {
-
-        String sql = "SELECT VarName, VarValue FROM " + DataTables.ENVIRONMENT + ";";
-        executeQuery(sql, result -> {
+        executeQuery("SELECT VarName, VarValue FROM " + DataTables.ENVIRONMENT + ";", result -> {
             try {
                 while (result.next()) {
                     environment.put(result.getString(1), result.getString(2));
                 }
-            } catch (SQLException e) {
+            } catch (SQLException exception) {
                 logger.warning(Lang.getString("messages.data-saving.error-occurred-when-loading-environment-var"));
-                Debug.trace(e);
+                Debug.trace(exception);
             }
         });
     }
 
-    private void init() {
-        String temp = environment.get(ITEM_ID_KEY);
-        if (temp != null) {
-            this.nextItemId = Integer.parseInt(temp);
-        }
-
-        temp = environment.get(CONTAINER_ID_KEY);
-        if (temp != null) {
-            this.nextContainerId = Integer.parseInt(temp);
-        }
+    private void initCounters() {
+        nextItemId = Math.max(parseCounter(ITEM_ID_KEY), highestUsedId(DataTables.ITEM_STACK, "ItemID") + 1);
+        nextContainerId = Math.max(parseCounter(CONTAINER_ID_KEY), highestUsedId(DataTables.CONTAINER, "ContainerID") + 1);
+        persistCounter(ITEM_ID_KEY, nextItemId);
+        persistCounter(CONTAINER_ID_KEY, nextContainerId);
     }
 
-    @NotNull
-    private ConcurrentHashMap<Integer, ItemContainer> getStoredItem(int id) {
-        ConcurrentHashMap<Integer, ItemContainer> re = new ConcurrentHashMap<>();
-
-        // Schedule query
-        Networks.getQueryQueue().scheduleQuery(new QueuedTask() {
-            private boolean success = true;
-
-            @Override
-            public boolean execute() {
-                String sql =
-                    "SELECT ItemID, Amount FROM " + DataTables.ITEM_STORED + " WHERE ContainerID = " + id + ";";
-                executeQuery(sql, result -> {
-                    try {
-                        while (result.next()) {
-                            int itemId = result.getInt("ItemID");
-                            ItemStack item = itemMap.get(itemId);
-                            if (item != null) {
-                                re.put(itemId, new ItemContainer(itemId, item, result.getInt("Amount")));
-                            }
-                        }
-                    } catch (SQLException e) {
-                        success = false;
-                        logger.warning(Lang.getString("messages.data-saving.error-occurred-when-loading-storage"));
-                        Debug.trace(e);
-                    }
-                });
-                return success;
-            }
-
-            @Override
-            public boolean callback() {
-                // Update container data state
-                DataStorage.setContainerLoaded(id);
-                return false;
-            }
-        });
-
-        return re;
-    }
-
-    private void executeQuery(String sql, @NotNull Consumer<ResultSet> usage) {
-
-        try (Statement stat = conn.createStatement();
-             ResultSet result = stat.executeQuery(sql)) {
-            usage.accept(result);
-        } catch (SQLException e) {
-            logger.warning(Lang.getString("messages.data-saving.error-occurred-when-executing-query"));
-            Debug.trace(e);
+    private int highestUsedId(@NotNull String table, @NotNull String column) {
+        String sql = "SELECT MAX(CAST(" + column + " AS INTEGER)) FROM " + table + ';';
+        try (Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery(sql)) {
+            return result.next() ? result.getInt(1) : -1;
+        } catch (SQLException exception) {
+            logger.warning("Could not verify the Networks database counter for " + table + '.');
+            Debug.trace(exception);
+            return -1;
         }
     }
 
-    private void scheduleExecute(String sql, String errorMsg) {
+    private int parseCounter(String key) {
+        String value = environment.get(key);
+        if (value == null) {
+            return 0;
+        }
+        try {
+            return Math.max(0, Integer.parseInt(value));
+        } catch (NumberFormatException exception) {
+            logger.warning("Invalid Networks database counter " + key + "='" + value + "'; resetting to 0.");
+            return 0;
+        }
+    }
+
+    private void persistCounter(@NotNull String key, int value) {
+        environment.put(key, Integer.toString(value));
         Networks.getQueryQueue().scheduleUpdate(() -> {
-            try (Statement stat = conn.createStatement()) {
-                stat.execute(sql);
+            String sql = "INSERT INTO " + DataTables.ENVIRONMENT
+                + " (VarName, VarValue) VALUES (?, ?) ON CONFLICT(VarName) DO UPDATE SET VarValue = excluded.VarValue;";
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setString(1, key);
+                statement.setInt(2, value);
+                statement.executeUpdate();
                 return true;
-            } catch (SQLException e) {
-                logger.warning(errorMsg);
-                Debug.trace(e);
+            } catch (SQLException exception) {
+                logger.warning(Lang.getString("messages.data-saving.error-occurred-when-updating-environment-var"));
+                Debug.trace(exception);
                 return false;
             }
         });
+    }
+
+    private @NotNull ConcurrentHashMap<Integer, ItemContainer> loadStoredItems(int containerId) {
+        ConcurrentHashMap<Integer, ItemContainer> stored = new ConcurrentHashMap<>();
+        String sql = "SELECT ItemID, Amount FROM " + DataTables.ITEM_STORED + " WHERE ContainerID = ?;";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, containerId);
+            try (ResultSet result = statement.executeQuery()) {
+                while (result.next()) {
+                    int itemId = result.getInt("ItemID");
+                    ItemStack item = itemMap.get(itemId);
+                    if (item != null) {
+                        stored.put(itemId, new ItemContainer(itemId, item, result.getInt("Amount")));
+                    }
+                }
+            }
+        } catch (SQLException exception) {
+            logger.warning(Lang.getString("messages.data-saving.error-occurred-when-loading-storage"));
+            Debug.trace(exception);
+        }
+        return stored;
+    }
+
+    private @Nullable Location parseLocation(@Nullable String serialized) {
+        if (serialized == null || serialized.isBlank()) {
+            return null;
+        }
+        String[] parts = serialized.split(";");
+        if (parts.length != 4) {
+            return null;
+        }
+        try {
+            World world = Bukkit.getWorld(UUID.fromString(parts[0]));
+            if (world == null) {
+                return null;
+            }
+            return new Location(
+                world,
+                Integer.parseInt(parts[1]),
+                Integer.parseInt(parts[2]),
+                Integer.parseInt(parts[3]));
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
+    }
+
+    private void executeQuery(@NotNull String sql, @NotNull Consumer<ResultSet> usage) {
+        try (Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery(sql)) {
+            usage.accept(result);
+        } catch (SQLException exception) {
+            logger.warning(Lang.getString("messages.data-saving.error-occurred-when-executing-query"));
+            Debug.trace(exception);
+        }
     }
 }

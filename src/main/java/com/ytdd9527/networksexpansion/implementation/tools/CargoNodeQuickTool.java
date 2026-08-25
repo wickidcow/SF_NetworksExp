@@ -18,7 +18,7 @@ import io.github.thebusybiscuit.slimefun4.core.handlers.ItemUseHandler;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
-import net.guizhanss.guizhanlib.minecraft.helper.inventory.ItemStackHelper;
+import io.github.sefiraat.networks.utils.DisplayNameUtils;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
@@ -197,7 +197,7 @@ public class CargoNodeQuickTool extends SpecialSlimefunItem {
                                     "messages.unsupported-operation.cargo_node_quick_tool.not-enough-items"));
                                 for (ItemStack item : itemList.keySet()) {
                                     if (!itemList.get(item)) {
-                                        p.sendMessage(TextUtil.color("- &e" + ItemStackHelper.getDisplayName(item) + "x"
+                                        p.sendMessage(TextUtil.color("- &e" + DisplayNameUtils.getDisplayName(item) + "x"
                                             + item.getAmount()));
                                     } else {
                                         for (int slot : listSlots) {

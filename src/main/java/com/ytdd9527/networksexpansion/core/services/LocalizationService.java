@@ -34,8 +34,6 @@ import java.nio.charset.StandardCharsets;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
@@ -43,6 +41,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -50,8 +49,8 @@ import java.util.stream.Collectors;
 
 @SuppressWarnings("DuplicatedCode")
 public class LocalizationService {
-    public static final Set<String> noticed = new HashSet<>();
-    private static final Map<String, String> CACHE = new HashMap<>();
+    public static final Set<String> noticed = ConcurrentHashMap.newKeySet();
+    private static final Map<String, String> CACHE = new ConcurrentHashMap<>();
     private static final String KEY_NAME = ".name";
     private static final String KEY_LORE = ".lore";
     private static final String MSG_KEY_NULL = "key cannot be null";
@@ -139,8 +138,16 @@ public class LocalizationService {
         addLanguage(langFilename);
     }
 
+    public static void clearRuntimeCache() {
+        CACHE.clear();
+        noticed.clear();
+    }
+
     public final void addLanguage(@NotNull String langFilename) {
         Preconditions.checkArgument(langFilename != null, "The language file name should not be null");
+        if (this.langMap.containsKey(langFilename)) {
+            return;
+        }
         File langFile = new File(this.langFolder, langFilename + ".yml");
         String resourcePath = this.langFolderName + "/" + langFilename + ".yml";
         if (!langFile.exists()) {
@@ -152,15 +159,19 @@ public class LocalizationService {
             }
         }
 
-        this.languages.add(langFilename);
-        InputStream resource = this.plugin.getResource(resourcePath);
-        if (resource == null) {
-            this.plugin.getLogger().log(Level.SEVERE, "The language file " + resourcePath + " does not exist in jar file!");
-            return;
+        try (InputStream resource = this.plugin.getResource(resourcePath)) {
+            if (resource == null) {
+                this.plugin.getLogger().log(Level.SEVERE,
+                    "The language file " + resourcePath + " does not exist in jar file!");
+                return;
+            }
+            InputStreamReader defaultReader = new InputStreamReader(resource, StandardCharsets.UTF_8);
+            FileConfiguration defaultConfig = YamlConfiguration.loadConfiguration(defaultReader);
+            this.langMap.put(langFilename, new Language(langFilename, langFile, defaultConfig));
+            this.languages.add(langFilename);
+        } catch (java.io.IOException exception) {
+            this.plugin.getLogger().log(Level.SEVERE, "Failed to close language resource " + resourcePath, exception);
         }
-        InputStreamReader defaultReader = new InputStreamReader(resource, StandardCharsets.UTF_8);
-        FileConfiguration defaultConfig = YamlConfiguration.loadConfiguration(defaultReader);
-        this.langMap.put(langFilename, new Language(langFilename, langFile, defaultConfig));
     }
 
     @NotNull

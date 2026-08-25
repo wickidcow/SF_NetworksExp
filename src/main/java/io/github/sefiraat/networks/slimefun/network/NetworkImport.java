@@ -6,6 +6,7 @@ import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
 import io.github.sefiraat.networks.slimefun.NetworkSlimefunItems;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemSetting;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
@@ -52,7 +53,7 @@ public class NetworkImport extends NetworkObject {
 
             @Override
             public boolean isSynchronized() {
-                return false;
+                return io.github.sefiraat.networks.Networks.getConfigManager().useSynchronizedMachineTickers();
             }
 
             @Override
@@ -88,9 +89,11 @@ public class NetworkImport extends NetworkObject {
             if (itemStack == null || itemStack.getType() == Material.AIR) {
                 continue;
             }
-            definition.getNode().getRoot().addItemStack0(blockMenu.getLocation(), itemStack);
+            if (NetworkTransferUtils.moveMenuSlotIntoNetwork(
+                definition.getNode().getRoot(), blockMenu.getLocation(), blockMenu, inputSlot) > 0) {
+                sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
+            }
         }
-        sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
     }
 
     @Override

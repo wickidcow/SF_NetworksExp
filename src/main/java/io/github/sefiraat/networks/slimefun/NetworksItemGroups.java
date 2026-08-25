@@ -20,7 +20,7 @@ public final class NetworksItemGroups {
     public static final MainFlexGroup MAIN = new MainFlexGroup(
         Keys.newKey("main"),
         new CustomItemStack(NetworksSlimefunItemStacks.NETWORK_CONTROLLER, Lang.getString("groups.main")),
-        0);
+        3);
 
     public static final DummyItemGroup MATERIALS = new DummyItemGroup(
         Keys.newKey("materials"),

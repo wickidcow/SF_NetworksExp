@@ -1,5 +1,6 @@
 package com.balugaq.netex.api.enums;
 
+import com.balugaq.netex.utils.BlockMenuUtil;
 import com.balugaq.netex.utils.Lang;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
@@ -72,10 +73,10 @@ public enum FacingPreset {
                     if (menu == null) {
                         continue;
                     }
-                    if (isGrabber && menu.getPreset().getSlotsAccessedByItemTransport(ItemTransportFlow.WITHDRAW).length == 0) {
+                    if (isGrabber && BlockMenuUtil.getSafeTransportSlots(menu, ItemTransportFlow.WITHDRAW).length == 0) {
                         continue;
                     }
-                    if (isPusher && menu.getPreset().getSlotsAccessedByItemTransport(ItemTransportFlow.INSERT).length == 0) {
+                    if (isPusher && BlockMenuUtil.getSafeTransportSlots(menu, ItemTransportFlow.INSERT).length == 0) {
                         continue;
                     }
                     setFace(blockData, face.name());

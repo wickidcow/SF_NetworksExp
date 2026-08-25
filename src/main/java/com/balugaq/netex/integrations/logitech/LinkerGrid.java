@@ -1,5 +1,6 @@
 package com.balugaq.netex.integrations.logitech;
 
+import com.balugaq.netex.utils.BlockMenuUtil;
 import com.balugaq.netex.api.data.ItemFlowRecord;
 import com.balugaq.netex.api.enums.FeedbackType;
 import com.balugaq.netex.api.helpers.Icon;
@@ -20,6 +21,7 @@ import io.github.sefiraat.networks.slimefun.network.NetworkController;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
 import io.github.sefiraat.networks.slimefun.network.grid.AbstractGrid;
 import io.github.sefiraat.networks.slimefun.network.grid.GridCache;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.sefiraat.networks.utils.StackUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
@@ -38,7 +40,7 @@ import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
-import net.guizhanss.guizhanlib.minecraft.helper.inventory.ItemStackHelper;
+import io.github.sefiraat.networks.utils.DisplayNameUtils;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -53,7 +55,7 @@ import javax.annotation.ParametersAreNonnullByDefault;
 import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -61,7 +63,7 @@ import java.util.Map;
 @SuppressWarnings({"DuplicatedCode"})
 public class LinkerGrid extends NetworkObject {
     public static final DateFormat DATE_FORMAT = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM);
-    private static final Map<Location, GridCache> CACHE_MAP = new HashMap<>();
+    private static final Map<Location, GridCache> CACHE_MAP = new ConcurrentHashMap<>();
     private static final int TYPE_SWITCH_SLOT = 17;
     // ! DO NOT REMOVE THIS
     private static final int[] BACKGROUND_SLOTS = new int[]{8, 17};
@@ -113,7 +115,7 @@ public class LinkerGrid extends NetworkObject {
 
             @Override
             public boolean isSynchronized() {
-                return false;
+                return io.github.sefiraat.networks.Networks.getConfigManager().useSynchronizedMachineTickers();
             }
 
             @Override
@@ -124,7 +126,9 @@ public class LinkerGrid extends NetworkObject {
                         return;
                     }
                     addToRegistry(block);
-                    GridCache cache = getCacheMap().get(block.getLocation());
+                    GridCache cache = getCacheMap().computeIfAbsent(
+                        block.getLocation().clone(),
+                        ignored -> new GridCache(0, 0, GridCache.SortOrder.ALPHABETICAL));
                     cache.setEntriesCache(null);
                     updateDisplay(blockMenu);
                 }
@@ -140,8 +144,9 @@ public class LinkerGrid extends NetworkObject {
             @Override
             @ParametersAreNonnullByDefault
             public void onPlayerBreak(BlockBreakEvent blockBreakEvent, ItemStack itemStack, List<ItemStack> list) {
-                NodeDefinition definition =
-                    NetworkStorage.getNode(blockBreakEvent.getBlock().getLocation());
+                final Location location = blockBreakEvent.getBlock().getLocation();
+                CACHE_MAP.remove(location);
+                NodeDefinition definition = NetworkStorage.getNode(location);
                 if (definition != null && definition.getNode() != null) {
                     NetworkController.disableRecord(
                         definition.getNode().getRoot().getController());
@@ -149,8 +154,11 @@ public class LinkerGrid extends NetworkObject {
             }
         });
 
-        HyperLinkStack = SlimefunItem.getById("LOGITECH_HYPER_LINK").getItem();
-        QuantumLinkStack = SlimefunItem.getById("LOGITECH_QUANTUM_LINK").getItem();
+        final SlimefunItem hyperLink = SlimefunItem.getById("LOGITECH_HYPER_LINK");
+        final SlimefunItem quantumLink = SlimefunItem.getById("LOGITECH_QUANTUM_LINK");
+        initialized = initialized && hyperLink != null && quantumLink != null;
+        HyperLinkStack = hyperLink == null ? new ItemStack(Material.AIR) : hyperLink.getItem();
+        QuantumLinkStack = quantumLink == null ? new ItemStack(Material.AIR) : quantumLink.getItem();
     }
 
     public static @NotNull String serializeIcon(@NotNull ItemStack itemStack) {
@@ -164,17 +172,23 @@ public class LinkerGrid extends NetworkObject {
 
     @Nullable
     public static ItemStack deserializeIcon(@NotNull String icon) {
-        if (icon.startsWith(NAMESPACE_SF)) {
-            String id = icon.split(":")[1];
-            SlimefunItem sf = SlimefunItem.getById(id);
-            if (sf != null) {
-                return sf.getItem();
-            }
-        } else if (icon.startsWith(NAMESPACE_MC)) {
-            Material type = Material.valueOf(icon.split(":")[1]);
-            return new ItemStack(type);
+        final String[] parts = icon.split(":", 2);
+        if (parts.length != 2 || parts[1].isBlank()) {
+            return null;
         }
 
+        if (NAMESPACE_SF.equals(parts[0])) {
+            final SlimefunItem sf = SlimefunItem.getById(parts[1]);
+            return sf == null ? null : sf.getItem();
+        }
+        if (NAMESPACE_MC.equals(parts[0])) {
+            try {
+                final Material type = Material.valueOf(parts[1]);
+                return type.isAir() ? null : new ItemStack(type);
+            } catch (IllegalArgumentException ignored) {
+                return null;
+            }
+        }
         return null;
     }
 
@@ -294,7 +308,7 @@ public class LinkerGrid extends NetworkObject {
                 }
 
                 displayStack = new CustomItemStack(
-                    displayStack, TextUtil.GRAY + ItemStackHelper.getDisplayName(stack));
+                    displayStack, TextUtil.GRAY + DisplayNameUtils.getDisplayName(stack));
 
                 final ItemMeta itemMeta = displayStack.getItemMeta();
                 if (itemMeta == null) {
@@ -353,25 +367,39 @@ public class LinkerGrid extends NetworkObject {
                 return;
             }
         }
-        ItemStack link = getLinkStack(blockMenu, root, player);
-        if (link == null) {
+        final LinkReservation reservation = reserveLink(blockMenu, root, player);
+        if (reservation == null) {
             sendFeedback(blockMenu.getLocation(), FeedbackType.NOT_ENOUGH_ITEMS);
             player.sendMessage(Lang.getString("messages.unsupported-operation.viewer.link-stack-not-found"));
             return;
         }
 
-        var meta = link.getItemMeta();
-        if ((tp == LinkerType.HyperLink && !canLink$HyperLink(meta))
-            || (tp == LinkerType.QuantumLink && !canLink$QuantumLink(meta))) {
-            sendFeedback(blockMenu.getLocation(), FeedbackType.NOT_ENOUGH_ITEMS);
-            player.sendMessage(Lang.getString("messages.unsupported-operation.viewer.link-stack-not-found"));
+        final ItemStack link = reservation.stack();
+        final ItemMeta meta = link.getItemMeta();
+        try {
+            if (meta == null
+                || (tp == LinkerType.HyperLink && !canLink$HyperLink(meta))
+                || (tp == LinkerType.QuantumLink && !canLink$QuantumLink(meta))) {
+                rollbackLinkReservation(reservation, blockMenu, root, player);
+                sendFeedback(blockMenu.getLocation(), FeedbackType.NOT_ENOUGH_ITEMS);
+                player.sendMessage(Lang.getString("messages.unsupported-operation.viewer.link-stack-not-found"));
+                return;
+            }
+
+            if (tp == LinkerType.HyperLink) {
+                setLink$HyperLink(meta, location);
+            } else {
+                setLink$QuantumLink(meta, location);
+            }
+            link.setItemMeta(meta);
+            InventoryUtil.give(player, link);
+        } catch (RuntimeException exception) {
+            rollbackLinkReservation(reservation, blockMenu, root, player);
+            io.github.sefiraat.networks.Networks.getInstance().getLogger().warning(
+                "Could not create a LogiTech link at " + blockMenu.getLocation() + ": " + exception.getMessage());
+            sendFeedback(blockMenu.getLocation(), FeedbackType.ERROR_OCCURRED);
             return;
         }
-
-        if (tp == LinkerType.HyperLink) setLink$HyperLink(meta, location);
-        else setLink$QuantumLink(meta, location);
-        link.setItemMeta(meta);
-        InventoryUtil.give(player, link);
 
         if (tp == LinkerType.QuantumLink) {
             sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
@@ -406,14 +434,17 @@ public class LinkerGrid extends NetworkObject {
         }
 
         for (var g : root.getGreedyBlockMenus()) {
-            int[] slots = g.getPreset().getSlotsAccessedByItemTransport(ItemTransportFlow.WITHDRAW);
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(g, ItemTransportFlow.WITHDRAW);
+            if (slots.length == 0) {
+                continue;
+            }
             final ItemStack s = g.getItemInSlot(slots[0]);
             if (!StackUtils.itemsMatch(s, itemStack)) continue;
             return g.getLocation();
         }
 
         for (var g : root.getAdvancedGreedyBlockMenus()) {
-            int[] slots = g.getPreset().getSlotsAccessedByItemTransport(ItemTransportFlow.WITHDRAW);
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(g, ItemTransportFlow.WITHDRAW);
             for (int slot : slots) {
                 final ItemStack s = g.getItemInSlot(slot);
                 if (!StackUtils.itemsMatch(s, itemStack)) continue;
@@ -430,7 +461,7 @@ public class LinkerGrid extends NetworkObject {
         }
 
         for (var c : root.getCrafterOutputs()) {
-            int[] slots = c.getPreset().getSlotsAccessedByItemTransport(ItemTransportFlow.WITHDRAW);
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(c, ItemTransportFlow.WITHDRAW);
             for (int slot : slots) {
                 final ItemStack s = c.getItemInSlot(slot);
                 if (!StackUtils.itemsMatch(s, itemStack)) continue;
@@ -451,25 +482,61 @@ public class LinkerGrid extends NetworkObject {
 
     @NotNull
     public static LinkerType getLinkerType(Location location) {
-        var s = StorageCacheUtils.getData(location, BS_LINKER_TYPE);
-        if (s == null) return LinkerType.QuantumLink;
-        return LinkerType.valueOf(s);
+        final String stored = StorageCacheUtils.getData(location, BS_LINKER_TYPE);
+        if (stored == null) {
+            return LinkerType.QuantumLink;
+        }
+        try {
+            return LinkerType.valueOf(stored);
+        } catch (IllegalArgumentException ignored) {
+            StorageCacheUtils.setData(location, BS_LINKER_TYPE, LinkerType.QuantumLink.name());
+            return LinkerType.QuantumLink;
+        }
     }
 
     @Nullable
-    private ItemStack getLinkStack(@NotNull BlockMenu menu, @NotNull NetworkRoot root, @NotNull Player player) {
-        ItemStack link = root.getItemStack0(menu.getLocation(), new ItemRequest(getLink(menu.getLocation()), 1));
-        if (link == null) {
-            // get from player inventory
-            for (ItemStack stack : player.getInventory()) {
-                if (StackUtils.itemsMatch(stack, getLink(menu.getLocation()))) {
-                    link = StackUtils.getAsQuantity(stack, 1);
+    private LinkReservation reserveLink(
+        @NotNull BlockMenu menu, @NotNull NetworkRoot root, @NotNull Player player) {
+        final ItemStack template = getLink(menu.getLocation());
+        if (template.getType() == Material.AIR) {
+            return null;
+        }
+
+        final ItemStack networkLink = root.getItemStack0(menu.getLocation(), new ItemRequest(template, 1));
+        if (networkLink != null && networkLink.getAmount() > 0) {
+            return new LinkReservation(networkLink, true);
+        }
+
+        final int storageSize = player.getInventory().getStorageContents().length;
+        for (int slot = 0; slot < storageSize; slot++) {
+            final ItemStack stack = player.getInventory().getItem(slot);
+            if (stack != null && StackUtils.itemsMatch(stack, template)) {
+                final ItemStack link = StackUtils.getAsQuantity(stack, 1);
+                if (stack.getAmount() <= 1) {
+                    player.getInventory().setItem(slot, null);
+                } else {
                     stack.setAmount(stack.getAmount() - 1);
-                    break;
                 }
+                return new LinkReservation(link, false);
             }
         }
-        return link;
+        return null;
+    }
+
+    private void rollbackLinkReservation(
+        @NotNull LinkReservation reservation,
+        @NotNull BlockMenu menu,
+        @NotNull NetworkRoot root,
+        @NotNull Player player) {
+        if (reservation.fromNetwork()) {
+            NetworkTransferUtils.rollbackNetworkWithdrawal(
+                root, menu.getLocation(), reservation.stack(), player.getLocation(), "LogiTech linker creation");
+        } else {
+            InventoryUtil.give(player, reservation.stack());
+        }
+    }
+
+    private record LinkReservation(@NotNull ItemStack stack, boolean fromNetwork) {
     }
 
     @Override

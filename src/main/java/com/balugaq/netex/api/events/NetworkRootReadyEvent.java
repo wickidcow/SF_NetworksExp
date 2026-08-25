@@ -2,6 +2,7 @@ package com.balugaq.netex.api.events;
 
 import io.github.sefiraat.networks.network.NetworkRoot;
 import lombok.Getter;
+import org.bukkit.Bukkit;
 import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
 import org.jetbrains.annotations.NotNull;
@@ -12,7 +13,7 @@ public class NetworkRootReadyEvent extends Event {
     private final NetworkRoot root;
 
     public NetworkRootReadyEvent(NetworkRoot root) {
-        super(true);
+        super(!Bukkit.isPrimaryThread());
         this.root = root;
     }
 

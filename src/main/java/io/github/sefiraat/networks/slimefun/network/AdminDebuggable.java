@@ -9,21 +9,21 @@ import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.HashSet;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.logging.Level;
 
 @SuppressWarnings("JavaExistingMethodCanBeUsed")
 public interface AdminDebuggable {
     Queue<Pair<Location, String>> DEBUG_QUEUE = new ConcurrentLinkedQueue<>();
-    Set<Player> VIEWERS = new HashSet<>();
+    Set<Player> VIEWERS = ConcurrentHashMap.newKeySet();
     String DEBUG_KEY = "network_debugging";
 
     static void load() {
         Bukkit.getScheduler()
-            .runTaskTimerAsynchronously(
+            .runTaskTimer(
                 Networks.getInstance(),
                 () -> {
                     while (!DEBUG_QUEUE.isEmpty()) {
@@ -54,6 +54,9 @@ public interface AdminDebuggable {
     }
 
     static void sendDebugMessage1(@NotNull Location location, @NotNull String string) {
+        if (location.getWorld() == null) {
+            return;
+        }
         final String locationString = "W[" + location.getWorld().getName() + "] " + "X["
             + location.getBlockX() + "] " + "Y["
             + location.getBlockY() + "] " + "Z["

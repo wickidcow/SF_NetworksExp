@@ -15,6 +15,7 @@ import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
 import io.github.sefiraat.networks.slimefun.network.NetworkDirectional;
 import io.github.sefiraat.networks.slimefun.network.grid.GridCache;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
@@ -437,8 +438,13 @@ public class HangingGridNewStyle extends NetworkGridNewStyle implements HangingB
                     Location fixedLocation = menu.getLocation();
                     Location attachon = getAttachon(fixedLocation);
                     BlockFace attachSide = getAttachSideFromFixed(fixedLocation);
-                    // Shift+Left-click
-                    receiveItem(p, i, a, menu, attachon, attachSide);
+                    // Shift+Left-click: commit from the exact player inventory slot.
+                    NodeDefinition definition = NetworkStorage.getNode(attachon);
+                    if (definition == null || definition.getNode() == null) {
+                        return false;
+                    }
+                    NetworkTransferUtils.moveInventorySlotIntoNetwork(
+                        definition.getNode().getRoot(), menu.getLocation(), p.getInventory(), s);
                     return false;
                 });
             }
@@ -503,8 +509,8 @@ public class HangingGridNewStyle extends NetworkGridNewStyle implements HangingB
             return;
         }
 
-        ItemStack cursor = player.getItemOnCursor();
-        receiveItem(definition.getNode().getRoot(), player, cursor, action, blockMenu, attachon, attachSide);
+        NetworkTransferUtils.movePlayerCursorIntoNetwork(
+            definition.getNode().getRoot(), blockMenu.getLocation(), player);
     }
 
     @SuppressWarnings("deprecation")
@@ -541,7 +547,7 @@ public class HangingGridNewStyle extends NetworkGridNewStyle implements HangingB
         @NotNull Location attachon,
         BlockFace attachSide) {
         if (itemStack != null && itemStack.getType() != Material.AIR) {
-            root.addItemStack0(blockMenu.getLocation(), itemStack);
+            NetworkTransferUtils.moveStackReferenceIntoNetwork(root, blockMenu.getLocation(), itemStack);
         }
     }
 }

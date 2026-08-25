@@ -22,6 +22,7 @@ import io.github.thebusybiscuit.slimefun4.libraries.dough.protection.Interaction
 import lombok.Getter;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
@@ -92,17 +93,22 @@ public class NetworkRemote extends SpecialSlimefunItem {
         final Location location = DataTypeMethods.getCustom(itemMeta, KEY, DataType.LOCATION);
 
         if (location != null) {
-
-            if (!location.getWorld().isChunkLoaded(location.getBlockX() / 16, location.getBlockZ() / 16)) {
+            final World world = location.getWorld();
+            if (world == null) {
                 player.sendMessage(Lang.getString("messages.unsupported-operation.remote.grid_not_loaded"));
                 return;
             }
 
-            final boolean sameDimension = location.getWorld().equals(player.getWorld());
+            if (!world.isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
+                player.sendMessage(Lang.getString("messages.unsupported-operation.remote.grid_not_loaded"));
+                return;
+            }
+
+            final boolean sameDimension = world.equals(player.getWorld());
 
             if (range == -1
                 || range == 0 && sameDimension
-                || sameDimension && player.getLocation().distance(location) <= range) {
+                || sameDimension && player.getLocation().distanceSquared(location) <= (double) range * range) {
                 openGrid(location, player);
             } else {
                 player.sendMessage(Lang.getString("messages.unsupported-operation.remote.grid_not_in_range"));
@@ -113,31 +119,52 @@ public class NetworkRemote extends SpecialSlimefunItem {
     }
 
     public static void openGrid(@NotNull Location location, @NotNull Player player) {
-        SlimefunBlockData blockData = StorageCacheUtils.getBlock(location);
-        if (blockData == null) {
-            player.sendMessage(Theme.ERROR + "无法找到绑定的网格");
+        final World world = location.getWorld();
+        if (world == null || !world.isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
+            player.sendMessage(Lang.getString("messages.unsupported-operation.remote.grid_not_loaded"));
             return;
         }
 
-        SlimefunItem item = SlimefunItem.getById(blockData.getSfId());
+        final SlimefunItem liveItem = StorageCacheUtils.getSfItem(location);
+        if (!isGrid(liveItem)) {
+            player.sendMessage(Lang.getString("messages.unsupported-operation.remote.not_a_grid_found"));
+            return;
+        }
+
+        final SlimefunBlockData blockData = StorageCacheUtils.getBlock(location);
+        if (blockData == null) {
+            player.sendMessage(Theme.ERROR + "Unable to find the bound Network Grid");
+            return;
+        }
+
         StorageCacheUtils.executeAfterLoad(
             blockData,
             () -> {
-                if ((item instanceof NetworkGrid
-                    || item instanceof NetworkCraftingGrid
-                    || item instanceof NetworkGridNewStyle)
-                    && (player.hasPermission("slimefun.inventory.bypass")
+                // Revalidate after the deferred load callback. A grid can be broken or replaced between the
+                // remote click and this callback, especially around chunk unload/reload boundaries.
+                final SlimefunItem currentItem = StorageCacheUtils.getSfItem(location);
+                final boolean allowed = player.hasPermission("slimefun.inventory.bypass")
                     || Slimefun.getProtectionManager()
-                    .hasPermission(player, location, Interaction.INTERACT_BLOCK))) {
-                    BlockMenu blockMenu = blockData.getBlockMenu();
-                    if (blockMenu != null) {
+                    .hasPermission(player, location, Interaction.INTERACT_BLOCK);
+
+                if (isGrid(currentItem) && allowed) {
+                    final SlimefunBlockData currentData = StorageCacheUtils.getBlock(location);
+                    final BlockMenu blockMenu = currentData == null ? null : currentData.getBlockMenu();
+                    if (blockMenu != null && blockMenu.getLocation().equals(location)) {
                         blockMenu.open(player);
+                        return;
                     }
-                } else {
-                    player.sendMessage(Lang.getString("messages.unsupported-operation.remote.not_a_grid_found"));
                 }
+                player.sendMessage(Lang.getString("messages.unsupported-operation.remote.not_a_grid_found"));
             },
             false);
+    }
+
+    private static boolean isGrid(SlimefunItem item) {
+        return item instanceof NetworkGrid
+            || item instanceof NetworkCraftingGrid
+            || item instanceof NetworkGridNewStyle
+            || item instanceof NetworkCraftingGridNewStyle;
     }
 
     public static int[] getRanges() {

@@ -55,9 +55,9 @@ import org.jetbrains.annotations.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @SuppressWarnings({"deprecation", "DuplicatedCode"})
 public class NetworkQuantumStorage extends SpecialSlimefunItem implements DistinctiveItem {
@@ -97,7 +97,7 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
     private static final int[] OUTPUT_SLOTS = new int[]{6, 8};
     private static final int[] BACKGROUND_SLOTS = new int[]{9, 10, 11, 12, 14, 15, 16, 17};
 
-    private static final Map<Location, QuantumCache> CACHES = new HashMap<>();
+    private static final Map<Location, QuantumCache> CACHES = new ConcurrentHashMap<>();
 
     static {
         final ItemMeta itemMeta = Icon.QUANTUM_STORAGE_NO_ITEM.getItemMeta();
@@ -144,8 +144,9 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
         if (cache == null || cache.getAmountLong() > 0) {
             return;
         }
-        itemStack.setAmount(1);
-        cache.setItemStack(itemStack);
+        final ItemStack storedTemplate = itemStack.clone();
+        storedTemplate.setAmount(1);
+        cache.setItemStack(storedTemplate);
         cache.setAmount(amount);
         updateDisplayItem(blockMenu, cache);
         syncBlock(blockMenu.getLocation(), cache);
@@ -159,7 +160,7 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
         }
 
         for (ItemStack itemStack : input) {
-            if (StackUtils.isBlacklisted(itemStack)) {
+            if (itemStack == null || itemStack.getType() == Material.AIR || StackUtils.isBlacklisted(itemStack)) {
                 continue;
             }
             if (StackUtils.itemsMatch(cache, itemStack)) {
@@ -181,36 +182,41 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
 
     @ParametersAreNonnullByDefault
     @Nullable
-    public static synchronized ItemStack getItemStack(@NotNull QuantumCache cache, @NotNull BlockMenu blockMenu, int amount) {
-        if (cache.getAmountLong() < amount) {
-            // Storage has no content or not enough, mix and match!
-            ItemStack output = blockMenu.getItemInSlot(OUTPUT_SLOT);
-            ItemStack fetched = cache.withdrawItem(amount);
+    public static ItemStack getItemStack(@NotNull QuantumCache cache, @NotNull BlockMenu blockMenu, int amount) {
+        synchronized (cache) {
+            if (cache.getAmountLong() < amount) {
+                // Storage has no content or not enough, mix and match!
+                ItemStack output = blockMenu.getItemInSlot(OUTPUT_SLOT);
+                ItemStack fetched = cache.withdrawItem(amount);
 
-            if (output != null && output.getType() != Material.AIR && StackUtils.itemsMatch(cache, output)) {
-                // We have an output item we can use also
-                if (fetched == null || fetched.getType() == Material.AIR) {
-                    // Storage is totally empty - just use output slot
-                    fetched = output.clone();
-                    if (fetched.getAmount() > amount) {
-                        fetched.setAmount(amount);
+                if (output != null && output.getType() != Material.AIR && StackUtils.itemsMatch(cache, output)) {
+                    // We have an output item we can use also
+                    if (fetched == null || fetched.getType() == Material.AIR) {
+                        // Storage is totally empty - just use output slot
+                        fetched = output.clone();
+                        if (fetched.getAmount() > amount) {
+                            fetched.setAmount(amount);
+                        }
+                        output.setAmount(output.getAmount() - fetched.getAmount());
+                    } else {
+                        // Storage has content, lets add on top of it
+                        int additional = Math.min(amount - fetched.getAmount(), output.getAmount());
+                        output.setAmount(output.getAmount() - additional);
+                        fetched.setAmount(fetched.getAmount() + additional);
                     }
-                    output.setAmount(output.getAmount() - fetched.getAmount());
-                } else {
-                    // Storage has content, lets add on top of it
-                    int additional = Math.min(amount - fetched.getAmount(), output.getAmount());
-                    output.setAmount(output.getAmount() - additional);
-                    fetched.setAmount(fetched.getAmount() + additional);
                 }
+                if (output != null && output.getType() != Material.AIR) {
+                    blockMenu.markDirty();
+                }
+                syncBlock(blockMenu.getLocation(), cache);
+                return fetched;
+            } else {
+                // Netex - wtf reversed syncBlock
+                // Storage has everything we need
+                ItemStack fetched = cache.withdrawItem(amount);
+                syncBlock(blockMenu.getLocation(), cache);
+                return fetched;
             }
-            syncBlock(blockMenu.getLocation(), cache);
-            return fetched;
-        } else {
-            // Netex - wtf reversed syncBlock
-            // Storage has everything we need
-            ItemStack fetched = cache.withdrawItem(amount);
-            syncBlock(blockMenu.getLocation(), cache);
-            return fetched;
         }
     }
 
@@ -229,10 +235,9 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
                 return;
             }
 
-            List<String> lore = itemMeta.hasLore() ? itemMeta.getLore() : new ArrayList<>();
-            if (lore == null) {
-                lore = new ArrayList<>();
-            }
+            List<String> lore = itemMeta.hasLore() && itemMeta.getLore() != null
+                ? new ArrayList<>(itemMeta.getLore())
+                : new ArrayList<>();
 
             lore.add("");
             lore.add(String.format(
@@ -304,7 +309,7 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
             new BlockTicker() {
                 @Override
                 public boolean isSynchronized() {
-                    return false;
+                    return io.github.sefiraat.networks.Networks.getConfigManager().useSynchronizedMachineTickers();
                 }
 
                 @Override
@@ -335,10 +340,10 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
             return;
         }
 
-        final QuantumCache cache = CACHES.get(blockMenu.getLocation());
+        QuantumCache cache = CACHES.get(blockMenu.getLocation());
 
         if (cache == null) {
-            return;
+            cache = addCache(blockMenu);
         }
 
         if (blockMenu.hasViewer()) {
@@ -364,9 +369,42 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
             fetched = cache.withdrawItem(requestAmount);
         }
 
-        if (fetched != null && fetched.getType() != Material.AIR) {
-            BlockMenuUtil.pushItem(blockMenu, fetched, OUTPUT_SLOT);
-            blockMenu.markDirty();
+        if (fetched != null && fetched.getType() != Material.AIR && fetched.getAmount() > 0) {
+            final int withdrawn = fetched.getAmount();
+            final ItemStack remainder = BlockMenuUtil.pushItem(blockMenu, fetched, OUTPUT_SLOT);
+            final int remaining = remainder == null || remainder.getType() == Material.AIR
+                ? 0
+                : Math.max(0, remainder.getAmount());
+            final int committed = Math.max(0, withdrawn - remaining);
+            if (remainder != null && remaining > 0) {
+                final long configuredLimit = cache.getLimitLong();
+                int notRestored = cache.restoreAmount(remaining);
+                if (notRestored > 0) {
+                    // These items were already counted in this cache before the withdrawal. A concurrent custom-limit
+                    // change must not turn a rollback into item loss, so temporarily restore the required capacity.
+                    final long requiredLimit = cache.getAmountLong() > Long.MAX_VALUE - notRestored
+                        ? Long.MAX_VALUE
+                        : cache.getAmountLong() + notRestored;
+                    cache.setLimit(requiredLimit);
+                    notRestored = cache.restoreAmount(notRestored);
+                    cache.setLimit(configuredLimit);
+                }
+
+                if (notRestored > 0) {
+                    // This is reachable only if the cache was already at Long.MAX_VALUE. Keep the live remainder
+                    // intact and log loudly rather than clearing it or pretending it was restored.
+                    remainder.setAmount(notRestored);
+                    Networks.getInstance().getLogger().severe(
+                        "Quantum Storage could not restore " + notRestored
+                            + " output item(s) after a changed menu transaction at " + blockMenu.getLocation()
+                            + "; the live remainder was deliberately left untouched to prevent silent loss.");
+                } else {
+                    remainder.setAmount(0);
+                }
+            }
+            if (committed > 0) {
+                blockMenu.markDirty();
+            }
             syncBlock(blockMenu.getLocation(), cache);
         }
 
@@ -376,6 +414,9 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
 
     private void toggleVoid(@NotNull BlockMenu blockMenu) {
         final QuantumCache cache = CACHES.get(blockMenu.getLocation());
+        if (cache == null) {
+            return;
+        }
         cache.setVoidExcess(!cache.isVoidExcess());
         updateDisplayItem(blockMenu, cache);
         syncBlock(blockMenu.getLocation(), cache);
@@ -391,12 +432,15 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
             return;
         }
         cache.setLimit(newMaxAmount);
+        final long appliedMaxAmount = cache.getLimitLong();
         updateDisplayItem(blockMenu, cache);
         syncBlock(blockMenu.getLocation(), cache);
         CACHES.put(blockMenu.getLocation(), cache);
 
         player.sendMessage(
-            String.format(Lang.getString("messages.completed-operation.quantum_storage.changed_custom_max_amount"), newMaxAmount));
+            String.format(
+                Lang.getString("messages.completed-operation.quantum_storage.changed_custom_max_amount"),
+                appliedMaxAmount));
     }
 
     @Override
@@ -609,15 +653,13 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
         }
         final String amountString = blockData.getData(BS_AMOUNT);
         final String voidString = blockData.getData(BS_VOID);
-        final long amount = amountString == null ? 0 : Long.parseLong(amountString);
+        final long amount = parseStoredLong(amountString, 0L, 0L, MAX_AMOUNT);
         final boolean voidExcess = Boolean.parseBoolean(voidString);
         long maxAmount = this.maxAmount;
         if (this.supportsCustomMaxAmount) {
             final String customMaxAmountString =
                 BlockStorage.getLocationInfo(blockMenu.getLocation(), BS_CUSTOM_MAX_AMOUNT);
-            if (customMaxAmountString != null) {
-                maxAmount = Long.parseLong(customMaxAmountString);
-            }
+            maxAmount = parseStoredLong(customMaxAmountString, this.maxAmount, 1L, this.maxAmount);
         }
         final ItemStack itemStack = blockMenu.getItemInSlot(ITEM_SLOT);
 
@@ -643,9 +685,10 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
         } else {
             final ItemStack clone = itemStack.clone();
             final ItemMeta itemMeta = clone.getItemMeta();
-            final List<String> lore = itemMeta.getLore();
+            final List<String> originalLore = itemMeta.getLore();
+            final List<String> lore = originalLore == null ? new ArrayList<>() : new ArrayList<>(originalLore);
             for (int i = 0; i < 3; i++) {
-                if (lore == null || lore.isEmpty()) {
+                if (lore.isEmpty()) {
                     break;
                 }
                 lore.remove(lore.size() - 1);
@@ -657,7 +700,7 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
                 }
             }
 
-            itemMeta.setLore(lore == null || lore.isEmpty() ? null : lore);
+            itemMeta.setLore(lore.isEmpty() ? null : lore);
             clone.setItemMeta(itemMeta);
 
             final QuantumCache cache =
@@ -712,6 +755,18 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
 
         syncBlock(event.getBlock().getLocation(), cache);
         CACHES.put(event.getBlock().getLocation(), cache);
+    }
+
+    private static long parseStoredLong(
+        @Nullable String value, long fallback, long minimum, long maximum) {
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        try {
+            return Math.max(minimum, Math.min(maximum, Long.parseLong(value)));
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
     }
 
     public boolean supportsCustomMaxAmount() {

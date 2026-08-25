@@ -17,6 +17,8 @@ import java.io.Reader;
 
 public class ConfigManager {
 
+    private boolean warnedAsyncTickerOverride;
+
     public ConfigManager() {
         setupDefaultConfig();
     }
@@ -38,6 +40,10 @@ public class ConfigManager {
         for (String key : resourceConfig.getKeys(false)) {
             checkKey(existingConfig, resourceConfig, key);
         }
+
+        // This distribution is English-only and never replaces its own JAR.
+        existingConfig.set("language", "en-US");
+        existingConfig.set("auto-update", false);
 
         try {
             existingConfig.save(existingFile);
@@ -68,7 +74,7 @@ public class ConfigManager {
     }
 
     public @NotNull String getLanguage() {
-        return Networks.getInstance().getConfig().getString("language", "zh-CN");
+        return "en-US";
     }
 
     public boolean isForceCheckLore() {
@@ -145,5 +151,21 @@ public class ConfigManager {
 
     public boolean isFastInteractQuantum() {
         return Networks.getInstance().getConfig().getBoolean("fast-interact-quantum", false);
+    }
+
+    /**
+     * Runs inventory, entity, event, and world-facing machine ticks on the server-owned thread.
+     * This is the safe default for Paper 1.21.11+ and for Slimefun Legacy's region scheduler.
+     */
+    public boolean useSynchronizedMachineTickers() {
+        final boolean configured = Networks.getInstance().getConfig().getBoolean(
+            "compatibility.synchronized-machine-tickers", true);
+        if (!configured && !warnedAsyncTickerOverride) {
+            warnedAsyncTickerOverride = true;
+            Networks.getInstance().getLogger().warning(
+                "compatibility.synchronized-machine-tickers=false is unsafe on modern Paper/Slimefun cores. "
+                    + "Networks will keep inventory and world-facing tickers synchronized to prevent item loss and async API errors.");
+        }
+        return true;
     }
 }

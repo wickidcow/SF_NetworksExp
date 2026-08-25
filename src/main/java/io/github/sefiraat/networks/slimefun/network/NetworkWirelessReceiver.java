@@ -7,6 +7,7 @@ import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
 import io.github.sefiraat.networks.slimefun.NetworkSlimefunItems;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
@@ -43,7 +44,7 @@ public class NetworkWirelessReceiver extends NetworkObject {
         addItemHandler(new BlockTicker() {
             @Override
             public boolean isSynchronized() {
-                return false;
+                return io.github.sefiraat.networks.Networks.getConfigManager().useSynchronizedMachineTickers();
             }
 
             @Override
@@ -72,8 +73,10 @@ public class NetworkWirelessReceiver extends NetworkObject {
             return;
         }
 
-        definition.getNode().getRoot().addItemStack0(blockMenu.getLocation(), itemStack);
-        sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
+        if (NetworkTransferUtils.moveMenuSlotIntoNetwork(
+            definition.getNode().getRoot(), blockMenu.getLocation(), blockMenu, RECEIVED_SLOT) > 0) {
+            sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
+        }
     }
 
     @Override

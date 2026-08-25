@@ -3,19 +3,23 @@ authors:
   - Sefiraat
   - balugaq
   - ytdd9527
-description: No idea yet
+  - wickidcow
+description: A modern Networks continuation for Slimefun Legacy, United, and Gugu.
 main: io.github.sefiraat.networks.Networks
-website: https://github.com/ytdd9527/NetworksExpansion
+website: https://github.com/wickidcow/SF_NetworksExp
 version: ${version}
-api-version: 1.20
+api-version: '1.21'
 depend:
   - Slimefun
 softdepend:
-  - GuizhanLibPlugin
   - InfinityExpansion
+  - InfinityExpansion2
   - FluffyMachines
   - Netheopoiesis
   - SlimeHUD
+  - SlimeHUDPlus
+  - JustEnoughGuide
+  - LogiTech
   - WildChests
   - RoseStacker
   - WildStacker
@@ -23,50 +27,51 @@ softdepend:
   - GuguSlimefunLib
   - FinalTECH
   - FinalTECH-Changed
-#  - JustEnoughGuide # Don't add this line, see https://github.com/balugaq/JustEnoughGuide/blob/master/src/main/java/com/balugaq/jeg/implementation/ThirdPartyWarnings.java
 commands:
   networks:
     aliases: networksexpansion
-    description: NetworksExpansion base command
-    usage: The NetworksExpansion version you have installed does not seem to be compatible with your server setup. Check your console for more detailed info.
-
+    description: Networks administration and diagnostic commands
+    usage: The installed Networks build is not compatible with this server. Check the console for details.
 permissions:
   networks.admin:
-    description: Allows you to use all NetworksExpansion commands
+    description: Allows all Networks administration commands
     default: op
   networks.commands.help:
-    description: Allows you to use the /networks help command
+    description: Allows /networks help
     default: op
   networks.commands.fillquantum:
-    description: Allows you to use the /networks fillquantum command
+    description: Allows /networks fillquantum
     default: op
   networks.commands.fixblueprint:
-    description: Allows you to use the /networks fixblueprint command
+    description: Allows /networks fixblueprint
     default: op
   networks.commands.restore:
-    description: Allows you to use the /networks restore command
+    description: Allows /networks restore
     default: op
   networks.commands.addstorageitem:
-    description: Allows you to use the /networks addstorageitem command
+    description: Allows /networks addstorageitem
     default: op
   networks.commands.reducestorageitem:
-    description: Allows you to use the /networks reducestorageitem command
+    description: Allows /networks reducestorageitem
     default: op
   networks.commands.setquantum:
-    description: Allows you to use the /networks setquantum command
+    description: Allows /networks setquantum
     default: op
   networks.commands.setcontainerid:
-    description: Allows you to use the /networks setcontainerid command
+    description: Allows /networks setcontainerid
     default: op
   networks.commands.updateitem:
-    description: Allows you to use the /networks updateitem command
+    description: Allows /networks updateitem
     default: op
   networks.commands.findcachedstorages:
-    description: Allows you to use the /networks findcachedstorages command
+    description: Allows /networks findcachedstorages
     default: op
   networks.commands.getstorageitem:
-    description: Allows you to use the /networks getstorageitem command
+    description: Allows /networks getstorageitem
     default: op
   networks.commands.map:
-    description: Allows you to use the /networks map command
+    description: Allows /networks map
+    default: op
+  networks.commands.doctor:
+    description: Allows Networks runtime integrity scans and repairs
     default: op

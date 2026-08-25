@@ -24,6 +24,7 @@ import org.jetbrains.annotations.Nullable;
 import javax.annotation.OverridingMethodsMustInvokeSuper;
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.Collection;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -87,7 +88,18 @@ public interface HangingBlock {
     }
 
     static void loadHangingBlocks(@NotNull SlimefunBlockData attachon) {
-        Map<BlockFace, ItemFrame> map = getHangingBlocks(attachon.getLocation(), NetworkDirectional.VALID_FACES);
+        // Most Network blocks have no hanging attachment. Check cheap persisted metadata before querying entities.
+        Set<BlockFace> persistedFaces = EnumSet.noneOf(BlockFace.class);
+        for (BlockFace face : NetworkDirectional.VALID_FACES) {
+            if (getHangingBlockId(attachon, face) != null) {
+                persistedFaces.add(face);
+            }
+        }
+        if (persistedFaces.isEmpty()) {
+            return;
+        }
+
+        Map<BlockFace, ItemFrame> map = getHangingBlocks(attachon.getLocation(), persistedFaces);
         for (Map.Entry<BlockFace, ItemFrame> entry : map.entrySet()) {
             HangingBlock hangingBlock = getByItemFrame(entry.getValue());
             if (hangingBlock != null) {
@@ -96,17 +108,29 @@ public interface HangingBlock {
         }
     }
 
+    /**
+     * Finds all requested hanging item frames with one nearby-entity query instead of one query per block face.
+     */
     static @NotNull Map<BlockFace, ItemFrame> getHangingBlocks(
         @NotNull Location attachon, @NotNull Set<BlockFace> attachSides) {
-        Map<BlockFace, ItemFrame> hangingBlocks = new HashMap<>();
-        for (BlockFace attachSide : attachSides) {
-            ItemFrame v = getItemFrame(attachon, attachSide);
-            if (v != null) {
-                hangingBlocks.put(attachSide, v);
-            }
+        Map<BlockFace, ItemFrame> found = new HashMap<>();
+        if (attachSides.isEmpty()) {
+            return found;
         }
 
-        return hangingBlocks;
+        Location center = attachon.toBlockLocation().add(CENTER_OFFSET, CENTER_OFFSET, CENTER_OFFSET);
+        Collection<Entity> entities =
+            center.getWorld().getNearbyEntities(center, ITEM_FRAME_OFFSET, ITEM_FRAME_OFFSET, ITEM_FRAME_OFFSET);
+        for (Entity entity : entities) {
+            if (!(entity instanceof ItemFrame itemFrame)) {
+                continue;
+            }
+            BlockFace attachedFace = itemFrame.getAttachedFace();
+            if (attachSides.contains(attachedFace)) {
+                found.putIfAbsent(attachedFace, itemFrame);
+            }
+        }
+        return found;
     }
 
     static @Nullable String getHangingBlockId(@NotNull SlimefunBlockData attachon, @NotNull BlockFace attachSide) {
@@ -155,18 +179,7 @@ public interface HangingBlock {
 
     @Nullable
     static ItemFrame getItemFrame(@NotNull Location attachon, BlockFace attachSide) {
-        Location center = attachon.toBlockLocation().add(CENTER_OFFSET, CENTER_OFFSET, CENTER_OFFSET);
-        Collection<Entity> es =
-            center.getWorld().getNearbyEntities(center, ITEM_FRAME_OFFSET, ITEM_FRAME_OFFSET, ITEM_FRAME_OFFSET);
-        for (Entity e : es) {
-            if (e instanceof ItemFrame itemFrame) {
-                if (itemFrame.getAttachedFace() == attachSide) {
-                    return itemFrame;
-                }
-            }
-        }
-
-        return null;
+        return getHangingBlocks(attachon, Set.of(attachSide)).get(attachSide);
     }
 
     static void doFirstTick(@NotNull SlimefunBlockData attachon) {

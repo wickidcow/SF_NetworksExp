@@ -2,7 +2,6 @@ package com.ytdd9527.networksexpansion.implementation.machines.networks.advanced
 
 import com.balugaq.netex.api.interfaces.HangingBlock;
 import com.balugaq.netex.utils.Debug;
-import com.balugaq.netex.utils.InventoryUtil;
 import com.ytdd9527.networksexpansion.implementation.ExpansionItems;
 import com.ytdd9527.networksexpansion.utils.TextUtil;
 import com.ytdd9527.networksexpansion.utils.databases.DataSource;
@@ -10,9 +9,9 @@ import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
-import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
 import io.github.sefiraat.networks.utils.Keys;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.sefiraat.networks.utils.StackUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
@@ -22,7 +21,7 @@ import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.protection.Interaction;
 import io.papermc.paper.event.player.PlayerItemFrameChangeEvent;
 import lombok.SneakyThrows;
-import net.guizhanss.guizhanlib.minecraft.helper.inventory.ItemStackHelper;
+import io.github.sefiraat.networks.utils.DisplayNameUtils;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -110,7 +109,7 @@ public class SwitchingMonitor extends NetworkObject implements HangingBlock, Pla
         }
 
         pdc.set(ORIGINAL, PersistentDataType.STRING, DataSource.getBase64String(template));
-        meta.setDisplayName(addSuffixAmount(ItemStackHelper.getDisplayName(template), amount));
+        meta.setDisplayName(addSuffixAmount(DisplayNameUtils.getDisplayName(template), amount));
         clone.setItemMeta(meta);
         return clone;
     }
@@ -207,40 +206,26 @@ public class SwitchingMonitor extends NetworkObject implements HangingBlock, Pla
                 return;
             }
 
-            if (shift) {
-                ItemStack result = root.getItemStack0(attachon, new ItemRequest(template, amount));
-                if (result != null) {
-                    InventoryUtil.addItem(player, result);
-                    if (result.getAmount() > 0) {
-                        root.addItemStack0(attachon, result);
-                    }
-                }
-            } else {
-                ItemStack result = root.getItemStack0(
-                    attachon, new ItemRequest(template, Math.min(amount, template.getMaxStackSize())));
-                if (result != null) {
-                    InventoryUtil.addItem(player, result);
-                    if (result.getAmount() > 0) {
-                        root.addItemStack0(attachon, result);
-                    }
-                }
-            }
+            final int requested = shift ? amount : Math.min(amount, template.getMaxStackSize());
+            NetworkTransferUtils.moveNetworkItemIntoPlayerInventory(
+                root, attachon, player, template, requested);
         } else {
             if (shift) {
-                for (ItemStack item : player.getInventory().getStorageContents()) {
+                ItemStack[] storage = player.getInventory().getStorageContents();
+                for (int slot = 0; slot < storage.length; slot++) {
+                    ItemStack item = storage[slot];
                     if (item != null
                         && item.getType() != Material.AIR
                         && StackUtils.itemsMatch(item, template, true, false)) {
-                        int before = item.getAmount();
-                        root.addItemStack0(attachon, item);
-                        int after = item.getAmount();
-                        if (before == after) {
+                        int moved = NetworkTransferUtils.moveInventorySlotIntoNetwork(
+                            root, attachon, player.getInventory(), slot);
+                        if (moved <= 0) {
                             break;
                         }
                     }
                 }
             } else {
-                root.addItemStack0(attachon, hand);
+                NetworkTransferUtils.movePlayerMainHandIntoNetwork(root, attachon, player);
             }
         }
     }

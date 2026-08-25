@@ -3,6 +3,7 @@ package io.github.sefiraat.networks.slimefun.network;
 import com.balugaq.netex.api.enums.FeedbackType;
 import com.balugaq.netex.api.helpers.Icon;
 import com.balugaq.netex.utils.BlockMenuUtil;
+import com.balugaq.netex.utils.InventoryUtil;
 import com.balugaq.netex.utils.Lang;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import com.ytdd9527.networksexpansion.core.items.SpecialSlimefunItem;
@@ -23,6 +24,7 @@ import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.block.BlockBreakEvent;
@@ -110,7 +112,7 @@ public class NetworkQuantumWorkbench extends SpecialSlimefunItem {
         // Fill the inputs
         for (int recipeSlot : RECIPE_SLOTS) {
             ItemStack stack = menu.getItemInSlot(recipeSlot);
-            inputs[i] = stack;
+            inputs[i] = stack == null ? null : stack.clone();
             i++;
         }
 
@@ -126,13 +128,13 @@ public class NetworkQuantumWorkbench extends SpecialSlimefunItem {
 
         if (crafted != null) {
             final ItemStack coreItem = inputs[4];
-            final SlimefunItem oldQuantum = SlimefunItem.getByItem(coreItem);
+            final SlimefunItem oldQuantum = coreItem == null ? null : SlimefunItem.getByItem(coreItem);
 
             if (oldQuantum instanceof NetworkQuantumStorage) {
                 final ItemMeta oldMeta = coreItem.getItemMeta();
                 final ItemMeta newMeta = crafted.getItemMeta();
                 final NetworkQuantumStorage newQuantum = (NetworkQuantumStorage) SlimefunItem.getByItem(crafted);
-                if (newQuantum == null) {
+                if (oldMeta == null || newMeta == null || newQuantum == null) {
                     return;
                 }
 
@@ -164,28 +166,65 @@ public class NetworkQuantumWorkbench extends SpecialSlimefunItem {
                 }
             }
 
-            if (BlockMenuUtil.fits(menu, crafted, OUTPUT_SLOT)) {
-                for (int recipeSlot : RECIPE_SLOTS) {
-                    if (menu.getItemInSlot(recipeSlot) != null) {
-                        BlockMenuUtil.consumeItem(menu, recipeSlot, 1, true);
-                    }
-                }
+            // Fire the event before consuming ingredients. Listeners may cancel or replace the output.
+            final ItemStack[] eventInputs = cloneInputs(inputs);
+            final NetworkCraftEvent event = new NetworkCraftEvent(player, this, eventInputs, crafted.clone());
+            Bukkit.getPluginManager().callEvent(event);
+            if (event.isCancelled()) {
+                return;
+            }
 
-                // fire craft event
-                NetworkCraftEvent event = new NetworkCraftEvent(player, this, inputs, crafted);
-                Bukkit.getPluginManager().callEvent(event);
-                if (event.isCancelled()) {
-                    return;
-                }
-                crafted = event.getOutput();
+            crafted = event.getOutput();
+            if (crafted == null || crafted.getType() == Material.AIR || crafted.getAmount() <= 0) {
+                return;
+            }
 
-                BlockMenuUtil.pushItem(menu, crafted, OUTPUT_SLOT);
-                sendFeedback(menu.getLocation(), FeedbackType.SUCCESS);
-            } else {
+            // An event listener is allowed to interact with the menu. Revalidate the exact recipe before commit.
+            if (!recipeStillPresent(menu, inputs) || !BlockMenuUtil.fits(menu, crafted, OUTPUT_SLOT)) {
                 player.sendMessage(Lang.getString("messages.unsupported-operation.quantum_workbench.output_slot_full"));
                 sendFeedback(menu.getLocation(), FeedbackType.OUTPUT_FULL);
+                return;
+            }
+
+            for (int recipeSlot : RECIPE_SLOTS) {
+                if (menu.getItemInSlot(recipeSlot) != null) {
+                    BlockMenuUtil.consumeItem(menu, recipeSlot, 1, true);
+                }
+            }
+
+            final ItemStack outputRemainder = BlockMenuUtil.pushItem(menu, crafted, OUTPUT_SLOT);
+            if (outputRemainder != null
+                && outputRemainder.getType() != Material.AIR
+                && outputRemainder.getAmount() > 0) {
+                // Some output was already committed. Deliver the remainder to the crafter rather than restoring
+                // ingredients and accidentally duplicating the committed portion.
+                InventoryUtil.give(player, outputRemainder);
+                menu.markDirty();
+                sendFeedback(menu.getLocation(), FeedbackType.ERROR_OCCURRED);
+                return;
+            }
+
+            menu.markDirty();
+            sendFeedback(menu.getLocation(), FeedbackType.SUCCESS);
+        }
+    }
+
+    private static ItemStack @NotNull [] cloneInputs(ItemStack @NotNull [] inputs) {
+        final ItemStack[] clones = new ItemStack[inputs.length];
+        for (int i = 0; i < inputs.length; i++) {
+            clones[i] = inputs[i] == null ? null : inputs[i].clone();
+        }
+        return clones;
+    }
+
+    private static boolean recipeStillPresent(@NotNull BlockMenu menu, ItemStack @NotNull [] snapshots) {
+        for (int i = 0; i < RECIPE_SLOTS.length; i++) {
+            if (!SlimefunUtils.isItemSimilar(
+                menu.getItemInSlot(RECIPE_SLOTS[i]), snapshots[i], true, false, false)) {
+                return false;
             }
         }
+        return true;
     }
 
     private boolean testRecipe(ItemStack[] input, ItemStack @NotNull [] recipe) {

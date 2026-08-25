@@ -15,7 +15,7 @@ import io.github.sefiraat.networks.slimefun.network.NetworkGreedyBlock;
 import io.github.sefiraat.networks.slimefun.network.NetworkQuantumStorage;
 import io.github.thebusybiscuit.slimefun4.core.guide.options.SlimefunGuideSettings;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
-import net.guizhanss.guizhanlib.minecraft.helper.inventory.ItemStackHelper;
+import io.github.sefiraat.networks.utils.DisplayNameUtils;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -100,7 +100,7 @@ public class HudCallbacks {
     private static @NotNull String format(@NotNull Player player, @NotNull ItemStack itemStack, long amount, long limit) {
         String amountStr = HudBuilder.getAbbreviatedNumber(amount);
         String limitStr = HudBuilder.getAbbreviatedNumber(limit);
-        String itemName = ItemStackHelper.getDisplayName(itemStack);
+        String itemName = DisplayNameUtils.getDisplayName(itemStack);
 
         String raw = TextUtil.GRAY + "| " + TextUtil.WHITE + itemName + " " + TextUtil.GRAY + "| ";
 
