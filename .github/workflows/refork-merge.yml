@@ -1,4 +1,4 @@
-name: Refork Merge Upstream
+name: Refork Merge Cleanup
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  merge-upstream:
+  cleanup:
     runs-on: ubuntu-latest
     steps:
       - name: Check out migration branch
@@ -20,32 +20,52 @@ jobs:
           ref: refork-merge
           fetch-depth: 0
 
-      - name: Merge latest upstream
+      - name: Clean merged upstream artifacts
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git remote add upstream https://github.com/ytdd9527/NetworksExpansion.git || true
-          git fetch upstream master
 
-          set +e
-          git merge --no-ff -X ours upstream/master -m "merge: refork onto latest NetworksExpansion upstream"
-          merge_status=$?
-          set -e
+          python3 - <<'PY'
+          from pathlib import Path
 
-          if [ "$merge_status" -ne 0 ]; then
-            conflicts="$(git diff --name-only --diff-filter=U)"
-            expected="src/main/java/com/balugaq/netex/api/data/SimpleRecipeChoice.java"
-            if [ "$conflicts" != "$expected" ]; then
-              echo "Unexpected merge conflicts:"
-              printf '%s\n' "$conflicts"
-              exit 1
-            fi
+          stack = Path('src/main/java/io/github/sefiraat/networks/utils/StackUtils.java')
+          text = stack.read_text()
+          if 'import java.util.List;' not in text:
+              text = text.replace('import java.util.Map;', 'import java.util.List;\nimport java.util.Map;')
+          stack.write_text(text)
 
-            # Networks Legacy intentionally retains its compatibility implementation.
-            git add "$expected"
-            git commit --no-edit
+          gradle = Path('build.gradle.kts')
+          lines = gradle.read_text().splitlines(keepends=True)
+          out = []
+          i = 0
+          while i < len(lines):
+              if lines[i].startswith('    runServer {'):
+                  depth = 0
+                  while i < len(lines):
+                      depth += lines[i].count('{') - lines[i].count('}')
+                      i += 1
+                      if depth == 0:
+                          break
+                  if out and out[-1].strip() == '':
+                      pass
+                  continue
+              out.append(lines[i])
+              i += 1
+          gradle.write_text(''.join(out))
+          PY
+
+          # These upstream-only files conflict with the Legacy fork's release model/project identity.
+          git rm -f .github/workflows/release.yml AGENTS.md
+
+          git diff --check
+          grep -q 'import java.util.List;' src/main/java/io/github/sefiraat/networks/utils/StackUtils.java
+          if grep -q '^    runServer {' build.gradle.kts; then
+            echo 'Unexpected upstream runServer block remains'
+            exit 1
           fi
 
+          git add src/main/java/io/github/sefiraat/networks/utils/StackUtils.java build.gradle.kts
+          git commit -m "chore(refork): clean upstream merge artifacts"
           git push origin HEAD:refork-merge
