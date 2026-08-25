@@ -35,13 +35,17 @@ jobs:
           from pathlib import Path
           path = Path('src/main/java/io/github/sefiraat/networks/network/NetworkRoot.java')
           text = path.read_text()
+          method_start = text.index('    public Map<ItemStack, Long> getAllNetworkItemsLongType() {')
+          method_end = text.index('        for (BlockMenu blockMenu : getCrafterOutputs()) {', method_start)
+          region = text[method_start:method_end]
           old_a = "        for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {\n            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);\n"
           new_a = "        for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {\n            final ItemStack template = blockMenu.getItemInSlot(AdvancedGreedyBlock.TEMPLATE_SLOT);\n            if (template == null || template.getType() == Material.AIR) {\n                continue;\n            }\n            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);\n"
           old_g = "        for (BlockMenu blockMenu : getGreedyBlockMenus()) {\n            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);\n            if (slots.length == 0) {\n"
           new_g = "        for (BlockMenu blockMenu : getGreedyBlockMenus()) {\n            final ItemStack template = blockMenu.getItemInSlot(NetworkGreedyBlock.TEMPLATE_SLOT);\n            if (template == null || template.getType() == Material.AIR) {\n                continue;\n            }\n            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);\n            if (slots.length == 0) {\n"
-          assert text.count(old_a) == 1, text.count(old_a)
-          assert text.count(old_g) == 1, text.count(old_g)
-          path.write_text(text.replace(old_a, new_a, 1).replace(old_g, new_g, 1))
+          assert region.count(old_a) == 1, region.count(old_a)
+          assert region.count(old_g) == 1, region.count(old_g)
+          region = region.replace(old_a, new_a, 1).replace(old_g, new_g, 1)
+          path.write_text(text[:method_start] + region + text[method_end:])
           PY
 
           rm -f .github/workflows/refork-repair.yml .refork-trigger
