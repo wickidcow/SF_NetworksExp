@@ -1,36 +1,24 @@
-name: Build Networks Universal
+name: Refork Repair Runner
 
 on:
   push:
-    branches: ['**']
-    tags: ['v*']
-  pull_request:
-    branches: ['**']
-  workflow_dispatch:
+    branches:
+      - refork-merge
 
 permissions:
   contents: write
 
-env:
-  LEGACY_ARTIFACT_VERSION: "1.0.3"
-  OUTPUT_NAME: "SF_NetworksExp1.0.3.jar"
-
-# Gradle's internal shaded output remains Networks-Legacy-2.1.112-1.0.jar.
-# CI stages that internal JAR as the public versioned Legacy artifact.
-
 jobs:
-  # REFORK_REPAIR_BEGIN
-  repair_refork:
-    name: Repair refork merge artifacts
-    if: github.event_name == 'push' && github.ref == 'refs/heads/refork-merge'
+  repair:
     runs-on: ubuntu-latest
     steps:
       - name: Check out migration branch
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           ref: refork-merge
           fetch-depth: 0
-      - name: Repair and commit
+
+      - name: Repair merge artifacts and restore CI
         shell: bash
         run: |
           set -euo pipefail
@@ -39,51 +27,39 @@ jobs:
           git fetch origin legacy-1.0.2-pre-refork
 
           git checkout origin/legacy-1.0.2-pre-refork -- \
+            .github/workflows/build.yml \
             src/main/java/com/balugaq/netex/utils/InventoryUtil.java \
             src/main/java/io/github/sefiraat/networks/network/stackcaches/QuantumCache.java
 
           python3 - <<'PY'
           from pathlib import Path
-
-          root = Path('src/main/java/io/github/sefiraat/networks/network/NetworkRoot.java')
-          text = root.read_text()
-          old_advanced = '''        for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {
+          path = Path('src/main/java/io/github/sefiraat/networks/network/NetworkRoot.java')
+          text = path.read_text()
+          old_a = """        for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {
             int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
-'''
-          new_advanced = '''        for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {
+"""
+          new_a = """        for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {
             final ItemStack template = blockMenu.getItemInSlot(AdvancedGreedyBlock.TEMPLATE_SLOT);
             if (template == null || template.getType() == Material.AIR) {
                 continue;
             }
             int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
-'''
-          old_greedy = '''        for (BlockMenu blockMenu : getGreedyBlockMenus()) {
+"""
+          old_g = """        for (BlockMenu blockMenu : getGreedyBlockMenus()) {
             int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
             if (slots.length == 0) {
-'''
-          new_greedy = '''        for (BlockMenu blockMenu : getGreedyBlockMenus()) {
+"""
+          new_g = """        for (BlockMenu blockMenu : getGreedyBlockMenus()) {
             final ItemStack template = blockMenu.getItemInSlot(NetworkGreedyBlock.TEMPLATE_SLOT);
             if (template == null || template.getType() == Material.AIR) {
                 continue;
             }
             int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
             if (slots.length == 0) {
-'''
-          if text.count(old_advanced) != 1:
-              raise SystemExit(f'Expected one advanced greedy merge site, found {text.count(old_advanced)}')
-          if text.count(old_greedy) != 1:
-              raise SystemExit(f'Expected one greedy merge site, found {text.count(old_greedy)}')
-          root.write_text(text.replace(old_advanced, new_advanced, 1).replace(old_greedy, new_greedy, 1))
-
-          workflow = Path('.github/workflows/build.yml')
-          wf = workflow.read_text()
-          begin = '  # REFORK_REPAIR_BEGIN\n'
-          end = '  # REFORK_REPAIR_END\n'
-          if wf.count(begin) != 1 or wf.count(end) != 1:
-              raise SystemExit('Repair markers are missing or duplicated')
-          start = wf.index(begin)
-          finish = wf.index(end) + len(end)
-          workflow.write_text(wf[:start] + wf[finish:])
+"""
+          assert text.count(old_a) == 1, text.count(old_a)
+          assert text.count(old_g) == 1, text.count(old_g)
+          path.write_text(text.replace(old_a, new_a, 1).replace(old_g, new_g, 1))
           PY
 
           rm -f .github/workflows/refork-repair.yml
@@ -96,100 +72,3 @@ jobs:
           git add -A
           git commit -m "fix(refork): resolve upstream merge compile artifacts"
           git push origin HEAD:refork-merge
-  # REFORK_REPAIR_END
-
-  compatibility:
-    name: Gate universal release on all supported cores
-    uses: ./.github/workflows/compatibility.yml
-
-  build:
-    name: Build Networks Legacy JAR
-    needs: compatibility
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out Networks
-        uses: actions/checkout@v6
-      - name: Check out Slimefun Legacy
-        uses: actions/checkout@v6
-        with:
-          repository: wickidcow/Slimefun-Legacy
-          ref: master
-          path: .ci/slimefun-core
-      - name: Record release core revision
-        shell: bash
-        run: |
-          {
-            echo "Universal release compiler: Slimefun Legacy"
-            echo "Repository: wickidcow/Slimefun-Legacy"
-            echo "Branch: master"
-            echo "Commit: $(git -C .ci/slimefun-core rev-parse HEAD)"
-          } | tee compatibility-manifest.txt
-          cat compatibility-manifest.txt >> "$GITHUB_STEP_SUMMARY"
-      - name: Set up Java 25 for Slimefun Legacy
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "25"
-          cache: gradle
-      - name: Verify Networks source contract
-        run: python3 scripts/verify_legacy_compatibility.py
-      - name: Build exact Slimefun Legacy JAR
-        shell: bash
-        run: bash scripts/build_slimefun_core.sh .ci/slimefun-core legacy
-      - name: Locate exact Slimefun Legacy JAR
-        shell: bash
-        run: |
-          CORE_JAR="$(python3 scripts/find_slimefun_jar.py .ci/slimefun-core)"
-          test -f "$CORE_JAR"
-          echo "SLIMEFUN_CORE_JAR=$CORE_JAR" >> "$GITHUB_ENV"
-      - name: Set up Java 21 for Networks
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "21"
-          cache: gradle
-      - name: Build and test Networks
-        shell: bash
-        run: |
-          chmod +x gradlew
-          ./gradlew clean build --no-daemon -PslimefunCoreJar="$SLIMEFUN_CORE_JAR"
-      - name: Locate universal Networks JAR
-        shell: bash
-        run: |
-          NETWORKS_JAR="$(find build/libs -name 'Networks-Legacy-*.jar' ! -name '*-sources.jar' -print -quit)"
-          test -n "$NETWORKS_JAR"
-          echo "NETWORKS_JAR=$NETWORKS_JAR" >> "$GITHUB_ENV"
-      - name: Verify Java 21 bytecode
-        run: python3 scripts/verify_java21_bytecode.py "$NETWORKS_JAR"
-      - name: Verify universal JAR contents
-        run: python3 scripts/verify_universal_jar.py "$NETWORKS_JAR" "2.1.112-Legacy-1.0"
-      - name: Stage versioned JAR
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf dist
-          mkdir -p dist
-          cp "$NETWORKS_JAR" "dist/${OUTPUT_NAME}"
-          test -s "dist/${OUTPUT_NAME}"
-          sha256sum "dist/${OUTPUT_NAME}"
-      - name: Upload raw JAR artifact
-        uses: actions/upload-artifact@v7
-        with:
-          path: dist/${{ env.OUTPUT_NAME }}
-          archive: false
-          if-no-files-found: error
-      - name: Publish raw JAR release asset
-        if: (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') || github.ref_name == github.event.repository.default_branch) && needs.compatibility.result == 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then TAG="$GITHUB_REF_NAME"; else TAG="v${LEGACY_ARTIFACT_VERSION}"; fi
-          JAR="dist/${OUTPUT_NAME}"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$JAR" --clobber
-          else
-            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Chunk-loading stability update for large Networks installations. Network nodes now warm up through a shared bounded main-thread queue instead of creating a synchronous task for every waking block. Hanging-block restoration skips entity searches when no attachment metadata exists and resolves requested item frames with one nearby-entity scan. Local topology edits preserve unrelated loaded node registrations, while registration-driven controller rebuilds are briefly debounced so chunk activation batches settle before a new topology pass. Destructive changes and chunk unloads still invalidate topology immediately. Existing topology caching, synchronized Paper/Slimefun safety, storage formats, item IDs, and world data remain preserved."
-          fi
