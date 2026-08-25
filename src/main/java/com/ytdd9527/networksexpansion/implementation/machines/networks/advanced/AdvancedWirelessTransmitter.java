@@ -4,6 +4,7 @@ import com.balugaq.netex.api.algorithm.Calculator;
 import com.balugaq.netex.api.enums.FeedbackType;
 import com.balugaq.netex.api.interfaces.SoftCellBannable;
 import com.balugaq.netex.utils.Lang;
+import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import com.ytdd9527.networksexpansion.core.items.machines.AdvancedDirectional;
 import io.github.sefiraat.networks.NetworkStorage;
@@ -122,6 +123,10 @@ public class AdvancedWirelessTransmitter extends AdvancedDirectional implements 
             @Override
             public void newInstance(@NotNull BlockMenu blockMenu, @NotNull Block b) {
                 final Location location = blockMenu.getLocation();
+                final SlimefunBlockData blockData = StorageCacheUtils.getBlock(location);
+                if (blockData == null || !blockData.isDataLoaded()) {
+                    return;
+                }
 
                 final String rawLimit = StorageCacheUtils.getData(location, LIMIT_KEY);
 
