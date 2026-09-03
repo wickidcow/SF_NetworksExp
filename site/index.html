@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#07131f">
+  <meta name="description" content="Visual guide for Networks Legacy and Networks Expansion: storage, logistics, crafting, wireless networks, tools, integrations, and troubleshooting.">
+  <title>Networks Legacy Wiki</title>
+  <link rel="icon" href="assets/logo/logo_small_icon_only.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="ambient ambient-a"></div>
+  <div class="ambient ambient-b"></div>
+
+  <header class="topbar">
+    <a class="brand" href="#home" aria-label="Networks Legacy Wiki home">
+      <img src="assets/logo/logo_small_icon_only.png" alt="Networks logo">
+      <span><strong>Networks</strong><small>Legacy Wiki</small></span>
+    </a>
+    <nav class="desktop-nav" aria-label="Main navigation">
+      <a href="#start">Start</a>
+      <a href="#systems">Systems</a>
+      <a href="#catalog">Catalog</a>
+      <a href="#integrations">Integrations</a>
+      <a href="#support">Support</a>
+    </nav>
+    <a class="repo-button" href="https://github.com/wickidcow/SF_NetworksExp" rel="noreferrer">GitHub ↗</a>
+  </header>
+
+  <main>
+    <section class="hero" id="home">
+      <div class="hero-copy">
+        <div class="eyebrow"><span class="pulse"></span> Slimefun Legacy • Networks + Networks Expansion</div>
+        <h1>Build a network.<br><span>See how everything connects.</span></h1>
+        <p class="hero-lead">A visual, searchable guide to storage, item movement, crafting, wireless access, power, tools, and the expanded Networks feature set.</p>
+        <div class="hero-actions">
+          <a class="primary-button" href="#start">Build your first network</a>
+          <a class="secondary-button" href="#catalog">Browse every registered item</a>
+        </div>
+        <div class="hero-stats" aria-label="Wiki coverage">
+          <div><strong id="catalog-count">288</strong><span>registered IDs</span></div>
+          <div><strong>2</strong><span>project families</span></div>
+          <div><strong>1</strong><span>visual guide</span></div>
+        </div>
+      </div>
+      <div class="hero-visual" aria-label="Networks setup preview">
+        <div class="visual-frame">
+          <div class="frame-label"><span></span> NETWORK TOPOLOGY</div>
+          <img src="assets/wiki/setup.png" alt="Example Networks setup">
+          <div class="floating-card float-controller"><span class="node-dot controller"></span><b>Controller</b><small>Network root</small></div>
+          <div class="floating-card float-grid"><span class="node-dot grid"></span><b>Grid</b><small>Storage access</small></div>
+          <div class="floating-card float-storage"><span class="node-dot storage"></span><b>Storage</b><small>Cells • Quantum • Drawers</small></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="start">
+      <div class="section-heading">
+        <span class="kicker">START HERE</span>
+        <h2>Your first network in four pieces</h2>
+        <p>The core loop is deliberately simple: create a root, connect storage, add an interface, then automate around it.</p>
+      </div>
+      <div class="steps-grid">
+        <article class="step-card">
+          <div class="step-number">01</div>
+          <div class="step-icon icon-controller">⌘</div>
+          <h3>Place a Controller</h3>
+          <p>The Controller is the root of a connected Networks system. Build outward from it with valid network nodes.</p>
+          <button class="detail-link" data-feature="controller">Open visual guide →</button>
+        </article>
+        <article class="step-card">
+          <div class="step-number">02</div>
+          <div class="step-icon icon-storage">▦</div>
+          <h3>Add storage</h3>
+          <p>Use Cells, Quantum Storage, Drawers, or supported storage adapters to make items available to the network.</p>
+          <button class="detail-link" data-feature="storage">Compare storage →</button>
+        </article>
+        <article class="step-card">
+          <div class="step-number">03</div>
+          <div class="step-icon icon-grid">▤</div>
+          <h3>Open a Grid</h3>
+          <p>Grids provide a clean inventory view of network contents. Crafting Grids add recipe assembly directly on top.</p>
+          <button class="detail-link" data-feature="grids">See Grid types →</button>
+        </article>
+        <article class="step-card">
+          <div class="step-number">04</div>
+          <div class="step-icon icon-flow">⇄</div>
+          <h3>Move & automate</h3>
+          <p>Pushers, Grabbers, Importers, Exporters, wireless nodes, and Expansion transfer machines handle the rest.</p>
+          <button class="detail-link" data-feature="movement">See movement options →</button>
+        </article>
+      </div>
+    </section>
+
+    <section class="section visual-section" id="systems">
+      <div class="section-heading split-heading">
+        <div>
+          <span class="kicker">SYSTEMS</span>
+          <h2>Learn by what you want to build</h2>
+        </div>
+        <p>Instead of a wall of wiki pages, choose the job. Each card opens the important pieces, common upgrades, and the relevant catalog items.</p>
+      </div>
+      <div class="systems-grid">
+        <button class="system-card wide" data-feature="grids">
+          <div class="system-image"><img src="assets/wiki/grid.png" alt="Network Grid interface"></div>
+          <div class="system-body"><span class="system-tag">ACCESS</span><h3>Storage Grids</h3><p>Search, deposit, withdraw, and browse network storage from one interface.</p><span class="arrow">↗</span></div>
+        </button>
+        <button class="system-card wide" data-feature="crafting">
+          <div class="system-image"><img src="assets/wiki/grid_crafting.png" alt="Network Crafting Grid interface"></div>
+          <div class="system-body"><span class="system-tag">CRAFT</span><h3>Crafting & Blueprints</h3><p>Craft from network inventory, encode recipes, and automate supported crafting systems.</p><span class="arrow">↗</span></div>
+        </button>
+        <button class="system-card compact" data-feature="movement">
+          <div class="system-symbol">⇄</div><span class="system-tag">LOGISTICS</span><h3>Push, grab, import & export</h3><p>Classic nodes plus the much larger Expansion transfer family.</p><span class="arrow">↗</span>
+        </button>
+        <button class="system-card compact" data-feature="wireless">
+          <div class="system-symbol">⌁</div><span class="system-tag">WIRELESS</span><h3>Remote connections</h3><p>Transmitters, receivers, configurators, and remote network access.</p><span class="arrow">↗</span>
+        </button>
+        <button class="system-card compact" data-feature="power">
+          <div class="system-symbol">ϟ</div><span class="system-tag">POWER</span><h3>Capacitors & outlets</h3><p>Feed network energy and understand the expanded power tiers.</p><span class="arrow">↗</span>
+        </button>
+        <button class="system-card compact expansion-card" data-feature="expansion">
+          <div class="system-symbol">✦</div><span class="system-tag">EXPANSION</span><h3>Networks Expansion</h3><p>Managers, smart nodes, new grids, cargo storage, line transfers, and advanced machines.</p><span class="arrow">↗</span>
+        </button>
+      </div>
+    </section>
+
+    <section class="section expansion-showcase">
+      <div class="expansion-panel">
+        <div class="expansion-copy">
+          <span class="kicker">NETWORKS EXPANSION INCLUDED</span>
+          <h2>The wiki follows the plugin, not the old documentation.</h2>
+          <p>The complete catalog is built from the compatibility ID snapshot shipped in this repository. That means Expansion-only machines show up even when the historical Networks wiki never had a page for them.</p>
+          <div class="feature-pills">
+            <span>Smart Pushers</span><span>Advanced Transfers</span><span>13 Cargo Storage tiers</span><span>Managers</span><span>New-style Grids</span><span>Recipe Encoders</span><span>Colored Bridges</span><span>Advanced Autocrafters</span>
+          </div>
+          <a class="primary-button small" href="#catalog" data-preset-filter="Expansion">Show Expansion catalog</a>
+        </div>
+        <div class="expansion-orbit" aria-hidden="true">
+          <div class="orbit-ring ring-one"></div><div class="orbit-ring ring-two"></div>
+          <div class="orbit-core"><img src="assets/logo/logo_small_icon_only_inverted.png" alt=""></div>
+          <div class="orbit-node node-a">⇄</div><div class="orbit-node node-b">▦</div><div class="orbit-node node-c">✦</div><div class="orbit-node node-d">⌁</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section catalog-section" id="catalog">
+      <div class="section-heading split-heading">
+        <div><span class="kicker">LIVE CATALOG</span><h2>Every registered Networks ID</h2></div>
+        <p>Search the actual compatibility contract rather than an incomplete hand-maintained page list.</p>
+      </div>
+      <div class="catalog-shell">
+        <div class="catalog-toolbar">
+          <label class="search-box" for="catalog-search"><span>⌕</span><input id="catalog-search" type="search" placeholder="Search controller, pusher, quantum, crafter…" autocomplete="off"></label>
+          <div class="filter-row" id="filters" aria-label="Catalog filters"></div>
+        </div>
+        <div class="catalog-summary"><span id="result-count">Loading catalog…</span><button id="clear-filters" type="button">Reset</button></div>
+        <div class="catalog-grid" id="catalog-grid" aria-live="polite"></div>
+        <div class="catalog-empty" id="catalog-empty" hidden><div>⌕</div><h3>No matching items</h3><p>Try a shorter name or reset the filters.</p></div>
+      </div>
+    </section>
+
+    <section class="section" id="integrations">
+      <div class="section-heading"><span class="kicker">INTEGRATIONS</span><h2>Designed around the server you actually run</h2><p>The Legacy fork keeps compatibility and storage safety visible instead of hiding it in release notes.</p></div>
+      <div class="integration-grid">
+        <article class="integration-card legacy"><div class="integration-mark">L</div><div><span>PRIMARY</span><h3>Slimefun Legacy</h3><p>Primary runtime and release-blocking target, with preserved plugin identity and existing item IDs.</p></div></article>
+        <article class="integration-card ie2"><div class="integration-mark">∞</div><div><span>OPTIONAL</span><h3>InfinityExpansion2</h3><p>Fail-soft storage integration and IE2 barrel/storage adapter support without making IE2 mandatory.</p></div></article>
+        <article class="integration-card universal"><div class="integration-mark">3</div><div><span>BUILD CONTRACT</span><h3>Legacy • United • Gugu</h3><p>The universal release is verified against all three Slimefun API-family builds while Legacy remains the primary target.</p></div></article>
+      </div>
+    </section>
+
+    <section class="section support-section" id="support">
+      <div class="support-grid">
+        <div class="support-main">
+          <span class="kicker">TROUBLESHOOTING</span><h2>When a network behaves strangely</h2>
+          <div class="support-actions">
+            <button class="support-action" data-feature="doctor"><span class="support-icon">✚</span><div><b>Run Networks Doctor</b><small>Databases • transfers • controllers • registries • adapters</small></div><span>→</span></button>
+            <button class="support-action" data-feature="upgrade"><span class="support-icon">↻</span><div><b>Safe upgrade checklist</b><small>Backups • full restart • chunk reload • persistence checks</small></div><span>→</span></button>
+            <button class="support-action" data-feature="compatibility"><span class="support-icon">✓</span><div><b>Compatibility contract</b><small>Preserved IDs, data paths, bytecode, and runtime targets</small></div><span>→</span></button>
+          </div>
+        </div>
+        <aside class="warning-card"><div class="warning-icon">!</div><h3>Never use <code>/reload</code></h3><p>Stop the server fully when changing Slimefun or Networks JARs. Back up worlds and plugin data before replacing an established build.</p></aside>
+      </div>
+    </section>
+
+    <section class="credits-section">
+      <img src="assets/logo/networks_sefi_logo.png" alt="Original Networks logo">
+      <div><span class="kicker">PROJECT LINEAGE</span><h2>Built on the Networks community</h2><p>This visual wiki accompanies the unofficial Slimefun Legacy maintenance fork and preserves credit to Sefiraat, NetworksExpansion contributors, SlimefunGuguProject contributors, and the wider Networks community. Historical documentation was used as a reference and rewritten for the current fork.</p></div>
+      <div class="credit-links"><a href="https://github.com/Sefiraat/Networks" rel="noreferrer">Original Networks ↗</a><a href="https://github.com/ytdd9527/NetworksExpansion" rel="noreferrer">Networks Expansion ↗</a><a href="https://slimefun-addons-wiki.guizhanss.cn/networks/" rel="noreferrer">Historical wiki ↗</a></div>
+    </section>
+  </main>
+
+  <footer><div><img src="assets/logo/logo_small_icon_only.png" alt=""> Networks Legacy Wiki</div><span>Unofficial community-maintained documentation • NOT an official Minecraft product.</span></footer>
+
+  <dialog id="feature-dialog" class="feature-dialog">
+    <button class="dialog-close" id="dialog-close" aria-label="Close">×</button>
+    <div class="dialog-badge" id="dialog-badge">GUIDE</div>
+    <h2 id="dialog-title"></h2>
+    <p class="dialog-lead" id="dialog-lead"></p>
+    <div id="dialog-content"></div>
+    <div class="dialog-catalog" id="dialog-catalog"></div>
+  </dialog>
+
+  <dialog id="item-dialog" class="feature-dialog item-dialog">
+    <button class="dialog-close item-close" aria-label="Close">×</button>
+    <div class="item-dialog-head"><div class="item-glyph" id="item-glyph">N</div><div><div class="dialog-badge" id="item-family">NETWORKS</div><h2 id="item-name"></h2></div></div>
+    <div class="item-meta"><span id="item-category"></span><code id="item-id"></code></div>
+    <p class="dialog-lead" id="item-description"></p>
+    <div class="item-tips" id="item-tips"></div>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
