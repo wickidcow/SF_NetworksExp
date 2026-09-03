@@ -49,6 +49,11 @@ hs_err_pid*
 .AppleDouble
 .LSOverride
 
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
 # Icon must end with two \r
 Icon
 
