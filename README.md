@@ -4,6 +4,8 @@
 
 **Storage networks, remote access, automation, crafting, and high-capacity item movement for Slimefun.**
 
+[![Visual Wiki](https://img.shields.io/badge/Visual%20Wiki-Open%20Documentation-6bd425?style=for-the-badge&logo=github)](https://wickidcow.github.io/SF_NetworksExp/)
+
 ![Slimefun Legacy](https://img.shields.io/badge/Slimefun-Legacy-6bd425?style=for-the-badge)
 ![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue?style=for-the-badge)
 ![Maintained for AlbionMC.com](https://img.shields.io/badge/Maintained%20for-albionmc.com-7b68ee?style=for-the-badge)
