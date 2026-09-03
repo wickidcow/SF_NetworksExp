@@ -1,0 +1,52 @@
+name: Deploy Networks Visual Wiki
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'site/**'
+      - 'images/**'
+      - 'compatibility/item-ids-2.1.111.txt'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Assemble visual wiki
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p site/assets/logo site/assets/wiki site/assets/data
+          cp -R images/logo/. site/assets/logo/
+          cp -R images/wiki/. site/assets/wiki/
+          cp compatibility/item-ids-2.1.111.txt site/assets/data/item-ids.txt
+          touch site/.nojekyll
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
