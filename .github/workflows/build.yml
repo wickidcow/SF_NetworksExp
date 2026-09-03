@@ -15,8 +15,8 @@ env:
   LEGACY_ARTIFACT_VERSION: "1.0.3"
   OUTPUT_NAME: "SF_NetworksExp1.0.3.jar"
 
-# Gradle's internal shaded output remains Networks-Legacy-2.1.112-1.0.jar.
-# CI stages that internal JAR as the public versioned Legacy artifact.
+# Gradle produces Networks-Legacy-2.1.112-1.0.3.jar internally.
+# CI stages that JAR under the public Slimefun Legacy addon naming convention.
 
 jobs:
   compatibility:
@@ -84,7 +84,7 @@ jobs:
       - name: Verify Java 21 bytecode
         run: python3 scripts/verify_java21_bytecode.py "$NETWORKS_JAR"
       - name: Verify universal JAR contents
-        run: python3 scripts/verify_universal_jar.py "$NETWORKS_JAR" "2.1.112-Legacy-1.0"
+        run: python3 scripts/verify_universal_jar.py "$NETWORKS_JAR" "2.1.112-Legacy-1.0.3"
       - name: Stage versioned JAR
         shell: bash
         run: |
@@ -112,5 +112,5 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$JAR" --clobber
           else
-            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Chunk-loading stability update for large Networks installations. Network nodes now warm up through a shared bounded main-thread queue instead of creating a synchronous task for every waking block. Hanging-block restoration skips entity searches when no attachment metadata exists and resolves requested item frames with one nearby-entity scan. Local topology edits preserve unrelated loaded node registrations, while registration-driven controller rebuilds are briefly debounced so chunk activation batches settle before a new topology pass. Destructive changes and chunk unloads still invalidate topology immediately. Existing topology caching, synchronized Paper/Slimefun safety, storage formats, item IDs, and world data remain preserved."
+            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Targeted Networks Legacy maintenance release. Modern Paper item comparison now handles missing lore data components safely instead of risking a null-pointer failure, comparison exclusion sets are immutable, and obsolete migration/bytecode scratch files are removed. Existing item IDs, storage formats, world data, IE2 integration, topology caching, chunk warmup, and database recovery behavior remain unchanged."
           fi
