@@ -319,8 +319,6 @@ public class StackUtils {
 
         // Check the display name
         return !itemMeta.hasDisplayName() || Objects.equals(itemMeta.getDisplayName(), cachedMeta.getDisplayName());
-
-        // Everything should match if we've managed to get here
     }
 
     @SuppressWarnings("UnstableApiUsage")
@@ -329,31 +327,42 @@ public class StackUtils {
         @NotNull ItemStack itemStack,
         boolean checkLore,
         boolean checkCustomModelId) {
-        // most case pdc and others are enough
-        if (!cacheItem.matchesWithoutData(itemStack, checkCustomModelId ? DataComponentsCache.EXCLUDE_LORE : DataComponentsCache.EXCLUDE_LORE_AND_CMD, true)) {
+        // Persistent data and the remaining data components are enough for the fast path.
+        if (!cacheItem.matchesWithoutData(
+            itemStack,
+            checkCustomModelId ? DataComponentsCache.EXCLUDE_LORE : DataComponentsCache.EXCLUDE_LORE_AND_CMD,
+            true)) {
             return false;
         }
 
-        if (shouldCompareLore(itemStack, checkLore)) {
-            // we have to check lore manually, otherwise `matchesWithoutData` cannot identify non-style-preset text.
-            // of course, we can use CraftBukkit utils like `ItemMeta.getLore()`, but it needs reflection.
-            return loreMatchesLoose(
-                cacheItem.getData(DataComponentTypes.LORE).styledLines(),
-                itemStack.getData(DataComponentTypes.LORE).styledLines());
+        if (!shouldCompareLore(itemStack, checkLore)) {
+            return true;
         }
 
-        return true;
+        // Paper's DataComponentView#getData is nullable when the component is not set.
+        final var cacheLore = cacheItem.getData(DataComponentTypes.LORE);
+        final var itemLore = itemStack.getData(DataComponentTypes.LORE);
+        if (cacheLore == null || itemLore == null) {
+            return cacheLore == itemLore;
+        }
+
+        // Compare text while intentionally ignoring style differences introduced by modern component conversion.
+        return loreMatchesLoose(cacheLore.styledLines(), itemLore.styledLines());
     }
 
     /**
-     * Compare plain text (no style) only,
-     * Fix #436
+     * Compare plain text (no style) only.
      */
     private static boolean loreMatchesLoose(List<Component> a1, List<Component> a2) {
-        if (a1.size() != a2.size()) return false;
+        if (a1.size() != a2.size()) {
+            return false;
+        }
+
         var serializer = PlainTextComponentSerializer.plainText();
         for (int i = 0; i < a1.size(); i++) {
-            if (!serializer.serialize(a1.get(i)).equals(serializer.serialize(a2.get(i)))) return false;
+            if (!serializer.serialize(a1.get(i)).equals(serializer.serialize(a2.get(i)))) {
+                return false;
+            }
         }
         return true;
     }
@@ -461,9 +470,6 @@ public class StackUtils {
 
         // Bundle
         if (metaOne instanceof BundleMeta instanceOne && metaTwo instanceof BundleMeta instanceTwo) {
-            // Patch start - No bundle allowed
-            if (true) return false;
-            // Patch end - No bundle allowed
             if (instanceOne.hasItems() != instanceTwo.hasItems()) {
                 return true;
             }
@@ -715,10 +721,10 @@ public class StackUtils {
     }
 
     /**
-     * Heal the entity by the provided amount
+     * Marks an item as on cooldown for the provided duration.
      *
-     * @param itemStack         The {@link LivingEntity} to heal
-     * @param durationInSeconds The amount to heal by
+     * @param itemStack         The item to mark
+     * @param durationInSeconds The cooldown duration in seconds
      */
     @ParametersAreNonnullByDefault
     public static void putOnCooldown(ItemStack itemStack, int durationInSeconds) {
@@ -731,9 +737,9 @@ public class StackUtils {
     }
 
     /**
-     * Heal the entity by the provided amount
+     * Checks whether an item's stored cooldown has not yet expired.
      *
-     * @param itemStack The {@link LivingEntity} to heal
+     * @param itemStack The item to check
      */
     @ParametersAreNonnullByDefault
     public static boolean isOnCooldown(ItemStack itemStack) {
