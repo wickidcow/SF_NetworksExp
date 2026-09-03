@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.wickidcow.networks"
-version = "2.1.112-Legacy-1.0.3"
+version = "2.1.112-Legacy-1.0"
 
 val slimefunCoreJarPath = providers.gradleProperty("slimefunCoreJar")
     .orElse(providers.environmentVariable("SLIMEFUN_CORE_JAR"))
@@ -119,7 +119,8 @@ tasks {
 
     shadowJar {
         archiveBaseName.set("Networks-Legacy")
-        archiveVersion.set("2.1.112-1.0.3")
+        // Keep plugin metadata descriptive while making the actual output filename non-redundant.
+        archiveVersion.set("2.1.112-1.0")
         archiveClassifier.set("")
 
         minimize()
