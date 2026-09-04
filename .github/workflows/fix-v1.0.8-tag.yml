@@ -1,0 +1,24 @@
+name: Align Networks v1.0.8 Tag
+
+on:
+  push:
+    branches: ['tag-fix-v1.0.8']
+    paths: ['.github/workflows/fix-v1.0.8-tag.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  align-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Move tag to final tested commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/v1.0.8" \
+            -f sha='afbb0061e6b092fa8ac4fd10b81579ebd8c9d55c' \
+            -F force=true
+          gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/tag-fix-v1.0.8" || true
