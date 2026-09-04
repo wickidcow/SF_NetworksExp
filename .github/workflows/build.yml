@@ -12,8 +12,8 @@ permissions:
   contents: write
 
 env:
-  LEGACY_ARTIFACT_VERSION: "1.0.6"
-  OUTPUT_NAME: "SF_NetworksExp1.0.6.jar"
+  LEGACY_ARTIFACT_VERSION: "1.0.7"
+  OUTPUT_NAME: "SF_NetworksExp1.0.7.jar"
 
 # Gradle's internal runtime-contract output remains Networks-Legacy-2.1.112-1.0.jar.
 # CI stages that JAR under the public Slimefun Legacy addon release naming convention.
@@ -112,5 +112,5 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$JAR" --clobber
           else
-            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Networks Auto Crafter performance hotfix. Auto Crafters now keep their decoded blueprint cache between normal ticker passes instead of invalidating it every tick, and ingredient withdrawal no longer performs a full network availability scan before immediately scanning the same network again to fetch those ingredients. Existing rollback behavior is retained if a later ingredient is unavailable, so failed crafts remain transaction-safe. Output rules, power costs, blueprint behavior, item IDs, storage formats, world data, IE2 integration, topology caching, chunk warmup, and database recovery behavior remain unchanged."
+            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Networks crafting and transfer compatibility update. The Blueprint Encoder now resolves live Bukkit crafting recipes with the actual player and world before falling back to Slimefun recipe maps, allowing PrepareItemCraftEvent integrations such as ValhallaMMO to enforce player unlocks, world or region restrictions, ingredient validation, and dynamic result metadata. A Bukkit recipe rejected for that player is no longer silently bypassed by a Slimefun recipe using the same matrix. Supreme dynamic machine inputs now recover compatible empty input slots after an accepted stack fills, preventing Networks line pushers from stalling part-way through large recipes such as the Electric Core Machine. The v1.0.6 Auto Crafter performance improvements remain included."
           fi
