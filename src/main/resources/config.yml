@@ -68,6 +68,14 @@ disable-profile-check: false
 
 fast-interact-quantum: true
 
+# Quantum Storage world visuals are cosmetic. They are disabled by default so established
+# servers do not create hundreds or thousands of persistent display entities. Turning the
+# item display on does not alter stored items or amounts. Hover text is independent.
+quantum-storage:
+  display:
+    enabled: false
+    hover-text: true
+
 rpg-fix:
   force-check-lore: false
 

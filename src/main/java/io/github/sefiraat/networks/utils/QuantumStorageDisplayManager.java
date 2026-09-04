@@ -7,6 +7,7 @@ import io.github.sefiraat.networks.slimefun.network.NetworkQuantumStorage;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
+import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -18,6 +19,9 @@ import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
@@ -26,6 +30,8 @@ import org.bukkit.util.Transformation;
 import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -35,19 +41,26 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Renders the item registered in Network Quantum Storage directly on the block.
+ * Optional world-side visuals for Network Quantum Storage.
  *
- * <p>The visual uses a non-interactive {@link ItemDisplay}, matching the native display
- * approach used by Fluffy Barrels without introducing item frames that can intercept
- * right-clicks. All entity work is performed by this class's main-thread scheduler;
- * Quantum Storage machine tickers remain free to run asynchronously.</p>
+ * <p>The item display is cosmetic and is disabled by default in the Legacy build. When disabled,
+ * previously tagged Networks displays are removed gradually from already-loaded chunks and from
+ * chunks as they load. No cleanup path force-loads chunks and no Quantum Storage item or amount
+ * data is changed.</p>
  */
 public final class QuantumStorageDisplayManager {
 
     private static final Map<BlockKey, DisplayState> STATES = new HashMap<>();
+    private static final Deque<Chunk> CLEANUP_QUEUE = new ArrayDeque<>();
+    private static final Set<ChunkKey> CLEANUP_QUEUED = new HashSet<>();
+
     private static final float DISPLAY_SCALE = 0.50F;
     private static final long REFRESH_INTERVAL = 5L;
+    private static final int CLEANUP_CHUNKS_PER_TICK = 4;
+    private static final long CLEANUP_BUDGET_NANOS = 2_000_000L;
+
     private static boolean initialized;
+    private static boolean lastDisplayEnabled;
     private static NamespacedKey displayKey;
 
     private QuantumStorageDisplayManager() {
@@ -70,6 +83,13 @@ public final class QuantumStorageDisplayManager {
 
         initialized = true;
         displayKey = new NamespacedKey(plugin, "quantum_storage_item_display");
+        lastDisplayEnabled = isDisplayEnabled();
+
+        Networks.getPluginManager().registerEvents(new CleanupListener(), plugin);
+
+        if (!lastDisplayEnabled) {
+            queueAllLoadedChunksForCleanup();
+        }
 
         Bukkit.getScheduler().runTaskTimer(
             plugin,
@@ -85,18 +105,32 @@ public final class QuantumStorageDisplayManager {
         );
         Bukkit.getScheduler().runTaskTimer(
             plugin,
+            QuantumStorageDisplayManager::processCleanupQueue,
+            1L,
+            1L
+        );
+        Bukkit.getScheduler().runTaskTimer(
+            plugin,
             QuantumStorageDisplayManager::pruneStateCache,
             600L,
             600L
         );
+
+        plugin.getLogger().info(
+            "Quantum Storage world item displays are " + (lastDisplayEnabled ? "enabled." : "disabled by default."));
     }
 
     /**
-     * Refreshes all currently cached Quantum Storage blocks on the server thread.
-     * The Quantum Storage cache map is concurrent and each cache exposes synchronized
-     * item access, so this remains safe even when machine tickers are asynchronous.
+     * Refreshes all currently cached Quantum Storage blocks on the server thread when the
+     * optional item display is enabled.
      */
     private static void refreshDisplays() {
+        final boolean enabled = isDisplayEnabled();
+        handleDisplayToggle(enabled);
+        if (!enabled) {
+            return;
+        }
+
         final Set<BlockKey> activeKeys = new HashSet<>();
 
         for (Map.Entry<Location, QuantumCache> entry : NetworkQuantumStorage.getCaches().entrySet()) {
@@ -129,6 +163,25 @@ public final class QuantumStorageDisplayManager {
         }
 
         cleanupInactiveDisplays(activeKeys);
+    }
+
+    private static void handleDisplayToggle(boolean enabled) {
+        if (enabled == lastDisplayEnabled) {
+            return;
+        }
+
+        lastDisplayEnabled = enabled;
+        STATES.clear();
+
+        if (enabled) {
+            CLEANUP_QUEUE.clear();
+            CLEANUP_QUEUED.clear();
+            Networks.getInstance().getLogger().info("Quantum Storage world item displays enabled.");
+        } else {
+            queueAllLoadedChunksForCleanup();
+            Networks.getInstance().getLogger().info(
+                "Quantum Storage world item displays disabled; tagged displays will be removed as chunks are processed.");
+        }
     }
 
     private static void updateDisplay(
@@ -189,7 +242,9 @@ public final class QuantumStorageDisplayManager {
         display.setGravity(false);
         display.setInvulnerable(true);
         display.setSilent(true);
-        display.setPersistent(true);
+        // Runtime visuals are reconstructable from Quantum Storage data. Do not save new display
+        // entities into chunk data, which also prevents stale holograms after a clean restart.
+        display.setPersistent(false);
         display.setShadowRadius(0.0F);
         display.setShadowStrength(0.0F);
         display.getPersistentDataContainer().set(displayKey, PersistentDataType.STRING, ownerKey);
@@ -216,6 +271,9 @@ public final class QuantumStorageDisplayManager {
     }
 
     private static String getDisplayOwner(@NotNull ItemDisplay display) {
+        if (displayKey == null) {
+            return null;
+        }
         return display.getPersistentDataContainer().get(displayKey, PersistentDataType.STRING);
     }
 
@@ -230,8 +288,6 @@ public final class QuantumStorageDisplayManager {
 
             final World world = Bukkit.getWorld(key.worldId());
             if (world == null || !world.isChunkLoaded(key.chunkX(), key.chunkZ())) {
-                // The display entity is persistent. Forget only the in-memory state and
-                // rediscover the entity when the chunk is loaded again.
                 iterator.remove();
                 continue;
             }
@@ -286,6 +342,10 @@ public final class QuantumStorageDisplayManager {
     }
 
     private static void showHoverText() {
+        if (!isHoverTextEnabled()) {
+            return;
+        }
+
         for (Player player : Bukkit.getOnlinePlayers()) {
             final RayTraceResult result = player.rayTraceBlocks(5.0D);
             if (result == null || result.getHitBlock() == null) {
@@ -367,12 +427,90 @@ public final class QuantumStorageDisplayManager {
         return item.effectiveName();
     }
 
+    private static void queueAllLoadedChunksForCleanup() {
+        for (World world : Bukkit.getWorlds()) {
+            for (Chunk chunk : world.getLoadedChunks()) {
+                queueChunkForCleanup(chunk);
+            }
+        }
+    }
+
+    private static void queueChunkForCleanup(@NotNull Chunk chunk) {
+        if (!chunk.isLoaded()) {
+            return;
+        }
+
+        final ChunkKey key = ChunkKey.from(chunk);
+        if (CLEANUP_QUEUED.add(key)) {
+            CLEANUP_QUEUE.addLast(chunk);
+        }
+    }
+
+    private static void processCleanupQueue() {
+        final boolean enabled = isDisplayEnabled();
+        handleDisplayToggle(enabled);
+        if (enabled) {
+            return;
+        }
+
+        final long deadline = System.nanoTime() + CLEANUP_BUDGET_NANOS;
+        int processed = 0;
+
+        while (processed < CLEANUP_CHUNKS_PER_TICK
+            && System.nanoTime() < deadline
+            && !CLEANUP_QUEUE.isEmpty()) {
+            final Chunk chunk = CLEANUP_QUEUE.pollFirst();
+            if (chunk == null) {
+                break;
+            }
+
+            CLEANUP_QUEUED.remove(ChunkKey.from(chunk));
+            if (chunk.isLoaded()) {
+                cleanupTaggedDisplays(chunk);
+            }
+            processed++;
+        }
+    }
+
+    private static void cleanupTaggedDisplays(@NotNull Chunk chunk) {
+        for (Entity entity : chunk.getEntities()) {
+            if (entity instanceof ItemDisplay display && getDisplayOwner(display) != null) {
+                display.remove();
+            }
+        }
+    }
+
+    private static boolean isDisplayEnabled() {
+        final Networks plugin = Networks.getInstance();
+        return plugin != null && plugin.getConfig().getBoolean("quantum-storage.display.enabled", false);
+    }
+
+    private static boolean isHoverTextEnabled() {
+        final Networks plugin = Networks.getInstance();
+        return plugin != null && plugin.getConfig().getBoolean("quantum-storage.display.hover-text", true);
+    }
+
     private static void pruneStateCache() {
+        if (!isDisplayEnabled()) {
+            STATES.clear();
+            return;
+        }
+
         STATES.entrySet().removeIf(entry -> {
             final BlockKey key = entry.getKey();
             final World world = Bukkit.getWorld(key.worldId());
             return world == null || !world.isChunkLoaded(key.chunkX(), key.chunkZ());
         });
+    }
+
+    private static final class CleanupListener implements Listener {
+
+        @EventHandler
+        public void onChunkLoad(@NotNull ChunkLoadEvent event) {
+            if (!isDisplayEnabled()) {
+                queueChunkForCleanup(event.getChunk());
+            }
+        }
     }
 
     private record BlockKey(UUID worldId, int x, int y, int z) {
@@ -397,6 +535,13 @@ public final class QuantumStorageDisplayManager {
         @NotNull
         private String ownerKey() {
             return worldId + ":" + x + ":" + y + ":" + z;
+        }
+    }
+
+    private record ChunkKey(UUID worldId, int x, int z) {
+
+        private static ChunkKey from(@NotNull Chunk chunk) {
+            return new ChunkKey(chunk.getWorld().getUID(), chunk.getX(), chunk.getZ());
         }
     }
 
