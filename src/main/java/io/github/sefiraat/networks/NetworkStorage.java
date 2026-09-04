@@ -12,6 +12,7 @@ import io.github.sefiraat.networks.utils.TopologyDirtyQueue;
 import lombok.experimental.UtilityClass;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -154,6 +155,13 @@ public class NetworkStorage {
         final Location key = normalize(location);
         final NodeDefinition definition = getNode(key);
         if (definition == null) {
+            return null;
+        }
+
+        // Slimefun metadata can survive an indirect world mutation. AIR is therefore an immediate stale-node
+        // signal even if the storage cache still reports the old sfId.
+        if (key.getBlock().getType() == Material.AIR) {
+            invalidateStaleNode(key, definition);
             return null;
         }
 
