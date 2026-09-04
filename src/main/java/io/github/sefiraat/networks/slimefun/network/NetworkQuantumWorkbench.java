@@ -31,6 +31,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.HashMap;
@@ -229,11 +230,26 @@ public class NetworkQuantumWorkbench extends SpecialSlimefunItem {
 
     private boolean testRecipe(ItemStack[] input, ItemStack @NotNull [] recipe) {
         for (int test = 0; test < recipe.length; test++) {
-            if (!SlimefunUtils.isItemSimilar(input[test], recipe[test], true, false, false)) {
+            if (!SlimefunUtils.isItemSimilar(normalizeRecipeInput(input[test]), recipe[test], true, false, false)) {
                 return false;
             }
         }
         return true;
+    }
+
+    private @Nullable ItemStack normalizeRecipeInput(@Nullable ItemStack input) {
+        if (input == null) {
+            return null;
+        }
+
+        final SlimefunItem slimefunItem = SlimefunItem.getByItem(input);
+        if (slimefunItem instanceof NetworkQuantumStorage) {
+            final SlimefunItem registered = SlimefunItem.getById(slimefunItem.getId());
+            if (registered != null) {
+                return registered.getItem().clone();
+            }
+        }
+        return input;
     }
 
     private @NotNull BlockBreakHandler getBlockBreakHandler() {
