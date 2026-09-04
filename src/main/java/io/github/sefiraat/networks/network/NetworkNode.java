@@ -20,11 +20,14 @@ import java.util.Deque;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class NetworkNode {
 
     public static final Set<BlockFace> VALID_FACES =
         EnumSet.of(BlockFace.UP, BlockFace.DOWN, BlockFace.NORTH, BlockFace.EAST, BlockFace.SOUTH, BlockFace.WEST);
+
+    private static final Set<Location> PENDING_CONTROLLER_REMOVALS = ConcurrentHashMap.newKeySet();
 
     @Getter
     protected final Set<NetworkNode> childrenNodes = new HashSet<>();
@@ -133,23 +136,50 @@ public class NetworkNode {
     }
 
     private void killAdditionalController(@NotNull Location location) {
-        SlimefunItem sfItem = StorageCacheUtils.getSfItem(location);
-        if (sfItem != null) {
-            Slimefun.getDatabaseManager().getBlockDataController().removeBlock(location);
-            BukkitRunnable runnable = new BukkitRunnable() {
-                @Override
-                public void run() {
-                    // fix #99
-                    NetworkController.wipeNetwork(location);
-                    if (location.getWorld() != null) {
-                        location.getWorld().dropItemNaturally(location, sfItem.getItem());
-                        location.getBlock().setType(Material.AIR);
-                    }
-                }
-            };
-            runnable.runTask(Networks.getInstance());
-            NetworkController.wipeNetwork(location);
+        final Location controllerLocation = normalizeBlockLocation(location);
+
+        // A controller can be reached from more than one graph edge during the same discovery pass. Without this
+        // reservation, each edge can queue its own delayed removal and drop the same controller item more than once.
+        if (!PENDING_CONTROLLER_REMOVALS.add(controllerLocation)) {
+            return;
         }
+
+        BukkitRunnable runnable = new BukkitRunnable() {
+            @Override
+            public void run() {
+                try {
+                    // Re-read the live Slimefun identity on the server thread. If the controller was already broken,
+                    // replaced, or cleaned up by another path, there is nothing left for this task to drop.
+                    SlimefunItem liveItem = StorageCacheUtils.getSfItem(controllerLocation);
+                    if (!(liveItem instanceof NetworkController)) {
+                        return;
+                    }
+
+                    NetworkController.removeRuntimeState(controllerLocation);
+                    NetworkStorage.removeNodeOnly(controllerLocation);
+                    Slimefun.getDatabaseManager().getBlockDataController().removeBlock(controllerLocation);
+
+                    if (controllerLocation.getWorld() != null
+                        && controllerLocation.getBlock().getType() != Material.AIR) {
+                        controllerLocation.getWorld().dropItemNaturally(controllerLocation, liveItem.getItem());
+                        controllerLocation.getBlock().setType(Material.AIR);
+                    }
+                } finally {
+                    PENDING_CONTROLLER_REMOVALS.remove(controllerLocation);
+                }
+            }
+        };
+        runnable.runTask(Networks.getInstance());
+    }
+
+    private static @NotNull Location normalizeBlockLocation(@NotNull Location location) {
+        Location normalized = location.clone();
+        normalized.setX(location.getBlockX());
+        normalized.setY(location.getBlockY());
+        normalized.setZ(location.getBlockZ());
+        normalized.setYaw(0.0F);
+        normalized.setPitch(0.0F);
+        return normalized;
     }
 
     protected long retrieveBlockCharge() {
