@@ -5,9 +5,7 @@ import com.ytdd9527.networksexpansion.core.items.machines.AbstractGridNewStyle;
 import com.ytdd9527.networksexpansion.implementation.machines.unit.NetworksDrawer;
 import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.commands.NetworksMain;
-import io.github.sefiraat.networks.slimefun.network.NetworkCell;
-import io.github.sefiraat.networks.slimefun.network.NetworkQuantumStorage;
-import io.github.sefiraat.networks.slimefun.network.grid.AbstractGrid;
+import io.github.sefiraat.networks.slimefun.network.NetworkObject;
 import io.github.thebusybiscuit.slimefun4.api.events.ExplosiveToolBreakBlocksEvent;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import org.bukkit.Location;
@@ -29,22 +27,18 @@ public class ExplosiveToolListener implements Listener {
             final Location location = block.getLocation();
 
             final SlimefunItem item = StorageCacheUtils.getSfItem(location);
-            if (item != null) {
-                if (isAntiExplosiveBlock(item)) {
-                    blocksToRemove.add(block);
-                    Networks.getInstance()
-                        .debug("Disabled explosive block: " + NetworksMain.locationToString(block.getLocation()));
-                }
+            if (item != null && isProtectedNetworkBlock(item)) {
+                blocksToRemove.add(block);
+                Networks.getInstance()
+                    .debug("Disabled explosive block: " + NetworksMain.locationToString(block.getLocation()));
             }
         }
         event.getAdditionalBlocks().removeAll(blocksToRemove);
     }
 
-    private boolean isAntiExplosiveBlock(SlimefunItem item) {
-        return item instanceof NetworksDrawer
-            || item instanceof NetworkQuantumStorage
-            || item instanceof NetworkCell
-            || item instanceof AbstractGrid
+    static boolean isProtectedNetworkBlock(@NotNull SlimefunItem item) {
+        return item instanceof NetworkObject
+            || item instanceof NetworksDrawer
             || item instanceof AbstractGridNewStyle;
     }
 }
