@@ -2,8 +2,10 @@ package com.balugaq.netex.utils;
 
 import com.ytdd9527.networksexpansion.utils.itemstacks.ItemStackUtil;
 import io.github.sefiraat.networks.utils.StackUtils;
+import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.items.CustomItemStack;
 import lombok.experimental.UtilityClass;
+import me.mrCookieSlime.Slimefun.Objects.SlimefunItem.interfaces.InventoryBlock;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
 import org.bukkit.Material;
@@ -15,10 +17,12 @@ import org.jetbrains.annotations.Range;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
-@SuppressWarnings("DuplicatedCode")
+@SuppressWarnings({"DuplicatedCode", "deprecation"})
 @UtilityClass
 public class BlockMenuUtil {
 
@@ -46,6 +50,33 @@ public class BlockMenuUtil {
             }
         }
 
+        final int[] safeSlots = sanitizeSlots(blockMenu, slots);
+
+        /*
+         * Supreme's GenericMachine intentionally prefers existing matching input stacks. Once those
+         * stacks are full its item-aware transport method can return no slots even while other machine
+         * input slots are still empty. That makes line pushers stall part-way through large recipes such
+         * as the Electric Core Machine's 9x64 input batch. When Supreme has already accepted this item in
+         * one of its declared input slots, keep the normal routing but also expose compatible empty/partial
+         * input slots so the same transfer can finish loading the recipe.
+         *
+         * Keep this recovery scoped to Supreme. Other addons may use an empty dynamic slot result as an
+         * intentional transport lock and should retain that behavior.
+         */
+        if (flow == ItemTransportFlow.INSERT
+            && item != null
+            && item.getType() != Material.AIR
+            && item.getAmount() > 0) {
+            final int[] recovered = recoverSupremeInsertSlots(blockMenu, item, safeSlots);
+            if (recovered.length > 0) {
+                return recovered;
+            }
+        }
+
+        return safeSlots;
+    }
+
+    private static int @NotNull [] sanitizeSlots(@NotNull BlockMenu blockMenu, @Nullable int[] slots) {
         if (slots == null || slots.length == 0) {
             return new int[0];
         }
@@ -54,6 +85,63 @@ public class BlockMenuUtil {
             .filter(slot -> slot >= 0 && slot < blockMenu.getSize())
             .distinct()
             .toArray();
+    }
+
+    private static int @NotNull [] recoverSupremeInsertSlots(
+        @NotNull BlockMenu blockMenu,
+        @NotNull ItemStack item,
+        int @NotNull [] normalSlots) {
+
+        final SlimefunItem slimefunItem;
+        try {
+            slimefunItem = blockMenu.getPreset().getSlimefunItem();
+        } catch (RuntimeException | LinkageError ignored) {
+            return normalSlots;
+        }
+
+        if (slimefunItem == null
+            || !slimefunItem.getClass().getName().startsWith("com.github.relativobr.supreme.")
+            || !(slimefunItem instanceof InventoryBlock inventoryBlock)) {
+            return normalSlots;
+        }
+
+        final int[] inputSlots;
+        try {
+            inputSlots = sanitizeSlots(blockMenu, inventoryBlock.getInputSlots());
+        } catch (RuntimeException | LinkageError ignored) {
+            return normalSlots;
+        }
+
+        boolean alreadyAccepted = false;
+        for (int slot : inputSlots) {
+            final ItemStack existing = blockMenu.getItemInSlot(slot);
+            if (existing != null
+                && existing.getType() != Material.AIR
+                && StackUtils.itemsMatch(item, existing)) {
+                alreadyAccepted = true;
+                break;
+            }
+        }
+
+        if (!alreadyAccepted) {
+            return normalSlots;
+        }
+
+        final Set<Integer> merged = new LinkedHashSet<>();
+        for (int slot : normalSlots) {
+            merged.add(slot);
+        }
+        for (int slot : inputSlots) {
+            final ItemStack existing = blockMenu.getItemInSlot(slot);
+            if (existing == null || existing.getType() == Material.AIR) {
+                merged.add(slot);
+            } else if (StackUtils.itemsMatch(item, existing)
+                && existing.getAmount() < existing.getMaxStackSize()) {
+                merged.add(slot);
+            }
+        }
+
+        return merged.stream().mapToInt(Integer::intValue).toArray();
     }
 
     public static int @NotNull [] getSafeTransportSlots(
