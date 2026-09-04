@@ -37,7 +37,6 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -89,63 +88,60 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
     }
 
     protected void craftPreFlight(@NotNull BlockMenu blockMenu) {
-
-        releaseCache(blockMenu);
-
-        final NodeDefinition definition = NetworkStorage.getNode(blockMenu.getLocation());
+        final Location location = blockMenu.getLocation();
+        final NodeDefinition definition = NetworkStorage.getNode(location);
 
         if (definition == null || definition.getNode() == null) {
-            sendFeedback(blockMenu.getLocation(), FeedbackType.NO_NETWORK_FOUND);
+            sendFeedback(location, FeedbackType.NO_NETWORK_FOUND);
             return;
         }
 
         final NetworkRoot root = definition.getNode().getRoot();
 
-        if (checkSoftCellBan(blockMenu.getLocation(), root)) {
+        if (checkSoftCellBan(location, root)) {
             return;
         }
 
         if (!withholding) {
             final ItemStack stored = blockMenu.getItemInSlot(OUTPUT_SLOT);
             if (stored != null && stored.getType() != Material.AIR) {
-                NetworkTransferUtils.moveMenuSlotIntoNetwork(
-                    root, blockMenu.getLocation(), blockMenu, OUTPUT_SLOT);
+                NetworkTransferUtils.moveMenuSlotIntoNetwork(root, location, blockMenu, OUTPUT_SLOT);
             }
         }
 
         final ItemStack blueprint = blockMenu.getItemInSlot(BLUEPRINT_SLOT);
 
         if (blueprint == null || blueprint.getType() == Material.AIR) {
-            sendFeedback(blockMenu.getLocation(), FeedbackType.NO_BLUEPRINT_FOUND);
+            sendFeedback(location, FeedbackType.NO_BLUEPRINT_FOUND);
             return;
         }
 
         final long networkCharge = root.getRootPower();
 
         if (networkCharge < this.chargePerCraft) {
-            sendFeedback(blockMenu.getLocation(), FeedbackType.NOT_ENOUGH_POWER);
+            sendFeedback(location, FeedbackType.NOT_ENOUGH_POWER);
             return;
         }
 
         final SlimefunItem item = SlimefunItem.getByItem(blueprint);
 
         if (!isValidBlueprint(item)) {
-            sendFeedback(blockMenu.getLocation(), FeedbackType.INVALID_BLUEPRINT);
+            sendFeedback(location, FeedbackType.INVALID_BLUEPRINT);
             return;
         }
 
-        BlueprintInstance instance = AutoCrafter.INSTANCE_MAP.get(blockMenu.getLocation());
+        BlueprintInstance instance = AutoCrafter.INSTANCE_MAP.get(location);
 
         if (instance == null) {
             final ItemMeta blueprintMeta = blueprint.getItemMeta();
             BlueprintInstance instance2 = Keys.getBlueprintInstance(blueprintMeta);
             if (instance2 == null) {
-                sendFeedback(blockMenu.getLocation(), FeedbackType.NO_BLUEPRINT_INSTANCE_FOUND);
+                sendFeedback(location, FeedbackType.NO_BLUEPRINT_INSTANCE_FOUND);
                 return;
             }
 
             if (instance2 == BlueprintInstance.INVALID) {
-                sendFeedback(blockMenu.getLocation(), FeedbackType.BROKEN_BLUEPRINT);
+                sendFeedback(location, FeedbackType.BROKEN_BLUEPRINT);
                 return;
             }
 
@@ -158,7 +154,7 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
 
         ItemStack targetOutput = instance.getItemStack();
         if (targetOutput == null || targetOutput.getType() == Material.AIR || targetOutput.getAmount() <= 0) {
-            sendFeedback(blockMenu.getLocation(), FeedbackType.BROKEN_BLUEPRINT);
+            sendFeedback(location, FeedbackType.BROKEN_BLUEPRINT);
             return;
         }
         if (output != null
@@ -166,7 +162,7 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
             && targetOutput != null
             && (output.getAmount() + targetOutput.getAmount() * blueprintAmount > output.getMaxStackSize()
             || !StackUtils.itemsMatch(targetOutput, output))) {
-            sendFeedback(blockMenu.getLocation(), FeedbackType.OUTPUT_FULL);
+            sendFeedback(location, FeedbackType.OUTPUT_FULL);
             return;
         }
 
@@ -182,45 +178,35 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
         @NotNull NetworkRoot root,
         int blueprintAmount,
         @Nullable ItemStack existing) {
-        /* Make sure the network has the required items
-         * Needs to be revisited as matching is happening stacks 2x when it should
-         * only need the one
+        /*
+         * Withdraw each ingredient once and rely on the existing rollback path if a
+         * later ingredient is unavailable. The old pre-flight root.contains(...)
+         * pass walked network storage once, then getItemStack0(...) walked it again
+         * for the same ingredients on every crafter tick.
          */
-        HashMap<ItemStack, Integer> requiredItems = new HashMap<>();
-        for (int i = 0; i < instance.getRecipeItems().length; i++) {
-            final ItemStack requested = instance.getRecipeItems()[i];
+        final ItemStack[] recipeItems = instance.getRecipeItems();
+        final ItemStack[] fetcheds = new ItemStack[recipeItems.length];
+        final Location location = blockMenu.getLocation();
+
+        for (int i = 0; i < recipeItems.length; i++) {
+            final ItemStack requested = recipeItems[i];
             if (requested != null) {
-                requiredItems.merge(requested, requested.getAmount() * blueprintAmount, Integer::sum);
-            }
-        }
-
-        for (Map.Entry<ItemStack, Integer> entry : requiredItems.entrySet()) {
-            if (!root.contains(new ItemRequest(entry.getKey(), entry.getValue()))) {
-                sendFeedback(blockMenu.getLocation(), FeedbackType.NOT_ENOUGH_ITEMS_IN_NETWORK);
-                return false;
-            }
-        }
-
-        ItemStack[] fetcheds = new ItemStack[instance.getRecipeItems().length];
-
-        // Then fetch the actual items
-        for (int i = 0; i < instance.getRecipeItems().length; i++) {
-            final ItemStack requested = instance.getRecipeItems()[i];
-            if (requested != null) {
-                final ItemStack fetched = root.getItemStack0(
-                    blockMenu.getLocation(), new ItemRequest(requested, requested.getAmount() * blueprintAmount));
+                final int requestedAmount = requested.getAmount() * blueprintAmount;
+                final ItemStack fetched = root.getItemStack0(location, new ItemRequest(requested, requestedAmount));
                 fetcheds[i] = fetched;
-                if (fetched == null || fetched.getAmount() < requested.getAmount() * blueprintAmount) {
+                if (fetched == null || fetched.getAmount() < requestedAmount) {
                     returnItems(root, fetcheds, blockMenu);
+                    sendFeedback(location, FeedbackType.NOT_ENOUGH_ITEMS_IN_NETWORK);
                     return false;
                 }
             }
         }
 
-        // Push item
-        final Location location = blockMenu.getLocation().clone().add(0.5, 1.1, 0.5);
-        if (root.isDisplayParticles() && location.getWorld() != null) {
-            location.getWorld().spawnParticle(Particle.WAX_OFF, location, 0, 0, 4, 0);
+        if (root.isDisplayParticles()) {
+            final Location particleLocation = location.clone().add(0.5, 1.1, 0.5);
+            if (particleLocation.getWorld() != null) {
+                particleLocation.getWorld().spawnParticle(Particle.WAX_OFF, particleLocation, 0, 0, 4, 0);
+            }
         }
 
         ItemStack crafted = instance.getItemStack().clone();
@@ -229,13 +215,13 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
 
         if (crafted.getAmount() > crafted.getMaxStackSize()) {
             returnItems(root, fetcheds, blockMenu);
-            sendFeedback(blockMenu.getLocation(), FeedbackType.RESULT_IS_TOO_LARGE);
+            sendFeedback(location, FeedbackType.RESULT_IS_TOO_LARGE);
             return false;
         }
 
         if (!withholding && existing != null && existing.getType() != Material.AIR) {
-            root.uncontrolAccessInput(blockMenu.getLocation());
-            root.addItemStack0(blockMenu.getLocation(), crafted);
+            root.uncontrolAccessInput(location);
+            root.addItemStack0(location, crafted);
         }
         if (crafted.getType() != Material.AIR && crafted.getAmount() > 0) {
             final ItemStack remainder = BlockMenuUtil.pushItem(blockMenu, crafted, OUTPUT_SLOT);
@@ -247,10 +233,9 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
             blockMenu.markDirty();
         }
         if (crafted.getAmount() > 0) {
-            NetworkTransferUtils.rollbackNetworkWithdrawal(
-                root, blockMenu.getLocation(), crafted, blockMenu.getLocation(), "auto-crafter output");
+            NetworkTransferUtils.rollbackNetworkWithdrawal(root, location, crafted, location, "auto-crafter output");
         }
-        sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
+        sendFeedback(location, FeedbackType.WORKING);
         return true;
     }
 
