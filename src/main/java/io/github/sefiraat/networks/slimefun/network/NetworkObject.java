@@ -39,6 +39,7 @@ import org.jetbrains.annotations.Range;
 import javax.annotation.OverridingMethodsMustInvokeSuper;
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Queue;
@@ -264,6 +265,33 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
     @OverridingMethodsMustInvokeSuper
     @SuppressWarnings("unused")
     protected void prePlace(@NotNull BlockPlaceEvent event) {
+        final Set<Location> controllers = new HashSet<>();
+        final Block placedBlock = event.getBlockPlaced();
+
+        for (BlockFace face : CHECK_FACES) {
+            final Location adjacentLocation = placedBlock.getRelative(face).getLocation();
+            final SlimefunItem adjacentItem = StorageCacheUtils.getSfItem(adjacentLocation);
+            if (adjacentItem instanceof NetworkController) {
+                controllers.add(adjacentLocation);
+            }
+
+            final NodeDefinition definition = NetworkStorage.getNode(adjacentLocation);
+            if (definition == null || definition.getNode() == null || definition.getNode().getRoot() == null) {
+                continue;
+            }
+
+            final Location controller = definition.getNode().getRoot().getController();
+            if (controller != null) {
+                controllers.add(controller);
+            }
+        }
+
+        final boolean wouldMergeControllers = nodeType == NodeType.CONTROLLER
+            ? !controllers.isEmpty()
+            : controllers.size() > 1;
+        if (wouldMergeControllers) {
+            cancelPlace(event);
+        }
     }
 
     @SuppressWarnings("unused")
