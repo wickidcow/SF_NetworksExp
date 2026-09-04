@@ -31,6 +31,7 @@ import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.Recipe;
 import org.jetbrains.annotations.NotNull;
 import java.util.ArrayList;
 import java.util.List;
@@ -176,34 +177,58 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
         if (target == null || target.getType() == Material.AIR) {
             target = null;
         }
-        for (var recipes : CraftType.map().entrySet()) {
-            boolean found = false;
-            for (Map.Entry<ItemStack[], ItemStack> recipe : recipes.getValue()) {
-                if (!testRecipe(recipes.getKey(), inputs, recipe.getKey())) {
-                    continue;
+
+        /*
+         * Resolve the live Bukkit crafting registry first. This mirrors a real player's crafting-table
+         * preview: Bukkit.craftItem(..., player) fires PrepareItemCraftEvent with the actual Player and
+         * World, allowing plugins such as ValhallaMMO to apply unlock checks, region/world restrictions,
+         * ingredient validation and dynamic result metadata. If a registered Bukkit recipe is rejected
+         * for this player, do not silently bypass that rejection through a Slimefun recipe with the same
+         * matrix. An explicit target may still select a different Networks/Slimefun recipe intentionally.
+         */
+        if (canTestVanillaRecipe(inputs)) {
+            final ItemStack[] liveMatrix = copyRecipe(inputs);
+            final Recipe bukkitRecipe = Bukkit.getCraftingRecipe(liveMatrix, player.getWorld());
+            if (bukkitRecipe != null) {
+                final ItemStack playerResult = Bukkit.craftItem(copyRecipe(inputs), player.getWorld(), player);
+                final boolean validPlayerResult = playerResult != null
+                    && playerResult.getType() != Material.AIR
+                    && playerResult.getAmount() > 0;
+
+                if (validPlayerResult && (target == null || StackUtils.itemsMatch(playerResult, target))) {
+                    crafted = playerResult.clone();
+                    consumptionRecipe = vanillaConsumptionRecipe(inputs);
+                } else if (!validPlayerResult
+                    && (target == null || StackUtils.itemsMatch(bukkitRecipe.getResult(), target))) {
+                    player.sendMessage(Lang.getString("messages.unsupported-operation.encoder.invalid_recipe"));
+                    sendFeedback(blockMenu.getLocation(), FeedbackType.INVALID_RECIPE);
+                    return false;
                 }
-                final ItemStack candidate = recipe.getValue();
-                if (target != null && !StackUtils.itemsMatch(candidate, target)) {
-                    continue;
-                }
-                crafted = candidate.clone();
-                consumptionRecipe = cleanRecipe(recipe.getKey());
-                found = true;
-                break;
-            }
-            if (found) {
-                break;
             }
         }
-        if (crafted == null && canTestVanillaRecipe(inputs)) {
-            crafted = Bukkit.craftItem(copyRecipe(inputs), player.getWorld(), player);
-            consumptionRecipe = new ItemStack[RECIPE_SLOTS.length];
-            for (int index = 0; index < RECIPE_SLOTS.length; index++) {
-                if (inputs[index] != null && inputs[index].getType() != Material.AIR) {
-                    consumptionRecipe[index] = StackUtils.getAsQuantity(inputs[index], 1);
+
+        if (crafted == null) {
+            for (var recipes : CraftType.map().entrySet()) {
+                boolean found = false;
+                for (Map.Entry<ItemStack[], ItemStack> recipe : recipes.getValue()) {
+                    if (!testRecipe(recipes.getKey(), inputs, recipe.getKey())) {
+                        continue;
+                    }
+                    final ItemStack candidate = recipe.getValue();
+                    if (target != null && !StackUtils.itemsMatch(candidate, target)) {
+                        continue;
+                    }
+                    crafted = candidate.clone();
+                    consumptionRecipe = cleanRecipe(recipe.getKey());
+                    found = true;
+                    break;
+                }
+                if (found) {
+                    break;
                 }
             }
         }
+
         if (crafted == null
             || crafted.getType() == Material.AIR
             || crafted.getAmount() <= 0
@@ -262,6 +287,15 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
         root.removeRootPower(CHARGE_COST);
         sendFeedback(blockMenu.getLocation(), FeedbackType.SUCCESS);
         return true;
+    }
+    private static ItemStack[] vanillaConsumptionRecipe(ItemStack[] inputs) {
+        final ItemStack[] recipe = new ItemStack[RECIPE_SLOTS.length];
+        for (int index = 0; index < RECIPE_SLOTS.length; index++) {
+            if (inputs[index] != null && inputs[index].getType() != Material.AIR) {
+                recipe[index] = StackUtils.getAsQuantity(inputs[index], 1);
+            }
+        }
+        return recipe;
     }
     private static ItemStack[] cleanRecipe(ItemStack[] recipe) {
         final ItemStack[] copy = new ItemStack[recipe.length];
