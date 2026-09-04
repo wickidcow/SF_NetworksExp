@@ -12,8 +12,8 @@ permissions:
   contents: write
 
 env:
-  LEGACY_ARTIFACT_VERSION: "1.0.8"
-  OUTPUT_NAME: "SF_NetworksExp1.0.8.jar"
+  LEGACY_ARTIFACT_VERSION: "1.0.9"
+  OUTPUT_NAME: "SF_NetworksExp1.0.9.jar"
 
 # Gradle's internal runtime-contract output remains Networks-Legacy-2.1.112-1.0.jar.
 # CI stages that JAR under the public Slimefun Legacy addon release naming convention.
@@ -112,5 +112,5 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$JAR" --clobber
           else
-            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Networks anti-duplication and topology safety hotfix. Network Quantum Storages can no longer contain another Network Quantum Storage through cursor, automated, bulk-input, persisted-cache, or placement paths. Stored Quantum Storage metadata is normalized only for Quantum Workbench recipe matching so upgrades work without weakening the existing transactional craft checks or stored-content transfer. Network node placement now rejects connections that would merge two controller roots before topology discovery, while the existing duplicate-controller cleanup remains as a fallback. Existing item IDs, world data, database formats, IE2 integration, Auto Crafter performance fixes, and v1.0.7 crafting compatibility behavior remain unchanged."
+            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Large-server Quantum Storage visual follow-up. Floating Quantum Storage item displays are now opt-in and disabled by default, while hover/action-bar item and count information remains independently available. Existing Networks-tagged display entities are removed gradually from loaded chunks only with a small per-tick budget and no chunk force-loading, and no stored item or amount data is modified. Re-enabling quantum-storage.display.enabled restores the world item displays. Newly created displays are non-persistent to avoid stale entity buildup across clean restarts. Includes the v1.0.8 Auto Crafter performance, anti-duplication, topology safety, crafting compatibility, IE2 integration, item IDs, world data, and database behavior unchanged."
           fi
