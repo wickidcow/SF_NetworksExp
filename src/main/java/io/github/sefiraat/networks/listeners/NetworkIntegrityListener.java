@@ -1,9 +1,12 @@
 package io.github.sefiraat.networks.listeners;
 
+import com.balugaq.netex.api.events.NetworkRootReadyEvent;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.Networks;
+import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
+import io.github.sefiraat.networks.network.NodeType;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import org.bukkit.Location;
@@ -22,14 +25,16 @@ import org.bukkit.event.entity.EntityExplodeEvent;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Closes lifecycle gaps where a Networks node can be changed without the normal Slimefun BlockBreakHandler.
  *
  * <p>World-mutation events either protect live network blocks from destructive physics/explosions, or schedule a
- * next-tick validation after normal break/place events. The delayed validation observes the final physical block
- * and Slimefun identity after all event handlers have completed.</p>
+ * next-tick validation after normal break/place events. Controller-ready validation also checks item-serving nodes
+ * against their live Slimefun identity so a ghost Cell or machine cannot remain usable through cached topology.</p>
  */
 public final class NetworkIntegrityListener implements Listener {
 
@@ -81,6 +86,18 @@ public final class NetworkIntegrityListener implements Listener {
         }
     }
 
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onNetworkRootReady(@NotNull NetworkRootReadyEvent event) {
+        final NetworkRoot root = event.getRoot();
+        final Runnable validation = () -> validateItemServingNodes(root);
+
+        if (event.isAsynchronous()) {
+            Networks.getInstance().getServer().getScheduler().runTask(Networks.getInstance(), validation);
+        } else {
+            validation.run();
+        }
+    }
+
     private void protectExplosionBlocks(@NotNull List<Block> blocks) {
         final List<Block> protectedBlocks = new ArrayList<>();
         for (Block block : blocks) {
@@ -103,6 +120,34 @@ public final class NetworkIntegrityListener implements Listener {
     private boolean isProtectedNetworkBlock(@NotNull Block block) {
         final SlimefunItem item = StorageCacheUtils.getSfItem(block.getLocation());
         return item != null && ExplosiveToolListener.isProtectedNetworkBlock(item);
+    }
+
+    private void validateItemServingNodes(@NotNull NetworkRoot root) {
+        final Set<Location> staleLocations = new HashSet<>();
+
+        for (Location location : new HashSet<>(root.getNodeLocations())) {
+            final NodeDefinition definition = NetworkStorage.getNode(location);
+            if (definition == null || !isItemServingNode(definition.getType())) {
+                continue;
+            }
+
+            final SlimefunItem liveItem = StorageCacheUtils.getSfItem(location);
+            if (!(liveItem instanceof NetworkObject networkObject)
+                || networkObject.getNodeType() != definition.getType()) {
+                staleLocations.add(location);
+            }
+        }
+
+        for (Location staleLocation : staleLocations) {
+            NetworkStorage.detachNode(staleLocation);
+        }
+    }
+
+    private boolean isItemServingNode(@NotNull NodeType type) {
+        return switch (type) {
+            case CELL, GREEDY_BLOCK, ADVANCED_GREEDY_BLOCK, CRAFTER -> true;
+            default -> false;
+        };
     }
 
     private void scheduleValidation(@NotNull Location location) {

@@ -12,8 +12,8 @@ permissions:
   contents: write
 
 env:
-  LEGACY_ARTIFACT_VERSION: "1.0.4"
-  OUTPUT_NAME: "SF_NetworksExp1.0.4.jar"
+  LEGACY_ARTIFACT_VERSION: "1.0.5"
+  OUTPUT_NAME: "SF_NetworksExp1.0.5.jar"
 
 # Gradle's internal runtime-contract output remains Networks-Legacy-2.1.112-1.0.jar.
 # CI stages that JAR under the public Slimefun Legacy addon release naming convention.
@@ -112,5 +112,5 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$JAR" --clobber
           else
-            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Critical Networks anti-duplication hotfix. Additional Network Controllers are now removed idempotently so one controller cannot be queued for multiple item drops from overlapping graph edges. Network lifecycle protection now closes indirect-break gaps around explosions, pistons, entity block changes, and normal break/place transitions, while validated nodes reject physically missing AIR blocks even if stale Slimefun metadata remains. Existing item IDs, storage formats, world data, IE2 integration, topology caching, chunk warmup, and database recovery behavior remain unchanged."
+            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Networks anti-duplication hardening. Controller-ready validation now checks item-serving Network nodes against the live Slimefun block identity and actively detaches stale Cells, crafters, and greedy storage nodes before they can remain usable through cached topology. This closes the remaining ghost-node path where a Network Cell can be indirectly removed or replaced while its old runtime registration survives. Existing item IDs, storage formats, world data, IE2 integration, topology caching, chunk warmup, and database recovery behavior remain unchanged."
           fi
