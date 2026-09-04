@@ -59,7 +59,8 @@ grid-new-style-max-custom-amount: 2304
 
 use-bukkit-item-comparison: false
 
-ban-quantum-in-quantum: false
+# Legacy safety policy. Nested Network Quantum Storages are always rejected by the runtime.
+ban-quantum-in-quantum: true
 
 drawer-auto-save-period: 300
 
