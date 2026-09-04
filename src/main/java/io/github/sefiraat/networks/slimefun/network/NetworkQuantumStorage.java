@@ -91,6 +91,8 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
             Integer.MAX_VALUE * 256L * 256L,
         };
     private static final String WIKI_PAGE = "network-storage/quantum-storage";
+    private static final String NESTED_STORAGE_MESSAGE =
+        "Network Quantum Storages cannot be stored inside another Network Quantum Storage.";
 
     private static final int[] INPUT_SLOTS = new int[]{0, 2};
     private static final int[] ITEM_SLOTS = new int[]{3, 5};
@@ -125,19 +127,19 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
         slotsToDrop.add(OUTPUT_SLOT);
     }
 
+    private static boolean isNestedQuantumStorage(@Nullable ItemStack itemStack) {
+        return itemStack != null
+            && itemStack.getType() != Material.AIR
+            && SlimefunItem.getByItem(itemStack) instanceof NetworkQuantumStorage;
+    }
+
     public static void setItem(@NotNull BlockMenu blockMenu, @NotNull ItemStack itemStack, int amount) {
         setItem(blockMenu, itemStack, (long) amount);
     }
 
     public static void setItem(@NotNull BlockMenu blockMenu, @NotNull ItemStack itemStack, long amount) {
-        if (StackUtils.isBlacklisted(itemStack)) {
+        if (StackUtils.isBlacklisted(itemStack) || isNestedQuantumStorage(itemStack)) {
             return;
-        }
-
-        if (Networks.getConfigManager().isBanQuantumInQuantum()) {
-            if (SlimefunItem.getByItem(itemStack) instanceof NetworkQuantumStorage) {
-                return;
-            }
         }
 
         final QuantumCache cache = CACHES.get(blockMenu.getLocation());
@@ -155,12 +157,15 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
 
     @ParametersAreNonnullByDefault
     public static void tryInputItem(Location location, ItemStack[] input, QuantumCache cache) {
-        if (cache.getItemStack() == null) {
+        if (cache.getItemStack() == null || isNestedQuantumStorage(cache.getItemStack())) {
             return;
         }
 
         for (ItemStack itemStack : input) {
-            if (itemStack == null || itemStack.getType() == Material.AIR || StackUtils.isBlacklisted(itemStack)) {
+            if (itemStack == null
+                || itemStack.getType() == Material.AIR
+                || StackUtils.isBlacklisted(itemStack)
+                || isNestedQuantumStorage(itemStack)) {
                 continue;
             }
             if (StackUtils.itemsMatch(cache, itemStack)) {
@@ -174,7 +179,9 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
     @ParametersAreNonnullByDefault
     @Nullable
     public static ItemStack getItemStack(@NotNull QuantumCache cache, @NotNull BlockMenu blockMenu) {
-        if (cache.getItemStack() == null || cache.getAmountLong() <= 0) {
+        if (cache.getItemStack() == null
+            || cache.getAmountLong() <= 0
+            || isNestedQuantumStorage(cache.getItemStack())) {
             return null;
         }
         return getItemStack(cache, blockMenu, cache.getItemStack().getMaxStackSize());
@@ -183,6 +190,9 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
     @ParametersAreNonnullByDefault
     @Nullable
     public static ItemStack getItemStack(@NotNull QuantumCache cache, @NotNull BlockMenu blockMenu, int amount) {
+        if (cache.getItemStack() == null || isNestedQuantumStorage(cache.getItemStack())) {
+            return null;
+        }
         synchronized (cache) {
             if (cache.getAmountLong() < amount) {
                 // Storage has no content or not enough, mix and match!
@@ -289,6 +299,10 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
         if (StackUtils.isBlacklisted(itemStack)) {
             return;
         }
+        if (isNestedQuantumStorage(itemStack)) {
+            player.sendMessage(NESTED_STORAGE_MESSAGE);
+            return;
+        }
 
         final QuantumCache cache = CACHES.get(blockMenu.getLocation());
         if (cache == null || cache.getAmountLong() > 0) {
@@ -344,6 +358,11 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
 
         if (cache == null) {
             cache = addCache(blockMenu);
+        }
+
+        if (isNestedQuantumStorage(cache.getItemStack())) {
+            sendFeedback(blockMenu.getLocation(), FeedbackType.ERROR_OCCURRED);
+            return;
         }
 
         if (blockMenu.hasViewer()) {
@@ -559,7 +578,7 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
         if (cache == null) return;
 
         ItemStack storedItem = cache.getItemStack();
-        if (storedItem == null) return;
+        if (storedItem == null || isNestedQuantumStorage(storedItem)) return;
 
 //        if (dupeDetect(b, p)) {
 //            return;
@@ -571,7 +590,7 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
 
         for (int i = 0; i < contents.length; i++) {
             ItemStack item = contents[i];
-            if (item == null || item.getType() == Material.AIR) continue;
+            if (item == null || item.getType() == Material.AIR || isNestedQuantumStorage(item)) continue;
 
             ItemStackCache storedItemCache = new ItemStackCache(storedItem);
 
@@ -598,7 +617,7 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
         if (cache == null) return;
 
         ItemStack storedItem = cache.getItemStack();
-        if (storedItem == null) {
+        if (storedItem == null || isNestedQuantumStorage(storedItem)) {
             return;
         }
 
@@ -676,6 +695,18 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
         long maxAmount,
         boolean voidExcess,
         boolean supportsCustomMaxAmount) {
+        final boolean nestedQuantumStorage = isNestedQuantumStorage(itemStack);
+        if (nestedQuantumStorage) {
+            Networks.getInstance().getLogger().warning(
+                "Rejected a nested Network Quantum Storage at " + menu.getLocation()
+                    + ". The placed storage was reset to an empty state to prevent duplication exploits.");
+            menu.addItem(ITEM_SLOT, ItemStackUtil.getCleanItem(Icon.QUANTUM_STORAGE_NO_ITEM));
+            final QuantumCache safeCache =
+                new QuantumCache(null, 0, maxAmount, false, this.supportsCustomMaxAmount);
+            syncBlock(menu.getLocation(), safeCache);
+            return safeCache;
+        }
+
         if (itemStack == null
             || itemStack.getType() == Material.AIR
             || isDisplayItem(itemStack)
@@ -749,6 +780,12 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
             return;
         }
 
+        if (cache.getItemStack() != null && isNestedQuantumStorage(cache.getItemStack())) {
+            event.getPlayer().sendMessage(NESTED_STORAGE_MESSAGE);
+            event.setCancelled(true);
+            return;
+        }
+
         if (cache.getItemStack() != null && StackUtils.isBlacklisted(cache.getItemStack())) {
             return;
         }
@@ -780,7 +817,7 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
 
     // Keep here for SlimeAEPlugin used it, don't delete it
     public static boolean isBlacklisted(@NotNull ItemStack itemStack) {
-        return StackUtils.isBlacklisted(itemStack);
+        return StackUtils.isBlacklisted(itemStack) || isNestedQuantumStorage(itemStack);
     }
 
     // see https://b23.tv/BV1ZMXuBpEAz
