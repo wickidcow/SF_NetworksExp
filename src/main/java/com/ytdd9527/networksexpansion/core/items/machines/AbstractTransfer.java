@@ -10,6 +10,7 @@ import com.balugaq.netex.api.interfaces.PushTickOnly;
 import com.balugaq.netex.api.interfaces.SoftCellBannable;
 import com.balugaq.netex.api.interfaces.VanillaTransfer;
 import com.balugaq.netex.api.transfer.TransferConfiguration;
+import com.balugaq.netex.utils.BlockMenuUtil;
 import com.balugaq.netex.utils.LineOperationUtil;
 import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.network.NetworkRoot;
@@ -21,6 +22,7 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.attributes.RecipeDisplayItem;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
+import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -99,7 +101,7 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
          */
         final Location location = block.getLocation();
         final int currentServerTick = Bukkit.getCurrentTick();
-        final Integer previousServerTick = LAST_TRANSFER_SERVER_TICK.put(location.clone(), currentServerTick);
+        final Integer previousServerTick = LAST_TRANSFER_SERVER_TICK.put(location, currentServerTick);
         if (previousServerTick != null && previousServerTick == currentServerTick) {
             return;
         }
@@ -187,7 +189,7 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
         if (ticker != null) {
             return ticker;
         } else {
-            PUSH_TICKER_MAP.put(location.clone(), 0);
+            PUSH_TICKER_MAP.put(location, 0);
             return 0;
         }
     }
@@ -197,17 +199,17 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
         if (ticker != null) {
             return ticker;
         } else {
-            GRAB_TICKER_MAP.put(location.clone(), 0);
+            GRAB_TICKER_MAP.put(location, 0);
             return 0;
         }
     }
 
     private void updatePushTickCounter(Location location, int pushTick) {
-        PUSH_TICKER_MAP.put(location.clone(), pushTick);
+        PUSH_TICKER_MAP.put(location, pushTick);
     }
 
     private void updateGrabTickCounter(Location location, int grabTick) {
-        GRAB_TICKER_MAP.put(location.clone(), grabTick);
+        GRAB_TICKER_MAP.put(location, grabTick);
     }
 
     private void tryPushItem(
@@ -221,9 +223,10 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
             return;
         }
 
-        List<ItemStack> templates = new ArrayList<>();
-        for (int slot : this.getItemSlots()) {
-            templates.add(blockMenu.getItemInSlot(slot));
+        final List<ItemStack> templates = collectTemplates(blockMenu);
+        if (templates == null) {
+            finishPushAttempt(blockMenu, root);
+            return;
         }
 
         LineOperationUtil.doOperation(
@@ -235,8 +238,7 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
             (targetMenu) -> LineOperationUtil.pushItem(
                 targetMenu.getLocation(), root, targetMenu, templates, mode, limitQuantity));
 
-        root.removeRootPower(config.defaultRequiredPower);
-        sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
+        finishPushAttempt(blockMenu, root);
     }
 
     @ParametersAreNonnullByDefault
@@ -253,8 +255,12 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
             config.maxDistance,
             false,
             false,
-            (targetMenu) ->
-                LineOperationUtil.grabItem(targetMenu.getLocation(), root, targetMenu, mode, limitQuantity));
+            (targetMenu) -> {
+                if (hasWithdrawableItem(targetMenu)) {
+                    LineOperationUtil.grabItem(
+                        targetMenu.getLocation(), root, targetMenu, mode, limitQuantity);
+                }
+            });
 
         root.removeRootPower(config.defaultRequiredPower);
     }
@@ -270,9 +276,10 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
             return;
         }
 
-        List<ItemStack> templates = new ArrayList<>();
-        for (int slot : this.getItemSlots()) {
-            templates.add(blockMenu.getItemInSlot(slot));
+        final List<ItemStack> templates = collectTemplates(blockMenu);
+        if (templates == null) {
+            finishPushAttempt(blockMenu, root);
+            return;
         }
 
         LineOperationUtil.doVanillaOperation(
@@ -282,10 +289,14 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
             false,
             false,
             (menu) -> LineOperationUtil.pushItem(
-                menu.getLocation() == null ? blockMenu.getLocation() : menu.getLocation(), root, menu, templates, mode, limitQuantity));
+                menu.getLocation() == null ? blockMenu.getLocation() : menu.getLocation(),
+                root,
+                menu,
+                templates,
+                mode,
+                limitQuantity));
 
-        root.removeRootPower(config.defaultRequiredPower);
-        sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
+        finishPushAttempt(blockMenu, root);
     }
 
     @ParametersAreNonnullByDefault
@@ -302,10 +313,48 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
             config.maxDistance,
             false,
             false,
-            (menu) ->
-                LineOperationUtil.grabItem(menu.getLocation() == null ? blockMenu.getLocation() : menu.getLocation(), root, menu, mode, limitQuantity));
+            (menu) -> {
+                if (hasWithdrawableItem(menu)) {
+                    LineOperationUtil.grabItem(
+                        menu.getLocation() == null ? blockMenu.getLocation() : menu.getLocation(),
+                        root,
+                        menu,
+                        mode,
+                        limitQuantity);
+                }
+            });
 
         root.removeRootPower(config.defaultRequiredPower);
+    }
+
+    private @Nullable List<ItemStack> collectTemplates(@NotNull BlockMenu blockMenu) {
+        final int[] slots = getItemSlots();
+        final List<ItemStack> templates = new ArrayList<>(slots.length);
+        boolean hasTemplate = false;
+        for (int slot : slots) {
+            final ItemStack template = blockMenu.getItemInSlot(slot);
+            templates.add(template);
+            if (template != null && template.getType() != Material.AIR) {
+                hasTemplate = true;
+            }
+        }
+        return hasTemplate ? templates : null;
+    }
+
+    private static boolean hasWithdrawableItem(@NotNull BlockMenu blockMenu) {
+        final int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
+        for (int slot : slots) {
+            final ItemStack item = blockMenu.getItemInSlot(slot);
+            if (item != null && item.getType() != Material.AIR) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void finishPushAttempt(@NotNull BlockMenu blockMenu, @NotNull NetworkRoot root) {
+        root.removeRootPower(config.defaultRequiredPower);
+        sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
     }
 
     @Override
