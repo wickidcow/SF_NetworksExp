@@ -32,11 +32,14 @@ import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -45,9 +48,14 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
     public static final int BLUEPRINT_SLOT = 10;
     public static final int OUTPUT_SLOT = 16;
     public static final Map<Location, BlueprintInstance> INSTANCE_MAP = new ConcurrentHashMap<>();
+    private static final Map<Location, List<IngredientRequest>> INGREDIENT_PLAN_MAP = new ConcurrentHashMap<>();
+    private static final Map<Location, Integer> IDLE_MISS_MAP = new ConcurrentHashMap<>();
+    private static final Map<Location, Integer> IDLE_SKIP_MAP = new ConcurrentHashMap<>();
     private static final int[] BACKGROUND_SLOTS = new int[]{3, 4, 5, 12, 13, 14, 21, 22, 23};
     private static final int[] BLUEPRINT_BACKGROUND = new int[]{0, 1, 2, 9, 11, 18, 19, 20};
     private static final int[] OUTPUT_BACKGROUND = new int[]{6, 7, 8, 15, 17, 24, 25, 26};
+    private static final int IDLE_BACKOFF_THRESHOLD = 3;
+    private static final int IDLE_BACKOFF_MAX_TICKS = 4;
     protected final int chargePerCraft;
     protected final boolean withholding;
 
@@ -77,29 +85,70 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
                 BlockMenu blockMenu = data.getBlockMenu();
                 if (blockMenu != null) {
                     addToRegistry(block);
-                    craftPreFlight(blockMenu);
+                    final Location location = blockMenu.getLocation();
+                    if (shouldSkipIdleTick(location)) {
+                        return;
+                    }
+                    recordCraftResult(location, craftPreFlight(blockMenu));
                 }
             }
         });
     }
 
     public static void updateCache(@NotNull BlockMenu blockMenu) {
-        AutoCrafter.INSTANCE_MAP.remove(blockMenu.getLocation());
+        clearRuntimeCache(blockMenu.getLocation());
     }
 
-    protected void craftPreFlight(@NotNull BlockMenu blockMenu) {
+    private static boolean shouldSkipIdleTick(@NotNull Location location) {
+        final Integer remaining = IDLE_SKIP_MAP.get(location);
+        if (remaining == null || remaining <= 0) {
+            return false;
+        }
+        if (remaining <= 1) {
+            IDLE_SKIP_MAP.remove(location);
+        } else {
+            IDLE_SKIP_MAP.put(location.clone(), remaining - 1);
+        }
+        return true;
+    }
+
+    private static void recordCraftResult(@NotNull Location location, boolean crafted) {
+        if (crafted) {
+            IDLE_MISS_MAP.remove(location);
+            IDLE_SKIP_MAP.remove(location);
+            return;
+        }
+
+        final int misses = IDLE_MISS_MAP.merge(location.clone(), 1, Integer::sum);
+        if (misses < IDLE_BACKOFF_THRESHOLD) {
+            return;
+        }
+
+        final int exponent = Math.min(2, misses - IDLE_BACKOFF_THRESHOLD);
+        final int skipTicks = Math.min(IDLE_BACKOFF_MAX_TICKS, 1 << exponent);
+        IDLE_SKIP_MAP.put(location.clone(), skipTicks);
+    }
+
+    private static void clearRuntimeCache(@NotNull Location location) {
+        INSTANCE_MAP.remove(location);
+        INGREDIENT_PLAN_MAP.remove(location);
+        IDLE_MISS_MAP.remove(location);
+        IDLE_SKIP_MAP.remove(location);
+    }
+
+    protected boolean craftPreFlight(@NotNull BlockMenu blockMenu) {
         final Location location = blockMenu.getLocation();
         final NodeDefinition definition = NetworkStorage.getNode(location);
 
         if (definition == null || definition.getNode() == null) {
             sendFeedback(location, FeedbackType.NO_NETWORK_FOUND);
-            return;
+            return false;
         }
 
         final NetworkRoot root = definition.getNode().getRoot();
 
         if (checkSoftCellBan(location, root)) {
-            return;
+            return false;
         }
 
         if (!withholding) {
@@ -113,40 +162,39 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
 
         if (blueprint == null || blueprint.getType() == Material.AIR) {
             sendFeedback(location, FeedbackType.NO_BLUEPRINT_FOUND);
-            return;
+            return false;
         }
 
         final long networkCharge = root.getRootPower();
 
         if (networkCharge < this.chargePerCraft) {
             sendFeedback(location, FeedbackType.NOT_ENOUGH_POWER);
-            return;
-        }
-
-        final SlimefunItem item = SlimefunItem.getByItem(blueprint);
-
-        if (!isValidBlueprint(item)) {
-            sendFeedback(location, FeedbackType.INVALID_BLUEPRINT);
-            return;
+            return false;
         }
 
         BlueprintInstance instance = AutoCrafter.INSTANCE_MAP.get(location);
 
         if (instance == null) {
+            final SlimefunItem item = SlimefunItem.getByItem(blueprint);
+            if (!isValidBlueprint(item)) {
+                sendFeedback(location, FeedbackType.INVALID_BLUEPRINT);
+                return false;
+            }
+
             final ItemMeta blueprintMeta = blueprint.getItemMeta();
-            BlueprintInstance instance2 = Keys.getBlueprintInstance(blueprintMeta);
-            if (instance2 == null) {
+            BlueprintInstance decoded = Keys.getBlueprintInstance(blueprintMeta);
+            if (decoded == null) {
                 sendFeedback(location, FeedbackType.NO_BLUEPRINT_INSTANCE_FOUND);
-                return;
+                return false;
             }
 
-            if (instance2 == BlueprintInstance.INVALID) {
+            if (decoded == BlueprintInstance.INVALID) {
                 sendFeedback(location, FeedbackType.BROKEN_BLUEPRINT);
-                return;
+                return false;
             }
 
-            setCache(blockMenu, instance2);
-            instance = instance2;
+            setCache(blockMenu, decoded);
+            instance = decoded;
         }
 
         final ItemStack output = blockMenu.getItemInSlot(OUTPUT_SLOT);
@@ -155,20 +203,21 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
         ItemStack targetOutput = instance.getItemStack();
         if (targetOutput == null || targetOutput.getType() == Material.AIR || targetOutput.getAmount() <= 0) {
             sendFeedback(location, FeedbackType.BROKEN_BLUEPRINT);
-            return;
+            return false;
         }
         if (output != null
             && output.getType() != Material.AIR
-            && targetOutput != null
             && (output.getAmount() + targetOutput.getAmount() * blueprintAmount > output.getMaxStackSize()
             || !StackUtils.itemsMatch(targetOutput, output))) {
             sendFeedback(location, FeedbackType.OUTPUT_FULL);
-            return;
+            return false;
         }
 
         if (tryCraft(blockMenu, instance, root, blueprintAmount, output)) {
             root.removeRootPower(this.chargePerCraft);
+            return true;
         }
+        return false;
     }
 
     @SuppressWarnings("DataFlowIssue")
@@ -179,26 +228,32 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
         int blueprintAmount,
         @Nullable ItemStack existing) {
         /*
-         * Withdraw each ingredient once and rely on the existing rollback path if a
-         * later ingredient is unavailable. The old pre-flight root.contains(...)
-         * pass walked network storage once, then getItemStack0(...) walked it again
-         * for the same ingredients on every crafter tick.
+         * Cache an aggregated ingredient plan per decoded blueprint. Recipes commonly repeat the same
+         * ingredient in several crafting-grid slots; requesting the combined amount once avoids walking
+         * the network multiple times for an identical item on every Auto Crafter tick.
          */
-        final ItemStack[] recipeItems = instance.getRecipeItems();
-        final ItemStack[] fetcheds = new ItemStack[recipeItems.length];
         final Location location = blockMenu.getLocation();
+        final List<IngredientRequest> ingredientPlan = INGREDIENT_PLAN_MAP.computeIfAbsent(
+            location.clone(), ignored -> buildIngredientPlan(instance));
+        final ItemStack[] fetcheds = new ItemStack[ingredientPlan.size()];
 
-        for (int i = 0; i < recipeItems.length; i++) {
-            final ItemStack requested = recipeItems[i];
-            if (requested != null) {
-                final int requestedAmount = requested.getAmount() * blueprintAmount;
-                final ItemStack fetched = root.getItemStack0(location, new ItemRequest(requested, requestedAmount));
-                fetcheds[i] = fetched;
-                if (fetched == null || fetched.getAmount() < requestedAmount) {
-                    returnItems(root, fetcheds, blockMenu);
-                    sendFeedback(location, FeedbackType.NOT_ENOUGH_ITEMS_IN_NETWORK);
-                    return false;
-                }
+        for (int i = 0; i < ingredientPlan.size(); i++) {
+            final IngredientRequest ingredient = ingredientPlan.get(i);
+            final long scaledAmount = (long) ingredient.amount() * blueprintAmount;
+            if (scaledAmount <= 0 || scaledAmount > Integer.MAX_VALUE) {
+                returnItems(root, fetcheds, blockMenu);
+                sendFeedback(location, FeedbackType.RESULT_IS_TOO_LARGE);
+                return false;
+            }
+
+            final int requestedAmount = (int) scaledAmount;
+            final ItemStack fetched = root.getItemStack0(
+                location, new ItemRequest(ingredient.template(), requestedAmount));
+            fetcheds[i] = fetched;
+            if (fetched == null || fetched.getAmount() < requestedAmount) {
+                returnItems(root, fetcheds, blockMenu);
+                sendFeedback(location, FeedbackType.NOT_ENOUGH_ITEMS_IN_NETWORK);
+                return false;
             }
         }
 
@@ -239,6 +294,32 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
         return true;
     }
 
+    private static @NotNull List<IngredientRequest> buildIngredientPlan(@NotNull BlueprintInstance instance) {
+        final List<IngredientRequest> plan = new ArrayList<>();
+        for (ItemStack requested : instance.getRecipeItems()) {
+            if (requested == null || requested.getType() == Material.AIR || requested.getAmount() <= 0) {
+                continue;
+            }
+
+            boolean merged = false;
+            for (int i = 0; i < plan.size(); i++) {
+                final IngredientRequest existing = plan.get(i);
+                if (StackUtils.itemsMatch(existing.template(), requested)) {
+                    plan.set(i, new IngredientRequest(existing.template(), existing.amount() + requested.getAmount()));
+                    merged = true;
+                    break;
+                }
+            }
+
+            if (!merged) {
+                final ItemStack template = requested.clone();
+                template.setAmount(1);
+                plan.add(new IngredientRequest(template, requested.getAmount()));
+            }
+        }
+        return List.copyOf(plan);
+    }
+
     protected void returnItems(
         @NotNull NetworkRoot root, @Nullable ItemStack @NotNull [] inputs, @NotNull BlockMenu blockMenu) {
         for (ItemStack input : inputs) {
@@ -252,13 +333,21 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
     }
 
     public void releaseCache(@NotNull BlockMenu blockMenu) {
-        INSTANCE_MAP.remove(blockMenu.getLocation());
+        clearRuntimeCache(blockMenu.getLocation());
     }
 
     public void setCache(@NotNull BlockMenu blockMenu, @NotNull BlueprintInstance blueprintInstance) {
         if (!blockMenu.hasViewer()) {
-            INSTANCE_MAP.putIfAbsent(blockMenu.getLocation().clone(), blueprintInstance);
+            final Location location = blockMenu.getLocation();
+            INSTANCE_MAP.putIfAbsent(location.clone(), blueprintInstance);
+            INGREDIENT_PLAN_MAP.remove(location);
         }
+    }
+
+    @Override
+    protected void postBreak(@NotNull BlockBreakEvent event) {
+        super.postBreak(event);
+        clearRuntimeCache(event.getBlock().getLocation());
     }
 
     @Override
@@ -306,5 +395,8 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
 
     public boolean canBlueprintStack() {
         return false;
+    }
+
+    private record IngredientRequest(@NotNull ItemStack template, int amount) {
     }
 }
