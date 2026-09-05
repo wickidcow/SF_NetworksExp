@@ -53,15 +53,13 @@ public class BlockMenuUtil {
         final int[] safeSlots = sanitizeSlots(blockMenu, slots);
 
         /*
-         * Supreme's GenericMachine intentionally prefers existing matching input stacks. Once those
-         * stacks are full its item-aware transport method can return no slots even while other machine
-         * input slots are still empty. That makes line pushers stall part-way through large recipes such
-         * as the Electric Core Machine's 9x64 input batch. When Supreme has already accepted this item in
-         * one of its declared input slots, keep the normal routing but also expose compatible empty/partial
-         * input slots so the same transfer can finish loading the recipe.
+         * Older Supreme builds could return no slots after filling the currently exposed matching
+         * stacks, even when a large same-item recipe still needed additional physical slots. Preserve
+         * that compatibility recovery only when Supreme returned no usable routing information at all.
          *
-         * Keep this recovery scoped to Supreme. Other addons may use an empty dynamic slot result as an
-         * intentional transport lock and should retain that behavior.
+         * Newer Supreme builds deliberately return a recipe-limited slot list so multi-input recipes
+         * retain capacity for every ingredient. Never broaden a valid list here or Networks can recreate
+         * the equal-fill deadlock that Supreme's recipe-aware routing is designed to prevent.
          */
         if (flow == ItemTransportFlow.INSERT
             && item != null
@@ -91,6 +89,11 @@ public class BlockMenuUtil {
         @NotNull BlockMenu blockMenu,
         @NotNull ItemStack item,
         int @NotNull [] normalSlots) {
+
+        // Respect any explicit item-aware routing supplied by Supreme. Recovery is legacy-only.
+        if (normalSlots.length > 0) {
+            return normalSlots;
+        }
 
         final SlimefunItem slimefunItem;
         try {
