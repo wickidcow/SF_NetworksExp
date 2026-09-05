@@ -32,6 +32,10 @@ stability:
   chunk-warmup:
     max-node-initializations-per-tick: 128
     max-work-millis-per-tick: 2
+  # Break/place lifecycle events validate changed nodes immediately. This is a periodic safety audit for
+  # item-serving nodes that catches missed mutations without re-scanning every network on every SF tick.
+  integrity:
+    root-audit-sf-ticks: 20
   # New nodes often register in batches while a chunk warms up. Wait briefly for registration activity to settle
   # before marking an already-live controller dirty. Removals and chunk unloads are still handled immediately.
   topology:

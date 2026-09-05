@@ -6,7 +6,6 @@ import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
-import io.github.sefiraat.networks.network.NodeType;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import org.bukkit.Location;
@@ -25,7 +24,6 @@ import org.bukkit.event.entity.EntityExplodeEvent;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -33,10 +31,18 @@ import java.util.Set;
  * Closes lifecycle gaps where a Networks node can be changed without the normal Slimefun BlockBreakHandler.
  *
  * <p>World-mutation events either protect live network blocks from destructive physics/explosions, or schedule a
- * next-tick validation after normal break/place events. Controller-ready validation also checks item-serving nodes
- * against their live Slimefun identity so a ghost Cell or machine cannot remain usable through cached topology.</p>
+ * next-tick validation after normal break/place events. Controller-ready validation is a staggered safety audit of
+ * item-serving nodes so a ghost Cell or machine cannot remain usable through cached topology without re-scanning
+ * every member of every network on every controller tick.</p>
  */
 public final class NetworkIntegrityListener implements Listener {
+    private static final long DEFAULT_ROOT_AUDIT_SF_TICKS = 20L;
+
+    private final long rootAuditSfTicks = Math.max(
+        1L,
+        Networks.getInstance().getConfig().getLong(
+            "stability.integrity.root-audit-sf-ticks",
+            DEFAULT_ROOT_AUDIT_SF_TICKS));
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBlockBreak(@NotNull BlockBreakEvent event) {
@@ -89,13 +95,26 @@ public final class NetworkIntegrityListener implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onNetworkRootReady(@NotNull NetworkRootReadyEvent event) {
         final NetworkRoot root = event.getRoot();
-        final Runnable validation = () -> validateItemServingNodes(root);
+        final Runnable validation = () -> {
+            if (shouldAuditRoot(root)) {
+                validateItemServingNodes(root);
+            }
+        };
 
         if (event.isAsynchronous()) {
             Networks.getInstance().getServer().getScheduler().runTask(Networks.getInstance(), validation);
         } else {
             validation.run();
         }
+    }
+
+    private boolean shouldAuditRoot(@NotNull NetworkRoot root) {
+        if (rootAuditSfTicks <= 1L) {
+            return true;
+        }
+
+        final long auditPhase = Math.floorMod((long) root.getNodePosition().hashCode(), rootAuditSfTicks);
+        return Math.floorMod(Networks.getSlimefunTickCount(), rootAuditSfTicks) == auditPhase;
     }
 
     private void protectExplosionBlocks(@NotNull List<Block> blocks) {
@@ -123,11 +142,23 @@ public final class NetworkIntegrityListener implements Listener {
     }
 
     private void validateItemServingNodes(@NotNull NetworkRoot root) {
-        final Set<Location> staleLocations = new HashSet<>();
+        final List<Location> staleLocations = new ArrayList<>();
+        collectStaleItemServingNodes(root.getCells(), staleLocations);
+        collectStaleItemServingNodes(root.getGreedyBlocks(), staleLocations);
+        collectStaleItemServingNodes(root.getAdvancedGreedyBlocks(), staleLocations);
+        collectStaleItemServingNodes(root.getCrafters(), staleLocations);
 
-        for (Location location : new HashSet<>(root.getNodeLocations())) {
+        for (Location staleLocation : staleLocations) {
+            NetworkStorage.detachNode(staleLocation);
+        }
+    }
+
+    private void collectStaleItemServingNodes(
+        @NotNull Set<Location> locations,
+        @NotNull List<Location> staleLocations) {
+        for (Location location : locations) {
             final NodeDefinition definition = NetworkStorage.getNode(location);
-            if (definition == null || !isItemServingNode(definition.getType())) {
+            if (definition == null) {
                 continue;
             }
 
@@ -137,17 +168,6 @@ public final class NetworkIntegrityListener implements Listener {
                 staleLocations.add(location);
             }
         }
-
-        for (Location staleLocation : staleLocations) {
-            NetworkStorage.detachNode(staleLocation);
-        }
-    }
-
-    private boolean isItemServingNode(@NotNull NodeType type) {
-        return switch (type) {
-            case CELL, GREEDY_BLOCK, ADVANCED_GREEDY_BLOCK, CRAFTER -> true;
-            default -> false;
-        };
     }
 
     private void scheduleValidation(@NotNull Location location) {
