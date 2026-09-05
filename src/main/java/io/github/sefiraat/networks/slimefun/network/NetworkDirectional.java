@@ -36,6 +36,7 @@ import org.bukkit.Particle;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Player;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
@@ -51,11 +52,11 @@ import javax.annotation.OverridingMethodsMustInvokeSuper;
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 @SuppressWarnings({"deprecation", "DuplicatedCode"})
 public abstract class NetworkDirectional extends NetworkObject {
@@ -71,7 +72,7 @@ public abstract class NetworkDirectional extends NetworkObject {
     private static final int UP_SLOT = 15;
     private static final int DOWN_SLOT = 33;
     private static final Set<Location> locked = new HashSet<>();
-    protected static final Map<Location, BlockFace> SELECTED_DIRECTION_MAP = new HashMap<>();
+    protected static final Map<Location, BlockFace> SELECTED_DIRECTION_MAP = new ConcurrentHashMap<>();
 
     private final @NotNull ItemSetting<Integer> tickRate;
 
@@ -239,20 +240,22 @@ public abstract class NetworkDirectional extends NetworkObject {
 
     @NotNull
     protected BlockFace getCurrentDirection(@NotNull BlockMenu blockMenu) {
-        BlockFace direction = SELECTED_DIRECTION_MAP.get(blockMenu.getLocation().clone());
+        final Location location = blockMenu.getLocation();
+        BlockFace direction = SELECTED_DIRECTION_MAP.get(location);
 
         if (direction == null) {
-            direction = BlockFace.valueOf(StorageCacheUtils.getData(blockMenu.getLocation(), DIRECTION));
-            SELECTED_DIRECTION_MAP.put(blockMenu.getLocation().clone(), direction);
+            direction = BlockFace.valueOf(StorageCacheUtils.getData(location, DIRECTION));
+            SELECTED_DIRECTION_MAP.putIfAbsent(location.clone(), direction);
         }
         return direction;
     }
 
     @Override
     public void onPlace(@NotNull BlockPlaceEvent event) {
-        NetworkStorage.removeNode(event.getBlock().getLocation());
-        SlimefunBlockData blockData =
-            StorageCacheUtils.getBlock(event.getBlock().getLocation());
+        final Location location = event.getBlock().getLocation();
+        SELECTED_DIRECTION_MAP.remove(location);
+        NetworkStorage.removeNode(location);
+        SlimefunBlockData blockData = StorageCacheUtils.getBlock(location);
         if (blockData == null) {
             return;
         }
@@ -274,6 +277,12 @@ public abstract class NetworkDirectional extends NetworkObject {
                 }
             }
         }
+    }
+
+    @Override
+    protected void onBreak(@NotNull BlockBreakEvent event) {
+        SELECTED_DIRECTION_MAP.remove(event.getBlock().getLocation());
+        super.onBreak(event);
     }
 
     @OverridingMethodsMustInvokeSuper

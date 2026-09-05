@@ -12,8 +12,8 @@ permissions:
   contents: write
 
 env:
-  LEGACY_ARTIFACT_VERSION: "1.0.12"
-  OUTPUT_NAME: "SF_NetworksExp1.0.12.jar"
+  LEGACY_ARTIFACT_VERSION: "1.0.13"
+  OUTPUT_NAME: "SF_NetworksExp1.0.13.jar"
 
 # Gradle's internal runtime-contract output remains Networks-Legacy-2.1.112-1.0.jar.
 # CI stages that JAR under the public Slimefun Legacy addon release naming convention.
@@ -112,5 +112,5 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$JAR" --clobber
           else
-            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Networks Legacy 1.0.12 reduces controller-side registry and integrity-check overhead on dense established servers. Read-only NetworkStorage lookups now reuse locations that already match the canonical block-key format instead of cloning a Location for every registry read. Controller-ready integrity verification is now a staggered safety audit, defaulting to once every 20 SF ticks per controller, and scans only item-serving node categories instead of copying every network member. Normal block break/place validation remains immediate on the next server tick, explosion/piston protections remain active, and the bounded Networks Doctor remains the fallback repair path. The v1.0.10 Auto Crafter optimizations, v1.0.11 controller/line-transfer improvements, duplicate ticker coalescing, Quantum Storage display defaults, anti-duplication protections, item IDs, world data, database formats, crafting compatibility, and IE2 integration remain unchanged."
+            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Networks Legacy 1.0.13 reduces per-tick overhead across directional network machines. Direction lookups no longer clone a Bukkit Location on every cache read, the shared direction cache is safe for synchronized and asynchronous ticker modes, and cached entries are cleared when directional blocks are broken or replaced so long-running servers do not retain stale block locations. Direction values are still persisted through the existing Slimefun block-data key, so this does not change machine orientation data or player-facing behavior. The v1.0.10 Auto Crafter optimizations, v1.0.11 controller/line-transfer improvements, v1.0.12 controller integrity audit changes, duplicate ticker coalescing, Quantum Storage display defaults, anti-duplication protections, item IDs, world data, database formats, crafting compatibility, and IE2 integration remain unchanged."
           fi
