@@ -127,11 +127,12 @@ public class NetworkStorage {
      * Returns the loaded runtime definition for a network node.
      *
      * <p>This method is intentionally a cheap registry lookup because it is called for every neighbour visited
-     * during network topology discovery. Stale Slimefun block validation is handled by lifecycle events and the
+     * during network topology discovery. Already-normalized block locations are used directly for read-only map
+     * lookups instead of cloning a new key. Stale Slimefun block validation is handled by lifecycle events and the
      * bounded Networks Doctor maintenance pass instead of performing a storage lookup for every graph edge.</p>
      */
     public static @Nullable NodeDefinition getNode(@NotNull Location location) {
-        final Location key = normalize(location);
+        final Location key = lookupKey(location);
         final NodeDefinition definition = ALL_NETWORK_OBJECTS.get(key);
         if (definition == null) {
             return null;
@@ -254,7 +255,7 @@ public class NetworkStorage {
     public static int clearRuntimeAssignments(@NotNull NetworkRoot root) {
         int cleared = 0;
         for (Location location : root.getNodeLocations()) {
-            NodeDefinition definition = ALL_NETWORK_OBJECTS.get(normalize(location));
+            NodeDefinition definition = ALL_NETWORK_OBJECTS.get(lookupKey(location));
             NetworkNode assigned = definition == null ? null : definition.getNode();
             if (assigned != null && assigned.getRoot() == root) {
                 definition.setNode(null);
@@ -398,6 +399,22 @@ public class NetworkStorage {
             }
         }
         controllers.forEach(TopologyDirtyQueue::mark);
+    }
+
+    /**
+     * Read-only registry lookups can reuse the caller's Location when it already exactly matches the canonical
+     * block-key representation. Map writes still clone through {@link #normalize(Location)} so mutable caller
+     * Locations are never retained as keys.
+     */
+    private static @NotNull Location lookupKey(@NotNull Location location) {
+        if (Double.compare(location.getX(), (double) location.getBlockX()) == 0
+            && Double.compare(location.getY(), (double) location.getBlockY()) == 0
+            && Double.compare(location.getZ(), (double) location.getBlockZ()) == 0
+            && Float.compare(location.getYaw(), 0.0F) == 0
+            && Float.compare(location.getPitch(), 0.0F) == 0) {
+            return location;
+        }
+        return normalize(location);
     }
 
     private static @NotNull Location normalize(@NotNull Location location) {
