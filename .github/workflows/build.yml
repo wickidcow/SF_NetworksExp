@@ -12,8 +12,8 @@ permissions:
   contents: write
 
 env:
-  LEGACY_ARTIFACT_VERSION: "1.0.10"
-  OUTPUT_NAME: "SF_NetworksExp1.0.10.jar"
+  LEGACY_ARTIFACT_VERSION: "1.0.11"
+  OUTPUT_NAME: "SF_NetworksExp1.0.11.jar"
 
 # Gradle's internal runtime-contract output remains Networks-Legacy-2.1.112-1.0.jar.
 # CI stages that JAR under the public Slimefun Legacy addon release naming convention.
@@ -112,5 +112,5 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$JAR" --clobber
           else
-            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Networks Legacy 1.0.10 performance update for dense NTW machine setups. Auto Crafters now reuse decoded blueprint validation, cache aggregated ingredient plans so repeated recipe ingredients are withdrawn in one network request, and use bounded idle backoff after repeated no-work passes while waking immediately on blueprint/menu interaction. NTW transfer machines now coalesce duplicate inherited directional ticker callbacks so each transfer block performs at most one transfer pass per server tick, avoiding duplicate line scans and duplicate network work without changing configured transfer cadence. Quantum Storage display defaults and all v1.0.9 safety behavior remain intact. Existing item IDs, world data, database formats, anti-duplication protections, crafting compatibility, and IE2 integration are unchanged."
+            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Networks Legacy 1.0.11 continues the profiler-driven NTW performance pass. Controllers now validate and copy their cached topology in one pass instead of allocating a full snapshot map first, reducing repeated per-tick graph work while keeping fresh NetworkRoot runtime state. Expansion line transfers avoid cloning Location keys on every ticker-counter update, line pushers skip the expensive line scan when no template is configured, and line grabbers avoid network-withdrawal work for target menus with no withdrawable items. The v1.0.10 Auto Crafter optimizations, duplicate ticker coalescing, Quantum Storage display defaults, anti-duplication protections, item IDs, world data, database formats, crafting compatibility, and IE2 integration remain unchanged."
           fi

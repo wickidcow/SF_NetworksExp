@@ -30,11 +30,9 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -122,16 +120,6 @@ public class NetworkController extends NetworkObject {
                         || markedDirty
                         || cachedRoot.getMaxNodes() != currentMaxNodes;
 
-                    Map<Location, NodeDefinition> cachedTopology = null;
-                    if (!fullDiscovery) {
-                        cachedTopology = snapshotTopology(cachedRoot);
-                        if (cachedTopology == null) {
-                            fullDiscovery = true;
-                            DIRTY_CONTROLLERS.remove(controllerKey);
-                            CACHED_TOPOLOGY_FALLBACKS.increment();
-                        }
-                    }
-
                     candidate = new NetworkRoot(
                         location,
                         NodeType.CONTROLLER,
@@ -142,9 +130,24 @@ public class NetworkController extends NetworkObject {
                     if (fullDiscovery) {
                         candidate.addAllChildren();
                         FULL_TOPOLOGY_REBUILDS.increment();
-                    } else {
-                        copyTopology(cachedRoot, candidate, cachedTopology);
+                    } else if (copyTopology(cachedRoot, candidate)) {
                         CACHED_TOPOLOGY_COPIES.increment();
+                    } else {
+                        /*
+                         * A cached member disappeared or changed type. The cheap one-pass copy restores any
+                         * definitions it touched before returning false, so a real neighbour discovery can safely
+                         * take over in the same tick without discarding the previously installed runtime root.
+                         */
+                        CACHED_TOPOLOGY_FALLBACKS.increment();
+                        fullDiscovery = true;
+                        candidate = new NetworkRoot(
+                            location,
+                            NodeType.CONTROLLER,
+                            currentMaxNodes,
+                            recordFlow.getOrDefault(location, false),
+                            records.get(location));
+                        candidate.addAllChildren();
+                        FULL_TOPOLOGY_REBUILDS.increment();
                     }
 
                     if (CRAYONS.contains(location)) {
@@ -364,32 +367,16 @@ public class NetworkController extends NetworkObject {
     }
 
     /**
-     * Snapshots the already-discovered topology using only cheap runtime-registry lookups. Returning null means
-     * at least one member disappeared or unloaded, so the caller must perform a real neighbour discovery pass.
+     * Rebuilds the per-tick NetworkRoot object from the last known tree without first allocating a full topology
+     * snapshot. Each cached member is validated directly against the runtime registry as it is copied. If one
+     * disappeared or changed type, any definitions already redirected to the candidate are restored to the old
+     * nodes and the caller falls back to normal neighbour discovery in the same tick.
      */
-    private static @Nullable Map<Location, NodeDefinition> snapshotTopology(@NotNull NetworkRoot previous) {
-        Map<Location, NodeDefinition> definitions = new HashMap<>(Math.max(16, previous.getNodeLocations().size()));
-        for (Location nodeLocation : previous.getNodeLocations()) {
-            NodeDefinition definition = NetworkStorage.getNode(nodeLocation);
-            if (definition == null) {
-                return null;
-            }
-            definitions.put(nodeLocation, definition);
-        }
-        return definitions;
-    }
-
-    /**
-     * Rebuilds the per-tick NetworkRoot object from the last known tree without scanning six neighbours for every
-     * node. The tree shape is preserved so removal semantics remain identical, while power values and all root
-     * item caches are naturally refreshed because every NetworkNode/NetworkRoot object is still newly created.
-     */
-    private static void copyTopology(
-        @NotNull NetworkRoot previous,
-        @NotNull NetworkRoot candidate,
-        @NotNull Map<Location, NodeDefinition> definitions) {
+    private static boolean copyTopology(@NotNull NetworkRoot previous, @NotNull NetworkRoot candidate) {
         Deque<NetworkNode> oldNodes = new ArrayDeque<>();
         Deque<NetworkNode> newParents = new ArrayDeque<>();
+        Deque<NodeDefinition> assignedDefinitions = new ArrayDeque<>();
+        Deque<NetworkNode> assignedOldNodes = new ArrayDeque<>();
 
         for (NetworkNode oldChild : previous.getChildrenNodes()) {
             oldNodes.addLast(oldChild);
@@ -399,20 +386,31 @@ public class NetworkController extends NetworkObject {
         while (!oldNodes.isEmpty()) {
             NetworkNode oldNode = oldNodes.removeFirst();
             NetworkNode newParent = newParents.removeFirst();
-            NodeDefinition definition = definitions.get(oldNode.getNodePosition());
+            NodeDefinition definition = NetworkStorage.getNode(oldNode.getNodePosition());
             if (definition == null || definition.getType() != oldNode.getNodeType()) {
-                throw new IllegalStateException(
-                    "Cached network topology changed while rebuilding at " + format(oldNode.getNodePosition()));
+                restoreCachedAssignments(assignedDefinitions, assignedOldNodes);
+                return false;
             }
 
             NetworkNode newNode = new NetworkNode(oldNode.getNodePosition(), definition.getType());
             newParent.addChild(newNode);
             definition.setNode(newNode);
+            assignedDefinitions.addLast(definition);
+            assignedOldNodes.addLast(oldNode);
 
             for (NetworkNode oldChild : oldNode.getChildrenNodes()) {
                 oldNodes.addLast(oldChild);
                 newParents.addLast(newNode);
             }
+        }
+        return true;
+    }
+
+    private static void restoreCachedAssignments(
+        @NotNull Deque<NodeDefinition> definitions,
+        @NotNull Deque<NetworkNode> oldNodes) {
+        while (!definitions.isEmpty()) {
+            definitions.removeFirst().setNode(oldNodes.removeFirst());
         }
     }
 
