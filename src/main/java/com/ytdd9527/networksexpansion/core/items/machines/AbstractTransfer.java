@@ -21,10 +21,12 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.attributes.RecipeDisplayItem;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
@@ -35,11 +37,13 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @SuppressWarnings("DuplicatedCode")
 public abstract class AbstractTransfer extends AdvancedDirectional implements RecipeDisplayItem {
     private static final Map<Location, Integer> PUSH_TICKER_MAP = new HashMap<>();
     private static final Map<Location, Integer> GRAB_TICKER_MAP = new HashMap<>();
+    private static final Map<Location, Integer> LAST_TRANSFER_SERVER_TICK = new ConcurrentHashMap<>();
     private final TransferConfiguration config;
 
     protected AbstractTransfer(
@@ -87,12 +91,24 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
 
     @Override
     protected void onTick(@Nullable BlockMenu blockMenu, @NotNull Block block) {
-        super.onTick(blockMenu, block);
+        /*
+         * AdvancedDirectional inherits the NetworkDirectional ticker and historically also registered a
+         * second directional ticker. Coalesce both callbacks here so NTW transfer machines perform at most
+         * one transfer pass in a server tick. This preserves configured transfer cadence and transport
+         * semantics while avoiding duplicate line scans and duplicate network work.
+         */
         final Location location = block.getLocation();
+        final int currentServerTick = Bukkit.getCurrentTick();
+        final Integer previousServerTick = LAST_TRANSFER_SERVER_TICK.put(location.clone(), currentServerTick);
+        if (previousServerTick != null && previousServerTick == currentServerTick) {
+            return;
+        }
+
+        super.onTick(blockMenu, block);
         sendFeedback(location, FeedbackType.TRANSFER_TICKING);
 
         if (blockMenu == null) {
-            sendFeedback(block.getLocation(), FeedbackType.INVALID_BLOCK);
+            sendFeedback(location, FeedbackType.INVALID_BLOCK);
             return;
         }
 
@@ -171,7 +187,7 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
         if (ticker != null) {
             return ticker;
         } else {
-            PUSH_TICKER_MAP.put(location, 0);
+            PUSH_TICKER_MAP.put(location.clone(), 0);
             return 0;
         }
     }
@@ -181,17 +197,17 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
         if (ticker != null) {
             return ticker;
         } else {
-            GRAB_TICKER_MAP.put(location, 0);
+            GRAB_TICKER_MAP.put(location.clone(), 0);
             return 0;
         }
     }
 
     private void updatePushTickCounter(Location location, int pushTick) {
-        PUSH_TICKER_MAP.put(location, pushTick);
+        PUSH_TICKER_MAP.put(location.clone(), pushTick);
     }
 
     private void updateGrabTickCounter(Location location, int grabTick) {
-        GRAB_TICKER_MAP.put(location, grabTick);
+        GRAB_TICKER_MAP.put(location.clone(), grabTick);
     }
 
     private void tryPushItem(
@@ -290,6 +306,15 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
                 LineOperationUtil.grabItem(menu.getLocation() == null ? blockMenu.getLocation() : menu.getLocation(), root, menu, mode, limitQuantity));
 
         root.removeRootPower(config.defaultRequiredPower);
+    }
+
+    @Override
+    protected void postBreak(@NotNull BlockBreakEvent event) {
+        super.postBreak(event);
+        final Location location = event.getBlock().getLocation();
+        PUSH_TICKER_MAP.remove(location);
+        GRAB_TICKER_MAP.remove(location);
+        LAST_TRANSFER_SERVER_TICK.remove(location);
     }
 
     @Override
