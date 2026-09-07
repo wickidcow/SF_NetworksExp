@@ -2,11 +2,11 @@ package com.ytdd9527.networksexpansion.core.items.machines;
 import com.balugaq.netex.api.enums.CraftType;
 import com.balugaq.netex.api.enums.FeedbackType;
 import com.balugaq.netex.api.helpers.Icon;
+import com.balugaq.netex.api.helpers.SupportedCraftingTableRecipes;
 import com.balugaq.netex.api.interfaces.CraftTyped;
 import com.balugaq.netex.api.interfaces.RecipeCompletableWithGuide;
 import com.balugaq.netex.utils.BlockMenuUtil;
 import com.balugaq.netex.utils.Lang;
-import com.ytdd9527.networksexpansion.utils.itemstacks.ItemStackUtil;
 import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
@@ -168,7 +168,8 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
         for (int index = 0; index < RECIPE_SLOTS.length; index++) {
             final ItemStack stackInSlot = blockMenu.getItemInSlot(RECIPE_SLOTS[index]);
             if (stackInSlot != null && stackInSlot.getType() != Material.AIR && stackInSlot.getAmount() > 0) {
-                inputs[index] = ItemStackUtil.getCleanItem(stackInSlot.clone());
+                // Preserve the live Paper 1.21 item/component snapshot while resolving the recipe.
+                inputs[index] = stackInSlot.clone();
             }
         }
         ItemStack crafted = null;
@@ -219,7 +220,7 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
                         continue;
                     }
                     crafted = candidate.clone();
-                    consumptionRecipe = cleanRecipe(recipe.getKey());
+                    consumptionRecipe = snapshotRecipe(recipe.getKey());
                     found = true;
                     break;
                 }
@@ -297,11 +298,23 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
         }
         return recipe;
     }
-    private static ItemStack[] cleanRecipe(ItemStack[] recipe) {
+    private static ItemStack[] snapshotRecipe(ItemStack[] recipe) {
         final ItemStack[] copy = new ItemStack[recipe.length];
         for (int index = 0; index < recipe.length; index++) {
-            if (recipe[index] != null && recipe[index].getType() != Material.AIR) {
-                copy[index] = ItemStackUtil.getCleanItem(recipe[index].clone());
+            final ItemStack ingredient = recipe[index];
+            if (ingredient == null || ingredient.getType() == Material.AIR) {
+                continue;
+            }
+
+            final SlimefunItem slimefunItem = SlimefunItem.getByItem(ingredient);
+            if (slimefunItem != null) {
+                // Store the canonical registered Slimefun item in the blueprint. This keeps addon ids such as
+                // IE2's INFINITY_VOID_BLOCK intact when the withholding Auto Crafter later requests ingredients.
+                final ItemStack canonical = slimefunItem.getItem().clone();
+                canonical.setAmount(ingredient.getAmount());
+                copy[index] = canonical;
+            } else {
+                copy[index] = ingredient.clone();
             }
         }
         return copy;
@@ -330,7 +343,7 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
                 continue;
             }
 
-            if (!StackUtils.itemsMatch(supplied, required)
+            if (!SupportedCraftingTableRecipes.recipeIngredientMatches(supplied, required)
                 || supplied.getAmount() < Math.max(1, required.getAmount())) {
                 return false;
             }
