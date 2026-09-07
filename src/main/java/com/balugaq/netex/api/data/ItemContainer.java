@@ -2,6 +2,8 @@ package com.balugaq.netex.api.data;
 
 import io.github.sefiraat.networks.network.stackcaches.ItemStackCache;
 import io.github.sefiraat.networks.utils.StackUtils;
+import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
+import io.github.thebusybiscuit.slimefun4.core.attributes.DistinctiveItem;
 import lombok.Getter;
 import lombok.ToString;
 import org.bukkit.inventory.ItemStack;
@@ -16,9 +18,23 @@ public class ItemContainer extends ItemStackCache {
     private volatile int amount;
 
     public ItemContainer(int id, @NotNull ItemStack item, int amount) {
-        super(StackUtils.getAsQuantity(item, 1));
+        super(canonicalizeSample(item));
         this.id = id;
         this.amount = amount;
+    }
+
+    /**
+     * Cargo storage persists the exact incoming ItemStack, but runtime matching should follow Slimefun's
+     * identity contract. Ordinary Slimefun items are therefore represented by their current registered
+     * template. This keeps recipe/blueprint requests stable across Paper data-component changes and addon
+     * rebuilds. Stateful items opt into DistinctiveItem and retain their exact instance metadata.
+     */
+    private static @NotNull ItemStack canonicalizeSample(@NotNull ItemStack item) {
+        final SlimefunItem slimefunItem = SlimefunItem.getByItem(item);
+        if (slimefunItem != null && !(slimefunItem instanceof DistinctiveItem)) {
+            return StackUtils.getAsQuantity(slimefunItem.getItem(), 1);
+        }
+        return StackUtils.getAsQuantity(item, 1);
     }
 
     public @NotNull ItemStack getSample() {
