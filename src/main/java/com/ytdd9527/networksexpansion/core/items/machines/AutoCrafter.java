@@ -235,22 +235,44 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
         final Location location = blockMenu.getLocation();
         final List<IngredientRequest> ingredientPlan = INGREDIENT_PLAN_MAP.computeIfAbsent(
             location.clone(), ignored -> buildIngredientPlan(instance));
-        final ItemStack[] fetcheds = new ItemStack[ingredientPlan.size()];
 
+        /*
+         * Validate the complete scaled recipe before withdrawing anything. Previously the crafter
+         * withdrew ingredient A before discovering that ingredient B was unavailable. That forced a
+         * rollback of A, which can fail when the network has become full and trigger the loss-prevention
+         * world drop. NetworkRoot#contains(ItemRequest) is non-mutating, so a normal missing ingredient
+         * now exits without changing network storage at all.
+         */
+        final int[] requestedAmounts = new int[ingredientPlan.size()];
         for (int i = 0; i < ingredientPlan.size(); i++) {
             final IngredientRequest ingredient = ingredientPlan.get(i);
             final long scaledAmount = (long) ingredient.amount() * blueprintAmount;
             if (scaledAmount <= 0 || scaledAmount > Integer.MAX_VALUE) {
-                returnItems(root, fetcheds, blockMenu);
                 sendFeedback(location, FeedbackType.RESULT_IS_TOO_LARGE);
                 return false;
             }
 
             final int requestedAmount = (int) scaledAmount;
+            requestedAmounts[i] = requestedAmount;
+            if (!root.contains(new ItemRequest(ingredient.template(), requestedAmount))) {
+                sendFeedback(location, FeedbackType.NOT_ENOUGH_ITEMS_IN_NETWORK);
+                return false;
+            }
+        }
+
+        final ItemStack[] fetcheds = new ItemStack[ingredientPlan.size()];
+        for (int i = 0; i < ingredientPlan.size(); i++) {
+            final IngredientRequest ingredient = ingredientPlan.get(i);
+            final int requestedAmount = requestedAmounts[i];
             final ItemStack fetched = root.getItemStack0(
                 location, new ItemRequest(ingredient.template(), requestedAmount));
             fetcheds[i] = fetched;
             if (fetched == null || fetched.getAmount() < requestedAmount) {
+                /*
+                 * This should now only be reachable if network state changed between preflight and
+                 * commit (for example when unsafe asynchronous machine tickers are enabled). Preserve
+                 * the existing loss-safe rollback as the final safety net rather than deleting items.
+                 */
                 returnItems(root, fetcheds, blockMenu);
                 sendFeedback(location, FeedbackType.NOT_ENOUGH_ITEMS_IN_NETWORK);
                 return false;
