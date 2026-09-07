@@ -80,10 +80,15 @@ public enum CraftType {
     }
 
     public static Collection<Set<Map.Entry<ItemStack[], ItemStack>>> entries() {
+        SupportedCraftingTableRecipes.refreshRecipes();
         return Arrays.stream(values()).map(CraftType::getRecipeEntries).toList();
     }
 
     public static Map<CraftType, Set<Map.Entry<ItemStack[], ItemStack>>> map() {
+        // Networks can enable before addon plugins have finished registering their Slimefun recipes.
+        // Refresh the mutable crafting recipe map before every encoder lookup; the helper itself is incremental.
+        SupportedCraftingTableRecipes.refreshRecipes();
+
         if (map.isEmpty()) {
             map.put(ANCIENT_ALTAR, ANCIENT_ALTAR.recipeEntries);
             map.put(ARMOR_FORGE, ARMOR_FORGE.recipeEntries);
