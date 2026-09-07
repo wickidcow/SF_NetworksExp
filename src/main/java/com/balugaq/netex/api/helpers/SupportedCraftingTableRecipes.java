@@ -134,11 +134,25 @@ public final class SupportedCraftingTableRecipes {
                 continue;
             }
 
-            if (!StackUtils.itemsMatch(supplied, required)) {
+            if (!recipeIngredientMatches(supplied, required)) {
                 return false;
             }
         }
         return true;
+    }
+
+    /**
+     * Slimefun recipes identify custom ingredients by their registered Slimefun id. Comparing the full
+     * Paper 1.21 data-component patch here is too strict for recipe templates and can reject a live copy of
+     * the same addon item. Vanilla/non-Slimefun ingredients continue to use Networks' normal strict matcher.
+     */
+    public static boolean recipeIngredientMatches(@NotNull ItemStack supplied, @NotNull ItemStack required) {
+        SlimefunItem requiredItem = SlimefunItem.getByItem(required);
+        if (requiredItem != null) {
+            SlimefunItem suppliedItem = SlimefunItem.getByItem(supplied);
+            return suppliedItem != null && requiredItem.getId().equals(suppliedItem.getId());
+        }
+        return StackUtils.itemsMatch(supplied, required);
     }
 
     private static boolean isEmpty(@Nullable ItemStack stack) {
