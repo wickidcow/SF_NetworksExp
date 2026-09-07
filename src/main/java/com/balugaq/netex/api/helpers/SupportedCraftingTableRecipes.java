@@ -13,64 +13,90 @@ import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 @SuppressWarnings("JavaExistingMethodCanBeUsed")
 @UtilityClass
 public final class SupportedCraftingTableRecipes {
 
     private static final Map<ItemStack[], ItemStack> RECIPES = new LinkedHashMap<>();
+    private static final Set<String> REGISTERED_SLIMEFUN_ITEMS = new HashSet<>();
+    private static int lastEnabledItemCount = -1;
 
     static {
+        addEnhancedCraftingTableRecipes();
+        refreshRecipes();
+    }
+
+    private static void addEnhancedCraftingTableRecipes() {
         String id = SlimefunItems.ENHANCED_CRAFTING_TABLE.getItemId();
         SlimefunItem recipeTypeItem = SlimefunItem.getById(id);
-        if (recipeTypeItem instanceof MultiBlockMachine mb) {
-            boolean isInput = true;
-            ItemStack[] input = null;
-            ItemStack[] output;
-            for (ItemStack[] recipe : mb.getRecipes()) {
-                if (isInput) {
-                    input = recipe;
-                } else {
-                    output = recipe;
-                    if (input.length != 9) {
-                        ItemStack[] newInput = new ItemStack[9];
-                        for (int i = 0; i < 9; i++) {
-                            if (i < input.length) {
-                                newInput[i] = input[i];
-                            } else {
-                                newInput[i] = null;
-                            }
-                        }
-                        input = newInput;
-                    }
-                    RECIPES.put(input, output[0]);
-                }
-                isInput = !isInput;
-            }
+        if (!(recipeTypeItem instanceof MultiBlockMachine mb)) {
+            return;
         }
-        for (SlimefunItem item : Slimefun.getRegistry().getEnabledSlimefunItems()) {
-            RecipeType recipeType = item.getRecipeType();
-            if ((recipeType == RecipeType.ENHANCED_CRAFTING_TABLE) && allowedRecipe(item)) {
-                ItemStack[] itemStacks = new ItemStack[9];
-                int i = 0;
-                for (ItemStack itemStack : item.getRecipe()) {
-                    if (itemStack == null) {
-                        itemStacks[i] = null;
-                    } else {
-                        itemStacks[i] = new ItemStack(itemStack.clone());
+
+        boolean isInput = true;
+        ItemStack[] input = null;
+        for (ItemStack[] recipe : mb.getRecipes()) {
+            if (isInput) {
+                input = recipe;
+            } else if (input != null && recipe.length > 0 && recipe[0] != null) {
+                if (input.length != 9) {
+                    ItemStack[] newInput = new ItemStack[9];
+                    for (int i = 0; i < 9; i++) {
+                        newInput[i] = i < input.length ? input[i] : null;
                     }
-                    if (++i >= 9) {
-                        break;
-                    }
+                    input = newInput;
                 }
-                SupportedCraftingTableRecipes.addRecipe(itemStacks, item.getRecipeOutput());
+                addRecipe(input, recipe[0]);
             }
+            isInput = !isInput;
         }
     }
 
+    /**
+     * Adds Enhanced Crafting Table recipes from Slimefun items that became available after Networks loaded.
+     *
+     * <p>Addon plugins such as InfinityExpansion2 commonly finish registering their items after Networks has
+     * initialized. The old one-time static snapshot permanently missed those recipes, causing the Network Recipe
+     * Encoder to reject otherwise valid addon recipes (for example IE2 generator recipes using Void Blocks).
+     * This refresh is incremental: already-seen Slimefun item ids are skipped, so normal encoder use does not
+     * rebuild or duplicate the recipe table.</p>
+     */
+    public static synchronized void refreshRecipes() {
+        var enabledItems = Slimefun.getRegistry().getEnabledSlimefunItems();
+        if (enabledItems.size() == lastEnabledItemCount) {
+            return;
+        }
+
+        for (SlimefunItem item : enabledItems) {
+            RecipeType recipeType = item.getRecipeType();
+            if (recipeType != RecipeType.ENHANCED_CRAFTING_TABLE || !allowedRecipe(item)) {
+                continue;
+            }
+            if (!REGISTERED_SLIMEFUN_ITEMS.add(item.getId())) {
+                continue;
+            }
+
+            ItemStack[] itemStacks = new ItemStack[9];
+            int i = 0;
+            for (ItemStack itemStack : item.getRecipe()) {
+                itemStacks[i] = itemStack == null ? null : new ItemStack(itemStack.clone());
+                if (++i >= 9) {
+                    break;
+                }
+            }
+            addRecipe(itemStacks, item.getRecipeOutput());
+        }
+
+        lastEnabledItemCount = enabledItems.size();
+    }
+
     public static @NotNull Map<ItemStack[], ItemStack> getRecipes() {
+        refreshRecipes();
         return RECIPES;
     }
 
@@ -84,6 +110,7 @@ public final class SupportedCraftingTableRecipes {
      * multiple recipes share similar ingredients.
      */
     public static @Nullable RecipeMatch findRecipe(@NotNull ItemStack[] input) {
+        refreshRecipes();
         for (Map.Entry<ItemStack[], ItemStack> entry : RECIPES.entrySet()) {
             if (testRecipe(input, entry.getKey())) {
                 return new RecipeMatch(entry.getKey(), entry.getValue());
