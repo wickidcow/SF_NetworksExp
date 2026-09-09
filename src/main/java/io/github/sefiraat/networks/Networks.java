@@ -138,16 +138,22 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
             startupStage = "detecting optional integrations";
             supportedPluginManager = new SupportedPluginManager();
 
-            startupStage = "starting the ordered drawer database worker";
-            getLogger().info(getLocalizationService().getString("messages.startup.creating-query-queue"));
-            queryQueue = new QueryQueue();
-            queryQueue.startThread();
+            if (configManager.isNetworksExpansionEnabled()) {
+                startupStage = "starting the ordered drawer database worker";
+                getLogger().info(getLocalizationService().getString("messages.startup.creating-query-queue"));
+                queryQueue = new QueryQueue();
+                queryQueue.startThread();
 
-            startupStage = "opening CargoStorageUnits.db";
-            getLogger().info(getLocalizationService().getString("messages.startup.connecting-database"));
-            dataSource = new DataSource();
-            DataStorage.replayRecoveryJournal();
-            startAutoSave();
+                startupStage = "opening CargoStorageUnits.db";
+                getLogger().info(getLocalizationService().getString("messages.startup.connecting-database"));
+                dataSource = new DataSource();
+                DataStorage.replayRecoveryJournal();
+                startAutoSave();
+            } else {
+                getLogger().info(
+                    "Networks Expansion is disabled by configuration. Running with original Networks features only; "
+                        + "Expansion data is preserved and its database services will not be started.");
+            }
 
             startupStage = "registering Networks items and integrations";
             getLogger().info(getLocalizationService().getString("messages.startup.registering-items"));
@@ -173,12 +179,14 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
             startMaintenanceTasks();
 
             AdminDebuggable.load();
-            SlimefunGuideSettings.addOption(GridNewStyleCustomAmountGuideOption.instance());
             LegacyDoctorBridge.register(this);
 
-            Bukkit.getScheduler().runTaskLater(this, Keybinds::distinctAll, 1L);
-            ID.fetchId();
-            Keybinds.fetchScripts();
+            if (configManager.isNetworksExpansionEnabled()) {
+                SlimefunGuideSettings.addOption(GridNewStyleCustomAmountGuideOption.instance());
+                Bukkit.getScheduler().runTaskLater(this, Keybinds::distinctAll, 1L);
+                ID.fetchId();
+                Keybinds.fetchScripts();
+            }
 
             startupComplete = true;
             startupStage = "complete";
@@ -204,7 +212,9 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
             if (localizationService != null) {
                 getLogger().info(getLocalizationService().getString("messages.shutdown.saving-config"));
             }
-            ID.saveId();
+            if (configManager != null && configManager.isNetworksExpansionEnabled()) {
+                ID.saveId();
+            }
             if (configManager != null) {
                 configManager.saveAll();
             }

@@ -10,6 +10,13 @@ config-version: 2.1.112-legacy-1.0
 # Do not change this value unless you know what you are doing.
 debug: false
 
+# Optional content bundled into this fork. Changes require a full server restart.
+# Disabling Networks Expansion keeps the original Networks feature set registered
+# and leaves existing Expansion world/database data untouched.
+features:
+  networks-expansion:
+    enabled: true
+
 # Runtime compatibility policy. Legacy is the primary target; United and Gugu are accepted
 # through their stable Slimefun API surface. Unknown cores fail closed by default.
 compatibility:

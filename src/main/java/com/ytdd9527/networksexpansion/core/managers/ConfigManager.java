@@ -73,6 +73,15 @@ public class ConfigManager {
         return Networks.getInstance().getConfig().getBoolean("debug", false);
     }
 
+    /**
+     * Controls whether the bundled Networks Expansion content is registered.
+     * This is intentionally a startup-only setting because Slimefun items cannot
+     * be safely registered or unregistered while the server is running.
+     */
+    public boolean isNetworksExpansionEnabled() {
+        return Networks.getInstance().getConfig().getBoolean("features.networks-expansion.enabled", true);
+    }
+
     public @NotNull String getLanguage() {
         return "en-US";
     }
