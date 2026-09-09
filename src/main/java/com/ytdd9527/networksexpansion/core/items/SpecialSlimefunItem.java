@@ -82,13 +82,15 @@ public abstract class SpecialSlimefunItem extends SlimefunItem implements Feedba
     }
 
     private boolean isEnabledByExpansionConfig() {
-        if (!Networks.getConfigManager().isNetworksExpansionEnabled()) {
-            return false;
-        }
-
         final String id = getId();
+
+        // Original Networks items also inherit this class. Expansion configuration
+        // must never suppress the core feature set.
         if (!id.startsWith("NTW_EXPANSION_")) {
             return true;
+        }
+        if (!Networks.getConfigManager().isNetworksExpansionEnabled()) {
+            return false;
         }
 
         if (id.equals("NTW_EXPANSION_DRAWER_MANAGER")) {
