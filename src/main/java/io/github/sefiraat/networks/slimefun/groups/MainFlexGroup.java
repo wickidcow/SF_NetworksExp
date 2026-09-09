@@ -3,6 +3,7 @@ package io.github.sefiraat.networks.slimefun.groups;
 import com.balugaq.netex.utils.Lang;
 import com.ytdd9527.networksexpansion.implementation.ExpansionItemsMenus;
 import com.ytdd9527.networksexpansion.utils.TextUtil;
+import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.slimefun.NetworksItemGroups;
 import io.github.sefiraat.networks.utils.Theme;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
@@ -134,31 +135,33 @@ public class MainFlexGroup extends FlexItemGroup {
             (player1, i1, itemStack1, clickAction) ->
                 openPage(profile, NetworksItemGroups.NETWORK_QUANTUMS, mode, 1));
 
-        // Networks Expansion: use the normal Slimefun guide renderer for stability
-        // across Slimefun Legacy, United and Gugu.
-        menu.replaceExistingItem(EXPANSION_ITEMS, ExpansionItemsMenus.MENU_ITEMS.getItem(player));
-        menu.addMenuClickHandler(
-            EXPANSION_ITEMS,
-            (player1, i1, itemStack1, clickAction) ->
-                openPage(profile, ExpansionItemsMenus.MENU_ITEMS, mode, 1));
+        if (Networks.getConfigManager().isNetworksExpansionEnabled()) {
+            // Networks Expansion: use the normal Slimefun guide renderer for stability
+            // across Slimefun Legacy, United and Gugu.
+            menu.replaceExistingItem(EXPANSION_ITEMS, ExpansionItemsMenus.MENU_ITEMS.getItem(player));
+            menu.addMenuClickHandler(
+                EXPANSION_ITEMS,
+                (player1, i1, itemStack1, clickAction) ->
+                    openPage(profile, ExpansionItemsMenus.MENU_ITEMS, mode, 1));
 
-        menu.replaceExistingItem(EXPANSION_CARGO, ExpansionItemsMenus.MENU_CARGO_SYSTEM.getItem(player));
-        menu.addMenuClickHandler(
-            EXPANSION_CARGO,
-            (player1, i1, itemStack1, clickAction) ->
-                openPage(profile, ExpansionItemsMenus.MENU_CARGO_SYSTEM, mode, 1));
+            menu.replaceExistingItem(EXPANSION_CARGO, ExpansionItemsMenus.MENU_CARGO_SYSTEM.getItem(player));
+            menu.addMenuClickHandler(
+                EXPANSION_CARGO,
+                (player1, i1, itemStack1, clickAction) ->
+                    openPage(profile, ExpansionItemsMenus.MENU_CARGO_SYSTEM, mode, 1));
 
-        menu.replaceExistingItem(EXPANSION_MACHINES, ExpansionItemsMenus.MENU_FUNCTIONAL_MACHINE.getItem(player));
-        menu.addMenuClickHandler(
-            EXPANSION_MACHINES,
-            (player1, i1, itemStack1, clickAction) ->
-                openPage(profile, ExpansionItemsMenus.MENU_FUNCTIONAL_MACHINE, mode, 1));
+            menu.replaceExistingItem(EXPANSION_MACHINES, ExpansionItemsMenus.MENU_FUNCTIONAL_MACHINE.getItem(player));
+            menu.addMenuClickHandler(
+                EXPANSION_MACHINES,
+                (player1, i1, itemStack1, clickAction) ->
+                    openPage(profile, ExpansionItemsMenus.MENU_FUNCTIONAL_MACHINE, mode, 1));
 
-        menu.replaceExistingItem(EXPANSION_INFO, ExpansionItemsMenus.MENU_TROPHY.getItem(player));
-        menu.addMenuClickHandler(
-            EXPANSION_INFO,
-            (player1, i1, itemStack1, clickAction) ->
-                openPage(profile, ExpansionItemsMenus.MENU_TROPHY, mode, 1));
+            menu.replaceExistingItem(EXPANSION_INFO, ExpansionItemsMenus.MENU_TROPHY.getItem(player));
+            menu.addMenuClickHandler(
+                EXPANSION_INFO,
+                (player1, i1, itemStack1, clickAction) ->
+                    openPage(profile, ExpansionItemsMenus.MENU_TROPHY, mode, 1));
+        }
     }
 
     @ParametersAreNonnullByDefault
