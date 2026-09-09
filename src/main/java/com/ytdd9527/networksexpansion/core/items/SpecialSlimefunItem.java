@@ -73,11 +73,64 @@ public abstract class SpecialSlimefunItem extends SlimefunItem implements Feedba
 
     @NotNull
     public SpecialSlimefunItem registerThis() {
-        if (!Networks.getConfigManager().isNetworksExpansionEnabled()) {
+        if (!isEnabledByExpansionConfig()) {
             return this;
         }
 
         this.register(Networks.getInstance());
         return this;
+    }
+
+    private boolean isEnabledByExpansionConfig() {
+        if (!Networks.getConfigManager().isNetworksExpansionEnabled()) {
+            return false;
+        }
+
+        final String id = getId();
+        if (!id.startsWith("NTW_EXPANSION_")) {
+            return true;
+        }
+
+        if (id.equals("NTW_EXPANSION_DRAWER_MANAGER")) {
+            return Networks.getConfigManager().isNetworksExpansionFeatureEnabled("drawer-manager");
+        }
+        if (id.equals("NTW_EXPANSION_QUANTUM_MANAGER")) {
+            return Networks.getConfigManager().isNetworksExpansionFeatureEnabled("quantum-manager");
+        }
+        if (id.equals("NTW_EXPANSION_ADVANCED_QUANTUM_STORAGE")) {
+            return Networks.getConfigManager().isNetworksExpansionFeatureEnabled("advanced-quantum-storage");
+        }
+        if (id.equals("NTW_EXPANSION_ITEM_FLOW_VIEWER")) {
+            return Networks.getConfigManager().isNetworksExpansionFeatureEnabled("item-flow-viewer");
+        }
+        if (id.contains("DUE_MACHINE")) {
+            return Networks.getConfigManager().isNetworksExpansionFeatureEnabled("due-machines");
+        }
+        if (id.contains("LINE_POWER_OUTLET")) {
+            return Networks.getConfigManager().isNetworksExpansionFeatureEnabled("power-outlets");
+        }
+        if (id.contains("LINE_TRANSFER")) {
+            return Networks.getConfigManager().isNetworksExpansionFeatureEnabled("line-transfers");
+        }
+        if (id.startsWith("NTW_EXPANSION_ADVANCED_TRANSFER")) {
+            return Networks.getConfigManager().isNetworksExpansionFeatureEnabled("advanced-transfers");
+        }
+        if (id.contains("CARGO_STORAGE_UNIT")
+            || id.equals("NTW_EXPANSION_DRAWER_TIPS")
+            || id.equals("NTW_EXPANSION_STORAGE_UPGRADE_TABLE")) {
+            return Networks.getConfigManager().isNetworksExpansionFeatureEnabled("drawers");
+        }
+        if (isExtraCraftingMachine(id)) {
+            return Networks.getConfigManager().isNetworksExpansionFeatureEnabled("extra-crafting-machines");
+        }
+
+        return true;
+    }
+
+    private static boolean isExtraCraftingMachine(@NotNull String id) {
+        return id.contains("_BLUEPRINT")
+            || id.contains("_RECIPE_ENCODER")
+            || id.contains("_AUTO_")
+            || id.equals("NTW_EXPANSION_CRAFTER_MANAGER");
     }
 }
