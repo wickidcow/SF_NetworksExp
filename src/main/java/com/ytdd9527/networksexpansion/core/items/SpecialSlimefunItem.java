@@ -73,6 +73,10 @@ public abstract class SpecialSlimefunItem extends SlimefunItem implements Feedba
 
     @NotNull
     public SpecialSlimefunItem registerThis() {
+        if (!Networks.getConfigManager().isNetworksExpansionEnabled()) {
+            return this;
+        }
+
         this.register(Networks.getInstance());
         return this;
     }
