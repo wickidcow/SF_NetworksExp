@@ -82,6 +82,16 @@ public class ConfigManager {
         return Networks.getInstance().getConfig().getBoolean("features.networks-expansion.enabled", true);
     }
 
+    /**
+     * Returns whether one optional Networks Expansion subsystem should register.
+     * The master Expansion switch always wins, and every subfeature defaults to
+     * enabled so existing installations keep their current behavior after upgrade.
+     */
+    public boolean isNetworksExpansionFeatureEnabled(@NotNull String feature) {
+        return isNetworksExpansionEnabled()
+            && Networks.getInstance().getConfig().getBoolean("features.networks-expansion." + feature, true);
+    }
+
     public @NotNull String getLanguage() {
         return "en-US";
     }
