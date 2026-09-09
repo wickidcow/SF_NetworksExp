@@ -13,9 +13,20 @@ debug: false
 # Optional content bundled into this fork. Changes require a full server restart.
 # Disabling Networks Expansion keeps the original Networks feature set registered
 # and leaves existing Expansion world/database data untouched.
+# Individual Expansion subsystems can also be disabled while keeping the rest active.
 features:
   networks-expansion:
     enabled: true
+    drawers: true
+    advanced-quantum-storage: true
+    quantum-manager: true
+    drawer-manager: true
+    line-transfers: true
+    advanced-transfers: true
+    power-outlets: true
+    due-machines: true
+    item-flow-viewer: true
+    extra-crafting-machines: true
 
 # Runtime compatibility policy. Legacy is the primary target; United and Gugu are accepted
 # through their stable Slimefun API surface. Unknown cores fail closed by default.
