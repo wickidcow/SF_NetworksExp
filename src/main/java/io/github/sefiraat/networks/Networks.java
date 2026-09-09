@@ -179,12 +179,14 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
             startMaintenanceTasks();
 
             AdminDebuggable.load();
-            SlimefunGuideSettings.addOption(GridNewStyleCustomAmountGuideOption.instance());
             LegacyDoctorBridge.register(this);
 
-            Bukkit.getScheduler().runTaskLater(this, Keybinds::distinctAll, 1L);
-            ID.fetchId();
-            Keybinds.fetchScripts();
+            if (configManager.isNetworksExpansionEnabled()) {
+                SlimefunGuideSettings.addOption(GridNewStyleCustomAmountGuideOption.instance());
+                Bukkit.getScheduler().runTaskLater(this, Keybinds::distinctAll, 1L);
+                ID.fetchId();
+                Keybinds.fetchScripts();
+            }
 
             startupComplete = true;
             startupStage = "complete";
@@ -210,7 +212,9 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
             if (localizationService != null) {
                 getLogger().info(getLocalizationService().getString("messages.shutdown.saving-config"));
             }
-            ID.saveId();
+            if (configManager != null && configManager.isNetworksExpansionEnabled()) {
+                ID.saveId();
+            }
             if (configManager != null) {
                 configManager.saveAll();
             }
