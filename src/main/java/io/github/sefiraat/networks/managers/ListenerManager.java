@@ -17,15 +17,18 @@ public class ListenerManager {
         addListener(new ExplosiveToolListener());
         addListener(new NetworkIntegrityListener());
         addListener(new SyncListener());
-        if (Networks.getSupportedPluginManager().isJustEnoughGuide()) {
-            // todo: remove and deprecate
-            try {
-                addListener(new JEGCompatibleListener());
-            } catch (Throwable ignored) {
-                Networks.getSupportedPluginManager().setJustEnoughGuide(false);
+
+        if (Networks.getConfigManager().isNetworksExpansionEnabled()) {
+            if (Networks.getSupportedPluginManager().isJustEnoughGuide()) {
+                // todo: remove and deprecate
+                try {
+                    addListener(new JEGCompatibleListener());
+                } catch (Throwable ignored) {
+                    Networks.getSupportedPluginManager().setJustEnoughGuide(false);
+                }
             }
+            addListener(new HangingBlockInteractListener());
         }
-        addListener(new HangingBlockInteractListener());
     }
 
     private void addListener(@NotNull Listener listener) {
