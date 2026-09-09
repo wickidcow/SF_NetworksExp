@@ -12,6 +12,10 @@ public class SetupUtil {
     public static void setupItem() {
         NetworkSlimefunItems.setup();
 
+        if (!Networks.getConfigManager().isNetworksExpansionEnabled()) {
+            return;
+        }
+
         /* items */
         ExpansionItemsMenus.SUB_MENU_TOOL.addTo(
             ExpansionItems.CARGO_NODE_QUICK_TOOL.registerThis(),
@@ -262,7 +266,9 @@ public class SetupUtil {
      * MainFlexGroup links to the native groups from the single Networks folder.
      */
     public static void setupWiki() {
-        WikiUtils.setupJson(Networks.getInstance());
+        if (Networks.getConfigManager().isNetworksExpansionEnabled()) {
+            WikiUtils.setupJson(Networks.getInstance());
+        }
     }
 
     public static void setupIntegration() {
