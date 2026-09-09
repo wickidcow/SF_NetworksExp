@@ -256,8 +256,8 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
                     ? Lang.getString("displays.quantum_storage.enabled_void_excess")
                     : Lang.getString("displays.quantum_storage.disabled_void_excess"))));
             lore.add(String.format(
-    Lang.getString("displays.quantum_storage.stored_amount"),
-    String.format("%,d / %,d", cache.getAmountLong(), cache.getLimitLong())));
+                Lang.getString("displays.quantum_storage.stored_amount"),
+                String.format("%,d / %,d", cache.getAmountLong(), cache.getLimitLong())));
             if (cache.supportsCustomMaxAmount()) {
                 // Cache limit is set at the potentially custom max amount set
                 // The player could set the custom maximum amount to be the actual maximum amount
