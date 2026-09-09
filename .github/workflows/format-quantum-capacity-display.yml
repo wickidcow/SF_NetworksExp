@@ -26,12 +26,16 @@ jobs:
 
           path = Path('src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkQuantumStorage.java')
           text = path.read_text(encoding='utf-8')
-          old = '''            lore.add(String.format(
-    Lang.getString("displays.quantum_storage.stored_amount"),
-    String.format("%,d / %,d", cache.getAmountLong(), cache.getLimitLong())));'''
-          new = '''            lore.add(String.format(
-                Lang.getString("displays.quantum_storage.stored_amount"),
-                String.format("%,d / %,d", cache.getAmountLong(), cache.getLimitLong())));'''
+          old = '\n'.join([
+              '            lore.add(String.format(',
+              '    Lang.getString("displays.quantum_storage.stored_amount"),',
+              '    String.format("%,d / %,d", cache.getAmountLong(), cache.getLimitLong())));',
+          ])
+          new = '\n'.join([
+              '            lore.add(String.format(',
+              '                Lang.getString("displays.quantum_storage.stored_amount"),',
+              '                String.format("%,d / %,d", cache.getAmountLong(), cache.getLimitLong())));',
+          ])
 
           if text.count(old) != 1:
               raise SystemExit(f'Expected exactly one unformatted amount/capacity block, found {text.count(old)}')
