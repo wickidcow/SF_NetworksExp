@@ -22,6 +22,14 @@ FORBIDDEN_PREFIXES = (
     "dev/rosewood/rosestacker/",
     "io/github/schntgaispock/slimehud/",
     "dev/sefiraat/netheopoiesis/",
+    "io/github/mooy1/infinityexpansion/",
+)
+
+# The universal JAR must not retain constant-pool descriptors for IE1's optional storage implementation.
+# NetworkRoot historically contained these direct references; Shadow now relocates them to inert local link types.
+FORBIDDEN_CLASS_MARKERS = (
+    b"io/github/mooy1/infinityexpansion/items/storage/StorageUnit",
+    b"io/github/mooy1/infinityexpansion/items/storage/StorageCache",
 )
 
 REQUIRED_ENTRIES = (
@@ -31,7 +39,11 @@ REQUIRED_ENTRIES = (
     "io/github/sefiraat/networks/Networks.class",
     "io/github/sefiraat/networks/utils/TransferAudit.class",
     "io/github/sefiraat/networks/integrations/storage/StorageAdapter.class",
+    "io/github/sefiraat/networks/integrations/infinityexpansion/InfinityExpansionIntegration.class",
     "io/github/sefiraat/networks/integrations/infinityexpansion2/InfinityExpansion2Integration.class",
+    "io/github/sefiraat/networks/network/barrel/LegacyInfinityExpansionBarrel.class",
+    "io/github/sefiraat/networks/internal/ie1link/StorageUnit.class",
+    "io/github/sefiraat/networks/internal/ie1link/StorageCache.class",
     "com/ytdd9527/networksexpansion/utils/databases/DrawerRecoveryJournal.class",
 )
 
@@ -93,6 +105,17 @@ def main() -> int:
                     "release JAR bundles Slimefun or optional-plugin API classes:\n - " + sample
                 )
 
+            stale_ie1_links = []
+            for name in sorted(n for n in names if n.endswith(".class")):
+                class_bytes = archive.read(name)
+                if any(marker in class_bytes for marker in FORBIDDEN_CLASS_MARKERS):
+                    stale_ie1_links.append(name)
+            if stale_ie1_links:
+                sample = "\n - ".join(stale_ie1_links[:20])
+                raise SystemExit(
+                    "release JAR still hard-links the optional IE1 StorageUnit/StorageCache API:\n - " + sample
+                )
+
             plugin = read_yaml(archive, "plugin.yml")
             config = read_yaml(archive, "config.yml")
             locale = read_yaml(archive, "lang/en-US.yml")
@@ -140,7 +163,7 @@ def main() -> int:
 
     print(
         f"Universal JAR verification passed: {jar.name}, {len(baseline_ids)} item IDs, "
-        "no bundled Slimefun or optional-plugin API classes."
+        "no bundled Slimefun/optional-plugin APIs and no hard IE1 storage linkage."
     )
     return 0
 
