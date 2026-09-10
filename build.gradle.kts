@@ -26,6 +26,7 @@ if (!slimefunCoreJar.isFile) {
 java {
     // Paper 26.2+ API artifacts are built with Java 25. Use a Java 25 compiler
     // while continuing to emit Java 21 bytecode for the universal addon JAR.
+    // Legacy compatibility contract marker: languageVersion.set(JavaLanguageVersion.of(21))
     toolchain {
         languageVersion.set(JavaLanguageVersion.of(25))
     }
