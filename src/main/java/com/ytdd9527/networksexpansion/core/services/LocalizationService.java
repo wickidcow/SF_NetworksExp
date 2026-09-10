@@ -5,6 +5,7 @@ import com.google.common.base.Preconditions;
 import com.ytdd9527.networksexpansion.utils.TextUtil;
 import com.ytdd9527.networksexpansion.utils.itemstacks.ItemStackUtil;
 import io.github.sefiraat.networks.Networks;
+import io.github.sefiraat.networks.compatibility.SlimefunItemStackBridge;
 import io.github.sefiraat.networks.utils.Keys;
 import io.github.sefiraat.networks.utils.Theme;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
@@ -315,7 +316,8 @@ public class LocalizationService {
     public RecipeType getRecipeType(String id, Material material, String... extraLore) {
         return new RecipeType(
             Keys.customNewKey(this.getPlugin(), id),
-            this.getItemBy(this.recipesKey, id, material, extraLore).item());
+            SlimefunItemStackBridge.asBukkitItemStack(
+                this.getItemBy(this.recipesKey, id, material, extraLore)));
     }
 
     @NotNull
@@ -323,7 +325,8 @@ public class LocalizationService {
     public RecipeType getRecipeType(String id, String texture, String... extraLore) {
         return new RecipeType(
             Keys.customNewKey(this.getPlugin(), id),
-            this.getItemBy(this.recipesKey, id, texture, extraLore).item());
+            SlimefunItemStackBridge.asBukkitItemStack(
+                this.getItemBy(this.recipesKey, id, texture, extraLore)));
     }
 
     @NotNull
@@ -331,7 +334,8 @@ public class LocalizationService {
     public RecipeType getRecipeType(String id, ItemStack itemStack, String... extraLore) {
         return new RecipeType(
             Keys.customNewKey(this.getPlugin(), id),
-            this.getItemBy(this.recipesKey, id, itemStack, extraLore).item());
+            SlimefunItemStackBridge.asBukkitItemStack(
+                this.getItemBy(this.recipesKey, id, itemStack, extraLore)));
     }
 
     private @NotNull String @NotNull [] mergeLore(
