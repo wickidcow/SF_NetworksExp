@@ -181,8 +181,8 @@ public final class InfinityExpansionIntegration implements StorageAdapter {
         throws ReflectiveOperationException {
         final Method getCache = itemClass.getMethod("getCache", Location.class);
         final Field capacity = findCapacityField(itemClass);
-        if (!capacity.trySetAccessible() && !capacity.canAccess(null)) {
-            capacity.setAccessible(true);
+        if (!capacity.trySetAccessible()) {
+            throw new IllegalAccessException("Unable to access IE1 StorageUnit capacity field");
         }
         return new StorageAccessors(getCache, capacity);
     }
