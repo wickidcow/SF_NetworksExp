@@ -1,8 +1,11 @@
 package io.github.sefiraat.networks.integrations.storage;
 
+import io.github.sefiraat.networks.integrations.infinityexpansion.InfinityExpansionIntegration;
 import io.github.sefiraat.networks.network.stackcaches.BarrelIdentity;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -23,6 +26,20 @@ public final class StorageAdapterRegistry {
 
     public StorageAdapterRegistry(@NotNull BiConsumer<String, Throwable> failureHandler) {
         this.failureHandler = failureHandler;
+        registerLegacyInfinityExpansion();
+    }
+
+    private void registerLegacyInfinityExpansion() {
+        final Plugin ie1 = Bukkit.getPluginManager().getPlugin(InfinityExpansionIntegration.PLUGIN_NAME);
+        if (ie1 == null || !ie1.isEnabled()) {
+            return;
+        }
+
+        try {
+            register(new InfinityExpansionIntegration(ie1));
+        } catch (RuntimeException | LinkageError exception) {
+            failureHandler.accept(InfinityExpansionIntegration.PLUGIN_NAME, exception);
+        }
     }
 
     public void register(@NotNull StorageAdapter adapter) {

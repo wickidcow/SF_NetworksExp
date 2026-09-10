@@ -126,6 +126,13 @@ tasks {
         minimize()
         relocate("org.bstats", "io.github.sefiraat.networks.bstats")
         relocate("io.papermc.lib", "dev.sefiraat.cultivation.paperlib")
+        // NetworkRoot historically referenced IE1 storage classes directly. IE1 remains compile-only;
+        // redirect those obsolete descriptors to inert local linkage types so the universal JAR can load
+        // without IE1. Real IE1 storage is handled by InfinityExpansionIntegration via reflection.
+        relocate(
+            "io.github.mooy1.infinityexpansion.items.storage",
+            "io.github.sefiraat.networks.internal.ie1link"
+        )
         exclude("META-INF/*")
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE
         mergeServiceFiles()
