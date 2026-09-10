@@ -5,6 +5,7 @@ public enum CoreVariant {
     SLIMEFUN_LEGACY("Slimefun Legacy", true),
     SLIMEFUN_UNITED("Slimefun United", true),
     SLIMEFUN_GUGU("Slimefun Gugu", true),
+    SLIMEFUN_EXPERIMENTAL("Slimefun Experimental", true),
     OFFICIAL_OR_UNKNOWN("Official/unknown Slimefun", false);
 
     private final String displayName;
