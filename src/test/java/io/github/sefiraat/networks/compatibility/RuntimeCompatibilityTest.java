@@ -19,6 +19,7 @@ class RuntimeCompatibilityTest {
         assertTrue(CoreVariant.SLIMEFUN_LEGACY.isExplicitlySupported());
         assertTrue(CoreVariant.SLIMEFUN_UNITED.isExplicitlySupported());
         assertTrue(CoreVariant.SLIMEFUN_GUGU.isExplicitlySupported());
+        assertTrue(CoreVariant.SLIMEFUN_EXPERIMENTAL.isExplicitlySupported());
     }
 
     @Test
@@ -46,6 +47,13 @@ class RuntimeCompatibilityTest {
         assertEquals(
             CoreVariant.SLIMEFUN_GUGU,
             RuntimeCompatibility.classifyCore("original Slimefun metadata", false, false, true));
+    }
+
+    @Test
+    void classifiesExperimentalFromVersionMetadata() {
+        assertEquals(
+            CoreVariant.SLIMEFUN_EXPERIMENTAL,
+            RuntimeCompatibility.classifyCore("Slimefun Experimental - 2", false, false, false));
     }
 
     @Test
