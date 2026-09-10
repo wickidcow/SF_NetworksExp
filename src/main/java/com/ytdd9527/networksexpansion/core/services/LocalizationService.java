@@ -21,10 +21,8 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.io.File;
@@ -245,15 +243,11 @@ public class LocalizationService {
         Preconditions.checkArgument(key != null, MSG_KEY_NULL);
         Preconditions.checkArgument(id != null, MSG_ID_NULL);
         Preconditions.checkArgument(material != null, MSG_MATERIAL_NULL);
-        SlimefunItemStack item = new SlimefunItemStack(
+        return new SlimefunItemStack(
             (this.idPrefix + id).toUpperCase(Locale.ROOT),
             material,
             this.getString(key + "." + id + KEY_NAME),
-            this.getStringArray(key + "." + id + KEY_LORE));
-        if (extraLore != null && extraLore.length != 0) {
-            appendLore(item, extraLore);
-        }
-        return item;
+            mergeLore(this.getStringArray(key + "." + id + KEY_LORE), extraLore));
     }
 
     @NotNull
@@ -262,13 +256,11 @@ public class LocalizationService {
         Preconditions.checkArgument(key != null, MSG_KEY_NULL);
         Preconditions.checkArgument(id != null, MSG_ID_NULL);
         Preconditions.checkArgument(texture != null, MSG_TEXTURE_NULL);
-        return appendLore(
-            new SlimefunItemStack(
-                (this.idPrefix + id).toUpperCase(Locale.ROOT),
-                texture,
-                this.getString(key + "." + id + ".name"),
-                this.getStringArray(key + "." + id + ".lore")),
-            extraLore);
+        return new SlimefunItemStack(
+            (this.idPrefix + id).toUpperCase(Locale.ROOT),
+            texture,
+            this.getString(key + "." + id + KEY_NAME),
+            mergeLore(this.getStringArray(key + "." + id + KEY_LORE), extraLore));
     }
 
     @NotNull
@@ -277,13 +269,11 @@ public class LocalizationService {
         Preconditions.checkArgument(key != null, MSG_KEY_NULL);
         Preconditions.checkArgument(id != null, MSG_ID_NULL);
         Preconditions.checkArgument(itemStack != null, MSG_ITEMSTACK_NULL);
-        return appendLore(
-            new SlimefunItemStack(
-                (this.idPrefix + id).toUpperCase(Locale.ROOT),
-                itemStack,
-                this.getString(key + "." + id + ".name"),
-                this.getStringArray(key + "." + id + ".lore")),
-            extraLore);
+        return new SlimefunItemStack(
+            (this.idPrefix + id).toUpperCase(Locale.ROOT),
+            itemStack,
+            this.getString(key + "." + id + KEY_NAME),
+            mergeLore(this.getStringArray(key + "." + id + KEY_LORE), extraLore));
     }
 
     @NotNull
@@ -324,39 +314,35 @@ public class LocalizationService {
     @ParametersAreNonnullByDefault
     public RecipeType getRecipeType(String id, Material material, String... extraLore) {
         return new RecipeType(
-            Keys.customNewKey(this.getPlugin(), id), this.getItemBy(this.recipesKey, id, material, extraLore));
+            Keys.customNewKey(this.getPlugin(), id),
+            this.getItemBy(this.recipesKey, id, material, extraLore).item());
     }
 
     @NotNull
     @ParametersAreNonnullByDefault
     public RecipeType getRecipeType(String id, String texture, String... extraLore) {
         return new RecipeType(
-            Keys.customNewKey(this.getPlugin(), id), this.getItemBy(this.recipesKey, id, texture, extraLore));
+            Keys.customNewKey(this.getPlugin(), id),
+            this.getItemBy(this.recipesKey, id, texture, extraLore).item());
     }
 
     @NotNull
     @ParametersAreNonnullByDefault
     public RecipeType getRecipeType(String id, ItemStack itemStack, String... extraLore) {
         return new RecipeType(
-            Keys.customNewKey(this.getPlugin(), id), this.getItemBy(this.recipesKey, id, itemStack, extraLore));
+            Keys.customNewKey(this.getPlugin(), id),
+            this.getItemBy(this.recipesKey, id, itemStack, extraLore).item());
     }
 
-    @SuppressWarnings("deprecation")
-    private <T extends ItemStack> @NotNull T appendLore(
-        @NotNull T itemStack, @Nullable String @Nullable ... extraLore) {
-        Preconditions.checkArgument(itemStack != null, MSG_ITEMSTACK_NULL);
-        if (extraLore != null && extraLore.length != 0) {
-            ItemMeta meta = itemStack.getItemMeta();
-            List<String> lore = meta.hasLore() ? meta.getLore() : new ArrayList<>();
-            if (lore == null) {
-                lore = new ArrayList<>();
-            }
-            lore.addAll(color(Arrays.asList(extraLore)));
-            meta.setLore(lore);
-            itemStack.setItemMeta(meta);
+    private @NotNull String @NotNull [] mergeLore(
+        @NotNull String @NotNull [] baseLore, String... extraLore) {
+        if (extraLore == null || extraLore.length == 0) {
+            return baseLore;
         }
 
-        return itemStack;
+        List<String> lore = new ArrayList<>(Arrays.asList(baseLore));
+        lore.addAll(color(Arrays.asList(extraLore)));
+        return lore.toArray(new String[0]);
     }
 
     @NotNull
