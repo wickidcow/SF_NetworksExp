@@ -49,7 +49,7 @@ public final class RuntimeCompatibility {
             supported = false;
         }
         if (!coreVariant.isExplicitlySupported()) {
-            warnings.add("The detected Slimefun core is not in the tested Legacy/United/Gugu compatibility set.");
+            warnings.add("The detected Slimefun core is not in the tested Legacy/United/Gugu/Experimental compatibility set.");
             if (!plugin.getConfig().getBoolean("compatibility.allow-unknown-slimefun-core", false)) {
                 supported = false;
             }
@@ -108,6 +108,9 @@ public final class RuntimeCompatibility {
             || normalized.contains("slimefunguguproject")
             || guguMarker) {
             return CoreVariant.SLIMEFUN_GUGU;
+        }
+        if (normalized.contains("experimental")) {
+            return CoreVariant.SLIMEFUN_EXPERIMENTAL;
         }
         if (legacyMarker) {
             return CoreVariant.SLIMEFUN_LEGACY;
