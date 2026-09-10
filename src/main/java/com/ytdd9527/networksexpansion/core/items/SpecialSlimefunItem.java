@@ -2,6 +2,7 @@ package com.ytdd9527.networksexpansion.core.items;
 
 import com.balugaq.netex.api.interfaces.FeedbackSendable;
 import io.github.sefiraat.networks.Networks;
+import io.github.sefiraat.networks.compatibility.SlimefunItemStackBridge;
 import io.github.sefiraat.networks.utils.StackUtils;
 import io.github.thebusybiscuit.slimefun4.api.SlimefunAddon;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
@@ -56,7 +57,12 @@ public abstract class SpecialSlimefunItem extends SlimefunItem implements Feedba
         @Nullable ItemStack @NotNull [] recipe,
         @Range(from = 1, to = 64) int outputAmount
     ) {
-        this(itemGroup, item, recipeType, recipe, StackUtils.getAsQuantity(item.item(), outputAmount));
+        this(
+            itemGroup,
+            item,
+            recipeType,
+            recipe,
+            StackUtils.getAsQuantity(SlimefunItemStackBridge.asBukkitItemStack(item), outputAmount));
     }
 
     @Override
