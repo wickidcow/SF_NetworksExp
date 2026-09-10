@@ -56,7 +56,7 @@ public abstract class SpecialSlimefunItem extends SlimefunItem implements Feedba
         @Nullable ItemStack @NotNull [] recipe,
         @Range(from = 1, to = 64) int outputAmount
     ) {
-        this(itemGroup, item, recipeType, recipe, StackUtils.getAsQuantity(item, outputAmount));
+        this(itemGroup, item, recipeType, recipe, StackUtils.getAsQuantity(item.item(), outputAmount));
     }
 
     @Override
