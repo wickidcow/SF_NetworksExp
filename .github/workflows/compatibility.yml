@@ -33,6 +33,12 @@ jobs:
             ref: master
             core_java: "21"
             cache: gradle
+          - key: experimental
+            display: Slimefun Experimental
+            repository: Slimefun/Slimefun4
+            ref: experimental
+            core_java: "21"
+            cache: maven
 
     steps:
       - name: Check out Networks
