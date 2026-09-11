@@ -46,13 +46,13 @@ A change is not considered complete merely because idle TPS remains 20. The impo
 
 ## Phase 1: topology and transport hot paths
 
-Status: **in progress**.
+Status: **in progress — Phase 1A implemented; Phase 1B prototype compiling on all supported cores**.
 
 ### P0 findings
 
-- **Controller steady-state topology work:** the maintained controller no longer performs original full neighbor discovery every stable tick, but it still creates a fresh `NetworkRoot` and copies the entire cached node tree on every controller tick. This remains O(network size) object allocation and registry work for an unchanged network. The original implementation rebuilt the entire graph every tick, so the fork is already safer, but giant networks still pay a large steady-state cost. This needs a behavior-preserving stable-root strategy with explicit dynamic-state refresh for power, storage views, record-flow state, particles, and root-ready event compatibility.
-- **Line-transfer grab routing:** `AbstractTransfer` currently checks whether a target has a withdrawable item by asking for safe transport slots, then `LineOperationUtil.grabItem` asks for the same safe transport slots again. Item-aware destinations can make that callback expensive. Phase 1 removes the duplicate query while retaining the same transfer modes and empty-inventory behavior.
-- **Repeated transport misses:** normal Grabber, Import, Export, and Expansion transfer variants can retry misses frequently. These will be reviewed for bounded/adaptive miss handling after parity tests establish the exact original successful-transfer semantics.
+- **Controller steady-state topology work:** the audit branch now reuses an unchanged `NetworkRoot` instead of allocating and copying the entire node tree every controller tick. A real topology discovery still occurs when the root is missing, topology is marked dirty, the node limit changes, or record-flow configuration changes. Stable ticks explicitly re-sum live power-node charge, refresh monitor-backed storage views, refresh particle state, and still fire `NetworkRootReadyEvent`. This removes the O(network size) per-tick object-graph copy from the normal steady-state path while keeping the dirty rebuild path intact.
+- **Line-transfer grab routing:** the audit branch removes the duplicate safe-slot preflight from Expansion line-transfer grabbers. `LineOperationUtil.grabItem` remains the single owner of transport-slot discovery, so the same transport-mode and quantity logic runs with one fewer potentially expensive destination query.
+- **Repeated transport misses:** normal Grabber, Import, Export, and Expansion transfer variants can retry misses frequently. These remain under review; no broad cooldown will be added unless source/destination changes can invalidate it promptly enough to avoid changing successful automation behavior.
 
 ### Existing protections confirmed
 
@@ -64,19 +64,30 @@ Status: **in progress**.
 - Doctor maintenance uses bounded rotating scans.
 - The compatibility verifier protects plugin identity, item IDs, supported Slimefun core families, Java target, runtime safety, and transaction/storage invariants.
 
-## Planned phases
+## Phase status
 
 ### Phase 1A — line-transfer duplicate routing
 
-Remove duplicate destination slot-discovery work from Expansion grab line transfers. Verify all transport modes retain their original final inventory result.
+**Implemented on the audit branch.** Duplicate destination slot discovery was removed from normal and vanilla Expansion grab line transfers. The compatibility matrix passes against Slimefun Legacy, United, and Gugu.
 
 ### Phase 1B — controller steady-state root reuse
 
-Prototype a stable-root path on an audit branch. A controller with unchanged topology should not recreate every node each tick. Dynamic values that historically refreshed through reconstruction must be refreshed explicitly. Add counters for reused roots versus topology rebuilds and retain a fallback to full discovery whenever invariants are uncertain.
+**Prototype implemented on the audit branch.** Stable controller ticks reuse the existing root instead of rebuilding/copying every node. The root reuse counter is tracked separately from true topology rebuilds. Dynamic power, storage views, crayon particle state, record-flow changes, dirty topology, controller limits, and `NetworkRootReadyEvent` remain explicitly accounted for.
+
+Before this phase is considered merge-ready, stage it on a mature server and verify:
+
+- A large unchanged network continues crafting, pushing, grabbing, importing, exporting, and displaying power normally.
+- Adding/removing a cable or machine causes the affected controller to rebuild and immediately reflects the new topology.
+- Breaking/replacing a controller or unloading/reloading its chunks leaves no stale runtime root.
+- Power-node charge is accurate before and after machine consumption.
+- Empty monitored storage becoming non-empty, and non-empty storage becoming empty, is reflected without stale item views.
+- Record-flow enable/disable and crayon particle toggles still take effect.
+- Optional storage integrations still receive their locate/root-ready events.
+- Spark and Slimefun profiler captures show controller work scaling with changed state rather than total network size on every stable tick.
 
 ### Phase 1C — core Grabber / Import / Export misses
 
-Measure and reduce repeated misses without delaying successful work. Any cooldown must be request-specific and must be cleared immediately when the relevant source/destination state changes or succeeds.
+**Next after the stable-root runtime check.** Measure and reduce repeated misses without delaying successful work. Any cooldown must be request-specific and must be cleared immediately when the relevant source/destination state changes or succeeds.
 
 ### Phase 2 — storage lookup and grid/crafting paths
 
