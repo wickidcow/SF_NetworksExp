@@ -12,8 +12,8 @@ permissions:
   contents: write
 
 env:
-  LEGACY_ARTIFACT_VERSION: "1.0.14"
-  OUTPUT_NAME: "SF_NetworksExp1.0.14.jar"
+  LEGACY_ARTIFACT_VERSION: "1.0.15"
+  OUTPUT_NAME: "SF_NetworksExp1.0.15.jar"
 
 # Gradle's internal runtime-contract output remains Networks-Legacy-2.1.112-1.0.jar.
 # CI stages that JAR under the public Slimefun Legacy addon release naming convention.
@@ -112,5 +112,5 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$JAR" --clobber
           else
-            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Networks Legacy 1.0.14 adds a restart-only configuration toggle for the bundled Networks Expansion feature set. The default remains enabled for compatibility. When disabled, original Networks items and core listeners still register, while Expansion items, guide sections, drawer database services, Expansion-only listeners, keybind/ID bootstrap, guide options, and Expansion wiki setup are skipped. Existing Expansion world and database data are preserved untouched so the feature can be re-enabled on a later restart. The v1.0.13 directional-cache performance improvements, v1.0.12 controller integrity audit changes, v1.0.11 controller/line-transfer improvements, v1.0.10 Auto Crafter optimizations, duplicate ticker coalescing, Quantum Storage display defaults, anti-duplication protections, item IDs, world data, database formats, crafting compatibility, and IE2 integration remain unchanged."
+            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Networks Legacy 1.0.15 reduces burst cost from Network Pushers feeding item-aware Slimefun machines. Pusher, MorePusher, and BestPusher now collapse duplicate templates into one logical transfer request, rotate a bounded set of unique ingredient requests per tick, and update feedback/particles once per pusher tick. The classic four-template Pusher remains full-speed, while larger More/Best Pushers spread expensive destination-routing and network-withdrawal work across subsequent ticks instead of doing every configured ingredient in one burst. Existing item IDs, world data, database formats, anti-duplication protections, IE2 integration, and the 1.0.14 Expansion toggle remain unchanged."
           fi
