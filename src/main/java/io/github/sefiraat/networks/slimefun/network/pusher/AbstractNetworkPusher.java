@@ -19,6 +19,9 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
 import org.bukkit.Bukkit;
@@ -39,6 +42,18 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
      * template sets instead of issuing every expensive request in the same server tick.
      */
     private static final int MAX_UNIQUE_REQUESTS_PER_TICK = 4;
+
+    /**
+     * Failed requests are retried quickly at first, then progressively less often while a destination
+     * remains unable to accept that exact item. Successful transfers immediately clear the backoff.
+     */
+    private static final int FAILED_RETRY_BASE_TICKS = 4;
+    private static final int FAILED_RETRY_MAX_TICKS = 20;
+    private static final long NANOS_PER_TICK = 50_000_000L;
+    private static final long STALE_BACKOFF_RETENTION_NANOS = 30_000_000_000L;
+    private static final int BACKOFF_PRUNE_MASK = 0xFF;
+    private static final Map<PushRequestKey, FailureBackoff> FAILED_REQUEST_BACKOFF = new ConcurrentHashMap<>();
+    private static final AtomicInteger BACKOFF_PRUNE_COUNTER = new AtomicInteger();
 
     private static final int NORTH_SLOT = 11;
     private static final int SOUTH_SLOT = 29;
@@ -80,8 +95,9 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
         }
 
         final BlockFace direction = getCurrentDirection(blockMenu);
-        final BlockMenu targetMenu = StorageCacheUtils.getMenu(
-            blockMenu.getBlock().getRelative(direction).getLocation());
+        final Block sourceBlock = blockMenu.getBlock();
+        final Block targetBlock = sourceBlock.getRelative(direction);
+        final BlockMenu targetMenu = StorageCacheUtils.getMenu(targetBlock.getLocation());
 
         if (targetMenu == null) {
             sendFeedback(blockMenu.getLocation(), FeedbackType.NO_TARGET_BLOCK);
@@ -102,29 +118,40 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
          * Item-aware destinations such as Supreme machines can perform recipe selection and multiple
          * similarity scans every time transport slots are requested. More/Best Pushers previously did
          * that for every configured template in one tick, which can produce multi-millisecond bursts.
-         * Rotate a bounded window through the unique requests instead. Multiplying game time by the
-         * window size gives fair coverage without retaining per-block scheduler state.
+         * Rotate a bounded window through the unique requests instead. Failed requests additionally use
+         * a short adaptive backoff so a full/busy destination is not queried again every single tick.
          */
         final List<Map.Entry<ItemStack, Integer>> requests = new ArrayList<>(pushRequests.entrySet());
         final int requestCount = requests.size();
-        final int attempts = Math.min(MAX_UNIQUE_REQUESTS_PER_TICK, requestCount);
-        final Block sourceBlock = blockMenu.getBlock();
+        final int attemptBudget = Math.min(MAX_UNIQUE_REQUESTS_PER_TICK, requestCount);
         final long rotationSeed = sourceBlock.getWorld().getGameTime() * MAX_UNIQUE_REQUESTS_PER_TICK
             + sourceBlock.getX() * 31L
             + sourceBlock.getY() * 17L
             + sourceBlock.getZ();
         final int startIndex = (int) Math.floorMod(rotationSeed, (long) requestCount);
+        final long now = System.nanoTime();
+        maybePruneBackoff(now);
 
+        int attempted = 0;
         boolean movedAny = false;
-        for (int attempt = 0; attempt < attempts; attempt++) {
-            final Map.Entry<ItemStack, Integer> request = requests.get((startIndex + attempt) % requestCount);
+        for (int offset = 0; offset < requestCount && attempted < attemptBudget; offset++) {
+            final Map.Entry<ItemStack, Integer> request = requests.get((startIndex + offset) % requestCount);
             final ItemStack template = request.getKey();
+            final PushRequestKey requestKey = createRequestKey(sourceBlock, targetBlock, template);
+
+            // Cooling requests do not consume the per-tick budget, leaving room for other ingredients.
+            if (isBackedOff(requestKey, now)) {
+                continue;
+            }
+            attempted++;
+
             final int[] slots = BlockMenuUtil.getSafeTransportSlots(
                 targetMenu,
                 ItemTransportFlow.INSERT,
                 template);
 
             if (slots.length == 0) {
+                recordFailure(requestKey, now);
                 continue;
             }
 
@@ -135,7 +162,18 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
                 template,
                 request.getValue(),
                 slots);
-            movedAny |= moved > 0;
+
+            if (moved > 0) {
+                FAILED_REQUEST_BACKOFF.remove(requestKey);
+                movedAny = true;
+            } else {
+                recordFailure(requestKey, now);
+            }
+        }
+
+        // If every selected request is cooling down, keep the current feedback state and do no destination work.
+        if (attempted == 0) {
+            return;
         }
 
         // Feedback and particles are visual state, so update them once per pusher tick rather than per template.
@@ -181,9 +219,63 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
         return requests;
     }
 
+    private static @NotNull PushRequestKey createRequestKey(
+        @NotNull Block sourceBlock,
+        @NotNull Block targetBlock,
+        @NotNull ItemStack template) {
+        return new PushRequestKey(
+            sourceBlock.getWorld().getUID(),
+            sourceBlock.getX(),
+            sourceBlock.getY(),
+            sourceBlock.getZ(),
+            targetBlock.getX(),
+            targetBlock.getY(),
+            targetBlock.getZ(),
+            template.clone());
+    }
+
+    private static boolean isBackedOff(@NotNull PushRequestKey requestKey, long now) {
+        final FailureBackoff backoff = FAILED_REQUEST_BACKOFF.get(requestKey);
+        return backoff != null && now < backoff.retryAfterNanos();
+    }
+
+    private static void recordFailure(@NotNull PushRequestKey requestKey, long now) {
+        FAILED_REQUEST_BACKOFF.compute(requestKey, (key, previous) -> {
+            final int failures = previous == null
+                ? 1
+                : Math.min(previous.consecutiveFailures() + 1, 31);
+            final int shift = Math.min(failures - 1, 3);
+            final int delayTicks = Math.min(FAILED_RETRY_MAX_TICKS, FAILED_RETRY_BASE_TICKS << shift);
+            return new FailureBackoff(failures, now + delayTicks * NANOS_PER_TICK);
+        });
+    }
+
+    private static void maybePruneBackoff(long now) {
+        if ((BACKOFF_PRUNE_COUNTER.incrementAndGet() & BACKOFF_PRUNE_MASK) != 0) {
+            return;
+        }
+
+        FAILED_REQUEST_BACKOFF.entrySet().removeIf(entry ->
+            entry.getValue().retryAfterNanos() + STALE_BACKOFF_RETENTION_NANOS < now);
+    }
+
     private static int saturatingAdd(int left, int right) {
         final long sum = (long) left + right;
         return sum >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) sum;
+    }
+
+    private record PushRequestKey(
+        UUID worldId,
+        int sourceX,
+        int sourceY,
+        int sourceZ,
+        int targetX,
+        int targetY,
+        int targetZ,
+        ItemStack template) {
+    }
+
+    private record FailureBackoff(int consecutiveFailures, long retryAfterNanos) {
     }
 
     @Override
