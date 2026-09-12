@@ -12,8 +12,8 @@ permissions:
   contents: write
 
 env:
-  LEGACY_ARTIFACT_VERSION: "1.0.17"
-  OUTPUT_NAME: "SF_NetworksExp1.0.17.jar"
+  LEGACY_ARTIFACT_VERSION: "1.0.18"
+  OUTPUT_NAME: "SF_NetworksExp1.0.18.jar"
 
 # Gradle's internal runtime-contract output remains Networks-Legacy-2.1.112-1.0.jar.
 # CI stages that JAR under the public Slimefun Legacy addon release naming convention.
@@ -112,5 +112,5 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$JAR" --clobber
           else
-            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Networks Legacy 1.0.17 reviews the Expansion transfer-pusher family for consistency and server cost. Expansion Enhanced and Ultimate push-only transfers now process at most four configured template slots per transfer tick and rotate fairly through the rest, so 9/12-template Line Transfer Pushers no longer multiply every configured ingredient across every inventory in a 32/64-block chain in one burst. Standard pushers with four or fewer active templates remain full-speed, and P2P slot indexes are preserved. Newly placed Expansion transfer machines now also start in the addon's documented FIRST_STOP transport mode instead of the generic NONE fallback. Existing saved transport modes, item IDs, world data, database formats, transfer ranges, anti-duplication protections, IE2 integration, the 1.0.16 failed-transfer backoff, and the 1.0.14 Expansion toggle remain unchanged."
+            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Networks Legacy 1.0.18 fixes Network Recipe Encoder collisions between addon items and vanilla crafting recipes. When the encoder matrix contains registered Slimefun ingredients, it now resolves the Slimefun recipe first, matching original Networks behavior, before falling back to Bukkit's live player crafting path. This fixes recipes such as InfinityExpansion2 Void Ingots -> Void Block and Supreme Thornium Bits -> Thornium Dust, whose custom ingredients use NETHERITE_INGOT and IRON_NUGGET as their base materials and could otherwise collide with vanilla compression recipes. Pure vanilla matrices still use the live Bukkit/PrepareItemCraftEvent path first, and target-item disambiguation, exact ingredient validation, item conservation, item IDs, world data, database formats, anti-duplication protections, IE2 integration, and previous pusher/line-transfer performance fixes remain unchanged."
           fi
