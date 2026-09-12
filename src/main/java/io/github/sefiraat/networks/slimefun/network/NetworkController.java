@@ -363,10 +363,9 @@ public class NetworkController extends NetworkObject {
     }
 
     /**
-     * Refreshes the state that the old per-tick root reconstruction implicitly refreshed without rebuilding the
-     * topology object graph. Storage views are refreshed before NetworkRootReadyEvent fires so listeners observe
-     * current monitor-backed storage, while power is re-summed from live power nodes for this controller tick.
-     */
+ * Refreshes dynamic state without rebuilding the topology object graph. Power is re-summed from live power
+ * nodes, while storage-derived views are invalidated back to a fresh root's lazy state before the ready event.
+ */
     private static void refreshStableRoot(@NotNull NetworkRoot root, @NotNull Location controllerLocation) {
         long livePower = 0L;
         for (Location powerNodeLocation : root.getPowerNodes()) {
@@ -377,9 +376,9 @@ public class NetworkController extends NetworkObject {
         }
         root.setRootPower(livePower);
         root.setDisplayParticles(CRAYONS.contains(controllerLocation));
-  // A fresh root would leave storage views lazy. Stable reuse should do the same instead of
-// eagerly rescanning every monitor in every direction on every unchanged controller tick.
-root.invalidateRootItems();
+        // A fresh root leaves storage-derived views lazy. Stable reuse should do the same instead of
+        // rescanning every monitor in every direction on every unchanged controller tick.
+        root.invalidateRootItems();
     }
 
     /**

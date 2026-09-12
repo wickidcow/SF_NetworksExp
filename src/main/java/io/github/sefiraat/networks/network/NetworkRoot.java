@@ -1345,9 +1345,9 @@ public class NetworkRoot extends NetworkNode {
                 }
                 final int toRemove = (int) Math.min(power - removed, charge);
                 powerNode.removeCharge(node, toRemove);
-    // Only subtract the charge actually removed from this node. Subtracting the full
-  // request once per power node could drive the root total negative when one request spans nodes.
-  this.rootPower -= toRemove;
+        // Only subtract the charge actually removed from this node. Subtracting the full
+        // request once per power node could drive the root total negative when one request spans nodes.
+        this.rootPower -= toRemove;
                 removed = removed + toRemove;
             }
             if (removed >= power) {
