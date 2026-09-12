@@ -1,11 +1,10 @@
 package com.balugaq.netex.api.factories;
 
 import com.balugaq.netex.api.enums.TransferType;
+import com.balugaq.netex.api.enums.TransportMode;
 import com.balugaq.netex.api.transfer.TransferConfiguration;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-
-import static com.ytdd9527.networksexpansion.core.items.machines.AdvancedDirectional.DEFAULT_TRANSPORT_MODE;
 
 public class TransferConfigFactory {
     public static final int ADVANCED_DEFAULT_TRANSPORT_LIMIT = 3456;
@@ -23,11 +22,19 @@ public class TransferConfigFactory {
     @NotNull
     public static TransferConfiguration getTransferConfiguration(
         @NotNull TransferType transferType, @Nullable String id) {
+        /*
+         * Expansion transfer item lore has always documented FIRST_STOP as the default mode.
+         * Keep that contract here instead of inheriting AdvancedDirectional's generic NONE fallback.
+         * Existing placed blocks keep their persisted transport_mode value; this only defines the
+         * intended default for new/missing transfer configurations.
+         */
+        final TransportMode defaultTransportMode = TransportMode.FIRST_STOP;
+
         return new TransferConfiguration(
             transferType.config(id, MAX_DISTANCE, 1),
             transferType.config(id, PUSHITEM_TICK, 1),
             transferType.config(id, GRABITEM_TICK, 1),
-            DEFAULT_TRANSPORT_MODE,
+            defaultTransportMode,
             (transferType.isAdvanced() ? ADVANCED_DEFAULT_TRANSPORT_LIMIT : DEFAULT_MAX_DISTANCE),
             transferType.config(id, REQUIRED_POWER, (transferType.isTransfer() ? 5000 : 0)),
             transferType.config(id, MAX_DISTANCE, 1),

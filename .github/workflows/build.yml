@@ -12,8 +12,8 @@ permissions:
   contents: write
 
 env:
-  LEGACY_ARTIFACT_VERSION: "1.0.16"
-  OUTPUT_NAME: "SF_NetworksExp1.0.16.jar"
+  LEGACY_ARTIFACT_VERSION: "1.0.17"
+  OUTPUT_NAME: "SF_NetworksExp1.0.17.jar"
 
 # Gradle's internal runtime-contract output remains Networks-Legacy-2.1.112-1.0.jar.
 # CI stages that JAR under the public Slimefun Legacy addon release naming convention.
@@ -112,5 +112,5 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$JAR" --clobber
           else
-            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Networks Legacy 1.0.16 adds adaptive failed-transfer backoff to Network Pushers. If a destination has no valid insert slot or a transfer moves zero items, that exact source/destination/item request waits briefly before retrying, increasing from 4 to 8 to 16 and then at most 20 ticks while the failure continues. Successful transfers clear the backoff immediately, and cooling requests do not consume the four-request per-tick budget, so other ingredients remain responsive. This further reduces repeated expensive destination checks against item-aware machines such as Supreme Electric Magical Fabricators while preserving successful transfer throughput, item IDs, world data, database formats, anti-duplication protections, IE2 integration, the 1.0.15 pusher batching, and the 1.0.14 Expansion toggle."
+            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Networks Legacy 1.0.17 reviews the Expansion transfer-pusher family for consistency and server cost. Expansion Enhanced and Ultimate push-only transfers now process at most four configured template slots per transfer tick and rotate fairly through the rest, so 9/12-template Line Transfer Pushers no longer multiply every configured ingredient across every inventory in a 32/64-block chain in one burst. Standard pushers with four or fewer active templates remain full-speed, and P2P slot indexes are preserved. Newly placed Expansion transfer machines now also start in the addon's documented FIRST_STOP transport mode instead of the generic NONE fallback. Existing saved transport modes, item IDs, world data, database formats, transfer ranges, anti-duplication protections, IE2 integration, the 1.0.16 failed-transfer backoff, and the 1.0.14 Expansion toggle remain unchanged."
           fi

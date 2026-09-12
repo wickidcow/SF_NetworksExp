@@ -36,6 +36,7 @@ import org.jetbrains.annotations.Nullable;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,8 +44,17 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @SuppressWarnings("DuplicatedCode")
 public abstract class AbstractTransfer extends AdvancedDirectional implements RecipeDisplayItem {
+    /**
+     * Keep Expansion Enhanced/Ultimate pusher variants consistent with the regular Networks pusher family:
+     * no more than four configured template requests are attempted in one transfer tick. Larger template
+     * sets rotate fairly across later ticks. The template list keeps its original slot indexes so P2P mode
+     * continues to map each template to the same destination slot.
+     */
+    private static final int MAX_PUSH_TEMPLATES_PER_TICK = 4;
+
     private static final Map<Location, Integer> PUSH_TICKER_MAP = new HashMap<>();
     private static final Map<Location, Integer> GRAB_TICKER_MAP = new HashMap<>();
+    private static final Map<Location, Integer> PUSH_TEMPLATE_CURSOR_MAP = new HashMap<>();
     private static final Map<Location, Integer> LAST_TRANSFER_SERVER_TICK = new ConcurrentHashMap<>();
     private final TransferConfiguration config;
 
@@ -79,6 +89,13 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
         for (int slot : config.templateSlots) {
             this.getSlotsToDrop().add(slot);
         }
+
+        /*
+         * AdvancedDirectional's generic placement fallback is NONE, but Expansion transfer machines are
+         * documented to start in FIRST_STOP. Persist the transfer-specific default immediately so new
+         * blocks load and tick with the same mode shown by the original addon documentation.
+         */
+        setTransportMode(e.getBlock().getLocation(), config.defaultTransportMode);
     }
 
     @Override
@@ -330,15 +347,43 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
     private @Nullable List<ItemStack> collectTemplates(@NotNull BlockMenu blockMenu) {
         final int[] slots = getItemSlots();
         final List<ItemStack> templates = new ArrayList<>(slots.length);
-        boolean hasTemplate = false;
-        for (int slot : slots) {
-            final ItemStack template = blockMenu.getItemInSlot(slot);
+        final List<Integer> activeIndexes = new ArrayList<>(slots.length);
+
+        for (int index = 0; index < slots.length; index++) {
+            final ItemStack template = blockMenu.getItemInSlot(slots[index]);
             templates.add(template);
             if (template != null && template.getType() != Material.AIR) {
-                hasTemplate = true;
+                activeIndexes.add(index);
             }
         }
-        return hasTemplate ? templates : null;
+
+        if (activeIndexes.isEmpty()) {
+            return null;
+        }
+
+        /*
+         * Standard pusher variants have at most four configured templates and stay full-speed. Enhanced
+         * and Ultimate push-only variants can expose nine or twelve templates; processing every one against
+         * every target in a 32/64-block line multiplies expensive item-aware slot checks. Rotate four slot
+         * positions per transfer tick instead. Null placeholders retain the original indexes for P2P mode.
+         */
+        if (!(this instanceof PushTickOnly) || activeIndexes.size() <= MAX_PUSH_TEMPLATES_PER_TICK) {
+            return templates;
+        }
+
+        final Location location = blockMenu.getLocation();
+        final int activeCount = activeIndexes.size();
+        final int start = Math.floorMod(PUSH_TEMPLATE_CURSOR_MAP.getOrDefault(location, 0), activeCount);
+        final int budget = Math.min(MAX_PUSH_TEMPLATES_PER_TICK, activeCount);
+        final List<ItemStack> scheduled = new ArrayList<>(Collections.nCopies(slots.length, null));
+
+        for (int offset = 0; offset < budget; offset++) {
+            final int templateIndex = activeIndexes.get((start + offset) % activeCount);
+            scheduled.set(templateIndex, templates.get(templateIndex));
+        }
+
+        PUSH_TEMPLATE_CURSOR_MAP.put(location.clone(), (start + budget) % activeCount);
+        return scheduled;
     }
 
     private static boolean hasWithdrawableItem(@NotNull BlockMenu blockMenu) {
@@ -363,6 +408,7 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
         final Location location = event.getBlock().getLocation();
         PUSH_TICKER_MAP.remove(location);
         GRAB_TICKER_MAP.remove(location);
+        PUSH_TEMPLATE_CURSOR_MAP.remove(location);
         LAST_TRANSFER_SERVER_TICK.remove(location);
     }
 
