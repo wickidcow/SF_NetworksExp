@@ -46,13 +46,13 @@ A change is not considered complete merely because idle TPS remains 20. The impo
 
 ## Phase 1: topology and transport hot paths
 
-Status: **in progress — Phase 1A implemented; Phase 1B prototype compiling on all supported cores**.
+Status: **in progress — Phase 1A implemented; Phase 1B runtime-tested; Phase 1C implementation in progress**.
 
 ### P0 findings
 
 - **Controller steady-state topology work:** the audit branch now reuses an unchanged `NetworkRoot` instead of allocating and copying the entire node tree every controller tick. A real topology discovery still occurs when the root is missing, topology is marked dirty, the node limit changes, or record-flow configuration changes. Stable ticks explicitly re-sum live power-node charge, refresh monitor-backed storage views, refresh particle state, and still fire `NetworkRootReadyEvent`. This removes the O(network size) per-tick object-graph copy from the normal steady-state path while keeping the dirty rebuild path intact.
 - **Line-transfer grab routing:** the audit branch removes the duplicate safe-slot preflight from Expansion line-transfer grabbers. `LineOperationUtil.grabItem` remains the single owner of transport-slot discovery, so the same transport-mode and quantity logic runs with one fewer potentially expensive destination query.
-- **Repeated transport misses:** normal Grabber, Import, Export, and Expansion transfer variants can retry misses frequently. These remain under review; no broad cooldown will be added unless source/destination changes can invalidate it promptly enough to avoid changing successful automation behavior.
+- **Repeated transport misses:** the root already contains the historical accessor-level miss limiter. Phase 1C now short-circuits Grabber, Import, Export, Advanced Import, and Advanced Export work while that same limiter is active, instead of layering a second cooldown with different gameplay timing.
 
 ### Existing protections confirmed
 
@@ -72,22 +72,20 @@ Status: **in progress — Phase 1A implemented; Phase 1B prototype compiling on 
 
 ### Phase 1B — controller steady-state root reuse
 
-**Prototype implemented on the audit branch.** Stable controller ticks reuse the existing root instead of rebuilding/copying every node. The root reuse counter is tracked separately from true topology rebuilds. Dynamic power, storage views, crayon particle state, record-flow changes, dirty topology, controller limits, and `NetworkRootReadyEvent` remain explicitly accounted for.
+**Prototype implemented and runtime-tested on the audit branch.** Stable controller ticks reuse the existing root instead of rebuilding/copying every node. The root reuse counter is tracked separately from true topology rebuilds. Dynamic power, storage views, crayon particle state, record-flow changes, dirty topology, controller limits, and `NetworkRootReadyEvent` remain explicitly accounted for.
 
-Before this phase is considered merge-ready, stage it on a mature server and verify:
-
-- A large unchanged network continues crafting, pushing, grabbing, importing, exporting, and displaying power normally.
-- Adding/removing a cable or machine causes the affected controller to rebuild and immediately reflects the new topology.
-- Breaking/replacing a controller or unloading/reloading its chunks leaves no stale runtime root.
-- Power-node charge is accurate before and after machine consumption.
-- Empty monitored storage becoming non-empty, and non-empty storage becoming empty, is reflected without stale item views.
-- Record-flow enable/disable and crayon particle toggles still take effect.
-- Optional storage integrations still receive their locate/root-ready events.
-- Spark and Slimefun profiler captures show controller work scaling with changed state rather than total network size on every stable tick.
+Runtime testing on a mature production-style setup showed no immediate regression while Pushers, MorePushers, Supreme machines, grids, and line transfer activity remained operational. Before merge, continue watching topology edits, chunk reloads, power accounting, and storage-view changes under normal use.
 
 ### Phase 1C — core Grabber / Import / Export misses
 
-**Next after the stable-root runtime check.** Measure and reduce repeated misses without delaying successful work. Any cooldown must be request-specific and must be cleared immediately when the relevant source/destination state changes or succeeds.
+**Implementation in progress.** The original root miss limiter remains the sole recovery timer (`speed-down.transport-miss-threshold` and `speed-down.reduce-ms`). The audit branch now checks that existing state before expensive repeated work:
+
+- Network Grabber avoids transport-slot discovery while its network-input accessor is already limited and stops scanning additional source slots if a miss crosses the threshold mid-tick.
+- Network Import and Advanced Import preserve empty-inventory behavior, but stop scanning remaining occupied slots once the root is already rejecting that accessor.
+- Network Export preserves template/output validation before checking the existing output limiter.
+- Advanced Export preserves `NO_ITEM_REQUEST` for an empty template area, but stops processing additional templates once the existing output limiter becomes active.
+
+No new cooldown duration, miss threshold, item ordering, transfer amount, tick rate, or success path is introduced by this phase.
 
 ### Phase 2 — storage lookup and grid/crafting paths
 
