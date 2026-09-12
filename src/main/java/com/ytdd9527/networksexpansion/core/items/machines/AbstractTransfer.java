@@ -10,7 +10,6 @@ import com.balugaq.netex.api.interfaces.PushTickOnly;
 import com.balugaq.netex.api.interfaces.SoftCellBannable;
 import com.balugaq.netex.api.interfaces.VanillaTransfer;
 import com.balugaq.netex.api.transfer.TransferConfiguration;
-import com.balugaq.netex.utils.BlockMenuUtil;
 import com.balugaq.netex.utils.LineOperationUtil;
 import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.network.NetworkRoot;
@@ -22,7 +21,6 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.attributes.RecipeDisplayItem;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
-import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -249,18 +247,19 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
             return;
         }
 
+        /*
+         * Let LineOperationUtil own transport-slot discovery. The previous preflight called
+         * getSafeTransportSlots here and LineOperationUtil immediately called it again, doubling
+         * an item-aware destination's routing work without changing the eventual transfer result.
+         */
         LineOperationUtil.doOperation(
             blockMenu.getLocation(),
             direction,
             config.maxDistance,
             false,
             false,
-            (targetMenu) -> {
-                if (hasWithdrawableItem(targetMenu)) {
-                    LineOperationUtil.grabItem(
-                        targetMenu.getLocation(), root, targetMenu, mode, limitQuantity);
-                }
-            });
+            (targetMenu) -> LineOperationUtil.grabItem(
+                targetMenu.getLocation(), root, targetMenu, mode, limitQuantity));
 
         root.removeRootPower(config.defaultRequiredPower);
     }
@@ -313,16 +312,12 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
             config.maxDistance,
             false,
             false,
-            (menu) -> {
-                if (hasWithdrawableItem(menu)) {
-                    LineOperationUtil.grabItem(
-                        menu.getLocation() == null ? blockMenu.getLocation() : menu.getLocation(),
-                        root,
-                        menu,
-                        mode,
-                        limitQuantity);
-                }
-            });
+            (menu) -> LineOperationUtil.grabItem(
+                menu.getLocation() == null ? blockMenu.getLocation() : menu.getLocation(),
+                root,
+                menu,
+                mode,
+                limitQuantity));
 
         root.removeRootPower(config.defaultRequiredPower);
     }
@@ -339,17 +334,6 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
             }
         }
         return hasTemplate ? templates : null;
-    }
-
-    private static boolean hasWithdrawableItem(@NotNull BlockMenu blockMenu) {
-        final int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
-        for (int slot : slots) {
-            final ItemStack item = blockMenu.getItemInSlot(slot);
-            if (item != null && item.getType() != Material.AIR) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private void finishPushAttempt(@NotNull BlockMenu blockMenu, @NotNull NetworkRoot root) {

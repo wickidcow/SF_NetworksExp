@@ -3,6 +3,7 @@ package io.github.sefiraat.networks.slimefun.network;
 import com.balugaq.netex.api.enums.FeedbackType;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
 import io.github.sefiraat.networks.NetworkStorage;
+import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
 import io.github.sefiraat.networks.slimefun.NetworkSlimefunItems;
@@ -83,15 +84,36 @@ public class NetworkImport extends NetworkObject {
             return;
         }
 
+        final NetworkRoot root = definition.getNode().getRoot();
+        final var accessor = blockMenu.getLocation();
+        boolean checkedInitialAccess = false;
+
         for (int inputSlot : INPUT_SLOTS) {
             final ItemStack itemStack = blockMenu.getItemInSlot(inputSlot);
 
             if (itemStack == null || itemStack.getType() == Material.AIR) {
                 continue;
             }
-            if (NetworkTransferUtils.moveMenuSlotIntoNetwork(
-                definition.getNode().getRoot(), blockMenu.getLocation(), blockMenu, inputSlot) > 0) {
-                sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
+
+            // Preserve the historical no-op behavior for an empty importer, but once there is actual work,
+            // skip it immediately while the root's existing transport-miss limiter is active.
+            if (!checkedInitialAccess) {
+                checkedInitialAccess = true;
+                if (!root.allowAccessInput(accessor)) {
+                    sendFeedback(accessor, FeedbackType.ROOT_LIMITING_ACCESS_INPUT);
+                    return;
+                }
+            }
+
+            final int moved = NetworkTransferUtils.moveMenuSlotIntoNetwork(
+                root, accessor, blockMenu, inputSlot);
+            if (moved > 0) {
+                sendFeedback(accessor, FeedbackType.WORKING);
+            } else if (!root.allowAccessInput(accessor)) {
+                // A failed transfer may have crossed the existing miss threshold. Do not scan the rest
+                // of this importer's slots when the root has already decided further attempts must wait.
+                sendFeedback(accessor, FeedbackType.ROOT_LIMITING_ACCESS_INPUT);
+                return;
             }
         }
     }

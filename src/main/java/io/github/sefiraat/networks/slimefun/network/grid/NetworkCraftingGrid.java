@@ -26,6 +26,7 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
@@ -170,6 +171,12 @@ public class NetworkCraftingGrid extends AbstractGrid {
                 });
             }
         };
+    }
+
+    @Override
+    protected void postBreak(@NotNull BlockBreakEvent event) {
+        super.postBreak(event);
+        CACHE_MAP.remove(event.getBlock().getLocation());
     }
 
     @NotNull
