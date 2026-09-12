@@ -123,15 +123,13 @@ jobs:
           controller = controller[:start] + stable_tail + controller[end:]
           controller_path.write_text(controller)
 
-      - name: Commit cleanup and restore normal workflow
+      - name: Commit cleanup
         shell: bash
         run: |
           set -euo pipefail
           git config user.name wickidcow
           git config user.email jaywago@gmail.com
-          git show HEAD^:.github/workflows/build.yml > .github/workflows/build.yml
-          git add .github/workflows/build.yml \
-            src/main/java/io/github/sefiraat/networks/network/NetworkRoot.java \
+          git add src/main/java/io/github/sefiraat/networks/network/NetworkRoot.java \
             src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkController.java
           git commit -m "Clean up stable-root audit formatting"
           git push origin HEAD:audit/server-scale-phase1
