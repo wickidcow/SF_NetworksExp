@@ -1,4 +1,5 @@
 package com.ytdd9527.networksexpansion.core.items.machines;
+
 import com.balugaq.netex.api.enums.CraftType;
 import com.balugaq.netex.api.enums.FeedbackType;
 import com.balugaq.netex.api.helpers.Icon;
@@ -33,10 +34,13 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.Recipe;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 public class BlueprintEncoder extends NetworkObject implements CraftTyped, RecipeCompletableWithGuide {
     private static final int[] BACKGROUND = new int[]{
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 15, 17, 18, 20, 24, 25, 27, 28, 29, 33, 36, 37, 38, 39, 40, 41,
@@ -50,6 +54,7 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
     private static final int ITEM_TARGET_DESC_SLOT = 26;
     private static final int ITEM_TARGET_SLOT = 35;
     private static final int CHARGE_COST = 2000;
+
     public BlueprintEncoder(
         @NotNull ItemGroup itemGroup,
         @NotNull SlimefunItemStack item,
@@ -62,6 +67,7 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
         this.getSlotsToDrop().add(BLANK_BLUEPRINT_SLOT);
         this.getSlotsToDrop().add(OUTPUT_SLOT);
     }
+
     @Override
     public void postRegister() {
         new BlockMenuPreset(this.getId(), this.getItemName()) {
@@ -73,6 +79,7 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
                 addItem(ENCODE_SLOT, Icon.ENCODE_STACK, (player, i, itemStack, clickAction) -> false);
                 addItem(ITEM_TARGET_DESC_SLOT, Icon.ITEM_TARGET_DESC_STACK, (player, i, itemStack, clickAction) -> false);
             }
+
             @Override
             public void newInstance(@NotNull BlockMenu menu, @NotNull Block b) {
                 menu.addMenuClickHandler(ENCODE_SLOT, (player, s, itemStack, clickAction) -> {
@@ -90,6 +97,7 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
                     menu.replaceExistingItem(ITEM_TARGET_SLOT, null);
                 }
             }
+
             @Override
             public boolean canOpen(@NotNull Block block, @NotNull Player player) {
                 return player.hasPermission("slimefun.inventory.bypass")
@@ -97,6 +105,7 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
                     && Slimefun.getProtectionManager()
                     .hasPermission(player, block.getLocation(), Interaction.INTERACT_BLOCK));
             }
+
             @Override
             public int[] getSlotsAccessedByItemTransport(ItemTransportFlow flow) {
                 if (flow == ItemTransportFlow.WITHDRAW) {
@@ -105,6 +114,7 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
 
                 return new int[0];
             }
+
             @Override
             public int[] getSlotsAccessedByItemTransport(DirtyChestMenu menu, ItemTransportFlow flow, ItemStack itemStack) {
                 if (flow == ItemTransportFlow.WITHDRAW) return new int[]{OUTPUT_SLOT};
@@ -180,14 +190,26 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
         }
 
         /*
-         * Resolve the live Bukkit crafting registry first. This mirrors a real player's crafting-table
-         * preview: Bukkit.craftItem(..., player) fires PrepareItemCraftEvent with the actual Player and
-         * World, allowing plugins such as ValhallaMMO to apply unlock checks, region/world restrictions,
-         * ingredient validation and dynamic result metadata. If a registered Bukkit recipe is rejected
-         * for this player, do not silently bypass that rejection through a Slimefun recipe with the same
-         * matrix. An explicit target may still select a different Networks/Slimefun recipe intentionally.
+         * Slimefun addon items often reuse a vanilla Material as their visual base. For example IE2's
+         * Void Ingot is a NETHERITE_INGOT and Supreme's Thornium Bit is an IRON_NUGGET. If Bukkit is
+         * queried first, those custom 3x3 recipes collide with the vanilla compression recipes and may
+         * resolve as a Netherite Block/Iron Ingot (or be rejected by a PrepareItemCraftEvent) before the
+         * real Slimefun recipe is considered. Original Networks resolved Slimefun recipes first.
+         *
+         * Preserve the newer live-player Bukkit path for normal vanilla matrices, but prefer the Slimefun
+         * registry whenever at least one supplied ingredient is a registered Slimefun item. If no Slimefun
+         * recipe matches, Bukkit still gets a chance so plugin-defined/live recipes remain available.
          */
-        if (canTestVanillaRecipe(inputs)) {
+        final boolean preferSlimefun = containsSlimefunIngredient(inputs);
+        if (preferSlimefun) {
+            final ResolvedRecipe slimefunRecipe = findSlimefunRecipe(inputs, target);
+            if (slimefunRecipe != null) {
+                crafted = slimefunRecipe.output();
+                consumptionRecipe = slimefunRecipe.recipe();
+            }
+        }
+
+        if (crafted == null && canTestVanillaRecipe(inputs)) {
             final ItemStack[] liveMatrix = copyRecipe(inputs);
             final Recipe bukkitRecipe = Bukkit.getCraftingRecipe(liveMatrix, player.getWorld());
             if (bukkitRecipe != null) {
@@ -208,25 +230,11 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
             }
         }
 
-        if (crafted == null) {
-            for (var recipes : CraftType.map().entrySet()) {
-                boolean found = false;
-                for (Map.Entry<ItemStack[], ItemStack> recipe : recipes.getValue()) {
-                    if (!testRecipe(recipes.getKey(), inputs, recipe.getKey())) {
-                        continue;
-                    }
-                    final ItemStack candidate = recipe.getValue();
-                    if (target != null && !StackUtils.itemsMatch(candidate, target)) {
-                        continue;
-                    }
-                    crafted = candidate.clone();
-                    consumptionRecipe = snapshotRecipe(recipe.getKey());
-                    found = true;
-                    break;
-                }
-                if (found) {
-                    break;
-                }
+        if (crafted == null && !preferSlimefun) {
+            final ResolvedRecipe slimefunRecipe = findSlimefunRecipe(inputs, target);
+            if (slimefunRecipe != null) {
+                crafted = slimefunRecipe.output();
+                consumptionRecipe = slimefunRecipe.recipe();
             }
         }
 
@@ -289,6 +297,35 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
         sendFeedback(blockMenu.getLocation(), FeedbackType.SUCCESS);
         return true;
     }
+
+    private ResolvedRecipe findSlimefunRecipe(ItemStack[] inputs, @Nullable ItemStack target) {
+        for (var recipes : CraftType.map().entrySet()) {
+            for (Map.Entry<ItemStack[], ItemStack> recipe : recipes.getValue()) {
+                if (!testRecipe(recipes.getKey(), inputs, recipe.getKey())) {
+                    continue;
+                }
+                final ItemStack candidate = recipe.getValue();
+                if (target != null && !StackUtils.itemsMatch(candidate, target)) {
+                    continue;
+                }
+                return new ResolvedRecipe(snapshotRecipe(recipe.getKey()), candidate.clone());
+            }
+        }
+        return null;
+    }
+
+    private static boolean containsSlimefunIngredient(ItemStack[] inputs) {
+        for (ItemStack input : inputs) {
+            if (input != null
+                && input.getType() != Material.AIR
+                && input.getAmount() > 0
+                && SlimefunItem.getByItem(input) != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static ItemStack[] vanillaConsumptionRecipe(ItemStack[] inputs) {
         final ItemStack[] recipe = new ItemStack[RECIPE_SLOTS.length];
         for (int index = 0; index < RECIPE_SLOTS.length; index++) {
@@ -298,6 +335,7 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
         }
         return recipe;
     }
+
     private static ItemStack[] snapshotRecipe(ItemStack[] recipe) {
         final ItemStack[] copy = new ItemStack[recipe.length];
         for (int index = 0; index < recipe.length; index++) {
@@ -319,6 +357,7 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
         }
         return copy;
     }
+
     private static ItemStack[] copyRecipe(ItemStack[] recipe) {
         final ItemStack[] copy = new ItemStack[recipe.length];
         for (int index = 0; index < recipe.length; index++) {
@@ -326,6 +365,7 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
         }
         return copy;
     }
+
     private static boolean hasExactIngredients(BlockMenu menu, ItemStack[] recipe) {
         for (int index = 0; index < RECIPE_SLOTS.length; index++) {
             final ItemStack required = index < recipe.length ? recipe[index] : null;
@@ -350,6 +390,7 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
         }
         return true;
     }
+
     public void blueprintSetter(ItemStack itemStack, ItemStack @NotNull [] inputs, ItemStack crafted) {
         craftType().blueprintSetter(itemStack, inputs, crafted);
     }
@@ -361,6 +402,7 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
     public Set<Map.Entry<ItemStack[], ItemStack>> getRecipeEntries() {
         return craftType().getRecipeEntries();
     }
+
     public boolean testRecipe(CraftType craftType, ItemStack[] inputs, ItemStack[] recipe) {
         return craftType.testRecipe(inputs, recipe);
     }
@@ -373,5 +415,8 @@ public class BlueprintEncoder extends NetworkObject implements CraftTyped, Recip
     @NotNull
     public SlimefunItem getSlimefunItem() {
         return this;
+    }
+
+    private record ResolvedRecipe(ItemStack[] recipe, ItemStack output) {
     }
 }
