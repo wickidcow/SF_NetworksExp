@@ -377,7 +377,9 @@ public class NetworkController extends NetworkObject {
         }
         root.setRootPower(livePower);
         root.setDisplayParticles(CRAYONS.contains(controllerLocation));
-        root.refreshRootItems();
+  // A fresh root would leave storage views lazy. Stable reuse should do the same instead of
+// eagerly rescanning every monitor in every direction on every unchanged controller tick.
+root.invalidateRootItems();
     }
 
     /**
