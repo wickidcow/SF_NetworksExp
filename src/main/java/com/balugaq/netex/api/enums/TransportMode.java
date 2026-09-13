@@ -1,7 +1,6 @@
 package com.balugaq.netex.api.enums;
 
 import com.balugaq.netex.utils.Lang;
-import com.ytdd9527.networksexpansion.utils.TextUtil;
 import org.jetbrains.annotations.NotNull;
 
 public enum TransportMode {
@@ -14,7 +13,8 @@ public enum TransportMode {
     LAZY,
     VOID,
     SPECIFIED_QUANTITY,
-    P2P;
+    P2P,
+    P2P_SPECIFIED_QUANTITY;
 
     public @NotNull String getRawName() {
         return switch (this) {
@@ -28,6 +28,9 @@ public enum TransportMode {
             case VOID -> Lang.getString("icons.transport_mode.void");
             case SPECIFIED_QUANTITY -> Lang.getString("icons.transport_mode.specified_quantity");
             case P2P -> Lang.getString("icons.transport_mode.p2p");
+            // Slimefun Legacy is English-only; keep the new upstream mode self-contained instead of
+            // pulling the upstream Chinese language-file restructuring into this maintenance fork.
+            case P2P_SPECIFIED_QUANTITY -> "P2P Specified Quantity";
         };
     }
 

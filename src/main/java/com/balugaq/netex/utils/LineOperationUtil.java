@@ -225,8 +225,8 @@ public class LineOperationUtil {
                     }
                 }
             }
-            case NULL_ONLY, P2P -> {
-                // Nothing to do.
+            case NULL_ONLY, P2P, P2P_SPECIFIED_QUANTITY -> {
+                // P2P modes are push-only.
             }
             case FIRST_ONLY -> {
                 if (slots.length > 0) {
@@ -592,6 +592,37 @@ public class LineOperationUtil {
 
                 int slot = slots[itemIndex];
                 pushSlot(accessor, root, itemRequest, blockMenu, template, slot, limitQuantity);
+            }
+            case P2P_SPECIFIED_QUANTITY -> {
+                if (itemIndex >= slots.length) {
+                    return;
+                }
+
+                final int slot = slots[itemIndex];
+                final ItemStack existing = blockMenu.getItemInSlot(slot);
+                int existingCount = 0;
+                int availableSpace = template.getMaxStackSize();
+
+                if (existing != null && existing.getType() != Material.AIR) {
+                    if (!StackUtils.itemsMatch(itemRequest, existing)) {
+                        return;
+                    }
+                    existingCount = existing.getAmount();
+                    availableSpace = Math.max(0, existing.getMaxStackSize() - existingCount);
+                }
+
+                final int targetCount = template.getAmount();
+                final int deficit = targetCount - existingCount;
+                final int toRequest = Math.min(Math.min(deficit, availableSpace), limitQuantity);
+                if (toRequest <= 0) {
+                    return;
+                }
+
+                itemRequest.setAmount(toRequest);
+                final ItemStack retrieved = root.getItemStack0(accessor, itemRequest);
+                if (retrieved != null && retrieved.getType() != Material.AIR) {
+                    NetworkTransferUtils.commitNetworkWithdrawal(root, accessor, blockMenu, retrieved, slot);
+                }
             }
         }
     }
