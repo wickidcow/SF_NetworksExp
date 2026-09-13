@@ -12,8 +12,8 @@ permissions:
   contents: write
 
 env:
-  LEGACY_ARTIFACT_VERSION: "1.0.18"
-  OUTPUT_NAME: "SF_NetworksExp1.0.18.jar"
+  LEGACY_ARTIFACT_VERSION: "1.0.19"
+  OUTPUT_NAME: "SF_NetworksExp1.0.19.jar"
 
 # Gradle's internal runtime-contract output remains Networks-Legacy-2.1.112-1.0.jar.
 # CI stages that JAR under the public Slimefun Legacy addon release naming convention.
@@ -112,5 +112,5 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$JAR" --clobber
           else
-            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Networks Legacy 1.0.18 fixes Network Recipe Encoder collisions between addon items and vanilla crafting recipes. When the encoder matrix contains registered Slimefun ingredients, it now resolves the Slimefun recipe first, matching original Networks behavior, before falling back to Bukkit's live player crafting path. This fixes recipes such as InfinityExpansion2 Void Ingots -> Void Block and Supreme Thornium Bits -> Thornium Dust, whose custom ingredients use NETHERITE_INGOT and IRON_NUGGET as their base materials and could otherwise collide with vanilla compression recipes. Pure vanilla matrices still use the live Bukkit/PrepareItemCraftEvent path first, and target-item disambiguation, exact ingredient validation, item conservation, item IDs, world data, database formats, anti-duplication protections, IE2 integration, and previous pusher/line-transfer performance fixes remain unchanged."
+            gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "SF_NetworksExp $TAG" --notes "Networks Legacy 1.0.19 ports the useful functional changes from upstream NetworksExpansion 2.1.121 while preserving this fork's safer transfer and compatibility work. It adds P2P Specified Quantity transport mode, which keeps each P2P destination slot at the quantity encoded by its corresponding template and routes withdrawals through the existing rollback-safe NetworkTransferUtils path. Item matching now checks lore requirements from either side of a comparison, including the modern data-component path, reducing incorrect matches for custom and Slimefun items. Minecraft 1.21.3 colored bundles are explicitly recognized by the transfer blacklist. The unrelated upstream Chinese announcement and author-guide restructuring is intentionally not imported. Existing Slimefun Legacy, United and Gugu compatibility, Java 21 output, InfinityExpansion2 support, anti-duplication safeguards, pusher performance fixes and Network Recipe Encoder collision fixes remain intact."
           fi
