@@ -38,8 +38,37 @@ public class Blueprint extends UnusableSlimefunItem implements DistinctiveItem, 
             Keys.BLUEPRINT_INSTANCE,
             PersistentCraftingBlueprintType.TYPE,
             new BlueprintInstance(recipe, output));
-        List<String> lore = new ArrayList<>();
+        itemMeta.setLore(buildLore(recipe, output));
+        blueprint.setItemMeta(itemMeta);
+    }
 
+    /**
+     * Rebuilds only the visible blueprint lore from the already-persisted recipe payload.
+     * The existing PDC is never rewritten, making this safe for explicit Doctor presentation migration.
+     */
+    public static boolean refreshStoredBlueprintLore(@NotNull ItemStack blueprint) {
+        ItemMeta itemMeta = blueprint.getItemMeta();
+        BlueprintInstance instance = DataTypeMethods.getCustomSafely(
+            itemMeta,
+            Keys.BLUEPRINT_INSTANCE,
+            PersistentCraftingBlueprintType.TYPE);
+        if (instance == null || instance.getRecipeItems() == null || instance.getItemStack() == null) {
+            return false;
+        }
+
+        List<String> refreshedLore = buildLore(instance.getRecipeItems(), instance.getItemStack());
+        List<String> currentLore = itemMeta.hasLore() ? itemMeta.getLore() : null;
+        if (refreshedLore.equals(currentLore)) {
+            return false;
+        }
+
+        itemMeta.setLore(refreshedLore);
+        blueprint.setItemMeta(itemMeta);
+        return true;
+    }
+
+    private static List<String> buildLore(ItemStack[] recipe, ItemStack output) {
+        List<String> lore = new ArrayList<>();
         lore.add(Lang.getString("messages.blueprint.title"));
 
         for (ItemStack item : recipe) {
@@ -52,12 +81,8 @@ public class Blueprint extends UnusableSlimefunItem implements DistinctiveItem, 
 
         lore.add("");
         lore.add(Lang.getString("messages.blueprint.output"));
-
         lore.add(Theme.PASSIVE + "- " + DisplayNameUtils.getDisplayName(output));
-
-        itemMeta.setLore(lore);
-
-        blueprint.setItemMeta(itemMeta);
+        return lore;
     }
 
     /*
