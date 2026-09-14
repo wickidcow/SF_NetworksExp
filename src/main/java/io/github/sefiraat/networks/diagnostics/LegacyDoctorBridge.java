@@ -29,8 +29,8 @@ public final class LegacyDoctorBridge {
             return;
         }
 
+        ClassLoader loader = slimefun.getClass().getClassLoader();
         try {
-            ClassLoader loader = slimefun.getClass().getClassLoader();
             Class<?> doctorInterface = Class.forName(DOCTOR_API, false, loader);
             Class<?> reportClass = Class.forName(REPORT_API, false, loader);
             Constructor<?> reportConstructor = reportClass.getConstructor(
@@ -51,6 +51,8 @@ public final class LegacyDoctorBridge {
         } catch (ReflectiveOperationException | RuntimeException exception) {
             plugin.getLogger().log(Level.WARNING, "Could not register the optional Slimefun Doctor bridge.", exception);
         }
+
+        LegacyBlueprintDoctorBridge.register(plugin, loader);
     }
 
     public static void unregister(@NotNull Networks plugin) {
