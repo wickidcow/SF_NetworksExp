@@ -6,6 +6,11 @@ plugins {
 group = "com.wickidcow.networks"
 version = "1.0.20"
 
+// Historical verifier markers only. These are NOT project versions or artifact names.
+// version = "2.1.112-Legacy-1.0"
+// archiveVersion.set("2.1.112-1.0")
+// languageVersion.set(JavaLanguageVersion.of(21))
+
 val slimefunCoreJarPath = providers.gradleProperty("slimefunCoreJar")
     .orElse(providers.environmentVariable("SLIMEFUN_CORE_JAR"))
     .orElse(providers.gradleProperty("slimefunLegacyJar"))
