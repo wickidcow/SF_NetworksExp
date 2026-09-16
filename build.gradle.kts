@@ -4,11 +4,10 @@ plugins {
 }
 
 group = "com.wickidcow.networks"
-version = "2.1.112-Legacy-1.0"
+version = "1.0.20"
 
 val slimefunCoreJarPath = providers.gradleProperty("slimefunCoreJar")
     .orElse(providers.environmentVariable("SLIMEFUN_CORE_JAR"))
-    // Backward-compatible aliases used by Slimefun Legacy's addon compatibility harness.
     .orElse(providers.gradleProperty("slimefunLegacyJar"))
     .orElse(providers.environmentVariable("SLIMEFUN_LEGACY_JAR"))
     .orElse(providers.environmentVariable("SLIMEFUN_COMPATIBILITY_JAR"))
@@ -24,12 +23,7 @@ if (!slimefunCoreJar.isFile) {
 }
 
 java {
-    // Paper 26.2+ API artifacts are built with Java 25. Use a Java 25 compiler
-    // while continuing to emit Java 21 bytecode for the universal addon JAR.
-    // Legacy compatibility contract marker: languageVersion.set(JavaLanguageVersion.of(21))
-    toolchain {
-        languageVersion.set(JavaLanguageVersion.of(25))
-    }
+    toolchain { languageVersion.set(JavaLanguageVersion.of(25)) }
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21
     withSourcesJar()
@@ -58,14 +52,11 @@ repositories {
 }
 
 dependencies {
-    // Core server APIs. CI compiles the same source against exact Legacy, United, and Gugu JARs.
     compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
     compileOnly(files(slimefunCoreJar))
-
     implementation("org.bstats:bstats-bukkit:3.2.1")
     implementation("com.jeff-media:MorePersistentDataTypes:2.4.0")
     implementation("dev.sefiraat:SefiLib:0.2.6")
-
     compileOnly("com.google.code.findbugs:annotations:3.0.1u2") {
         exclude("net.jcip", "jcip-annotations")
         exclude("com.google.code.findbugs", "jsr305")
@@ -77,8 +68,6 @@ dependencies {
     testImplementation(platform("org.junit:junit-bom:5.14.1"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-
-    // Optional integrations. These remain compile-only and are never bundled.
     compileOnly("com.github.SlimefunGuguProject:InfinityExpansion:3c5db3650a")
     compileOnly("com.github.Sefiraat:Netheopoiesis:8d1af6c570")
     compileOnly("com.github.schntgaispock:SlimeHUD:1.2.7")
@@ -109,46 +98,23 @@ tasks {
         options.encoding = "UTF-8"
         options.compilerArgs.add("-Xlint:-removal")
     }
-
     processResources {
-        filesMatching("plugin.yml") {
-            expand(project.properties)
-        }
+        filesMatching("plugin.yml") { expand(project.properties) }
     }
-
-    test {
-        useJUnitPlatform()
-    }
-
+    test { useJUnitPlatform() }
     shadowJar {
-        archiveBaseName.set("Networks-Legacy")
-        // Keep plugin metadata descriptive while making the actual output filename non-redundant.
-        archiveVersion.set("2.1.112-1.0")
         archiveClassifier.set("")
-
+        archiveFileName.set("SF_Networks${project.version}.jar")
         minimize()
         relocate("org.bstats", "io.github.sefiraat.networks.bstats")
         relocate("io.papermc.lib", "dev.sefiraat.cultivation.paperlib")
-        // NetworkRoot historically referenced IE1 storage classes directly. IE1 remains compile-only;
-        // redirect those obsolete descriptors to inert local linkage types so the universal JAR can load
-        // without IE1. Real IE1 storage is handled by InfinityExpansionIntegration via reflection.
-        relocate(
-            "io.github.mooy1.infinityexpansion.items.storage",
-            "io.github.sefiraat.networks.internal.ie1link"
-        )
+        relocate("io.github.mooy1.infinityexpansion.items.storage", "io.github.sefiraat.networks.internal.ie1link")
         exclude("META-INF/*")
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE
         mergeServiceFiles()
     }
-
-    jar {
-        enabled = false
-    }
-
-    build {
-        dependsOn(shadowJar)
-    }
-
+    jar { enabled = false }
+    build { dependsOn(shadowJar) }
 }
 
 defaultTasks("clean", "build")
