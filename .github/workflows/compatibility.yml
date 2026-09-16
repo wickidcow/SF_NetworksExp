@@ -83,7 +83,7 @@ jobs:
       - name: Locate canonical compatibility JAR
         shell: bash
         run: |
-          NETWORKS_JAR="$(find build/libs -name 'SF_Networks1.0.20.jar' -print -quit)"
+          NETWORKS_JAR="$(find build/libs -name 'SF_NetworksExp1.0.20.jar' -print -quit)"
           test -n "$NETWORKS_JAR"
           echo "NETWORKS_JAR=$NETWORKS_JAR" >> "$GITHUB_ENV"
       - name: Verify Java 21 bytecode
