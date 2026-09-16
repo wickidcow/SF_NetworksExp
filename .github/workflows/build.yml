@@ -15,6 +15,9 @@ env:
   LEGACY_ARTIFACT_VERSION: "1.0.20"
   OUTPUT_NAME: "SF_NetworksExp1.0.20.jar"
 
+# Internal compatibility contract remains Networks-Legacy-2.1.112-1.0.jar.
+# CI publishes that verified universal JAR under the public SF_ release format.
+
 jobs:
   compatibility:
     name: Gate universal release on all supported cores
@@ -75,14 +78,15 @@ jobs:
       - name: Locate universal Networks JAR
         shell: bash
         run: |
-          NETWORKS_JAR="build/libs/${OUTPUT_NAME}"
+          NETWORKS_JAR="$(find build/libs -name 'Networks-Legacy-*.jar' ! -name '*-sources.jar' -print -quit)"
+          test -n "$NETWORKS_JAR"
           test -s "$NETWORKS_JAR"
           echo "NETWORKS_JAR=$NETWORKS_JAR" >> "$GITHUB_ENV"
       - name: Verify Java 21 bytecode
         run: python3 scripts/verify_java21_bytecode.py "$NETWORKS_JAR"
       - name: Verify universal JAR contents
-        run: python3 scripts/verify_universal_jar.py "$NETWORKS_JAR" "1.0.20"
-      - name: Stage versioned JAR
+        run: python3 scripts/verify_universal_jar.py "$NETWORKS_JAR" "2.1.112-Legacy-1.0"
+      - name: Stage public versioned JAR
         shell: bash
         run: |
           set -euo pipefail
@@ -107,7 +111,7 @@ jobs:
           set -euo pipefail
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then TAG="$GITHUB_REF_NAME"; else TAG="v${LEGACY_ARTIFACT_VERSION}"; fi
           JAR="dist/${OUTPUT_NAME}"
-          NOTES="Networks Legacy 1.0.20 adds 26.3 compatibility release validation while keeping Minecraft/Paper 1.21.11 and 26.1.x supported, Paper/Purpur 26.2 as the primary production baseline, and the existing universal Slimefun Legacy, United, Gugu and InfinityExpansion2 compatibility work. The public artifact is now produced directly as ${OUTPUT_NAME} by the build instead of being renamed from an internal Networks-Legacy filename."
+          NOTES="Networks Legacy 1.0.20 adds 26.3 compatibility release validation while preserving the established internal Networks compatibility identity. Minecraft/Paper 1.21.11 and 26.1.x remain supported, Paper/Purpur 26.2 remain the primary production baseline, and the public release asset follows the standard ${OUTPUT_NAME} naming convention."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$JAR" --clobber
           else
