@@ -109,7 +109,7 @@ tasks {
     test { useJUnitPlatform() }
     shadowJar {
         archiveClassifier.set("")
-        archiveFileName.set("SF_NetworksExp${project.version}.jar")
+        archiveFileName.set("SF_Networks${project.version}.jar")
         minimize()
         relocate("org.bstats", "io.github.sefiraat.networks.bstats")
         relocate("io.papermc.lib", "dev.sefiraat.cultivation.paperlib")
