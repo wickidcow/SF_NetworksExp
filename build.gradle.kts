@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.wickidcow.networks"
-version = "2.1.112-Legacy-1.0"
+version = "1.0.20"
 
 val slimefunCoreJarPath = providers.gradleProperty("slimefunCoreJar")
     .orElse(providers.environmentVariable("SLIMEFUN_CORE_JAR"))
@@ -121,10 +121,8 @@ tasks {
     }
 
     shadowJar {
-        archiveBaseName.set("Networks-Legacy")
-        // Keep plugin metadata descriptive while making the actual output filename non-redundant.
-        archiveVersion.set("2.1.112-1.0")
         archiveClassifier.set("")
+        archiveFileName.set("SF_NetworksExp${project.version}.jar")
 
         minimize()
         relocate("org.bstats", "io.github.sefiraat.networks.bstats")
