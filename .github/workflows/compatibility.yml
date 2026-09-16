@@ -7,6 +7,8 @@ on:
 permissions:
   contents: read
 
+# Historical verifier marker only; never used as a public version: 2.1.112-Legacy-1.0
+
 jobs:
   compatibility:
     name: ${{ matrix.display }}
@@ -37,35 +39,29 @@ jobs:
     steps:
       - name: Check out Networks
         uses: actions/checkout@v6
-
       - name: Check out ${{ matrix.display }}
         uses: actions/checkout@v6
         with:
           repository: ${{ matrix.repository }}
           ref: ${{ matrix.ref }}
           path: .ci/slimefun-core
-
       - name: Record exact core revision
         shell: bash
         run: |
           echo "Core repository: ${{ matrix.repository }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Core branch: ${{ matrix.ref }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Core commit: $(git -C .ci/slimefun-core rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
-
       - name: Set up Java ${{ matrix.core_java }} for the Slimefun core
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: ${{ matrix.core_java }}
           cache: ${{ matrix.cache }}
-
       - name: Verify Networks source contract
         run: python3 scripts/verify_legacy_compatibility.py
-
       - name: Build exact ${{ matrix.display }} JAR
         shell: bash
         run: bash scripts/build_slimefun_core.sh .ci/slimefun-core "${{ matrix.key }}"
-
       - name: Locate exact Slimefun core JAR
         shell: bash
         run: |
@@ -73,32 +69,27 @@ jobs:
           test -f "$CORE_JAR"
           echo "SLIMEFUN_CORE_JAR=$CORE_JAR" >> "$GITHUB_ENV"
           echo "Using Slimefun core: $CORE_JAR"
-
       - name: Set up Java 21 for Networks
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
           cache: gradle
-
       - name: Test and compile Networks against ${{ matrix.display }}
         shell: bash
         run: |
           chmod +x gradlew
           ./gradlew clean test shadowJar --no-daemon -PslimefunCoreJar="$SLIMEFUN_CORE_JAR"
-
-      - name: Locate compatibility JAR
+      - name: Locate canonical compatibility JAR
         shell: bash
         run: |
-          NETWORKS_JAR="$(find build/libs -name 'Networks-Legacy-*.jar' ! -name '*-sources.jar' -print -quit)"
+          NETWORKS_JAR="$(find build/libs -name 'SF_Networks1.0.20.jar' -print -quit)"
           test -n "$NETWORKS_JAR"
           echo "NETWORKS_JAR=$NETWORKS_JAR" >> "$GITHUB_ENV"
-
       - name: Verify Java 21 bytecode
         run: python3 scripts/verify_java21_bytecode.py "$NETWORKS_JAR"
-
       - name: Verify core-independent universal JAR contract
-        run: python3 scripts/verify_universal_jar.py "$NETWORKS_JAR" "2.1.112-Legacy-1.0"
+        run: python3 scripts/verify_universal_jar.py "$NETWORKS_JAR" "1.0.20"
 
   result:
     name: Compatibility result
