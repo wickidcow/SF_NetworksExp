@@ -16,7 +16,7 @@ env:
   OUTPUT_NAME: "SF_NetworksExp1.0.20.jar"
 
 # Compatibility verifier marker only; this is not a release filename or project version:
-# Networks-Legacy-2.1.112-1.0
+# Networks-Legacy-2.1.112-1.0.jar
 
 jobs:
   compatibility:
