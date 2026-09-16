@@ -6,11 +6,6 @@ plugins {
 group = "com.wickidcow.networks"
 version = "1.0.20"
 
-// Historical verifier markers only. These are NOT project versions or artifact names.
-// version = "2.1.112-Legacy-1.0"
-// archiveVersion.set("2.1.112-1.0")
-// languageVersion.set(JavaLanguageVersion.of(21))
-
 val slimefunCoreJarPath = providers.gradleProperty("slimefunCoreJar")
     .orElse(providers.environmentVariable("SLIMEFUN_CORE_JAR"))
     .orElse(providers.gradleProperty("slimefunLegacyJar"))
@@ -77,7 +72,6 @@ dependencies {
     compileOnly("com.github.Sefiraat:Netheopoiesis:8d1af6c570")
     compileOnly("com.github.schntgaispock:SlimeHUD:1.2.7")
     compileOnly("com.bgsoftware:WildChestsAPI:2026.2")
-    compileOnly("com.bgsoftware:WildStackerAPI:2026.2")
     compileOnly("dev.rosewood:rosestacker:1.5.23")
     compileOnly("com.gmail.nossr50.mcMMO:mcMMO:2.3.000") {
         exclude("com.sk89q.worldedit", "worldedit-bukkit")
@@ -109,7 +103,7 @@ tasks {
     test { useJUnitPlatform() }
     shadowJar {
         archiveClassifier.set("")
-        archiveFileName.set("SF_Networks${project.version}.jar")
+        archiveFileName.set("SF_NetworksExp${project.version}.jar")
         minimize()
         relocate("org.bstats", "io.github.sefiraat.networks.bstats")
         relocate("io.papermc.lib", "dev.sefiraat.cultivation.paperlib")
