@@ -39,6 +39,8 @@ import me.mrCookieSlime.Slimefun.api.BlockStorage;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -56,6 +58,7 @@ import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -231,43 +234,53 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
     }
 
     public static void updateDisplayItem(@NotNull BlockMenu menu, @NotNull QuantumCache cache) {
-        if (cache.getItemStack() == null) {
+        final ItemStack cachedItem = cache.getItemStack();
+        final boolean hasStoredItem = cachedItem != null && !cachedItem.getType().isAir();
+        final ItemStack displayItem = hasStoredItem
+            ? cachedItem.clone()
+            : Icon.QUANTUM_STORAGE_NO_ITEM.clone();
+
+        final ItemMeta itemMeta = displayItem.getItemMeta();
+        if (itemMeta == null) {
             menu.replaceExistingItem(ITEM_SLOT, Icon.QUANTUM_STORAGE_NO_ITEM);
-        } else {
-            final ItemStack itemStack = cache.getItemStack().clone();
-            if (itemStack.getType() == Material.AIR) {
-                menu.replaceExistingItem(ITEM_SLOT, Icon.QUANTUM_STORAGE_NO_ITEM);
-                return;
-            }
-            final ItemMeta itemMeta = itemStack.getItemMeta();
-            if (itemMeta == null) {
-                menu.replaceExistingItem(ITEM_SLOT, Icon.QUANTUM_STORAGE_NO_ITEM);
-                return;
-            }
-
-            List<String> lore = itemMeta.hasLore() && itemMeta.getLore() != null
-                ? new ArrayList<>(itemMeta.getLore())
-                : new ArrayList<>();
-
-            lore.add("");
-            lore.add(String.format(
-                Lang.getString("displays.quantum_storage.void_excess"),
-                (cache.isVoidExcess()
-                    ? Lang.getString("displays.quantum_storage.enabled_void_excess")
-                    : Lang.getString("displays.quantum_storage.disabled_void_excess"))));
-            lore.add(String.format(
-                Lang.getString("displays.quantum_storage.stored_amount"),
-                String.format("%,d / %,d", cache.getAmountLong(), cache.getLimitLong())));
-            if (cache.supportsCustomMaxAmount()) {
-                // Cache limit is set at the potentially custom max amount set
-                // The player could set the custom maximum amount to be the actual maximum amount
-                lore.add(String.format(Lang.getString("displays.quantum_storage.custom_max_amount"), cache.getLimitLong()));
-            }
-            itemMeta.setLore(lore);
-            itemStack.setItemMeta(itemMeta);
-            itemStack.setAmount(1);
-            menu.replaceExistingItem(ITEM_SLOT, itemStack);
+            return;
         }
+
+        // Quantum Storage status must remain visible even when the stored item originally hid its tooltip.
+        itemMeta.setHideTooltip(false);
+
+        final List<Component> lore = itemMeta.lore() == null
+            ? new ArrayList<>()
+            : new ArrayList<>(itemMeta.lore());
+
+        lore.add(Component.empty());
+        lore.add(
+            Component.text("Stored: ", NamedTextColor.GRAY)
+                .append(Component.text(String.format(Locale.US, "%,d", cache.getAmountLong()), NamedTextColor.YELLOW))
+                .append(Component.text(" / ", NamedTextColor.GRAY))
+                .append(Component.text(String.format(Locale.US, "%,d", cache.getLimitLong()), NamedTextColor.GOLD))
+        );
+        lore.add(
+            Component.text("Void excess: ", NamedTextColor.GRAY)
+                .append(Component.text(
+                    cache.isVoidExcess() ? "Enabled" : "Disabled",
+                    cache.isVoidExcess() ? NamedTextColor.GREEN : NamedTextColor.RED
+                ))
+        );
+        if (cache.supportsCustomMaxAmount()) {
+            lore.add(
+                Component.text("Capacity limit: ", NamedTextColor.GRAY)
+                    .append(Component.text(
+                        String.format(Locale.US, "%,d", cache.getLimitLong()),
+                        NamedTextColor.AQUA
+                    ))
+            );
+        }
+
+        itemMeta.lore(lore);
+        displayItem.setItemMeta(itemMeta);
+        displayItem.setAmount(1);
+        menu.replaceExistingItem(ITEM_SLOT, displayItem);
     }
 
     public static void syncBlock(@NotNull Location location, @NotNull QuantumCache cache) {
