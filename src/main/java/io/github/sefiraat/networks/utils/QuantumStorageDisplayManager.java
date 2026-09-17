@@ -353,8 +353,7 @@ public final class QuantumStorageDisplayManager {
             }
 
             final Block block = result.getHitBlock();
-            if (!(StorageCacheUtils.getSfItem(block.getLocation()) instanceof NetworkQuantumStorage)
-                || !isInsideFrontHoverZone(result, block)) {
+            if (!(StorageCacheUtils.getSfItem(block.getLocation()) instanceof NetworkQuantumStorage)) {
                 continue;
             }
 
@@ -365,6 +364,7 @@ public final class QuantumStorageDisplayManager {
 
             final ItemStack item;
             final long amount;
+            final long limit;
             synchronized (cache) {
                 final ItemStack cachedItem = cache.getItemStack();
                 if (cachedItem == null || cachedItem.getType().isAir()) {
@@ -372,42 +372,20 @@ public final class QuantumStorageDisplayManager {
                 }
                 item = cachedItem.clone();
                 amount = cache.getAmountLong();
+                limit = cache.getLimitLong();
             }
 
             final String amountText = String.format(Locale.US, "%,d", amount);
+            final String limitText = String.format(Locale.US, "%,d", limit);
             player.sendActionBar(
                 getActualItemName(item)
                     .append(Component.text(" • ", NamedTextColor.DARK_GRAY))
                     .append(Component.text(amountText, NamedTextColor.YELLOW))
+                    .append(Component.text(" / ", NamedTextColor.GRAY))
+                    .append(Component.text(limitText, NamedTextColor.GOLD))
                     .append(Component.text(" stored", NamedTextColor.GRAY))
             );
         }
-    }
-
-    private static boolean isInsideFrontHoverZone(
-        @NotNull RayTraceResult result,
-        @NotNull Block block
-    ) {
-        final BlockFace face = getDisplayFace(block);
-        if (result.getHitBlockFace() != face) {
-            return false;
-        }
-
-        final Vector hit = result.getHitPosition();
-        final double localX = hit.getX() - block.getX();
-        final double localY = hit.getY() - block.getY();
-        final double localZ = hit.getZ() - block.getZ();
-
-        return switch (face) {
-            case NORTH, SOUTH -> inCenterHalf(localX) && inCenterHalf(localY);
-            case EAST, WEST -> inCenterHalf(localZ) && inCenterHalf(localY);
-            case UP, DOWN -> inCenterHalf(localX) && inCenterHalf(localZ);
-            default -> false;
-        };
-    }
-
-    private static boolean inCenterHalf(double coordinate) {
-        return coordinate >= 0.25D && coordinate <= 0.75D;
     }
 
     @NotNull
