@@ -7,7 +7,12 @@ on:
 permissions:
   contents: read
 
-# Historical verifier marker only; never used as a public version: 2.1.112-Legacy-1.0
+# Historical verifier markers only; never used as public versions:
+# 2.1.112-Legacy-1.0 / Networks-Legacy-2.1.112-1.0
+
+env:
+  VERSION: "1.0.21"
+  OUTPUT_NAME: "SF_Networks1.0.21.jar"
 
 jobs:
   compatibility:
@@ -83,13 +88,13 @@ jobs:
       - name: Locate canonical compatibility JAR
         shell: bash
         run: |
-          NETWORKS_JAR="$(find build/libs -name 'SF_NetworksExp1.0.20.jar' -print -quit)"
-          test -n "$NETWORKS_JAR"
+          NETWORKS_JAR="build/libs/${OUTPUT_NAME}"
+          test -s "$NETWORKS_JAR"
           echo "NETWORKS_JAR=$NETWORKS_JAR" >> "$GITHUB_ENV"
       - name: Verify Java 21 bytecode
         run: python3 scripts/verify_java21_bytecode.py "$NETWORKS_JAR"
       - name: Verify core-independent universal JAR contract
-        run: python3 scripts/verify_universal_jar.py "$NETWORKS_JAR" "1.0.20"
+        run: python3 scripts/verify_universal_jar.py "$NETWORKS_JAR" "$VERSION"
 
   result:
     name: Compatibility result

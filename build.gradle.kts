@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.wickidcow.networks"
-version = "1.0.20"
+version = "1.0.21"
 
 // Compatibility verifier markers only; these are not project versions or output filenames.
 // version = "2.1.112-Legacy-1.0"
