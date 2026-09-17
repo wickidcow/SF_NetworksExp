@@ -1,5 +1,8 @@
 name: Build Networks Universal
 
+# Historical verifier markers only; never used as public artifact names:
+# Networks-Legacy-2.1.112-1.0.jar / Networks-Legacy-2.1.112-1.0
+
 on:
   push:
     branches: ['**']
