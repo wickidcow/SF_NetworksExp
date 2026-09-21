@@ -124,29 +124,55 @@ public class AdvancedExport extends NetworkObject implements RecipeDisplayItem {
             return;
         }
 
+        final NetworkRoot root = definition.getNode().getRoot();
+        final var accessor = blockMenu.getLocation();
         boolean hasRequest = false;
+        boolean checkedInitialAccess = false;
         int moved = 0;
+
         for (int testItemSlot : getTestSlots()) {
             final ItemStack template = blockMenu.getItemInSlot(testItemSlot);
             if (template == null || template.getType() == Material.AIR) {
                 continue;
             }
             hasRequest = true;
-            moved += NetworkTransferUtils.moveNetworkItemIntoMenu(
-                definition.getNode().getRoot(),
-                blockMenu.getLocation(),
+
+            /*
+             * Keep NO_ITEM_REQUEST semantics for a completely empty template area. Once a real request exists,
+             * however, an accessor that is already under the root's original output-miss limiter cannot succeed.
+             * Stop before repeating capacity checks and full network searches for the remaining templates.
+             */
+            if (!checkedInitialAccess) {
+                checkedInitialAccess = true;
+                if (!root.allowAccessOutput(accessor)) {
+                    sendFeedback(accessor, FeedbackType.ROOT_LIMITING_ACCESS_OUTPUT);
+                    return;
+                }
+            }
+
+            final int movedNow = NetworkTransferUtils.moveNetworkItemIntoMenu(
+                root,
+                accessor,
                 blockMenu,
                 template,
                 template.getAmount(),
                 getOutputSlots());
+            moved += movedNow;
+
+            if (movedNow == 0 && !root.allowAccessOutput(accessor)) {
+                // A network miss during this template may have crossed the historical threshold.
+                // Avoid scanning the rest of the configured templates until that same timer expires.
+                sendFeedback(accessor, FeedbackType.ROOT_LIMITING_ACCESS_OUTPUT);
+                return;
+            }
         }
 
         if (!hasRequest) {
-            sendFeedback(blockMenu.getLocation(), FeedbackType.NO_ITEM_REQUEST);
+            sendFeedback(accessor, FeedbackType.NO_ITEM_REQUEST);
         } else if (moved > 0) {
-            sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
+            sendFeedback(accessor, FeedbackType.WORKING);
         } else {
-            sendFeedback(blockMenu.getLocation(), FeedbackType.NO_ENOUGH_SPACE);
+            sendFeedback(accessor, FeedbackType.NO_ENOUGH_SPACE);
         }
     }
 

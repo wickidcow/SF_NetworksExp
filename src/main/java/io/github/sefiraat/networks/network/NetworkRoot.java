@@ -1345,7 +1345,9 @@ public class NetworkRoot extends NetworkNode {
                 }
                 final int toRemove = (int) Math.min(power - removed, charge);
                 powerNode.removeCharge(node, toRemove);
-                this.rootPower -= power;
+        // Only subtract the charge actually removed from this node. Subtracting the full
+        // request once per power node could drive the root total negative when one request spans nodes.
+        this.rootPower -= toRemove;
                 removed = removed + toRemove;
             }
             if (removed >= power) {
@@ -1648,27 +1650,36 @@ public class NetworkRoot extends NetworkNode {
         return dataSet;
     }
 
-    public boolean refreshRootItems() {
-        this.barrels = null;
-        this.cargoStorageUnitDatas = null;
-        this.inputAbleBarrels = null;
-        this.outputAbleBarrels = null;
-        this.inputAbleCargoStorageUnitDatas = null;
-        this.outputAbleCargoStorageUnitDatas = null;
-        this.mapInputAbleBarrels = null;
-        this.mapOutputAbleBarrels = null;
-        this.mapInputAbleCargoStorageUnits = null;
-        this.mapOutputAbleCargoStorageUnits = null;
-        this.allItemsView = null;
+    /**
+ * Invalidates storage-derived views without immediately rescanning every monitor. A newly-created
+ * NetworkRoot starts with these views empty as well, so stable-root reuse should return to that same
+ * lazy state and let the next real storage operation rebuild only the view it actually needs.
+ */
+public void invalidateRootItems() {
+    this.barrels = null;
+    this.cargoStorageUnitDatas = null;
+    this.inputAbleBarrels = null;
+    this.outputAbleBarrels = null;
+    this.inputAbleCargoStorageUnitDatas = null;
+    this.outputAbleCargoStorageUnitDatas = null;
+    this.mapInputAbleBarrels = null;
+    this.mapOutputAbleBarrels = null;
+    this.mapInputAbleCargoStorageUnits = null;
+    this.mapOutputAbleCargoStorageUnits = null;
+    this.allItemsView = null;
+}
 
-        getBarrels();
-        getCargoStorageUnitDatas();
-        getInputAbleBarrels();
-        getOutputAbleBarrels();
-        getInputAbleCargoStorageUnitDatas();
-        getOutputAbleCargoStorageUnitDatas();
-        return true;
-    }
+public boolean refreshRootItems() {
+    invalidateRootItems();
+
+    getBarrels();
+    getCargoStorageUnitDatas();
+    getInputAbleBarrels();
+    getOutputAbleBarrels();
+    getInputAbleCargoStorageUnitDatas();
+    getOutputAbleCargoStorageUnitDatas();
+    return true;
+}
 
     @Nullable
     public BarrelIdentity accessInputAbleBarrel(Location barrelLocation) {

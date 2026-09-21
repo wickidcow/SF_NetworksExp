@@ -93,6 +93,8 @@ public class AdvancedImport extends NetworkObject implements RecipeDisplayItem {
         }
 
         final NetworkRoot root = definition.getNode().getRoot();
+        final var accessor = blockMenu.getLocation();
+        boolean checkedInitialAccess = false;
 
         for (int inputSlot : INPUT_SLOTS) {
             final ItemStack itemStack = blockMenu.getItemInSlot(inputSlot);
@@ -100,9 +102,29 @@ public class AdvancedImport extends NetworkObject implements RecipeDisplayItem {
             if (itemStack == null || itemStack.getType() == Material.AIR) {
                 continue;
             }
-            if (NetworkTransferUtils.moveMenuSlotIntoNetwork(
-                root, blockMenu.getLocation(), blockMenu, inputSlot) > 0) {
-                sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
+
+            /*
+             * Advanced Import can expose 54 occupied slots. Once the root's existing miss limiter is active,
+             * walking all of them and cloning/offering every stack cannot succeed. Keep empty-import behavior
+             * unchanged, but stop immediately once real work is present and this accessor is limited.
+             */
+            if (!checkedInitialAccess) {
+                checkedInitialAccess = true;
+                if (!root.allowAccessInput(accessor)) {
+                    sendFeedback(accessor, FeedbackType.ROOT_LIMITING_ACCESS_INPUT);
+                    return;
+                }
+            }
+
+            final int moved = NetworkTransferUtils.moveMenuSlotIntoNetwork(
+                root, accessor, blockMenu, inputSlot);
+            if (moved > 0) {
+                sendFeedback(accessor, FeedbackType.WORKING);
+            } else if (!root.allowAccessInput(accessor)) {
+                // If this miss crossed the historical threshold, do not spend the rest of the tick
+                // repeating deposits that the root has already decided to reject.
+                sendFeedback(accessor, FeedbackType.ROOT_LIMITING_ACCESS_INPUT);
+                return;
             }
         }
     }

@@ -5,6 +5,7 @@ import com.balugaq.netex.api.helpers.Icon;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import io.github.sefiraat.networks.NetworkStorage;
+import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
 import io.github.sefiraat.networks.slimefun.NetworkSlimefunItems;
@@ -114,16 +115,23 @@ public class NetworkExport extends NetworkObject {
             return;
         }
 
+        final NetworkRoot root = definition.getNode().getRoot();
+        final var accessor = blockMenu.getLocation();
+        if (!root.allowAccessOutput(accessor)) {
+            sendFeedback(accessor, FeedbackType.ROOT_LIMITING_ACCESS_OUTPUT);
+            return;
+        }
+
         final int moved = NetworkTransferUtils.moveNetworkItemIntoMenu(
-            definition.getNode().getRoot(),
-            blockMenu.getLocation(),
+            root,
+            accessor,
             blockMenu,
             testItem,
             testItem.getMaxStackSize(),
             OUTPUT_ITEM_SLOT);
 
         sendFeedback(
-            blockMenu.getLocation(),
+            accessor,
             moved > 0 ? FeedbackType.WORKING : FeedbackType.NO_ITEM_FOUND);
     }
 
