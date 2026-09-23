@@ -90,6 +90,7 @@ networks_drawer = read("src/main/java/com/ytdd9527/networksexpansion/implementat
 fluffy_barrel = read("src/main/java/io/github/sefiraat/networks/network/barrel/FluffyBarrel.java")
 root_ready_event = read("src/main/java/com/balugaq/netex/api/events/NetworkRootReadyEvent.java")
 network_controller = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkController.java")
+network_monitor = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkMonitor.java")
 quantum_cache = read("src/main/java/io/github/sefiraat/networks/network/stackcaches/QuantumCache.java")
 quantum_workbench = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkQuantumWorkbench.java")
 linker_grid = read("src/main/java/com/balugaq/netex/integrations/logitech/LinkerGrid.java")
@@ -142,6 +143,8 @@ require(config.get("compatibility", {}).get("allow-unknown-slimefun-core") is Fa
         "unknown Slimefun cores must fail closed by default")
 require(config.get("doctor", {}).get("max-auto-scan-entries") == 512,
         "bounded automatic Doctor scan budget must default to 512 entries")
+require(config.get("features", {}).get("network-monitor-inspector", {}).get("enabled") is True,
+        "Network Monitor topology inspector must default to enabled")
 softdepend = plugin.get("softdepend") or []
 for optional_plugin in ["InfinityExpansion2", "SlimeHUDPlus", "JustEnoughGuide", "LogiTech"]:
     require(optional_plugin in softdepend, f"optional integration is missing from softdepend: {optional_plugin}")
@@ -315,6 +318,21 @@ require("NetworkRoot previous = NETWORKS.put(location, candidate);" in network_c
         and "FailureCircuitBreaker.FailureSnapshot recoverySnapshot" in network_controller
         and "FailureCircuitBreaker.FailureSnapshot previous =" not in network_controller,
         "controller rebuild success handling reuses the previous local variable name")
+require("root.getNodeLocations()" in network_monitor
+        and "Total connected:" in network_monitor
+        and "Active:" in network_monitor
+        and "Inactive:" in network_monitor,
+        "Network Monitor grouped topology counts are missing")
+require("NetworkController.markTopologyDirty(controller)" in network_monitor
+        and "Refresh Network" in network_monitor
+        and "slimefunTickRate * 2L + 2L" in network_monitor,
+        "Network Monitor refresh does not perform controller topology rediscovery")
+require("world.isChunkLoaded" in network_monitor
+        and "loadChunk" not in network_monitor,
+        "Network Monitor inspector must never force-load chunks")
+require("getNorthSlot()" not in network_monitor
+        and "super.updateGui(blockMenu)" in network_monitor,
+        "Network Monitor inspector must preserve inherited directional storage controls")
 require("World world = dropLocation.getWorld()" in transfer_utils
         and "no loaded world was" in transfer_utils,
         "last-resort transfer rollback can still clear an undropped remainder")

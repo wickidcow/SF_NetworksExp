@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.24
+
+### Network Monitor topology inspector
+- The classic **Network Monitor** now doubles as a read-only Networks topology inspector while preserving its six storage-facing controls and adjacent-inventory behavior.
+- The monitor lists every machine type present in the controller's current `NetworkRoot`, grouped by actual Slimefun item rather than only by broad node category.
+- Hovering a machine icon shows **Total connected**, **Active**, and **Inactive** counts. Active means the node is loaded, resolved to its Slimefun item, and currently assigned to this root; inactive means the root snapshot contains it but the runtime block is not fully resolved.
+- Added page controls for networks with more machine types than fit on one screen.
+- Added a summary panel showing total nodes versus controller capacity, active/inactive totals, machine-type count, page number, and overburdened state.
+- Added a **Refresh Network** button. Refresh marks the owning controller topology dirty, waits for controller rediscovery, then rebuilds the monitor list from the new root instead of merely repainting stale GUI data.
+- The inspector never scans outward itself and never force-loads chunks; it reads the controller's authoritative runtime topology.
+- Added `features.network-monitor-inspector.enabled` (default `true`) so servers can disable the inspector without changing the historical Network Monitor item or world data.
+
 ## 1.0.23
 
 ### Advanced Auto Crafter functionality
