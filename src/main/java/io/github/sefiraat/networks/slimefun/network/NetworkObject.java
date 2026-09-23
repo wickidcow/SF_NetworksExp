@@ -13,7 +13,6 @@ import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
 import io.github.sefiraat.networks.utils.ChunkWarmupQueue;
 import io.github.sefiraat.networks.utils.StackUtils;
-import io.github.thebusybiscuit.slimefun4.api.events.PlayerRightClickEvent;
 import io.github.thebusybiscuit.slimefun4.api.exceptions.IncompatibleItemHandlerException;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
@@ -21,7 +20,6 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.handlers.BlockBreakHandler;
 import io.github.thebusybiscuit.slimefun4.core.handlers.BlockPlaceHandler;
-import io.github.thebusybiscuit.slimefun4.core.handlers.ItemUseHandler;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import lombok.Getter;
 import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
@@ -166,10 +164,9 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
                 @ParametersAreNonnullByDefault
                 public void onPlayerPlace(BlockPlaceEvent event) {
                     /*
-                     * This is the second-line safety check. Slimefun has already created its block-data record
-                     * before invoking BlockPlaceHandler, so cancelPlace(BlockPlaceEvent) must also remove that
-                     * just-created record or the next placement can see a ghost Slimefun block and drop a
-                     * duplicate item.
+                     * Slimefun has already created its block-data record before invoking BlockPlaceHandler.
+                     * Any late cancellation must therefore remove that just-created record or the next placement
+                     * can see a ghost Slimefun block and drop a duplicate item.
                      */
                     prePlace(event);
                     if (event.isCancelled()) {
@@ -177,16 +174,6 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
                     }
                     onPlace(event);
                     postPlace(event);
-                }
-            },
-            new ItemUseHandler() {
-                @Override
-                public void onRightClick(@NotNull PlayerRightClickEvent event) {
-                    /*
-                     * Reject controller conflicts before Bukkit reaches BlockPlaceEvent. This preserves the
-                     * original Networks placement contract and avoids the late-cancellation ghost-block path.
-                     */
-                    prePlace(event);
                 }
             });
     }
@@ -284,23 +271,6 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
     }
 
     /**
-     * Pre-placement guard that runs from the held Networks item's right-click event, before Slimefun persists
-     * block data for the attempted placement.
-     */
-    @SuppressWarnings("unused")
-    protected void prePlace(@NotNull PlayerRightClickEvent event) {
-        final Optional<Block> clicked = event.getClickedBlock();
-        if (clicked.isEmpty()) {
-            return;
-        }
-
-        final Block target = clicked.get().getRelative(event.getClickedFace());
-        if (wouldMergeControllers(target)) {
-            cancelPlace(event);
-        }
-    }
-
-    /**
      * Fallback placement guard for unusual placement paths where the pre-use event did not run.
      */
     @OverridingMethodsMustInvokeSuper
@@ -311,7 +281,7 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
         }
     }
 
-    private boolean wouldMergeControllers(@NotNull Block placedBlock) {
+    protected final boolean wouldMergeControllers(@NotNull Block placedBlock) {
         final Set<Location> controllers = new HashSet<>();
 
         for (BlockFace face : CHECK_FACES) {
@@ -333,12 +303,6 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
         }
 
         return nodeType == NodeType.CONTROLLER ? !controllers.isEmpty() : controllers.size() > 1;
-    }
-
-    @SuppressWarnings("unused")
-    protected void cancelPlace(@NotNull PlayerRightClickEvent event) {
-        event.getPlayer().sendMessage(getPlacementConflictMessage());
-        event.cancel();
     }
 
     @SuppressWarnings("unused")
