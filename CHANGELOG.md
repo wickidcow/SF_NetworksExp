@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.25
+
+### Network Controller placement safety
+- Fixed a controller duplication path when a player attempted to place a second Network Controller onto an already-controlled network.
+- Controller/network merge conflicts are now rejected during the held item's right-click phase, before Slimefun creates persistent block data for the attempted placement.
+- Retained a BlockPlaceEvent fallback for unusual placement paths, but that fallback now explicitly removes the just-created runtime/database block state before cancelling. This prevents a later placement from seeing a ghost Slimefun controller and dropping an extra controller item.
+- The same early guard protects ordinary Network nodes from being used to merge two controller roots.
+
+### Network Controller interaction
+- Right-clicking a Network Controller with an empty hand now shows a compact status readout instead of doing nothing.
+- The readout shows current node count/capacity and whether the controller is online or overburdened, then points players to the Network Monitor for the full machine list, Active/Inactive counts, and Refresh.
+- Held Networks tools keep priority, so Network Probe/Crayon-style item interactions are not replaced by the controller status click.
+
 ## 1.0.24
 
 ### Network Monitor topology inspector
