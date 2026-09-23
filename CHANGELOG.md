@@ -6,7 +6,7 @@
 - Fixed a controller duplication path when a player attempted to place a second Network Controller onto an already-controlled network.
 - Controller/network merge conflicts are now rejected during the held item's right-click phase, before Slimefun creates persistent block data for the attempted placement.
 - Retained a BlockPlaceEvent fallback for unusual placement paths, but that fallback now explicitly removes the just-created runtime/database block state before cancelling. This prevents a later placement from seeing a ghost Slimefun controller and dropping an extra controller item.
-- The same early guard protects ordinary Network nodes from being used to merge two controller roots.
+- Ordinary Network nodes still use the BlockPlaceEvent merge guard, now with explicit ghost-state cleanup when such a merge is rejected.
 
 ### Network Controller interaction
 - Right-clicking a Network Controller with an empty hand now shows a compact status readout instead of doing nothing.
