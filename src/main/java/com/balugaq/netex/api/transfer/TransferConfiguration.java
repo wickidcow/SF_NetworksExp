@@ -30,6 +30,8 @@ public class TransferConfiguration {
 
     // The required power per action (push / grab) when ticking block.
     public final int defaultRequiredPower;
+    // Maximum line targets processed per push/grab pass. 0 keeps the historical unlimited behavior.
+    public final int maxTargetsPerTick;
     // The max distance
     public final int maxDistance;
     // The max transport limit
@@ -78,6 +80,11 @@ public class TransferConfiguration {
     @Range(from = 0, to = Integer.MAX_VALUE)
     public int drp() {
         return defaultRequiredPower;
+    }
+
+    @Range(from = 0, to = Integer.MAX_VALUE)
+    public int mtpt() {
+        return maxTargetsPerTick;
     }
 
     @Range(from = 0, to = Integer.MAX_VALUE)

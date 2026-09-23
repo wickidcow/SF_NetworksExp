@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.22
+
+### Advanced Line Transfer performance
+- Added a rotating per-pass target budget for the bidirectional `NTW_EXPANSION_ADVANCED_LINE_TRANSFER` family, defaulting to 8 targets per push pass and 8 per grab pass. Long 32/64-block lines now spread expensive target work across ticks while preserving contiguous-line stop semantics.
+- Added `max-targets-per-tick` under the normal and PLUS Advanced Line Transfer config sections. Set it to `0` to restore the historical unlimited per-tick scan.
+- Removed the redundant pre-scan before line and vanilla grab operations, so target transport slots are no longer enumerated twice before a grab.
+- Reworked transport-slot sanitation to avoid stream/distinct allocation on the hot cargo path when presets already return valid unique slot lists.
+- Preserved the existing duplicate-ticker coalescing, transfer modes, power charging, item safety/rollback behavior, and 3,456 maximum advanced transfer amount.
+
 ## 2.1.112-Legacy-1.0
 
 ### Universal compatibility and preserved world contract
