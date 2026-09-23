@@ -10,7 +10,6 @@ import com.balugaq.netex.api.interfaces.PushTickOnly;
 import com.balugaq.netex.api.interfaces.SoftCellBannable;
 import com.balugaq.netex.api.interfaces.VanillaTransfer;
 import com.balugaq.netex.api.transfer.TransferConfiguration;
-import com.balugaq.netex.utils.BlockMenuUtil;
 import com.balugaq.netex.utils.LineOperationUtil;
 import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.network.NetworkRoot;
