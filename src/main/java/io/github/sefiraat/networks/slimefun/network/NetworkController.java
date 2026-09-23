@@ -196,7 +196,22 @@ public class NetworkController extends NetworkObject {
             }
         });
 
-        addItemHandler((BlockUseHandler) this::onControllerUse);
+        addItemHandler(
+            (ItemUseHandler) this::onControllerItemUse,
+            (BlockUseHandler) this::onControllerUse);
+    }
+
+    private void onControllerItemUse(@NotNull PlayerRightClickEvent event) {
+        final Block clicked = event.getClickedBlock().orElse(null);
+        if (clicked == null) {
+            return;
+        }
+
+        final Block target = clicked.getRelative(event.getClickedFace());
+        if (wouldMergeControllers(target)) {
+            event.getPlayer().sendMessage(getPlacementConflictMessage());
+            event.cancel();
+        }
     }
 
     private void onControllerUse(@NotNull PlayerRightClickEvent event) {
