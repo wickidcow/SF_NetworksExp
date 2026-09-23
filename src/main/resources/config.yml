@@ -170,6 +170,8 @@ items:
     max-distance: 32
     pushitem-tick: 1
     grabitem-tick: 1
+    # Rotates long lines across ticks to cap per-machine main-thread work. 0 = unlimited legacy behavior.
+    max-targets-per-tick: 8
   NTW_EXPANSION_ADVANCED_LINE_TRANSFER_PLUS_PUSHER:
     max-distance: 64
     pushitem-tick: 1
@@ -186,6 +188,8 @@ items:
     max-distance: 64
     pushitem-tick: 1
     grabitem-tick: 1
+    # PLUS lines use the same bounded pass; each target is revisited as the cursor rotates.
+    max-targets-per-tick: 8
     required-power: 5000
   NTW_EXPANSION_LINE_TRANSFER_VANILLA_PUSHER:
     max-distance: 32
