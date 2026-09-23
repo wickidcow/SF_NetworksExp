@@ -59,6 +59,7 @@ repositories {
 dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
     compileOnly(files(slimefunCoreJar))
+    testCompileOnly(files(slimefunCoreJar))
     implementation("org.bstats:bstats-bukkit:3.2.1")
     implementation("com.jeff-media:MorePersistentDataTypes:2.4.0")
     implementation("dev.sefiraat:SefiLib:0.2.6")
