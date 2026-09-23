@@ -198,17 +198,36 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
         }
 
         final ItemStack output = blockMenu.getItemInSlot(OUTPUT_SLOT);
-        int blueprintAmount = canBlueprintStack() ? blueprint.getAmount() : 1;
+        final int requestedCrafts = canBlueprintStack() ? Math.max(1, blueprint.getAmount()) : 1;
 
         ItemStack targetOutput = instance.getItemStack();
         if (targetOutput == null || targetOutput.getType() == Material.AIR || targetOutput.getAmount() <= 0) {
             sendFeedback(location, FeedbackType.BROKEN_BLUEPRINT);
             return false;
         }
-        if (output != null
-            && output.getType() != Material.AIR
-            && (output.getAmount() + targetOutput.getAmount() * blueprintAmount > output.getMaxStackSize()
-            || !StackUtils.itemsMatch(targetOutput, output))) {
+
+        int currentOutputAmount = 0;
+        if (output != null && output.getType() != Material.AIR) {
+            if (!StackUtils.itemsMatch(targetOutput, output)) {
+                sendFeedback(location, FeedbackType.OUTPUT_FULL);
+                return false;
+            }
+            currentOutputAmount = output.getAmount();
+        }
+
+        /*
+         * Advanced Auto Crafters use the encoded-blueprint stack size as their requested batch size.
+         * The original addon documented this as "stackable blueprints". Clamp that request to the
+         * remaining room in one legal output stack instead of rejecting recipes whose per-craft output
+         * is greater than one. Example: 64 stacked blueprints + a recipe yielding 4 items crafts 16
+         * recipe executions (64 output items) in this operation, rather than failing with RESULT_IS_TOO_LARGE.
+         */
+        final int blueprintAmount = calculateSafeBatchSize(
+            requestedCrafts,
+            targetOutput.getAmount(),
+            targetOutput.getMaxStackSize(),
+            currentOutputAmount);
+        if (blueprintAmount <= 0) {
             sendFeedback(location, FeedbackType.OUTPUT_FULL);
             return false;
         }
@@ -314,6 +333,25 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
         }
         sendFeedback(location, FeedbackType.WORKING);
         return true;
+    }
+
+    static int calculateSafeBatchSize(
+        int requestedCrafts,
+        int outputPerCraft,
+        int maxStackSize,
+        int currentOutputAmount) {
+
+        if (requestedCrafts <= 0 || outputPerCraft <= 0 || maxStackSize <= 0) {
+            return 0;
+        }
+
+        final int occupied = Math.max(0, Math.min(currentOutputAmount, maxStackSize));
+        final int remainingRoom = maxStackSize - occupied;
+        if (remainingRoom < outputPerCraft) {
+            return 0;
+        }
+
+        return Math.min(requestedCrafts, remainingRoom / outputPerCraft);
     }
 
     private static @NotNull List<IngredientRequest> buildIngredientPlan(@NotNull BlueprintInstance instance) {
