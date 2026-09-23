@@ -845,7 +845,8 @@ icons:
   encode-stack:
     name: Encode Stack
     lore:
-    - Networks interface control.
+    - 'Click: Encode 1 blueprint.'
+    - 'Shift-click: Encode up to 64 identical blueprints.'
   blank-slot-stack:
     name: Blank Slot Stack
     lore:
@@ -1582,134 +1583,159 @@ items:
   NTW_EXPANSION_ADVANCED_AUTO_MAGIC_WORKBENCH:
     name: Network Expansion Advanced Auto Magic Workbench
     lore:
-    - Automatically crafts the encoded recipe
-    - using materials stored in the network.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
   NTW_EXPANSION_ADVANCED_AUTO_MAGIC_WORKBENCH_WITHHOLDING:
     name: Network Expansion Advanced Auto Magic Workbench Withholding
     lore:
-    - Automatically crafts the encoded recipe
-    - using materials stored in the network.
-    - Keeps one output stack available.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
+    - Keeps one output stack available to Networks/Cargo.
   NTW_EXPANSION_ADVANCED_AUTO_ARMOR_FORGE:
     name: Network Expansion Advanced Auto Armor Forge
     lore:
-    - Automatically crafts the encoded recipe
-    - using materials stored in the network.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
   NTW_EXPANSION_ADVANCED_AUTO_ARMOR_FORGE_WITHHOLDING:
     name: Network Expansion Advanced Auto Armor Forge Withholding
     lore:
-    - Automatically crafts the encoded recipe
-    - using materials stored in the network.
-    - Keeps one output stack available.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
+    - Keeps one output stack available to Networks/Cargo.
   NTW_EXPANSION_ADVANCED_AUTO_SMELTERY:
     name: Network Expansion Advanced Auto Smeltery
     lore:
-    - Automatically crafts the encoded recipe
-    - using materials stored in the network.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
   NTW_EXPANSION_ADVANCED_AUTO_SMELTERY_WITHHOLDING:
     name: Network Expansion Advanced Auto Smeltery Withholding
     lore:
-    - Automatically crafts the encoded recipe
-    - using materials stored in the network.
-    - Keeps one output stack available.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
+    - Keeps one output stack available to Networks/Cargo.
   NTW_EXPANSION_ADVANCED_AUTO_QUANTUM_WORKBENCH:
     name: Network Expansion Advanced Auto Quantum Workbench
     lore:
-    - Automatically crafts the encoded recipe
-    - using materials stored in the network.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
   NTW_EXPANSION_ADVANCED_AUTO_QUANTUM_WORKBENCH_WITHHOLDING:
     name: Network Expansion Advanced Auto Quantum Workbench Withholding
     lore:
-    - Automatically crafts the encoded recipe
-    - using materials stored in the network.
-    - Keeps one output stack available.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
+    - Keeps one output stack available to Networks/Cargo.
   NTW_EXPANSION_ADVANCED_AUTO_ANCIENT_ALTAR:
     name: Network Expansion Advanced Auto Ancient Altar
     lore:
-    - Automatically crafts the encoded recipe
-    - using materials stored in the network.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
   NTW_EXPANSION_ADVANCED_AUTO_ANCIENT_ALTAR_WITHHOLDING:
     name: Network Expansion Advanced Auto Ancient Altar Withholding
     lore:
-    - Automatically crafts the encoded recipe
-    - using materials stored in the network.
-    - Keeps one output stack available.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
+    - Keeps one output stack available to Networks/Cargo.
   NTW_EXPANSION_ADVANCED_AUTO_EXPANSION_WORKBENCH:
     name: Network Expansion Advanced Auto Expansion Workbench
     lore:
-    - Automatically crafts the encoded recipe
-    - using materials stored in the network.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
   NTW_EXPANSION_ADVANCED_AUTO_EXPANSION_WORKBENCH_WITHHOLDING:
     name: Network Expansion Advanced Auto Expansion Workbench Withholding
     lore:
-    - Automatically crafts the encoded recipe
-    - using materials stored in the network.
-    - Keeps one output stack available.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
+    - Keeps one output stack available to Networks/Cargo.
   NTW_EXPANSION_ADVANCED_AUTO_COMPRESSOR:
     name: Network Expansion Advanced Auto Compressor
     lore:
-    - Automatically crafts the encoded recipe
-    - using materials stored in the network.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
   NTW_EXPANSION_ADVANCED_AUTO_COMPRESSOR_WITHHOLDING:
     name: Network Expansion Advanced Auto Compressor Withholding
     lore:
-    - Automatically crafts the encoded recipe
-    - using materials stored in the network.
-    - Keeps one output stack available.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
+    - Keeps one output stack available to Networks/Cargo.
   NTW_EXPANSION_ADVANCED_AUTO_GRIND_STONE:
     name: Network Expansion Advanced Auto Grind Stone
     lore:
-    - A component of the Networks Expansion system.
-    - Use the Slimefun guide to learn how Network Expansion Advanced Auto Grind Stone works.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
   NTW_EXPANSION_ADVANCED_AUTO_GRIND_STONE_WITHHOLDING:
     name: Network Expansion Advanced Auto Grind Stone Withholding
     lore:
-    - A component of the Networks Expansion system.
-    - Use the Slimefun guide to learn how Network Expansion Advanced Auto Grind Stone Withholding works.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
+    - Keeps one output stack available to Networks/Cargo.
   NTW_EXPANSION_ADVANCED_AUTO_JUICER:
     name: Network Expansion Advanced Auto Juicer
     lore:
-    - Automatically crafts the encoded recipe
-    - using materials stored in the network.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
   NTW_EXPANSION_ADVANCED_AUTO_JUICER_WITHHOLDING:
     name: Network Expansion Advanced Auto Juicer Withholding
     lore:
-    - Automatically crafts the encoded recipe
-    - using materials stored in the network.
-    - Keeps one output stack available.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
+    - Keeps one output stack available to Networks/Cargo.
   NTW_EXPANSION_ADVANCED_AUTO_ORE_CRUSHER:
     name: Network Expansion Advanced Auto Ore Crusher
     lore:
-    - Automatically crafts the encoded recipe
-    - using materials stored in the network.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
   NTW_EXPANSION_ADVANCED_AUTO_ORE_CRUSHER_WITHHOLDING:
     name: Network Expansion Advanced Auto Ore Crusher Withholding
     lore:
-    - Automatically crafts the encoded recipe
-    - using materials stored in the network.
-    - Keeps one output stack available.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
+    - Keeps one output stack available to Networks/Cargo.
   NTW_EXPANSION_ADVANCED_AUTO_PRESSURE_CHAMBER:
     name: Network Expansion Advanced Auto Pressure Chamber
     lore:
-    - Automatically crafts the encoded recipe
-    - using materials stored in the network.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
   NTW_EXPANSION_ADVANCED_AUTO_PRESSURE_CHAMBER_WITHHOLDING:
     name: Network Expansion Advanced Auto Pressure Chamber Withholding
     lore:
-    - Automatically crafts the encoded recipe
-    - using materials stored in the network.
-    - Keeps one output stack available.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
+    - Keeps one output stack available to Networks/Cargo.
   NTW_EXPANSION_ADVANCED_AUTO_CRAFTING:
     name: Network Expansion Advanced Auto Crafting
     lore:
-    - Automatically crafts the encoded recipe
-    - using materials stored in the network.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
   NTW_EXPANSION_ADVANCED_AUTO_CRAFTING_WITHHOLDING:
     name: Network Expansion Advanced Auto Crafting Withholding
     lore:
-    - Automatically crafts the encoded recipe
-    - using materials stored in the network.
-    - Keeps one output stack available.
+    - Stack identical encoded blueprints to set batch size.
+    - A stack of 64 can craft up to 64 recipes at once.
+    - Large-output recipes stop at one legal output stack.
+    - Keeps one output stack available to Networks/Cargo.
   NTW_EXPANSION_BRIDGE_ORDINAL:
     name: Network Bridge (Standard)
     lore:
