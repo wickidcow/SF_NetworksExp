@@ -8,6 +8,7 @@
 - Fixed large-output recipes so a stacked blueprint no longer fails merely because `recipe output × blueprint count` exceeds one stack. The crafter now clamps the batch to the remaining legal output-stack capacity (for example, a 4-item recipe with 64 blueprints performs 16 crafts and produces 64 items).
 - Withholding variants use the same batching rule while continuing to keep one output stack locally available to Networks/Cargo.
 - The Recipe Encoder control now documents Click = 1 blueprint and Shift-click = up to 64 identical encoded blueprints.
+- Auto Crafters now use reason-aware idle retry delays: missing/broken blueprint states back off longer until player intervention, while transient states such as missing power, missing ingredients, output pressure, or a temporarily missing network retry on the shorter interval. Opening/clicking the crafter still clears the runtime delay immediately.
 
 ### Line-transfer performance
 - Extended the rotating target-work budget to the other line families visible in live profiling: normal Line Transfer, normal Line Transfer Grabber, and Advanced Line Transfer Grabber, including PLUS variants.
