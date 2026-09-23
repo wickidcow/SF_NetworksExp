@@ -15,6 +15,12 @@ debug: false
 # and leaves existing Expansion world/database data untouched.
 # Individual Expansion subsystems can also be disabled while keeping the rest active.
 features:
+  # Adds a read-only topology inspector to the classic Network Monitor.
+  # Hover machine types for Total / Active / Inactive counts. The Refresh button
+  # asks the owning controller to rediscover its topology before rebuilding the list.
+  network-monitor-inspector:
+    enabled: true
+
   networks-expansion:
     enabled: true
     drawers: true
