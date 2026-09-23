@@ -15,7 +15,6 @@ import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Range;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -79,10 +78,50 @@ public class BlockMenuUtil {
             return new int[0];
         }
 
-        return Arrays.stream(slots)
-            .filter(slot -> slot >= 0 && slot < blockMenu.getSize())
-            .distinct()
-            .toArray();
+        final int menuSize = blockMenu.getSize();
+        long seen = 0L;
+        int validCount = 0;
+        boolean changed = false;
+
+        for (int slot : slots) {
+            if (slot < 0 || slot >= menuSize || slot >= Long.SIZE) {
+                changed = true;
+                continue;
+            }
+
+            final long bit = 1L << slot;
+            if ((seen & bit) != 0L) {
+                changed = true;
+                continue;
+            }
+
+            seen |= bit;
+            validCount++;
+        }
+
+        if (!changed && validCount == slots.length) {
+            return slots;
+        }
+
+        final int[] safeSlots = new int[validCount];
+        seen = 0L;
+        int index = 0;
+
+        for (int slot : slots) {
+            if (slot < 0 || slot >= menuSize || slot >= Long.SIZE) {
+                continue;
+            }
+
+            final long bit = 1L << slot;
+            if ((seen & bit) != 0L) {
+                continue;
+            }
+
+            seen |= bit;
+            safeSlots[index++] = slot;
+        }
+
+        return safeSlots;
     }
 
     private static int @NotNull [] recoverSupremeInsertSlots(
