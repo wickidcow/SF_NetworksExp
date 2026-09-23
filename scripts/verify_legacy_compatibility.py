@@ -373,6 +373,28 @@ require("returnItems(root, fetcheds, blockMenu)" in auto_crafter,
         "Auto Crafter ingredient rollback is missing")
 require("instance.getItemStack()" in auto_crafter,
         "Auto Crafter output is not bound to its blueprint instance")
+require("canBlueprintStack() ? Math.max(1, blueprint.getAmount()) : 1" in auto_crafter
+        and "calculateSafeBatchSize" in auto_crafter
+        and "remainingRoom / outputPerCraft" in auto_crafter,
+        "Advanced Auto Crafter stacked-blueprint batch sizing is missing")
+require("Stack identical encoded blueprints to set batch size." in locale_text
+        and "Shift-click: Encode up to 64 identical blueprints." in locale_text,
+        "Advanced Auto Crafter/Encoder batch guidance is missing")
+
+items_config = config.get("items", {})
+expected_line_budgets = {
+    "NTW_EXPANSION_LINE_TRANSFER": 16,
+    "NTW_EXPANSION_LINE_TRANSFER_GRABBER": 16,
+    "NTW_EXPANSION_LINE_TRANSFER_PLUS": 16,
+    "NTW_EXPANSION_LINE_TRANSFER_PLUS_GRABBER": 16,
+    "NTW_EXPANSION_ADVANCED_LINE_TRANSFER": 8,
+    "NTW_EXPANSION_ADVANCED_LINE_TRANSFER_GRABBER": 12,
+    "NTW_EXPANSION_ADVANCED_LINE_TRANSFER_PLUS": 8,
+    "NTW_EXPANSION_ADVANCED_LINE_TRANSFER_PLUS_GRABBER": 12,
+}
+for item_id, expected_budget in expected_line_budgets.items():
+    require(items_config.get(item_id, {}).get("max-targets-per-tick") == expected_budget,
+            f"line-transfer target budget drifted for {item_id}")
 
 # Doctor integration.
 require("class NetworksDoctor" in doctor, "Networks Doctor scanner is missing")
