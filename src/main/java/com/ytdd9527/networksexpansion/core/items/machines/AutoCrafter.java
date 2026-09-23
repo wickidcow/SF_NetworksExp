@@ -56,6 +56,8 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
     private static final int[] OUTPUT_BACKGROUND = new int[]{6, 7, 8, 15, 17, 24, 25, 26};
     private static final int IDLE_BACKOFF_THRESHOLD = 3;
     private static final int IDLE_BACKOFF_MAX_TICKS = 4;
+    private static final int IDLE_MANUAL_INTERVENTION_TICKS = 10;
+    private static final int IDLE_TRANSIENT_TICKS = 4;
     protected final int chargePerCraft;
     protected final boolean withholding;
 
@@ -119,6 +121,12 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
             return;
         }
 
+        // A known idle reason may already have selected a more appropriate retry interval.
+        if (IDLE_SKIP_MAP.containsKey(location)) {
+            IDLE_MISS_MAP.remove(location);
+            return;
+        }
+
         final int misses = IDLE_MISS_MAP.merge(location.clone(), 1, Integer::sum);
         if (misses < IDLE_BACKOFF_THRESHOLD) {
             return;
@@ -136,18 +144,27 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
         IDLE_SKIP_MAP.remove(location);
     }
 
+    private static void deferIdleAttempt(@NotNull Location location, int slimefunTicks) {
+        IDLE_MISS_MAP.remove(location);
+        if (slimefunTicks > 0) {
+            IDLE_SKIP_MAP.put(location.clone(), slimefunTicks);
+        }
+    }
+
     protected boolean craftPreFlight(@NotNull BlockMenu blockMenu) {
         final Location location = blockMenu.getLocation();
         final NodeDefinition definition = NetworkStorage.getNode(location);
 
         if (definition == null || definition.getNode() == null) {
             sendFeedback(location, FeedbackType.NO_NETWORK_FOUND);
+            deferIdleAttempt(location, IDLE_TRANSIENT_TICKS);
             return false;
         }
 
         final NetworkRoot root = definition.getNode().getRoot();
 
         if (checkSoftCellBan(location, root)) {
+            deferIdleAttempt(location, IDLE_TRANSIENT_TICKS);
             return false;
         }
 
@@ -162,6 +179,7 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
 
         if (blueprint == null || blueprint.getType() == Material.AIR) {
             sendFeedback(location, FeedbackType.NO_BLUEPRINT_FOUND);
+            deferIdleAttempt(location, IDLE_MANUAL_INTERVENTION_TICKS);
             return false;
         }
 
@@ -169,6 +187,7 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
 
         if (networkCharge < this.chargePerCraft) {
             sendFeedback(location, FeedbackType.NOT_ENOUGH_POWER);
+            deferIdleAttempt(location, IDLE_TRANSIENT_TICKS);
             return false;
         }
 
@@ -178,6 +197,7 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
             final SlimefunItem item = SlimefunItem.getByItem(blueprint);
             if (!isValidBlueprint(item)) {
                 sendFeedback(location, FeedbackType.INVALID_BLUEPRINT);
+                deferIdleAttempt(location, IDLE_MANUAL_INTERVENTION_TICKS);
                 return false;
             }
 
@@ -185,11 +205,13 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
             BlueprintInstance decoded = Keys.getBlueprintInstance(blueprintMeta);
             if (decoded == null) {
                 sendFeedback(location, FeedbackType.NO_BLUEPRINT_INSTANCE_FOUND);
+                deferIdleAttempt(location, IDLE_MANUAL_INTERVENTION_TICKS);
                 return false;
             }
 
             if (decoded == BlueprintInstance.INVALID) {
                 sendFeedback(location, FeedbackType.BROKEN_BLUEPRINT);
+                deferIdleAttempt(location, IDLE_MANUAL_INTERVENTION_TICKS);
                 return false;
             }
 
@@ -203,6 +225,7 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
         ItemStack targetOutput = instance.getItemStack();
         if (targetOutput == null || targetOutput.getType() == Material.AIR || targetOutput.getAmount() <= 0) {
             sendFeedback(location, FeedbackType.BROKEN_BLUEPRINT);
+            deferIdleAttempt(location, IDLE_MANUAL_INTERVENTION_TICKS);
             return false;
         }
 
@@ -210,6 +233,7 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
         if (output != null && output.getType() != Material.AIR) {
             if (!StackUtils.itemsMatch(targetOutput, output)) {
                 sendFeedback(location, FeedbackType.OUTPUT_FULL);
+                deferIdleAttempt(location, IDLE_TRANSIENT_TICKS);
                 return false;
             }
             currentOutputAmount = output.getAmount();
@@ -229,6 +253,7 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
             currentOutputAmount);
         if (blueprintAmount <= 0) {
             sendFeedback(location, FeedbackType.OUTPUT_FULL);
+            deferIdleAttempt(location, IDLE_TRANSIENT_TICKS);
             return false;
         }
 
@@ -268,6 +293,7 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
             final long scaledAmount = (long) ingredient.amount() * blueprintAmount;
             if (scaledAmount <= 0 || scaledAmount > Integer.MAX_VALUE) {
                 sendFeedback(location, FeedbackType.RESULT_IS_TOO_LARGE);
+                deferIdleAttempt(location, IDLE_MANUAL_INTERVENTION_TICKS);
                 return false;
             }
 
@@ -275,6 +301,7 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
             requestedAmounts[i] = requestedAmount;
             if (!root.contains(new ItemRequest(ingredient.template(), requestedAmount))) {
                 sendFeedback(location, FeedbackType.NOT_ENOUGH_ITEMS_IN_NETWORK);
+                deferIdleAttempt(location, IDLE_TRANSIENT_TICKS);
                 return false;
             }
         }
@@ -294,6 +321,7 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
                  */
                 returnItems(root, fetcheds, blockMenu);
                 sendFeedback(location, FeedbackType.NOT_ENOUGH_ITEMS_IN_NETWORK);
+                deferIdleAttempt(location, IDLE_TRANSIENT_TICKS);
                 return false;
             }
         }
@@ -312,6 +340,7 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
         if (crafted.getAmount() > crafted.getMaxStackSize()) {
             returnItems(root, fetcheds, blockMenu);
             sendFeedback(location, FeedbackType.RESULT_IS_TOO_LARGE);
+            deferIdleAttempt(location, IDLE_MANUAL_INTERVENTION_TICKS);
             return false;
         }
 
