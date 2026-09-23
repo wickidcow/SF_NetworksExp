@@ -83,6 +83,16 @@ public class ConfigManager {
     }
 
     /**
+     * Enables the native topology inspector inside the classic Network Monitor.
+     *
+     * <p>This is a read-only view of the controller's current NetworkRoot. The manual refresh button may mark the
+     * owning controller dirty so the next Slimefun tick performs a real neighbour rediscovery.</p>
+     */
+    public boolean isNetworkMonitorInspectorEnabled() {
+        return Networks.getInstance().getConfig().getBoolean("features.network-monitor-inspector.enabled", true);
+    }
+
+    /**
      * Returns whether one optional Networks Expansion subsystem should register.
      * The master Expansion switch always wins, and every subfeature defaults to
      * enabled so existing installations keep their current behavior after upgrade.
