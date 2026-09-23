@@ -286,7 +286,9 @@ require("blockMenu.markDirty()" in block_menu_util and "slot < 0 || slot >= bloc
         "BlockMenu transfer persistence/bounds hardening is missing")
 require("getSafeTransportSlots" in block_menu_util
         and "AbstractMethodError" in block_menu_util
-        and ".distinct()" in block_menu_util,
+        and "sanitizeSlots" in block_menu_util
+        and "slot < 0 || slot >= menuSize" in block_menu_util
+        and "seen" in block_menu_util,
         "cross-fork Slimefun cargo-slot adapter is missing")
 require("BlockMenuUtil.getSafeTransportSlots" in network_root
         and "BlockMenuUtil.getSafeTransportSlots" in fluffy_barrel
