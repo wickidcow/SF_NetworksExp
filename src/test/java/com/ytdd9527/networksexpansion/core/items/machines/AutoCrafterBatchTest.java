@@ -8,26 +8,26 @@ class AutoCrafterBatchTest {
 
     @Test
     void craftsFullStackForSingleOutputRecipes() {
-        assertEquals(64, AutoCrafter.calculateSafeBatchSize(64, 1, 64, 0));
+        assertEquals(64, AutoCrafterBatchPlanner.calculateSafeBatchSize(64, 1, 64, 0));
     }
 
     @Test
     void clampsMultiOutputRecipesToOneLegalStack() {
-        assertEquals(16, AutoCrafter.calculateSafeBatchSize(64, 4, 64, 0));
+        assertEquals(16, AutoCrafterBatchPlanner.calculateSafeBatchSize(64, 4, 64, 0));
     }
 
     @Test
     void fillsRemainingWithholdingOutputSpace() {
-        assertEquals(6, AutoCrafter.calculateSafeBatchSize(64, 4, 64, 40));
+        assertEquals(6, AutoCrafterBatchPlanner.calculateSafeBatchSize(64, 4, 64, 40));
     }
 
     @Test
     void keepsNormalCrafterAtOneRecipe() {
-        assertEquals(1, AutoCrafter.calculateSafeBatchSize(1, 1, 64, 0));
+        assertEquals(1, AutoCrafterBatchPlanner.calculateSafeBatchSize(1, 1, 64, 0));
     }
 
     @Test
     void refusesCraftWhenNoCompleteRecipeOutputFits() {
-        assertEquals(0, AutoCrafter.calculateSafeBatchSize(64, 4, 64, 62));
+        assertEquals(0, AutoCrafterBatchPlanner.calculateSafeBatchSize(64, 4, 64, 62));
     }
 }
