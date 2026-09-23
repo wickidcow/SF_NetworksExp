@@ -3,6 +3,7 @@ package io.github.sefiraat.networks.slimefun.network;
 import com.balugaq.netex.api.data.ItemFlowRecord;
 import com.balugaq.netex.api.events.NetworkRootReadyEvent;
 import com.balugaq.netex.utils.Lang;
+import io.github.sefiraat.networks.utils.Theme;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import io.github.sefiraat.networks.NetworkStorage;
@@ -12,6 +13,7 @@ import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
 import io.github.sefiraat.networks.utils.FailureCircuitBreaker;
+import io.github.thebusybiscuit.slimefun4.api.events.PlayerRightClickEvent;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemSetting;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
@@ -27,7 +29,7 @@ import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.event.block.BlockBreakEvent;
-import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
@@ -193,6 +195,45 @@ public class NetworkController extends NetworkObject {
                 }
             }
         });
+
+        addItemHandler((BlockUseHandler) this::onControllerUse);
+    }
+
+    private void onControllerUse(@NotNull PlayerRightClickEvent event) {
+        /*
+         * Do not steal interactions from held tools/blocks. Network Probe, Crayon and other Slimefun item
+         * handlers run first and may cancel the custom event themselves. Empty-hand controller clicks provide a
+         * small status readout instead of silently doing nothing.
+         */
+        if (event.getItem().getType() != Material.AIR) {
+            return;
+        }
+
+        final Block clicked = event.getClickedBlock().orElse(null);
+        if (clicked == null) {
+            return;
+        }
+
+        event.cancel();
+        final Player player = event.getPlayer();
+        final NetworkRoot root = NETWORKS.get(clicked.getLocation());
+
+        player.sendMessage(Theme.MAIN + "Network Controller");
+        if (root == null) {
+            player.sendMessage(Theme.WARNING + "Network topology is still initializing.");
+            player.sendMessage(Theme.PASSIVE + "Try again after the next Slimefun tick.");
+            return;
+        }
+
+        final String state = root.isOverburdened()
+            ? Theme.ERROR + "Overburdened"
+            : Theme.SUCCESS + "Online";
+        player.sendMessage(
+            Theme.PASSIVE + "Nodes: " + Theme.WHITE + root.getNodeCount()
+                + Theme.PASSIVE + "/" + Theme.WHITE + root.getMaxNodes()
+                + Theme.PASSIVE + " | Status: " + state);
+        player.sendMessage(
+            Theme.CLICK_INFO + "Open a Network Monitor for machine totals, Active/Inactive counts and Refresh.");
     }
 
     public static void configureRuntimeSafety(@NotNull Networks plugin) {
@@ -352,11 +393,9 @@ public class NetworkController extends NetworkObject {
         removeRuntimeState(location);
     }
 
-    @SuppressWarnings("unused")
     @Override
-    protected void cancelPlace(@NotNull BlockPlaceEvent event) {
-        event.getPlayer().sendMessage(Lang.getString("messages.unsupported-operation.controller.cancel_place"));
-        event.setCancelled(true);
+    protected @NotNull String getPlacementConflictMessage() {
+        return Lang.getString("messages.unsupported-operation.controller.cancel_place");
     }
 
     private void onFirstTick(@NotNull Block block, @NotNull SlimefunBlockData data) {
