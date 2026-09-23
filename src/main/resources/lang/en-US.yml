@@ -2139,6 +2139,9 @@ items:
     lore:
     - The Network Controller is the brain
     - for the whole network. Max 1 per network.
+    - ''
+    - Right-click with an empty hand to view
+    - node count and controller status.
   NTW_BRIDGE:
     name: Network Bridge
     lore:
