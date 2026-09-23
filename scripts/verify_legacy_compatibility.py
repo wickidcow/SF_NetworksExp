@@ -318,6 +318,18 @@ require("NetworkRoot previous = NETWORKS.put(location, candidate);" in network_c
         and "FailureCircuitBreaker.FailureSnapshot recoverySnapshot" in network_controller
         and "FailureCircuitBreaker.FailureSnapshot previous =" not in network_controller,
         "controller rebuild success handling reuses the previous local variable name")
+require("new ItemUseHandler()" in network_object
+        and "protected void prePlace(@NotNull PlayerRightClickEvent event)" in network_object
+        and "wouldMergeControllers(target)" in network_object,
+        "Networks placement conflicts are not rejected before BlockPlaceEvent")
+require("cleanupCancelledPlacement" in network_object
+        and "getBlockDataController().removeBlock(location)" in network_object
+        and "if (event.isCancelled())" in network_object,
+        "late cancelled Networks placements can leave ghost Slimefun block data")
+require("addItemHandler((BlockUseHandler) this::onControllerUse)" in network_controller
+        and "Network topology is still initializing." in network_controller
+        and "Open a Network Monitor for machine totals" in network_controller,
+        "Network Controller empty-hand status interaction is missing")
 require("root.getNodeLocations()" in network_monitor
         and "Total connected:" in network_monitor
         and "Active:" in network_monitor
