@@ -9,6 +9,9 @@ import org.jetbrains.annotations.Nullable;
 public class TransferConfigFactory {
     public static final int ADVANCED_DEFAULT_TRANSPORT_LIMIT = 3456;
     public static final int ADVANCED_LINE_TRANSFER_TARGET_BUDGET = 8;
+    public static final int ADVANCED_LINE_GRABBER_TARGET_BUDGET = 12;
+    public static final int LINE_TRANSFER_TARGET_BUDGET = 16;
+    public static final int LINE_GRABBER_TARGET_BUDGET = 16;
     public static final int DEFAULT_MAX_DISTANCE = 64;
     public static final String MAX_DISTANCE = "max-distance";
     public static final String PUSHITEM_TICK = "pushitem-tick";
@@ -42,9 +45,7 @@ public class TransferConfigFactory {
             transferType.config(
                 id,
                 MAX_TARGETS_PER_TICK,
-                transferType == TransferType.ADVANCED_LINE_TRANSFER
-                    ? ADVANCED_LINE_TRANSFER_TARGET_BUDGET
-                    : 0),
+                defaultTargetBudget(transferType)),
             transferType.config(id, MAX_DISTANCE, 1),
             (transferType.isAdvanced() ? ADVANCED_DEFAULT_TRANSPORT_LIMIT : DEFAULT_MAX_DISTANCE),
             transferType.getGui().select("B"),
@@ -60,5 +61,15 @@ public class TransferConfigFactory {
             transferType.getGui().select1("q"),
             transferType.getGui().select1("r"),
             transferType.getGui().select1("o"));
+    }
+
+    private static int defaultTargetBudget(@NotNull TransferType transferType) {
+        return switch (transferType) {
+            case ADVANCED_LINE_TRANSFER -> ADVANCED_LINE_TRANSFER_TARGET_BUDGET;
+            case ADVANCED_LINE_TRANSFER_GRABBER -> ADVANCED_LINE_GRABBER_TARGET_BUDGET;
+            case LINE_TRANSFER -> LINE_TRANSFER_TARGET_BUDGET;
+            case LINE_TRANSFER_GRABBER -> LINE_GRABBER_TARGET_BUDGET;
+            default -> 0;
+        };
     }
 }
