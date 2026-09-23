@@ -568,6 +568,15 @@ def generic_item_lore(item_id: str, name: str) -> list[str]:
         return [f"Stores a {name.replace(' Blueprint','')} recipe", "for use by a compatible Network crafter."]
     if "RECIPE_ENCODER" in u:
         return [f"Encodes recipes for the {name.replace(' Recipe Encoder','')}.", "Insert the recipe and a blank blueprint."]
+    if u.startswith("NTW_EXPANSION_ADVANCED_AUTO_"):
+        lore = [
+            "Stack identical encoded blueprints to set batch size.",
+            "A stack of 64 can craft up to 64 recipes at once.",
+            "Large-output recipes automatically stop at one legal output stack.",
+        ]
+        if "WITHHOLDING" in u:
+            lore += ["Keeps one output stack available to Networks/Cargo."]
+        return lore
     if "AUTO_" in u and any(x in u for x in ("WORKBENCH", "FORGE", "SMELTERY", "ALTAR", "COMPRESSOR", "JUICER", "CRUSHER", "CHAMBER", "CRAFTING")):
         return ["Automatically crafts the encoded recipe", "using materials stored in the network."] + (["Keeps one output stack available."] if "WITHHOLDING" in u else [])
     if "LINE_TRANSFER" in u or "_TRANSFER" in u:
@@ -940,6 +949,8 @@ SUPER_HEAD = [
 
 def generic_icon_lore(icon_key: str) -> list[str]:
     key = icon_key.lower()
+    if key == "encode-stack":
+        return ["Click: Encode 1 blueprint.", "Shift-click: Encode up to 64 identical blueprints."]
     if "next" in key:
         return ["Click to open the next page."]
     if "previous" in key or "prev" in key:

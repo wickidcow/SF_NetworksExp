@@ -133,10 +133,12 @@ items:
   NTW_EXPANSION_LINE_TRANSFER_GRABBER:
     max-distance: 32
     grabitem-tick: 1
+    max-targets-per-tick: 16
   NTW_EXPANSION_LINE_TRANSFER:
     max-distance: 32
     pushitem-tick: 1
     grabitem-tick: 1
+    max-targets-per-tick: 16
   NTW_EXPANSION_LINE_TRANSFER_PLUS_PUSHER:
     max-distance: 64
     pushitem-tick: 1
@@ -149,10 +151,12 @@ items:
   NTW_EXPANSION_LINE_TRANSFER_PLUS_GRABBER:
     max-distance: 64
     grabitem-tick: 1
+    max-targets-per-tick: 16
   NTW_EXPANSION_LINE_TRANSFER_PLUS:
     max-distance: 64
     pushitem-tick: 1
     grabitem-tick: 1
+    max-targets-per-tick: 16
     required-power: 5000
   NTW_EXPANSION_ADVANCED_LINE_TRANSFER_PUSHER:
     max-distance: 32
@@ -166,6 +170,7 @@ items:
   NTW_EXPANSION_ADVANCED_LINE_TRANSFER_GRABBER:
     max-distance: 32
     grabitem-tick: 1
+    max-targets-per-tick: 12
   NTW_EXPANSION_ADVANCED_LINE_TRANSFER:
     max-distance: 32
     pushitem-tick: 1
@@ -184,6 +189,7 @@ items:
   NTW_EXPANSION_ADVANCED_LINE_TRANSFER_PLUS_GRABBER:
     max-distance: 64
     grabitem-tick: 1
+    max-targets-per-tick: 12
   NTW_EXPANSION_ADVANCED_LINE_TRANSFER_PLUS:
     max-distance: 64
     pushitem-tick: 1

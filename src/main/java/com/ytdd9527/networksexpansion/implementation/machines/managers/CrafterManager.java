@@ -344,6 +344,10 @@ public class CrafterManager extends NetworkObject {
         }
 
         blueprint.setAmount(blueprint.getAmount() - v);
+        if (v > 0) {
+            AutoCrafter.updateCache(crafterMenu);
+            crafterMenu.markDirty();
+        }
     }
 
     @SuppressWarnings("deprecation")

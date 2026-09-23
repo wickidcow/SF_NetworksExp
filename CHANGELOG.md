@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.23
+
+### Advanced Auto Crafter functionality
+- Restored the original stacked-blueprint contract in the English guide text: Advanced Auto Crafters use the number of identical encoded blueprints in their blueprint slot as the requested batch size.
+- A 64-blueprint stack can therefore execute up to 64 recipe crafts in one operation when the recipe output stacks to 64 and enough ingredients are available.
+- Fixed large-output recipes so a stacked blueprint no longer fails merely because `recipe output × blueprint count` exceeds one stack. The crafter now clamps the batch to the remaining legal output-stack capacity (for example, a 4-item recipe with 64 blueprints performs 16 crafts and produces 64 items).
+- Withholding variants use the same batching rule while continuing to keep one output stack locally available to Networks/Cargo.
+- The Recipe Encoder control now documents Click = 1 blueprint and Shift-click = up to 64 identical encoded blueprints.
+- Auto Crafters now use reason-aware idle retry delays: missing/broken blueprint states back off longer until player intervention, while transient states such as missing power, missing ingredients, output pressure, or a temporarily missing network retry on the shorter interval. Opening/clicking the crafter or inserting a blueprint through the Crafter Manager clears the runtime delay immediately.
+
+### Line-transfer performance
+- Extended the rotating target-work budget to the other line families visible in live profiling: normal Line Transfer, normal Line Transfer Grabber, and Advanced Line Transfer Grabber, including PLUS variants.
+- Defaults are 16 targets/pass for normal Line Transfer/Grabber and 12 targets/pass for Advanced Line Transfer Grabber. The existing bidirectional Advanced Line Transfer remains at 8.
+- `max-targets-per-tick: 0` still restores historical unlimited-per-pass behavior.
+
 ## 1.0.22
 
 ### Advanced Line Transfer performance
