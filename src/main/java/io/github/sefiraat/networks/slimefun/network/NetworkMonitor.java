@@ -299,7 +299,6 @@ public class NetworkMonitor extends NetworkDirectional {
             || definition.getNode().getRoot() != root
             || data == null
             || data.isPendingRemove()
-            || !data.isDataLoaded()
             || item == null) {
             return false;
         }
