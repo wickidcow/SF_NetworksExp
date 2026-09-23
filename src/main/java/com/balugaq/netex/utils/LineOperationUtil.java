@@ -84,6 +84,62 @@ public class LineOperationUtil {
         }
     }
 
+    /**
+     * Runs a bounded pass across a contiguous Slimefun line and returns the offset to resume from next tick.
+     *
+     * <p>The method still validates every skipped position from the start of the line, so a broken line keeps
+     * the same stop-at-first-gap semantics as {@link #doOperation(Location, BlockFace, int, boolean, boolean, Consumer)}.
+     * Only the expensive consumer work is rotated across ticks.</p>
+     *
+     * @return 0 when the line ended/reset, otherwise the zero-based offset to resume from
+     */
+    public static int doBudgetedOperation(
+        @NotNull Location startLocation,
+        @NotNull BlockFace direction,
+        int limit,
+        int startOffset,
+        int maxTargets,
+        @NotNull Consumer<BlockMenu> consumer) {
+
+        if (limit <= 0 || maxTargets <= 0) {
+            return 0;
+        }
+
+        final int effectiveStart = startOffset >= 0 && startOffset < limit ? startOffset : 0;
+        final Location location = startLocation.clone();
+        int processed = 0;
+
+        for (int i = 0; i < limit; i++) {
+            switch (direction) {
+                case NORTH -> location.setZ(location.getZ() - 1);
+                case SOUTH -> location.setZ(location.getZ() + 1);
+                case EAST -> location.setX(location.getX() + 1);
+                case WEST -> location.setX(location.getX() - 1);
+                case UP -> location.setY(location.getY() + 1);
+                case DOWN -> location.setY(location.getY() - 1);
+            }
+
+            final BlockMenu blockMenu = StorageCacheUtils.getMenu(location);
+            if (blockMenu == null) {
+                return 0;
+            }
+
+            if (i < effectiveStart) {
+                continue;
+            }
+
+            consumer.accept(blockMenu);
+            processed++;
+
+            if (processed >= maxTargets) {
+                final int nextOffset = i + 1;
+                return nextOffset >= limit ? 0 : nextOffset;
+            }
+        }
+
+        return 0;
+    }
+
     public static void doVanillaOperation(
         @NotNull Location startLocation,
         @NotNull BlockFace direction,
