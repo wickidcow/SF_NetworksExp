@@ -22,7 +22,6 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.attributes.RecipeDisplayItem;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
-import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -41,6 +40,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 @SuppressWarnings("DuplicatedCode")
 public abstract class AbstractTransfer extends AdvancedDirectional implements RecipeDisplayItem {
@@ -55,6 +55,8 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
     private static final Map<Location, Integer> PUSH_TICKER_MAP = new HashMap<>();
     private static final Map<Location, Integer> GRAB_TICKER_MAP = new HashMap<>();
     private static final Map<Location, Integer> PUSH_TEMPLATE_CURSOR_MAP = new HashMap<>();
+    private static final Map<Location, Integer> PUSH_LINE_CURSOR_MAP = new HashMap<>();
+    private static final Map<Location, Integer> GRAB_LINE_CURSOR_MAP = new HashMap<>();
     private static final Map<Location, Integer> LAST_TRANSFER_SERVER_TICK = new ConcurrentHashMap<>();
     private final TransferConfiguration config;
 
@@ -242,16 +244,15 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
 
         final List<ItemStack> templates = collectTemplates(blockMenu);
         if (templates == null) {
+            PUSH_LINE_CURSOR_MAP.remove(blockMenu.getLocation());
             finishPushAttempt(blockMenu, root);
             return;
         }
 
-        LineOperationUtil.doOperation(
-            blockMenu.getLocation(),
+        runLineOperation(
+            blockMenu,
             direction,
-            config.maxDistance,
-            false,
-            false,
+            PUSH_LINE_CURSOR_MAP,
             (targetMenu) -> LineOperationUtil.pushItem(
                 targetMenu.getLocation(), root, targetMenu, templates, mode, limitQuantity));
 
@@ -266,18 +267,12 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
             return;
         }
 
-        LineOperationUtil.doOperation(
-            blockMenu.getLocation(),
+        runLineOperation(
+            blockMenu,
             direction,
-            config.maxDistance,
-            false,
-            false,
-            (targetMenu) -> {
-                if (hasWithdrawableItem(targetMenu)) {
-                    LineOperationUtil.grabItem(
-                        targetMenu.getLocation(), root, targetMenu, mode, limitQuantity);
-                }
-            });
+            GRAB_LINE_CURSOR_MAP,
+            (targetMenu) -> LineOperationUtil.grabItem(
+                targetMenu.getLocation(), root, targetMenu, mode, limitQuantity));
 
         root.removeRootPower(config.defaultRequiredPower);
     }
@@ -330,16 +325,12 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
             config.maxDistance,
             false,
             false,
-            (menu) -> {
-                if (hasWithdrawableItem(menu)) {
-                    LineOperationUtil.grabItem(
-                        menu.getLocation() == null ? blockMenu.getLocation() : menu.getLocation(),
-                        root,
-                        menu,
-                        mode,
-                        limitQuantity);
-                }
-            });
+            (menu) -> LineOperationUtil.grabItem(
+                menu.getLocation() == null ? blockMenu.getLocation() : menu.getLocation(),
+                root,
+                menu,
+                mode,
+                limitQuantity));
 
         root.removeRootPower(config.defaultRequiredPower);
     }
@@ -386,20 +377,54 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
         return scheduled;
     }
 
-    private static boolean hasWithdrawableItem(@NotNull BlockMenu blockMenu) {
-        final int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
-        for (int slot : slots) {
-            final ItemStack item = blockMenu.getItemInSlot(slot);
-            if (item != null && item.getType() != Material.AIR) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private void finishPushAttempt(@NotNull BlockMenu blockMenu, @NotNull NetworkRoot root) {
         root.removeRootPower(config.defaultRequiredPower);
         sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
+    }
+
+    private void runLineOperation(
+        @NotNull BlockMenu sourceMenu,
+        @NotNull BlockFace direction,
+        @NotNull Map<Location, Integer> cursorMap,
+        @NotNull Consumer<BlockMenu> consumer) {
+
+        final Location location = sourceMenu.getLocation();
+        final int targetBudget = Math.max(0, config.maxTargetsPerTick);
+
+        if (targetBudget <= 0 || targetBudget >= config.maxDistance) {
+            cursorMap.remove(location);
+            LineOperationUtil.doOperation(
+                location,
+                direction,
+                config.maxDistance,
+                false,
+                false,
+                consumer);
+            return;
+        }
+
+        final int startOffset = cursorMap.getOrDefault(location, 0);
+        final int nextOffset = LineOperationUtil.doBudgetedOperation(
+            location,
+            direction,
+            config.maxDistance,
+            startOffset,
+            targetBudget,
+            consumer);
+
+        if (nextOffset == 0) {
+            cursorMap.remove(location);
+        } else {
+            cursorMap.put(location.clone(), nextOffset);
+        }
+    }
+
+    @Override
+    public void setDirection(@NotNull BlockMenu blockMenu, @NotNull BlockFace blockFace) {
+        super.setDirection(blockMenu, blockFace);
+        final Location location = blockMenu.getLocation();
+        PUSH_LINE_CURSOR_MAP.remove(location);
+        GRAB_LINE_CURSOR_MAP.remove(location);
     }
 
     @Override
@@ -409,6 +434,8 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
         PUSH_TICKER_MAP.remove(location);
         GRAB_TICKER_MAP.remove(location);
         PUSH_TEMPLATE_CURSOR_MAP.remove(location);
+        PUSH_LINE_CURSOR_MAP.remove(location);
+        GRAB_LINE_CURSOR_MAP.remove(location);
         LAST_TRANSFER_SERVER_TICK.remove(location);
     }
 
