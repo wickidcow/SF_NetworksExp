@@ -8,11 +8,13 @@ import org.jetbrains.annotations.Nullable;
 
 public class TransferConfigFactory {
     public static final int ADVANCED_DEFAULT_TRANSPORT_LIMIT = 3456;
+    public static final int ADVANCED_LINE_TRANSFER_TARGET_BUDGET = 8;
     public static final int DEFAULT_MAX_DISTANCE = 64;
     public static final String MAX_DISTANCE = "max-distance";
     public static final String PUSHITEM_TICK = "pushitem-tick";
     public static final String GRABITEM_TICK = "grabitem-tick";
     public static final String REQUIRED_POWER = "required-power";
+    public static final String MAX_TARGETS_PER_TICK = "max-targets-per-tick";
 
     @NotNull
     public static TransferConfiguration getTransferConfiguration(@NotNull TransferType transferType) {
@@ -37,6 +39,12 @@ public class TransferConfigFactory {
             defaultTransportMode,
             (transferType.isAdvanced() ? ADVANCED_DEFAULT_TRANSPORT_LIMIT : DEFAULT_MAX_DISTANCE),
             transferType.config(id, REQUIRED_POWER, (transferType.isTransfer() ? 5000 : 0)),
+            transferType.config(
+                id,
+                MAX_TARGETS_PER_TICK,
+                transferType == TransferType.ADVANCED_LINE_TRANSFER
+                    ? ADVANCED_LINE_TRANSFER_TARGET_BUDGET
+                    : 0),
             transferType.config(id, MAX_DISTANCE, 1),
             (transferType.isAdvanced() ? ADVANCED_DEFAULT_TRANSPORT_LIMIT : DEFAULT_MAX_DISTANCE),
             transferType.getGui().select("B"),
