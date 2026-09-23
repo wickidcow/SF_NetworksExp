@@ -114,6 +114,7 @@ storage_adapter_registry = read("src/main/java/io/github/sefiraat/networks/integ
 control_x = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkControlX.java")
 quantum_storage = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkQuantumStorage.java")
 auto_crafter = read("src/main/java/com/ytdd9527/networksexpansion/core/items/machines/AutoCrafter.java")
+auto_crafter_batch_planner = read("src/main/java/com/ytdd9527/networksexpansion/core/items/machines/AutoCrafterBatchPlanner.java")
 smart_crafting = read("src/main/java/com/ytdd9527/networksexpansion/implementation/machines/networks/advanced/SmartNetworkCraftingGridNewStyle.java")
 crafting_grid = read("src/main/java/io/github/sefiraat/networks/slimefun/network/grid/NetworkCraftingGrid.java")
 crafting_grid_new = read("src/main/java/com/ytdd9527/networksexpansion/implementation/machines/networks/advanced/NetworkCraftingGridNewStyle.java")
@@ -374,8 +375,8 @@ require("returnItems(root, fetcheds, blockMenu)" in auto_crafter,
 require("instance.getItemStack()" in auto_crafter,
         "Auto Crafter output is not bound to its blueprint instance")
 require("canBlueprintStack() ? Math.max(1, blueprint.getAmount()) : 1" in auto_crafter
-        and "calculateSafeBatchSize" in auto_crafter
-        and "remainingRoom / outputPerCraft" in auto_crafter,
+        and "AutoCrafterBatchPlanner.calculateSafeBatchSize" in auto_crafter
+        and "remainingRoom / outputPerCraft" in auto_crafter_batch_planner,
         "Advanced Auto Crafter stacked-blueprint batch sizing is missing")
 require("Stack identical encoded blueprints to set batch size." in locale_text
         and "Shift-click: Encode up to 64 identical blueprints." in locale_text,
