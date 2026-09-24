@@ -1311,12 +1311,6 @@ public class NetworkRoot extends NetworkNode {
             }
         }
 
-        // Empty Network Quantum Storages are structured storage too. Let one claim the item type
-        // before Network Cells are allowed to absorb the remainder.
-        if (depositIntoUnassignedNetworkStorage(null, incoming)) {
-            return;
-        }
-
         for (BlockMenu blockMenu : getCellMenus()) {
             if (!isRealCell(blockMenu)) continue;
             blockMenu.markDirty();
@@ -2280,18 +2274,6 @@ public class NetworkRoot extends NetworkNode {
             }
         }
 
-        /*
-         * Cells are deliberately the final generic storage tier. Filled/matching barrels and drawers
-         * have already had their chance above; now an empty Network Quantum Storage may bind itself to
-         * the incoming item. Only the amount that none of those structured stores can accept reaches
-         * a Network Cell.
-         */
-        if (depositIntoUnassignedNetworkStorage(accessor, incoming)) {
-            uncontrolAccessInput(accessor);
-            tryRecord(accessor, beforeItemStack, 0);
-            return;
-        }
-
         for (BlockMenu blockMenu : getCellMenus()) {
             if (!isRealCell(blockMenu)) continue;
             blockMenu.markDirty();
@@ -2318,37 +2300,6 @@ public class NetworkRoot extends NetworkNode {
         // Netex - Record start
         tryRecord(accessor, beforeItemStack, incoming.getAmount());
         // Netex - Record end
-    }
-
-    private boolean depositIntoUnassignedNetworkStorage(
-        @Nullable Location accessor, @NotNull ItemStack incoming) {
-        boolean movedAny = false;
-
-        for (BarrelIdentity barrelIdentity : getInputAbleBarrels()) {
-            if (!(barrelIdentity instanceof NetworkStorage networkStorage) || !networkStorage.isUnassigned()) {
-                continue;
-            }
-
-            final int before = incoming.getAmount();
-            networkStorage.depositItemStack(incoming);
-            if (incoming.getAmount() == before) {
-                continue;
-            }
-
-            movedAny = true;
-            if (accessor != null) {
-                addCountObservingAccessHistory(accessor, networkStorage.getLocation());
-            }
-
-            if (incoming.getAmount() <= 0) {
-                return true;
-            }
-        }
-
-        if (movedAny && accessor != null) {
-            uncontrolAccessInput(accessor);
-        }
-        return incoming.getAmount() <= 0;
     }
 
     public Map<Location, BarrelIdentity> getMapInputAbleBarrels() {
