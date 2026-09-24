@@ -792,7 +792,7 @@ public class NetworkRoot extends NetworkNode {
             return null;
         }
 
-        // Classic Networks intentionally drains loose Cell inventory before deep storage.
+        // Classic Networks withdrawal order: Cells -> Crafters -> Greedy storage -> deep storage.
         // Cells
         for (BlockMenu blockMenu : getCellMenus()) {
             if (!isRealCell(blockMenu)) continue;
@@ -855,57 +855,6 @@ public class NetworkRoot extends NetworkNode {
                     stackToReturn.setAmount(stackToReturn.getAmount() + itemStack.getAmount());
                     request.receiveAmount(itemStack.getAmount());
                     itemStack.setAmount(0);
-                }
-            }
-        }
-
-        // Deep storage after loose network inventory (classic Networks withdrawal order)
-        for (BarrelIdentity barrelIdentity : getOutputAbleBarrels()) {
-
-            final ItemStack itemStack = barrelIdentity.getItemStack();
-
-            if (itemStack == null || !StackUtils.itemsMatch(request, itemStack)) {
-                continue;
-            }
-
-            boolean infinity = barrelIdentity instanceof InfinityBarrel;
-            final ItemStack fetched = barrelIdentity.requestItem(request);
-            if (fetched == null || fetched.getType() == Material.AIR || (infinity && fetched.getAmount() == 1)) {
-                continue;
-            }
-
-            // Stack is null, so we can fill it here
-            if (stackToReturn == null) {
-                stackToReturn = fetched.clone();
-                stackToReturn.setAmount(0);
-            }
-
-            final int preserveAmount = infinity ? fetched.getAmount() - 1 : fetched.getAmount();
-
-            if (request.getAmount() <= preserveAmount) {
-                stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
-                fetched.setAmount(fetched.getAmount() - request.getAmount());
-                return stackToReturn;
-            } else {
-                stackToReturn.setAmount(stackToReturn.getAmount() + preserveAmount);
-                request.receiveAmount(preserveAmount);
-                fetched.setAmount(fetched.getAmount() - preserveAmount);
-            }
-        }
-
-        // Units
-        for (StorageUnitData cache : getOutputAbleCargoStorageUnitDatas().keySet()) {
-            ItemStack take = cache.requestItem(request);
-            if (take != null) {
-                if (stackToReturn == null) {
-                    stackToReturn = take.clone();
-                } else {
-                    stackToReturn.setAmount(stackToReturn.getAmount() + take.getAmount());
-                }
-                request.receiveAmount(take.getAmount());
-
-                if (request.getAmount() <= 0) {
-                    return stackToReturn;
                 }
             }
         }
@@ -973,6 +922,57 @@ public class NetworkRoot extends NetworkNode {
                 stackToReturn.setAmount(stackToReturn.getAmount() + itemStack.getAmount());
                 request.receiveAmount(itemStack.getAmount());
                 itemStack.setAmount(0);
+            }
+        }
+
+        // Deep storage after loose network inventory (classic Networks withdrawal order)
+        for (BarrelIdentity barrelIdentity : getOutputAbleBarrels()) {
+
+            final ItemStack itemStack = barrelIdentity.getItemStack();
+
+            if (itemStack == null || !StackUtils.itemsMatch(request, itemStack)) {
+                continue;
+            }
+
+            boolean infinity = barrelIdentity instanceof InfinityBarrel;
+            final ItemStack fetched = barrelIdentity.requestItem(request);
+            if (fetched == null || fetched.getType() == Material.AIR || (infinity && fetched.getAmount() == 1)) {
+                continue;
+            }
+
+            // Stack is null, so we can fill it here
+            if (stackToReturn == null) {
+                stackToReturn = fetched.clone();
+                stackToReturn.setAmount(0);
+            }
+
+            final int preserveAmount = infinity ? fetched.getAmount() - 1 : fetched.getAmount();
+
+            if (request.getAmount() <= preserveAmount) {
+                stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
+                fetched.setAmount(fetched.getAmount() - request.getAmount());
+                return stackToReturn;
+            } else {
+                stackToReturn.setAmount(stackToReturn.getAmount() + preserveAmount);
+                request.receiveAmount(preserveAmount);
+                fetched.setAmount(fetched.getAmount() - preserveAmount);
+            }
+        }
+
+        // Units
+        for (StorageUnitData cache : getOutputAbleCargoStorageUnitDatas().keySet()) {
+            ItemStack take = cache.requestItem(request);
+            if (take != null) {
+                if (stackToReturn == null) {
+                    stackToReturn = take.clone();
+                } else {
+                    stackToReturn.setAmount(stackToReturn.getAmount() + take.getAmount());
+                }
+                request.receiveAmount(take.getAmount());
+
+                if (request.getAmount() <= 0) {
+                    return stackToReturn;
+                }
             }
         }
 
@@ -1734,8 +1734,8 @@ public class NetworkRoot extends NetworkNode {
         allItemsView = null;
 
         /*
-         * Preserve original Networks withdrawal semantics: Cells are loose network inventory and are
-         * drained before crafter outputs and deep storage. This matters for Pushers feeding Quantum
+         * Preserve original Networks withdrawal semantics: Cells first, then crafter outputs and
+         * Greedy storage, with exposed deep storage last. This matters for Pushers feeding Quantum
          * Storage: an item deposited into a Grid may land in a Cell first, then the Pusher moves that
          * item into its assigned destination instead of withdrawing from the destination itself.
          */
@@ -1813,6 +1813,83 @@ public class NetworkRoot extends NetworkNode {
                     request.receiveAmount(itemStack.getAmount());
                     itemStack.setAmount(0);
                 }
+            }
+        }
+
+        for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
+            for (int slot : slots) {
+                final ItemStack itemStack = blockMenu.getItemInSlot(slot);
+                if (itemStack == null
+                    || itemStack.getType() == Material.AIR
+                    || !StackUtils.itemsMatch(request, itemStack)) {
+                    continue;
+                }
+
+                blockMenu.markDirty();
+
+                // Stack is null, so we can fill it here
+                if (stackToReturn == null) {
+                    stackToReturn = itemStack.clone();
+                    stackToReturn.setAmount(0);
+                }
+
+                if (request.getAmount() <= itemStack.getAmount()) {
+                    // Netex - Reduce start
+                    uncontrolAccessOutput(accessor);
+                    // Netex - Reduce end
+                    stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
+                    itemStack.setAmount(itemStack.getAmount() - request.getAmount());
+                    // Netex - Record start
+                    tryRecord(accessor, request);
+                    // Netex - Record end
+                    return stackToReturn;
+                } else {
+                    stackToReturn.setAmount(stackToReturn.getAmount() + itemStack.getAmount());
+                    request.receiveAmount(itemStack.getAmount());
+                    itemStack.setAmount(0);
+                }
+            }
+        }
+
+        // Greedy Blocks
+        for (BlockMenu blockMenu : getGreedyBlockMenus()) {
+            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
+            if (slots.length == 0) {
+                continue;
+            }
+            final ItemStack itemStack = blockMenu.getItemInSlot(slots[0]);
+            if (itemStack == null
+                || itemStack.getType() == Material.AIR
+                || !StackUtils.itemsMatch(request, itemStack)) {
+                continue;
+            }
+
+            // Mark the Cell as dirty otherwise the changes will not save on shutdown
+            blockMenu.markDirty();
+
+            // If the return stack is null, we need to set it up
+            if (stackToReturn == null) {
+                stackToReturn = itemStack.clone();
+                stackToReturn.setAmount(0);
+            }
+
+            if (request.getAmount() <= itemStack.getAmount()) {
+                // Netex - Reduce start
+                uncontrolAccessOutput(accessor);
+                // Netex - Reduce end
+                // We can't take more than this stack. Level to request amount, remove items and then return
+                stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
+                itemStack.setAmount(itemStack.getAmount() - request.getAmount());
+                // Netex - Record start
+                tryRecord(accessor, request);
+                // Netex - Record end
+                return stackToReturn;
+            } else {
+                // We can take more than what is here, consume before trying to take more
+                stackToReturn.setAmount(stackToReturn.getAmount() + itemStack.getAmount());
+                request.receiveAmount(itemStack.getAmount());
+                itemStack.setAmount(0);
             }
         }
 
@@ -1994,83 +2071,6 @@ public class NetworkRoot extends NetworkNode {
                 }
             }
             // </editor-fold>
-        }
-
-        for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {
-            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
-            for (int slot : slots) {
-                final ItemStack itemStack = blockMenu.getItemInSlot(slot);
-                if (itemStack == null
-                    || itemStack.getType() == Material.AIR
-                    || !StackUtils.itemsMatch(request, itemStack)) {
-                    continue;
-                }
-
-                blockMenu.markDirty();
-
-                // Stack is null, so we can fill it here
-                if (stackToReturn == null) {
-                    stackToReturn = itemStack.clone();
-                    stackToReturn.setAmount(0);
-                }
-
-                if (request.getAmount() <= itemStack.getAmount()) {
-                    // Netex - Reduce start
-                    uncontrolAccessOutput(accessor);
-                    // Netex - Reduce end
-                    stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
-                    itemStack.setAmount(itemStack.getAmount() - request.getAmount());
-                    // Netex - Record start
-                    tryRecord(accessor, request);
-                    // Netex - Record end
-                    return stackToReturn;
-                } else {
-                    stackToReturn.setAmount(stackToReturn.getAmount() + itemStack.getAmount());
-                    request.receiveAmount(itemStack.getAmount());
-                    itemStack.setAmount(0);
-                }
-            }
-        }
-
-        // Greedy Blocks
-        for (BlockMenu blockMenu : getGreedyBlockMenus()) {
-            int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
-            if (slots.length == 0) {
-                continue;
-            }
-            final ItemStack itemStack = blockMenu.getItemInSlot(slots[0]);
-            if (itemStack == null
-                || itemStack.getType() == Material.AIR
-                || !StackUtils.itemsMatch(request, itemStack)) {
-                continue;
-            }
-
-            // Mark the Cell as dirty otherwise the changes will not save on shutdown
-            blockMenu.markDirty();
-
-            // If the return stack is null, we need to set it up
-            if (stackToReturn == null) {
-                stackToReturn = itemStack.clone();
-                stackToReturn.setAmount(0);
-            }
-
-            if (request.getAmount() <= itemStack.getAmount()) {
-                // Netex - Reduce start
-                uncontrolAccessOutput(accessor);
-                // Netex - Reduce end
-                // We can't take more than this stack. Level to request amount, remove items and then return
-                stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
-                itemStack.setAmount(itemStack.getAmount() - request.getAmount());
-                // Netex - Record start
-                tryRecord(accessor, request);
-                // Netex - Record end
-                return stackToReturn;
-            } else {
-                // We can take more than what is here, consume before trying to take more
-                stackToReturn.setAmount(stackToReturn.getAmount() + itemStack.getAmount());
-                request.receiveAmount(itemStack.getAmount());
-                itemStack.setAmount(0);
-            }
         }
 
         if (stackToReturn == null || stackToReturn.getAmount() == 0) {
