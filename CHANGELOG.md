@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.28
+
+### Network Cells as overflow storage
+- Reviewed and retained the new storage priority: explicit Greedy storage → existing matching barrels/Quantum Storage → Cargo/Drawers → empty unassigned Network Quantum Storage → Network Cells.
+- Empty Network Quantum Storage can now claim the incoming item type before a Network Cell is considered, so Cells behave as the final generic overflow tier.
+- Only the actual remainder reaches Network Cells when structured storage fills; Quantum Storage capacity, void-excess behavior, and typed-but-empty item assignments remain intact.
+
+### Quantum Storage routing hardening
+- Fixed a follow-up cache-identity issue found during review: after an empty Quantum Storage claimed its first item, the existing `BarrelIdentity` could still hold its old null template and reject later deposits until the network rebuilt.
+- Network-backed Quantum Storage matching now checks the live `QuantumCache`, so subsequent deposits route correctly immediately after first assignment.
+- When assigning from an item array, rejected/blacklisted candidates no longer prevent a later valid item from being considered.
+- The legacy identity template is refreshed after successful assignment for compatibility with callers that still inspect it.
+
 ## 1.0.27
 
 ### Network Monitor GUI direction fix
