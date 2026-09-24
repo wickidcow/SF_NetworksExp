@@ -145,6 +145,10 @@ require(config.get("doctor", {}).get("max-auto-scan-entries") == 512,
         "bounded automatic Doctor scan budget must default to 512 entries")
 require(config.get("features", {}).get("network-monitor-inspector", {}).get("enabled") is True,
         "Network Monitor topology inspector must default to enabled")
+require(config.get("features", {}).get("network-monitor-inspector", {}).get("highlight-connected-nodes") is True,
+        "Network Monitor node highlighting must default to enabled")
+require(config.get("features", {}).get("network-monitor-inspector", {}).get("highlight-seconds") == 10,
+        "Network Monitor highlight duration must default to 10 seconds")
 softdepend = plugin.get("softdepend") or []
 for optional_plugin in ["InfinityExpansion2", "SlimeHUDPlus", "JustEnoughGuide", "LogiTech"]:
     require(optional_plugin in softdepend, f"optional integration is missing from softdepend: {optional_plugin}")
@@ -335,6 +339,25 @@ require("root.getNodeLocations()" in network_monitor
         and "Active:" in network_monitor
         and "Inactive:" in network_monitor,
         "Network Monitor grouped topology counts are missing")
+require("renderGroupDetails" in network_monitor
+        and "Click to view each connected node." in network_monitor
+        and "World:" in network_monitor
+        and "Location:" in network_monitor
+        and "Slimefun ID:" in network_monitor,
+        "Network Monitor individual-node drill-down is missing")
+require("enum NodeHealth" in network_monitor
+        and "CHUNK_UNLOADED" in network_monitor
+        and "WRONG_ROOT" in network_monitor
+        and "BLOCK_DATA_MISSING" in network_monitor
+        and "ITEM_ID_MISMATCH" in network_monitor,
+        "Network Monitor inactive-reason diagnostics are incomplete")
+require("enum NodeFilter" in network_monitor
+        and "All / Active / Inactive" in network_monitor,
+        "Network Monitor detail filtering is missing")
+require("spawnHighlightFrame" in network_monitor
+        and "player.spawnParticle" in network_monitor
+        and "MAX_VISIBLE_HIGHLIGHT_DISTANCE_SQUARED" in network_monitor,
+        "Network Monitor individual-node highlighting is missing")
 require("NetworkController.markTopologyDirty(controller)" in network_monitor
         and "Refresh Network" in network_monitor
         and "slimefunTickRate * 2L + 2L" in network_monitor,

@@ -13,17 +13,18 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
-import me.mrCookieSlime.CSCoreLibPlugin.general.Inventory.ClickAction;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Particle;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.scheduler.BukkitRunnable;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -55,8 +56,9 @@ public class NetworkMonitor extends NetworkDirectional {
     private static final int REFRESH_SLOT = 40;
     private static final int LEGEND_SLOT = 42;
     private static final int PAGE_NEXT_SLOT = 44;
+    private static final double MAX_VISIBLE_HIGHLIGHT_DISTANCE_SQUARED = 128.0D * 128.0D;
 
-    private static final Map<Location, Integer> PAGE_MAP = new ConcurrentHashMap<>();
+    private static final Map<Location, ViewState> VIEW_STATE_MAP = new ConcurrentHashMap<>();
     private static final Map<Location, MonitorSnapshot> SNAPSHOT_MAP = new ConcurrentHashMap<>();
     private static final Map<Location, RenderState> RENDERED_STATE_MAP = new ConcurrentHashMap<>();
     private static final Map<Location, Long> LAST_REFRESH_REQUEST = new ConcurrentHashMap<>();
@@ -86,7 +88,7 @@ public class NetworkMonitor extends NetworkDirectional {
     @Override
     protected void onBreak(@NotNull BlockBreakEvent event) {
         final Location location = key(event.getBlock().getLocation());
-        PAGE_MAP.remove(location);
+        VIEW_STATE_MAP.remove(location);
         SNAPSHOT_MAP.remove(location);
         RENDERED_STATE_MAP.remove(location);
         LAST_REFRESH_REQUEST.remove(location);
@@ -95,14 +97,39 @@ public class NetworkMonitor extends NetworkDirectional {
 
     private void renderInspector(@NotNull BlockMenu blockMenu, boolean force) {
         final Location monitorLocation = key(blockMenu.getLocation());
-        MonitorSnapshot snapshot = SNAPSHOT_MAP.computeIfAbsent(monitorLocation, ignored -> createSnapshot(blockMenu));
+        final MonitorSnapshot snapshot = SNAPSHOT_MAP.computeIfAbsent(
+            monitorLocation,
+            ignored -> createSnapshot(blockMenu));
+
+        ViewState view = VIEW_STATE_MAP.getOrDefault(monitorLocation, ViewState.overview());
+        final MachineGroup selected = view.groupKey() == null ? null : findGroup(snapshot, view.groupKey());
+        if (view.groupKey() != null && selected == null) {
+            view = ViewState.overview();
+            VIEW_STATE_MAP.put(monitorLocation, view);
+        }
+
+        if (selected == null) {
+            renderOverview(blockMenu, snapshot, monitorLocation, view, force);
+        } else {
+            renderGroupDetails(blockMenu, snapshot, selected, monitorLocation, view, force);
+        }
+    }
+
+    private void renderOverview(
+        @NotNull BlockMenu blockMenu,
+        @NotNull MonitorSnapshot snapshot,
+        @NotNull Location monitorLocation,
+        @NotNull ViewState view,
+        boolean force) {
 
         final int maxPage = Math.max(0, pageCount(snapshot.groups().size()) - 1);
-        final int page = Math.min(Math.max(0, PAGE_MAP.getOrDefault(monitorLocation, 0)), maxPage);
-        PAGE_MAP.put(monitorLocation, page);
+        final int page = Math.min(Math.max(0, view.page()), maxPage);
+        final ViewState normalized = new ViewState(null, page, NodeFilter.ALL);
+        VIEW_STATE_MAP.put(monitorLocation, normalized);
 
         final RenderState previous = RENDERED_STATE_MAP.get(monitorLocation);
-        if (!force && previous != null && previous.revision() == snapshot.revision() && previous.page() == page) {
+        final RenderState currentState = new RenderState(snapshot.revision(), null, page, NodeFilter.ALL);
+        if (!force && currentState.equals(previous)) {
             return;
         }
 
@@ -116,18 +143,125 @@ public class NetworkMonitor extends NetworkDirectional {
             if (entryIndex < end) {
                 final MachineGroup group = snapshot.groups().get(entryIndex);
                 blockMenu.replaceExistingItem(slot, groupDisplay(group));
-                blockMenu.addMenuClickHandler(slot, (player, clickedSlot, item, action) -> false);
+                blockMenu.addMenuClickHandler(slot, (player, clickedSlot, item, action) -> {
+                    VIEW_STATE_MAP.put(monitorLocation, new ViewState(group.key(), 0, NodeFilter.ALL));
+                    RENDERED_STATE_MAP.remove(monitorLocation);
+                    renderInspector(blockMenu, true);
+                    return false;
+                });
             } else {
-                blockMenu.replaceExistingItem(slot, background());
-                blockMenu.addMenuClickHandler(slot, (player, clickedSlot, item, action) -> false);
+                fillBackground(blockMenu, slot);
             }
         }
+
+        addPageButtons(blockMenu, monitorLocation, page, maxPage, normalized, snapshot, null);
+
+        blockMenu.replaceExistingItem(SUMMARY_SLOT, summaryItem(snapshot, page, maxPage));
+        blockMenu.addMenuClickHandler(SUMMARY_SLOT, (player, slot, item, action) -> false);
+
+        blockMenu.replaceExistingItem(REFRESH_SLOT, refreshItem(false));
+        blockMenu.addMenuClickHandler(REFRESH_SLOT, (player, slot, item, action) -> {
+            requestTopologyRefresh(blockMenu);
+            return false;
+        });
+
+        blockMenu.replaceExistingItem(LEGEND_SLOT, legendItem());
+        blockMenu.addMenuClickHandler(LEGEND_SLOT, (player, slot, item, action) -> false);
+
+        RENDERED_STATE_MAP.put(monitorLocation, currentState);
+    }
+
+    private void renderGroupDetails(
+        @NotNull BlockMenu blockMenu,
+        @NotNull MonitorSnapshot snapshot,
+        @NotNull MachineGroup group,
+        @NotNull Location monitorLocation,
+        @NotNull ViewState view,
+        boolean force) {
+
+        final List<NodeSnapshot> visibleNodes = filteredNodes(group.nodes(), view.filter());
+        final int maxPage = Math.max(0, pageCount(visibleNodes.size()) - 1);
+        final int page = Math.min(Math.max(0, view.page()), maxPage);
+        final ViewState normalized = new ViewState(group.key(), page, view.filter());
+        VIEW_STATE_MAP.put(monitorLocation, normalized);
+
+        final RenderState previous = RENDERED_STATE_MAP.get(monitorLocation);
+        final RenderState currentState =
+            new RenderState(snapshot.revision(), group.key(), page, view.filter());
+        if (!force && currentState.equals(previous)) {
+            return;
+        }
+
+        final int start = page * INSPECTOR_DISPLAY_SLOTS.length;
+        final int end = Math.min(start + INSPECTOR_DISPLAY_SLOTS.length, visibleNodes.size());
+
+        for (int i = 0; i < INSPECTOR_DISPLAY_SLOTS.length; i++) {
+            final int slot = INSPECTOR_DISPLAY_SLOTS[i];
+            final int entryIndex = start + i;
+
+            if (entryIndex < end) {
+                final NodeSnapshot node = visibleNodes.get(entryIndex);
+                blockMenu.replaceExistingItem(slot, nodeDisplay(group, node, entryIndex + 1));
+                blockMenu.addMenuClickHandler(slot, (player, clickedSlot, item, action) -> {
+                    highlightNode(player, node);
+                    return false;
+                });
+            } else {
+                fillBackground(blockMenu, slot);
+            }
+        }
+
+        addPageButtons(blockMenu, monitorLocation, page, maxPage, normalized, snapshot, group);
+
+        blockMenu.replaceExistingItem(SUMMARY_SLOT, backButton(group));
+        blockMenu.addMenuClickHandler(SUMMARY_SLOT, (player, slot, item, action) -> {
+            VIEW_STATE_MAP.put(monitorLocation, ViewState.overview());
+            RENDERED_STATE_MAP.remove(monitorLocation);
+            renderInspector(blockMenu, true);
+            return false;
+        });
+
+        blockMenu.replaceExistingItem(REFRESH_SLOT, refreshItem(false));
+        blockMenu.addMenuClickHandler(REFRESH_SLOT, (player, slot, item, action) -> {
+            requestTopologyRefresh(blockMenu);
+            return false;
+        });
+
+        blockMenu.replaceExistingItem(LEGEND_SLOT, groupFilterItem(group, view.filter(), visibleNodes.size()));
+        blockMenu.addMenuClickHandler(LEGEND_SLOT, (player, slot, item, action) -> {
+            final NodeFilter next = view.filter().next();
+            VIEW_STATE_MAP.put(monitorLocation, new ViewState(group.key(), 0, next));
+            RENDERED_STATE_MAP.remove(monitorLocation);
+            renderInspector(blockMenu, true);
+            return false;
+        });
+
+        RENDERED_STATE_MAP.put(monitorLocation, currentState);
+    }
+
+    private void addPageButtons(
+        @NotNull BlockMenu blockMenu,
+        @NotNull Location monitorLocation,
+        int page,
+        int maxPage,
+        @NotNull ViewState view,
+        @NotNull MonitorSnapshot snapshot,
+        @Nullable MachineGroup group) {
 
         blockMenu.replaceExistingItem(PAGE_PREVIOUS_SLOT, pageButton(false, page, maxPage));
         blockMenu.addMenuClickHandler(PAGE_PREVIOUS_SLOT, (player, slot, item, action) -> {
             if (page > 0) {
-                PAGE_MAP.put(monitorLocation, page - 1);
-                renderInspector(blockMenu, true);
+                VIEW_STATE_MAP.put(
+                    monitorLocation,
+                    new ViewState(view.groupKey(), page - 1, view.filter()));
+                RENDERED_STATE_MAP.remove(monitorLocation);
+                if (group == null) {
+                    renderOverview(blockMenu, snapshot, monitorLocation,
+                        new ViewState(null, page - 1, NodeFilter.ALL), true);
+                } else {
+                    renderGroupDetails(blockMenu, snapshot, group, monitorLocation,
+                        new ViewState(group.key(), page - 1, view.filter()), true);
+                }
             }
             return false;
         });
@@ -135,28 +269,23 @@ public class NetworkMonitor extends NetworkDirectional {
         blockMenu.replaceExistingItem(PAGE_NEXT_SLOT, pageButton(true, page, maxPage));
         blockMenu.addMenuClickHandler(PAGE_NEXT_SLOT, (player, slot, item, action) -> {
             if (page < maxPage) {
-                PAGE_MAP.put(monitorLocation, page + 1);
-                renderInspector(blockMenu, true);
+                VIEW_STATE_MAP.put(
+                    monitorLocation,
+                    new ViewState(view.groupKey(), page + 1, view.filter()));
+                RENDERED_STATE_MAP.remove(monitorLocation);
+                if (group == null) {
+                    renderOverview(blockMenu, snapshot, monitorLocation,
+                        new ViewState(null, page + 1, NodeFilter.ALL), true);
+                } else {
+                    renderGroupDetails(blockMenu, snapshot, group, monitorLocation,
+                        new ViewState(group.key(), page + 1, view.filter()), true);
+                }
             }
             return false;
         });
-
-        blockMenu.replaceExistingItem(SUMMARY_SLOT, summaryItem(snapshot, page, maxPage));
-        blockMenu.addMenuClickHandler(SUMMARY_SLOT, (player, slot, item, action) -> false);
-
-        blockMenu.replaceExistingItem(LEGEND_SLOT, legendItem());
-        blockMenu.addMenuClickHandler(LEGEND_SLOT, (player, slot, item, action) -> false);
-
-        blockMenu.replaceExistingItem(REFRESH_SLOT, refreshItem(false));
-        blockMenu.addMenuClickHandler(REFRESH_SLOT, (player, slot, item, action) -> {
-            requestTopologyRefresh(player, blockMenu);
-            return false;
-        });
-
-        RENDERED_STATE_MAP.put(monitorLocation, new RenderState(snapshot.revision(), page));
     }
 
-    private void requestTopologyRefresh(@NotNull Player player, @NotNull BlockMenu blockMenu) {
+    private void requestTopologyRefresh(@NotNull BlockMenu blockMenu) {
         final Location monitorLocation = key(blockMenu.getLocation());
         final long now = System.currentTimeMillis();
         final long previous = LAST_REFRESH_REQUEST.getOrDefault(monitorLocation, 0L);
@@ -187,7 +316,7 @@ public class NetworkMonitor extends NetworkDirectional {
         SNAPSHOT_MAP.remove(monitorLocation);
         RENDERED_STATE_MAP.remove(monitorLocation);
         blockMenu.replaceExistingItem(REFRESH_SLOT, refreshItem(true));
-        blockMenu.addMenuClickHandler(REFRESH_SLOT, (p, slot, item, action) -> false);
+        blockMenu.addMenuClickHandler(REFRESH_SLOT, (player, slot, item, action) -> false);
 
         final long slimefunTickRate = Math.max(1L, Slimefun.getTickerTask().getTickRate());
         final long delay = Math.max(2L, slimefunTickRate * 2L + 2L);
@@ -240,7 +369,8 @@ public class NetworkMonitor extends NetworkDirectional {
                 slimefunItem = StorageCacheUtils.getSfItem(location);
             }
 
-            final boolean active = isActive(root, definition, data, slimefunItem, chunkLoaded);
+            final NodeHealth health = nodeHealth(root, definition, data, slimefunItem, chunkLoaded);
+            final boolean active = health == NodeHealth.ACTIVE;
             if (active) {
                 activeNodes++;
             } else {
@@ -266,8 +396,9 @@ public class NetworkMonitor extends NetworkDirectional {
                 icon = new ItemStack(Material.BARRIER);
             }
 
-            groups.computeIfAbsent(groupKey, ignored -> new MutableMachineGroup(displayName, icon))
-                .add(nodeType, active);
+            final NodeSnapshot node = new NodeSnapshot(location, nodeType, health, sfId);
+            groups.computeIfAbsent(groupKey, ignored -> new MutableMachineGroup(groupKey, displayName, icon))
+                .add(node);
         }
 
         final List<MachineGroup> entries = groups.values().stream()
@@ -286,25 +417,44 @@ public class NetworkMonitor extends NetworkDirectional {
             true);
     }
 
-    private static boolean isActive(
+    private static @NotNull NodeHealth nodeHealth(
         @NotNull NetworkRoot root,
         @Nullable NodeDefinition definition,
         @Nullable SlimefunBlockData data,
         @Nullable SlimefunItem item,
         boolean chunkLoaded) {
 
-        if (!chunkLoaded
-            || definition == null
-            || definition.getNode() == null
-            || definition.getNode().getRoot() != root
-            || data == null
-            || data.isPendingRemove()
-            || item == null) {
-            return false;
+        if (!chunkLoaded) {
+            return NodeHealth.CHUNK_UNLOADED;
+        }
+        if (definition == null) {
+            return NodeHealth.NODE_MISSING;
+        }
+        if (definition.getNode() == null) {
+            return NodeHealth.NODE_UNASSIGNED;
+        }
+        if (definition.getNode().getRoot() != root) {
+            return NodeHealth.WRONG_ROOT;
+        }
+        if (data == null) {
+            return NodeHealth.BLOCK_DATA_MISSING;
+        }
+        if (data.isPendingRemove()) {
+            return NodeHealth.PENDING_REMOVE;
+        }
+        if (item == null) {
+            return NodeHealth.ITEM_UNRESOLVED;
         }
 
         final String sfId = data.getSfId();
-        return sfId != null && sfId.equals(item.getId());
+        if (sfId == null || sfId.isBlank()) {
+            return NodeHealth.ITEM_ID_MISSING;
+        }
+        if (!sfId.equals(item.getId())) {
+            return NodeHealth.ITEM_ID_MISMATCH;
+        }
+
+        return NodeHealth.ACTIVE;
     }
 
     private static @Nullable NetworkRoot findRoot(@NotNull BlockMenu blockMenu) {
@@ -313,6 +463,33 @@ public class NetworkMonitor extends NetworkDirectional {
             return null;
         }
         return definition.getNode().getRoot();
+    }
+
+    private static @Nullable MachineGroup findGroup(
+        @NotNull MonitorSnapshot snapshot,
+        @NotNull String key) {
+
+        for (MachineGroup group : snapshot.groups()) {
+            if (group.key().equals(key)) {
+                return group;
+            }
+        }
+        return null;
+    }
+
+    private static @NotNull List<NodeSnapshot> filteredNodes(
+        @NotNull List<NodeSnapshot> nodes,
+        @NotNull NodeFilter filter) {
+
+        return nodes.stream()
+            .filter(node -> filter.accepts(node.health() == NodeHealth.ACTIVE))
+            .sorted(Comparator
+                .comparing((NodeSnapshot node) -> node.health() == NodeHealth.ACTIVE)
+                .thenComparing(node -> worldName(node.location()), String.CASE_INSENSITIVE_ORDER)
+                .thenComparingInt(node -> node.location().getBlockX())
+                .thenComparingInt(node -> node.location().getBlockY())
+                .thenComparingInt(node -> node.location().getBlockZ()))
+            .toList();
     }
 
     private static @NotNull ItemStack groupDisplay(@NotNull MachineGroup group) {
@@ -334,8 +511,55 @@ public class NetworkMonitor extends NetworkDirectional {
             }
 
             lore.add("");
-            lore.add(ChatColor.DARK_GRAY + "Active = loaded and resolved");
-            lore.add(ChatColor.DARK_GRAY + "by the current NetworkRoot.");
+            lore.add(ChatColor.YELLOW + "Click to view each connected node.");
+            lore.add(ChatColor.DARK_GRAY + "Inactive nodes are listed first");
+            lore.add(ChatColor.DARK_GRAY + "inside the detail view.");
+            meta.setLore(lore);
+            display.setItemMeta(meta);
+        }
+
+        return display;
+    }
+
+    private static @NotNull ItemStack nodeDisplay(
+        @NotNull MachineGroup group,
+        @NotNull NodeSnapshot node,
+        int ordinal) {
+
+        final ItemStack display = group.icon().clone();
+        display.setAmount(1);
+        final ItemMeta meta = display.getItemMeta();
+
+        if (meta != null) {
+            final Location location = node.location();
+            meta.setDisplayName(
+                (node.health() == NodeHealth.ACTIVE ? ChatColor.GREEN : ChatColor.RED)
+                    + group.displayName() + ChatColor.GRAY + " #" + ordinal);
+
+            final List<String> lore = new ArrayList<>();
+            lore.add("");
+            lore.add(ChatColor.GRAY + "Status: " + node.health().coloredLabel());
+            if (node.health() != NodeHealth.ACTIVE) {
+                lore.add(ChatColor.GRAY + "Reason: " + ChatColor.RED + node.health().description());
+            }
+            lore.add(ChatColor.GRAY + "World: " + ChatColor.WHITE + worldName(location));
+            lore.add(ChatColor.GRAY + "Location: " + ChatColor.WHITE
+                + location.getBlockX() + ", " + location.getBlockY() + ", " + location.getBlockZ());
+            if (node.nodeType() != null) {
+                lore.add(ChatColor.GRAY + "Node type: " + ChatColor.WHITE + prettyNodeType(node.nodeType()));
+            }
+            if (node.sfId() != null && !node.sfId().isBlank()) {
+                lore.add(ChatColor.GRAY + "Slimefun ID: " + ChatColor.DARK_GRAY + node.sfId());
+            }
+
+            lore.add("");
+            if (node.health() == NodeHealth.CHUNK_UNLOADED) {
+                lore.add(ChatColor.DARK_GRAY + "Chunk is unloaded; Monitor will");
+                lore.add(ChatColor.DARK_GRAY + "not force-load it for diagnostics.");
+            } else {
+                lore.add(ChatColor.YELLOW + "Click to highlight this block.");
+            }
+
             meta.setLore(lore);
             display.setItemMeta(meta);
         }
@@ -365,10 +589,42 @@ public class NetworkMonitor extends NetworkDirectional {
                 + (snapshot.overburdened() ? ChatColor.RED + "Overburdened" : ChatColor.GREEN + "OK"));
         }
         lore.add("");
+        lore.add(ChatColor.YELLOW + "Click a machine type for individual nodes.");
         lore.add(ChatColor.DARK_GRAY + "This is the controller's current");
         lore.add(ChatColor.DARK_GRAY + "Networks topology, not EnergyNet.");
 
         return control(Material.COMPASS, ChatColor.GOLD + "Network Overview", lore);
+    }
+
+    private static @NotNull ItemStack backButton(@NotNull MachineGroup group) {
+        return control(
+            Material.OAK_DOOR,
+            ChatColor.WHITE + "Back to Machine Types",
+            List.of(
+                "",
+                ChatColor.GRAY + "Currently viewing:",
+                ChatColor.WHITE + group.displayName(),
+                "",
+                ChatColor.YELLOW + "Click to return."));
+    }
+
+    private static @NotNull ItemStack groupFilterItem(
+        @NotNull MachineGroup group,
+        @NotNull NodeFilter filter,
+        int visibleCount) {
+
+        return control(
+            filter.material(),
+            ChatColor.AQUA + "Filter: " + filter.displayName(),
+            List.of(
+                "",
+                ChatColor.GRAY + "Machine: " + ChatColor.WHITE + group.displayName(),
+                ChatColor.GRAY + "Total: " + ChatColor.WHITE + group.total(),
+                ChatColor.GREEN + "Active: " + group.active(),
+                ChatColor.RED + "Inactive: " + group.inactive(),
+                ChatColor.GRAY + "Currently shown: " + ChatColor.WHITE + visibleCount,
+                "",
+                ChatColor.YELLOW + "Click to cycle All / Active / Inactive."));
     }
 
     private static @NotNull ItemStack refreshItem(boolean refreshing) {
@@ -403,10 +659,13 @@ public class NetworkMonitor extends NetworkDirectional {
                 ChatColor.GRAY + "Hover a machine icon to see:",
                 ChatColor.WHITE + "Total / Active / Inactive",
                 "",
+                ChatColor.YELLOW + "Click a machine type to inspect",
+                ChatColor.YELLOW + "each individual connected node.",
+                "",
                 ChatColor.GREEN + "Active " + ChatColor.GRAY + "= loaded, resolved,",
                 ChatColor.GRAY + "and assigned to this NetworkRoot.",
-                ChatColor.RED + "Inactive " + ChatColor.GRAY + "= present in the",
-                ChatColor.GRAY + "root snapshot but not fully resolved.",
+                ChatColor.RED + "Inactive " + ChatColor.GRAY + "= root contains the",
+                ChatColor.GRAY + "node but its runtime state has an issue.",
                 "",
                 ChatColor.DARK_GRAY + "The six center controls still set",
                 ChatColor.DARK_GRAY + "the Monitor's storage-facing side."));
@@ -425,6 +684,111 @@ public class NetworkMonitor extends NetworkDirectional {
 
     private static @NotNull ItemStack background() {
         return control(Material.GRAY_STAINED_GLASS_PANE, " ", List.of());
+    }
+
+    private static void fillBackground(@NotNull BlockMenu blockMenu, int slot) {
+        blockMenu.replaceExistingItem(slot, background());
+        blockMenu.addMenuClickHandler(slot, (player, clickedSlot, item, action) -> false);
+    }
+
+    private void highlightNode(@NotNull Player player, @NotNull NodeSnapshot node) {
+        final Location location = node.location();
+        final World world = location.getWorld();
+
+        if (!Networks.getConfigManager().isNetworkMonitorHighlightEnabled()) {
+            player.sendMessage(ChatColor.YELLOW + "Network Monitor highlighting is disabled in config.");
+            sendNodeCoordinates(player, location);
+            return;
+        }
+
+        if (world == null) {
+            player.sendMessage(ChatColor.RED + "This node's world is not available.");
+            return;
+        }
+
+        if (!world.isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
+            player.sendMessage(ChatColor.RED + "That node's chunk is unloaded; it will not be force-loaded.");
+            sendNodeCoordinates(player, location);
+            return;
+        }
+
+        if (!player.getWorld().equals(world)) {
+            player.sendMessage(ChatColor.YELLOW + "That node is in another world and cannot be highlighted here.");
+            sendNodeCoordinates(player, location);
+            return;
+        }
+
+        if (player.getLocation().distanceSquared(location) > MAX_VISIBLE_HIGHLIGHT_DISTANCE_SQUARED) {
+            player.sendMessage(ChatColor.YELLOW + "That node is too far away for a useful particle highlight.");
+            sendNodeCoordinates(player, location);
+            return;
+        }
+
+        final int seconds = Networks.getConfigManager().getNetworkMonitorHighlightSeconds();
+        player.sendMessage(
+            ChatColor.GREEN + "Highlighting network node for " + seconds + "s at "
+                + coordinateText(location));
+
+        new BukkitRunnable() {
+            private int remainingPasses = Math.max(1, seconds * 2);
+
+            @Override
+            public void run() {
+                if (!player.isOnline()
+                    || !player.getWorld().equals(world)
+                    || !world.isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
+                    cancel();
+                    return;
+                }
+
+                spawnHighlightFrame(player, location);
+                remainingPasses--;
+                if (remainingPasses <= 0) {
+                    cancel();
+                }
+            }
+        }.runTaskTimer(Networks.getInstance(), 0L, 10L);
+    }
+
+    private static void spawnHighlightFrame(@NotNull Player player, @NotNull Location blockLocation) {
+        final World world = blockLocation.getWorld();
+        if (world == null) {
+            return;
+        }
+
+        final double x = blockLocation.getBlockX();
+        final double y = blockLocation.getBlockY();
+        final double z = blockLocation.getBlockZ();
+        final double low = 0.08D;
+        final double high = 0.92D;
+
+        final double[][] points = {
+            {low, low, low}, {high, low, low}, {low, low, high}, {high, low, high},
+            {low, high, low}, {high, high, low}, {low, high, high}, {high, high, high},
+            {0.50D, low, low}, {0.50D, low, high}, {0.50D, high, low}, {0.50D, high, high},
+            {low, 0.50D, low}, {high, 0.50D, low}, {low, 0.50D, high}, {high, 0.50D, high},
+            {low, low, 0.50D}, {high, low, 0.50D}, {low, high, 0.50D}, {high, high, 0.50D}
+        };
+
+        for (double[] point : points) {
+            player.spawnParticle(
+                Particle.END_ROD,
+                new Location(world, x + point[0], y + point[1], z + point[2]),
+                1,
+                0.0D,
+                0.0D,
+                0.0D,
+                0.0D);
+        }
+    }
+
+    private static void sendNodeCoordinates(@NotNull Player player, @NotNull Location location) {
+        player.sendMessage(ChatColor.GRAY + "Node: " + ChatColor.WHITE + coordinateText(location));
+    }
+
+    private static @NotNull String coordinateText(@NotNull Location location) {
+        return worldName(location) + " "
+            + location.getBlockX() + ", " + location.getBlockY() + ", " + location.getBlockZ();
     }
 
     private static @NotNull ItemStack control(
@@ -471,6 +835,11 @@ public class NetworkMonitor extends NetworkDirectional {
             .orElse("Unknown");
     }
 
+    private static @NotNull String worldName(@NotNull Location location) {
+        final World world = location.getWorld();
+        return world == null ? "unknown-world" : world.getName();
+    }
+
     private static @NotNull Location key(@NotNull Location location) {
         final Location copy = location.clone();
         copy.setX(location.getBlockX());
@@ -483,42 +852,122 @@ public class NetworkMonitor extends NetworkDirectional {
 
     private static final class MutableMachineGroup {
 
+        private final String key;
         private final String displayName;
         private final ItemStack icon;
         private final Set<NodeType> nodeTypes = EnumSet.noneOf(NodeType.class);
-        private int total;
+        private final List<NodeSnapshot> nodes = new ArrayList<>();
         private int active;
 
-        private MutableMachineGroup(@NotNull String displayName, @NotNull ItemStack icon) {
+        private MutableMachineGroup(
+            @NotNull String key,
+            @NotNull String displayName,
+            @NotNull ItemStack icon) {
+
+            this.key = key;
             this.displayName = displayName;
             this.icon = icon;
         }
 
-        private void add(@Nullable NodeType nodeType, boolean isActive) {
-            total++;
-            if (isActive) {
+        private void add(@NotNull NodeSnapshot node) {
+            nodes.add(node);
+            if (node.health() == NodeHealth.ACTIVE) {
                 active++;
             }
-            if (nodeType != null) {
-                nodeTypes.add(nodeType);
+            if (node.nodeType() != null) {
+                nodeTypes.add(node.nodeType());
             }
         }
 
         private @NotNull MachineGroup freeze() {
             return new MachineGroup(
+                key,
                 displayName,
                 icon.clone(),
                 Set.copyOf(nodeTypes),
-                total,
+                List.copyOf(nodes),
+                nodes.size(),
                 active,
-                total - active);
+                nodes.size() - active);
         }
     }
 
+    private enum NodeFilter {
+        ALL("All", Material.COMPASS),
+        ACTIVE("Active", Material.LIME_DYE),
+        INACTIVE("Inactive", Material.RED_DYE);
+
+        private final String displayName;
+        private final Material material;
+
+        NodeFilter(@NotNull String displayName, @NotNull Material material) {
+            this.displayName = displayName;
+            this.material = material;
+        }
+
+        private boolean accepts(boolean active) {
+            return this == ALL || (this == ACTIVE && active) || (this == INACTIVE && !active);
+        }
+
+        private @NotNull NodeFilter next() {
+            return switch (this) {
+                case ALL -> ACTIVE;
+                case ACTIVE -> INACTIVE;
+                case INACTIVE -> ALL;
+            };
+        }
+
+        private @NotNull String displayName() {
+            return displayName;
+        }
+
+        private @NotNull Material material() {
+            return material;
+        }
+    }
+
+    private enum NodeHealth {
+        ACTIVE("Active", "Loaded, resolved and assigned to this NetworkRoot."),
+        CHUNK_UNLOADED("Inactive", "Chunk unloaded"),
+        NODE_MISSING("Inactive", "Runtime node definition missing"),
+        NODE_UNASSIGNED("Inactive", "Node is not assigned to a live NetworkRoot"),
+        WRONG_ROOT("Inactive", "Node is assigned to a different NetworkRoot"),
+        BLOCK_DATA_MISSING("Inactive", "Slimefun block data is unavailable"),
+        PENDING_REMOVE("Inactive", "Slimefun block is pending removal"),
+        ITEM_UNRESOLVED("Inactive", "Slimefun item could not be resolved"),
+        ITEM_ID_MISSING("Inactive", "Slimefun item ID is missing"),
+        ITEM_ID_MISMATCH("Inactive", "Runtime Slimefun item does not match stored ID");
+
+        private final String label;
+        private final String description;
+
+        NodeHealth(@NotNull String label, @NotNull String description) {
+            this.label = label;
+            this.description = description;
+        }
+
+        private @NotNull String coloredLabel() {
+            return (this == ACTIVE ? ChatColor.GREEN : ChatColor.RED) + label;
+        }
+
+        private @NotNull String description() {
+            return description;
+        }
+    }
+
+    private record NodeSnapshot(
+        @NotNull Location location,
+        @Nullable NodeType nodeType,
+        @NotNull NodeHealth health,
+        @Nullable String sfId) {
+    }
+
     private record MachineGroup(
+        @NotNull String key,
         @NotNull String displayName,
         @NotNull ItemStack icon,
         @NotNull Set<NodeType> nodeTypes,
+        @NotNull List<NodeSnapshot> nodes,
         int total,
         int active,
         int inactive) {
@@ -535,6 +984,20 @@ public class NetworkMonitor extends NetworkDirectional {
         boolean connected) {
     }
 
-    private record RenderState(long revision, int page) {
+    private record ViewState(
+        @Nullable String groupKey,
+        int page,
+        @NotNull NodeFilter filter) {
+
+        private static @NotNull ViewState overview() {
+            return new ViewState(null, 0, NodeFilter.ALL);
+        }
+    }
+
+    private record RenderState(
+        long revision,
+        @Nullable String groupKey,
+        int page,
+        @NotNull NodeFilter filter) {
     }
 }

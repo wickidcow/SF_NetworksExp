@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.26
+
+### Network Monitor individual-node inspector
+- Clicking a grouped machine type in the Network Monitor now opens a paginated list of every individual node in that group.
+- Each node entry shows its world, exact block coordinates, Networks node type, Slimefun item ID when known, and current Active/Inactive state.
+- Inactive entries now report the concrete reason when possible: unloaded chunk, missing runtime node, unassigned node, wrong root, missing Slimefun block data, pending removal, unresolved item, missing item ID, or ID mismatch.
+- Detail pages list inactive nodes first so network-reading problems are immediately visible.
+- Added a click-to-cycle **All / Active / Inactive** filter while viewing a machine type.
+- Clicking an individual loaded node highlights that exact block with player-only particles for a configurable duration. Cross-world, unloaded, or very distant nodes fall back to exact coordinates instead of force-loading chunks.
+- Added `features.network-monitor-inspector.highlight-connected-nodes` and `highlight-seconds` (default 10, clamped to 1-30 seconds).
+- Refresh remains available from both overview and detail pages and still performs a real controller topology rediscovery before rebuilding the snapshot.
+
 ## 1.0.25
 
 ### Network Controller placement safety
