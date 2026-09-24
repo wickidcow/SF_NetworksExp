@@ -37,7 +37,7 @@ ORIGINAL_ITEMS: dict[str, tuple[str, list[str]]] = {
     "NTW_INTERDIMENSIONAL_PRESENCE": ("Interdimensional Presence", ["An artificial intelligence that has", "grown too powerful for just a", "single dimension."]),
     "NTW_CONTROLLER": ("Network Controller", ["The Network Controller is the brain", "for the whole network. Max 1 per network.", "", "Right-click with an empty hand to view", "node count and controller status."]),
     "NTW_BRIDGE": ("Network Bridge", ["The bridge allows you to cheaply", "connect network objects together."]),
-    "NTW_MONITOR": ("Network Monitor", ["Allows the network to interact with", "an adjacent supported inventory.", "", "Also shows every node the Network Controller", "currently sees. Hover machine icons for", "Total / Active / Inactive counts.", "Use Refresh to force topology rediscovery."]),
+    "NTW_MONITOR": ("Network Monitor", ["Allows the network to interact with", "an adjacent supported inventory.", "", "Shows every node the Network Controller sees.", "Hover machine types for Total / Active / Inactive.", "Click a type for individual nodes and status.", "Click a node to highlight it in-world.", "Use Refresh to force topology rediscovery."]),
     "NTW_IMPORT": ("Network Importer", ["Moves items placed inside it into", "the network, up to 9 stacks per", "Slimefun tick.", "Accepts items from Cargo."]),
     "NTW_EXPORT": ("Network Exporter", ["Can be configured to constantly", "export one stack of a chosen item.", "Its inventory can be accessed by Cargo."]),
     "NTW_GRABBER": ("Network Grabber", ["Tries to grab the first available", "item from the selected Slimefun machine."]),
