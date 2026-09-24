@@ -370,7 +370,7 @@ require("protected boolean usesDirectionalGridControls()" in network_directional
         and "if (!usesDirectionalGridControls())" in network_directional,
         "directional machines do not expose the specialized-GUI control hook")
 require("protected boolean usesDirectionalGridControls()" in network_monitor
-        and "return false;" in network_monitor
+        and "isNetworkMonitorInspectorEnabled()" in network_monitor
         and "DIRECTION_SLOT = 37" in network_monitor
         and "Storage Direction" in network_monitor
         and "Click: cycle storage direction" in network_monitor
