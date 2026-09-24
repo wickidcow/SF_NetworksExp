@@ -1824,8 +1824,9 @@ items:
   NTW_EXPANSION_ADVANCED_QUANTUM_STORAGE:
     name: Network Expansion Advanced Quantum Storage
     lore:
-    - Stores a massive quantity of one item
-    - inside a quantum singularity.
+    - Stores a massive quantity of one assigned item.
+    - Assign the item manually.
+    - Monitor exposes it; Pusher feeds it.
   NTW_EXPANSION_LINE_POWER_OUTLET_1:
     name: Network Line Power Outlet 1
     lore:
@@ -2150,8 +2151,8 @@ items:
   NTW_MONITOR:
     name: Network Monitor
     lore:
-    - Allows the network to interact with
-    - an adjacent supported inventory.
+    - Exposes an adjacent supported storage
+    - directly to the network.
     - ''
     - Shows every node the Network Controller sees.
     - Hover machine types for Total / Active / Inactive.
@@ -2180,8 +2181,8 @@ items:
   NTW_PUSHER:
     name: Network Pusher
     lore:
-    - Tries to push a matching item from
-    - the network into the selected machine.
+    - Pulls matching items from the network
+    - into the selected adjacent machine/storage.
   NTW_MOREPUSHER:
     name: Network Pusher (Enhanced)
     lore:
@@ -2271,78 +2272,93 @@ items:
   NTW_QUANTUM_STORAGE_0:
     name: Network Quantum Storage (0)
     lore:
-    - Stores a massive quantity of one item
-    - inside a quantum singularity.
+    - Stores a massive quantity of one assigned item.
+    - Assign the item manually.
+    - Monitor exposes it; Pusher feeds it.
   NTW_QUANTUM_STORAGE_9:
     name: Network Quantum Storage (9)
     lore:
-    - Stores a massive quantity of one item
-    - inside a quantum singularity.
+    - Stores a massive quantity of one assigned item.
+    - Assign the item manually.
+    - Monitor exposes it; Pusher feeds it.
   NTW_QUANTUM_STORAGE_10:
     name: Network Quantum Storage (10)
     lore:
-    - Stores a massive quantity of one item
-    - inside a quantum singularity.
+    - Stores a massive quantity of one assigned item.
+    - Assign the item manually.
+    - Monitor exposes it; Pusher feeds it.
   NTW_QUANTUM_STORAGE_1:
     name: Network Quantum Storage (1)
     lore:
-    - Stores a massive quantity of one item
-    - inside a quantum singularity.
+    - Stores a massive quantity of one assigned item.
+    - Assign the item manually.
+    - Monitor exposes it; Pusher feeds it.
   NTW_QUANTUM_STORAGE_2:
     name: Network Quantum Storage (2)
     lore:
-    - Stores a massive quantity of one item
-    - inside a quantum singularity.
+    - Stores a massive quantity of one assigned item.
+    - Assign the item manually.
+    - Monitor exposes it; Pusher feeds it.
   NTW_QUANTUM_STORAGE_3:
     name: Network Quantum Storage (3)
     lore:
-    - Stores a massive quantity of one item
-    - inside a quantum singularity.
+    - Stores a massive quantity of one assigned item.
+    - Assign the item manually.
+    - Monitor exposes it; Pusher feeds it.
   NTW_QUANTUM_STORAGE_4:
     name: Network Quantum Storage (4)
     lore:
-    - Stores a massive quantity of one item
-    - inside a quantum singularity.
+    - Stores a massive quantity of one assigned item.
+    - Assign the item manually.
+    - Monitor exposes it; Pusher feeds it.
   NTW_QUANTUM_STORAGE_5:
     name: Network Quantum Storage (5)
     lore:
-    - Stores a massive quantity of one item
-    - inside a quantum singularity.
+    - Stores a massive quantity of one assigned item.
+    - Assign the item manually.
+    - Monitor exposes it; Pusher feeds it.
   NTW_QUANTUM_STORAGE_6:
     name: Network Quantum Storage (6)
     lore:
-    - Stores a massive quantity of one item
-    - inside a quantum singularity.
+    - Stores a massive quantity of one assigned item.
+    - Assign the item manually.
+    - Monitor exposes it; Pusher feeds it.
   NTW_QUANTUM_STORAGE_7:
     name: Network Quantum Storage (7)
     lore:
-    - Stores a massive quantity of one item
-    - inside a quantum singularity.
+    - Stores a massive quantity of one assigned item.
+    - Assign the item manually.
+    - Monitor exposes it; Pusher feeds it.
   NTW_QUANTUM_STORAGE_8:
     name: Network Quantum Storage (8)
     lore:
-    - Stores a massive quantity of one item
-    - inside a quantum singularity.
+    - Stores a massive quantity of one assigned item.
+    - Assign the item manually.
+    - Monitor exposes it; Pusher feeds it.
   NTW_QUANTUM_STORAGE_11:
     name: Network Quantum Storage (11)
     lore:
-    - Stores a massive quantity of one item
-    - inside a quantum singularity.
+    - Stores a massive quantity of one assigned item.
+    - Assign the item manually.
+    - Monitor exposes it; Pusher feeds it.
   NTW_QUANTUM_STORAGE_12:
     name: Network Quantum Storage (12)
     lore:
-    - Stores a massive quantity of one item
-    - inside a quantum singularity.
+    - Stores a massive quantity of one assigned item.
+    - Assign the item manually.
+    - Monitor exposes it; Pusher feeds it.
   NTW_QUANTUM_STORAGE_13:
     name: Network Quantum Storage (13)
     lore:
-    - Stores a massive quantity of one item
-    - inside a quantum singularity.
+    - Stores a massive quantity of one assigned item.
+    - Assign the item manually.
+    - Monitor exposes it; Pusher feeds it.
   NTW_QUANTUM_STORAGE_14:
     name: Network Quantum Storage (14)
     lore:
-    - Stores a massive quantity of one item
-    - inside a quantum singularity.
+    - Stores a massive quantity of one assigned item.
+    - Assign the item manually.
+    - Monitor exposes it; Pusher feeds it.
   NTW_CAPACITOR_1:
     name: Network Capacitor (1)
     lore:

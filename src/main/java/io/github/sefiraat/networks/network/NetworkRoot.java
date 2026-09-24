@@ -792,57 +792,7 @@ public class NetworkRoot extends NetworkNode {
             return null;
         }
 
-        // Barrels first
-        for (BarrelIdentity barrelIdentity : getOutputAbleBarrels()) {
-
-            final ItemStack itemStack = barrelIdentity.getItemStack();
-
-            if (itemStack == null || !StackUtils.itemsMatch(request, itemStack)) {
-                continue;
-            }
-
-            boolean infinity = barrelIdentity instanceof InfinityBarrel;
-            final ItemStack fetched = barrelIdentity.requestItem(request);
-            if (fetched == null || fetched.getType() == Material.AIR || (infinity && fetched.getAmount() == 1)) {
-                continue;
-            }
-
-            // Stack is null, so we can fill it here
-            if (stackToReturn == null) {
-                stackToReturn = fetched.clone();
-                stackToReturn.setAmount(0);
-            }
-
-            final int preserveAmount = infinity ? fetched.getAmount() - 1 : fetched.getAmount();
-
-            if (request.getAmount() <= preserveAmount) {
-                stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
-                fetched.setAmount(fetched.getAmount() - request.getAmount());
-                return stackToReturn;
-            } else {
-                stackToReturn.setAmount(stackToReturn.getAmount() + preserveAmount);
-                request.receiveAmount(preserveAmount);
-                fetched.setAmount(fetched.getAmount() - preserveAmount);
-            }
-        }
-
-        // Units
-        for (StorageUnitData cache : getOutputAbleCargoStorageUnitDatas().keySet()) {
-            ItemStack take = cache.requestItem(request);
-            if (take != null) {
-                if (stackToReturn == null) {
-                    stackToReturn = take.clone();
-                } else {
-                    stackToReturn.setAmount(stackToReturn.getAmount() + take.getAmount());
-                }
-                request.receiveAmount(take.getAmount());
-
-                if (request.getAmount() <= 0) {
-                    return stackToReturn;
-                }
-            }
-        }
-
+        // Classic Networks withdrawal order: Cells -> Crafters -> Greedy storage -> deep storage.
         // Cells
         for (BlockMenu blockMenu : getCellMenus()) {
             if (!isRealCell(blockMenu)) continue;
@@ -972,6 +922,57 @@ public class NetworkRoot extends NetworkNode {
                 stackToReturn.setAmount(stackToReturn.getAmount() + itemStack.getAmount());
                 request.receiveAmount(itemStack.getAmount());
                 itemStack.setAmount(0);
+            }
+        }
+
+        // Deep storage after loose network inventory (classic Networks withdrawal order)
+        for (BarrelIdentity barrelIdentity : getOutputAbleBarrels()) {
+
+            final ItemStack itemStack = barrelIdentity.getItemStack();
+
+            if (itemStack == null || !StackUtils.itemsMatch(request, itemStack)) {
+                continue;
+            }
+
+            boolean infinity = barrelIdentity instanceof InfinityBarrel;
+            final ItemStack fetched = barrelIdentity.requestItem(request);
+            if (fetched == null || fetched.getType() == Material.AIR || (infinity && fetched.getAmount() == 1)) {
+                continue;
+            }
+
+            // Stack is null, so we can fill it here
+            if (stackToReturn == null) {
+                stackToReturn = fetched.clone();
+                stackToReturn.setAmount(0);
+            }
+
+            final int preserveAmount = infinity ? fetched.getAmount() - 1 : fetched.getAmount();
+
+            if (request.getAmount() <= preserveAmount) {
+                stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
+                fetched.setAmount(fetched.getAmount() - request.getAmount());
+                return stackToReturn;
+            } else {
+                stackToReturn.setAmount(stackToReturn.getAmount() + preserveAmount);
+                request.receiveAmount(preserveAmount);
+                fetched.setAmount(fetched.getAmount() - preserveAmount);
+            }
+        }
+
+        // Units
+        for (StorageUnitData cache : getOutputAbleCargoStorageUnitDatas().keySet()) {
+            ItemStack take = cache.requestItem(request);
+            if (take != null) {
+                if (stackToReturn == null) {
+                    stackToReturn = take.clone();
+                } else {
+                    stackToReturn.setAmount(stackToReturn.getAmount() + take.getAmount());
+                }
+                request.receiveAmount(take.getAmount());
+
+                if (request.getAmount() <= 0) {
+                    return stackToReturn;
+                }
             }
         }
 
@@ -1732,186 +1733,12 @@ public class NetworkRoot extends NetworkNode {
         // Every successful or attempted withdrawal can change live menu-backed storage. Never serve a stale grid view.
         allItemsView = null;
 
-        Map<Location, Integer> m = getPersistentAccessHistory(accessor);
-        if (m != null) {
-            // Netex - Cache start
-            boolean found = false;
-            List<Location> misses = new ArrayList<>();
-            // Netex - Cache end
-            for (Map.Entry<Location, Integer> entry : m.entrySet()) {
-                // try cache first
-                BarrelIdentity barrelIdentity = accessOutputAbleBarrel(entry.getKey());
-                if (barrelIdentity != null) {
-                    // <editor-fold desc="do barrel">
-                    final ItemStack itemStack = barrelIdentity.getItemStack();
-
-                    if (itemStack == null || !StackUtils.itemsMatch(request, itemStack)) {
-                        // Netex - Cache start
-                        misses.add(entry.getKey());
-                        // Netex - Cache end
-                        continue;
-                    }
-
-                    // Netex - Cache start
-                    minusCacheMiss(accessor, entry.getKey());
-                    found = true;
-                    // Netex - Cache end
-
-                    boolean infinity = barrelIdentity instanceof InfinityBarrel;
-                    final ItemStack fetched = barrelIdentity.requestItem(request);
-                    if (fetched == null
-                        || fetched.getType() == Material.AIR
-                        || (infinity && fetched.getAmount() == 1)) {
-                        continue;
-                    }
-
-                    // Stack is null, so we can fill it here
-                    if (stackToReturn == null) {
-                        stackToReturn = fetched.clone();
-                        stackToReturn.setAmount(0);
-                    }
-
-                    final int preserveAmount = infinity ? fetched.getAmount() - 1 : fetched.getAmount();
-
-                    if (request.getAmount() <= preserveAmount) {
-                        // Netex - Reduce start
-                        uncontrolAccessOutput(accessor);
-                        // Netex - Reduce end
-                        stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
-                        fetched.setAmount(fetched.getAmount() - request.getAmount());
-                        // Netex - Record start
-                        tryRecord(accessor, request);
-                        // Netex - Record end
-                        return stackToReturn;
-                    } else {
-                        stackToReturn.setAmount(stackToReturn.getAmount() + preserveAmount);
-                        request.receiveAmount(preserveAmount);
-                        fetched.setAmount(fetched.getAmount() - preserveAmount);
-                    }
-                    // </editor-fold>
-                } else {
-                    StorageUnitData data = accessOutputAbleCargoStorageUnitData(entry.getKey());
-                    if (data != null) {
-                        // <editor-fold desc="do drawer">
-                        ItemStack take = data.requestItem0(accessor, request);
-                        if (take != null) {
-                            // Netex - Cache start
-                            minusCacheMiss(accessor, entry.getKey());
-                            found = true;
-                            // Netex - Cache end
-
-                            if (stackToReturn == null) {
-                                stackToReturn = take.clone();
-                            } else {
-                                stackToReturn.setAmount(stackToReturn.getAmount() + take.getAmount());
-                            }
-                            request.receiveAmount(take.getAmount());
-
-                            if (request.getAmount() <= 0) {
-                                // Netex - Reduce start
-                                uncontrolAccessOutput(accessor);
-                                // Netex - Reduce end
-                                // Netex - Record start
-                                tryRecord(accessor, request);
-                                // Netex - Record end
-                                return stackToReturn;
-                            }
-                        } else {
-                            // Netex - Cache start
-                            misses.add(entry.getKey());
-                            // Netex - Cache end
-                        }
-                        // </editor-fold>
-                    } else {
-                        // Netex - Cache start
-                        misses.add(entry.getKey());
-                        // Netex - Cache end
-                    }
-                }
-            }
-
-            // Netex - Cache start
-            if (!found) {
-                for (Location miss : misses) {
-                    addCacheMiss(accessor, miss);
-                }
-            }
-            // Netex - Cache end
-        }
-
-        // Barrels first
-        for (BarrelIdentity barrelIdentity : getOutputAbleBarrels()) {
-            // <editor-fold desc="do barrel">
-            final ItemStack itemStack = barrelIdentity.getItemStack();
-
-            if (itemStack == null || !StackUtils.itemsMatch(request, itemStack)) {
-                continue;
-            }
-
-            // Netex - Cache start
-            addCountObservingAccessHistory(accessor, barrelIdentity.getLocation());
-            // Netex - Cache end
-
-            boolean infinity = barrelIdentity instanceof InfinityBarrel;
-            final ItemStack fetched = barrelIdentity.requestItem(request);
-            if (fetched == null || fetched.getType() == Material.AIR || (infinity && fetched.getAmount() == 1)) {
-                continue;
-            }
-
-            // Stack is null, so we can fill it here
-            if (stackToReturn == null) {
-                stackToReturn = fetched.clone();
-                stackToReturn.setAmount(0);
-            }
-
-            final int preserveAmount = infinity ? fetched.getAmount() - 1 : fetched.getAmount();
-
-            if (request.getAmount() <= preserveAmount) {
-                // Netex - Reduce start
-                uncontrolAccessOutput(accessor);
-                // Netex - Reduce end
-                stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
-                fetched.setAmount(fetched.getAmount() - request.getAmount());
-                // Netex - Record start
-                tryRecord(accessor, request);
-                // Netex - Record end
-                return stackToReturn;
-            } else {
-                stackToReturn.setAmount(stackToReturn.getAmount() + preserveAmount);
-                request.receiveAmount(preserveAmount);
-                fetched.setAmount(fetched.getAmount() - preserveAmount);
-            }
-            // </editor-fold>
-        }
-
-        // Units
-        for (StorageUnitData cache : getOutputAbleCargoStorageUnitDatas().keySet()) {
-            // <editor-fold desc="do drawer">
-            ItemStack take = cache.requestItem0(accessor, request);
-            if (take != null) {
-                // Netex - Cache start
-                addCountObservingAccessHistory(accessor, cache.getLastLocation());
-                // Netex - Cache end
-                if (stackToReturn == null) {
-                    stackToReturn = take.clone();
-                } else {
-                    stackToReturn.setAmount(stackToReturn.getAmount() + take.getAmount());
-                }
-                request.receiveAmount(take.getAmount());
-
-                if (request.getAmount() <= 0) {
-                    // Netex - Reduce start
-                    uncontrolAccessOutput(accessor);
-                    // Netex - Reduce end
-                    // Netex - Record start
-                    tryRecord(accessor, request);
-                    // Netex - Record end
-                    return stackToReturn;
-                }
-            }
-            // </editor-fold>
-        }
-
+        /*
+         * Preserve original Networks withdrawal semantics: Cells first, then crafter outputs and
+         * Greedy storage, with exposed deep storage last. This matters for Pushers feeding Quantum
+         * Storage: an item deposited into a Grid may land in a Cell first, then the Pusher moves that
+         * item into its assigned destination instead of withdrawing from the destination itself.
+         */
         // Cells
         for (BlockMenu blockMenu : getCellMenus()) {
             if (!isRealCell(blockMenu)) continue;
@@ -2064,6 +1891,186 @@ public class NetworkRoot extends NetworkNode {
                 request.receiveAmount(itemStack.getAmount());
                 itemStack.setAmount(0);
             }
+        }
+
+        Map<Location, Integer> m = getPersistentAccessHistory(accessor);
+        if (m != null) {
+            // Netex - Cache start
+            boolean found = false;
+            List<Location> misses = new ArrayList<>();
+            // Netex - Cache end
+            for (Map.Entry<Location, Integer> entry : m.entrySet()) {
+                // try cache first
+                BarrelIdentity barrelIdentity = accessOutputAbleBarrel(entry.getKey());
+                if (barrelIdentity != null) {
+                    // <editor-fold desc="do barrel">
+                    final ItemStack itemStack = barrelIdentity.getItemStack();
+
+                    if (itemStack == null || !StackUtils.itemsMatch(request, itemStack)) {
+                        // Netex - Cache start
+                        misses.add(entry.getKey());
+                        // Netex - Cache end
+                        continue;
+                    }
+
+                    // Netex - Cache start
+                    minusCacheMiss(accessor, entry.getKey());
+                    found = true;
+                    // Netex - Cache end
+
+                    boolean infinity = barrelIdentity instanceof InfinityBarrel;
+                    final ItemStack fetched = barrelIdentity.requestItem(request);
+                    if (fetched == null
+                        || fetched.getType() == Material.AIR
+                        || (infinity && fetched.getAmount() == 1)) {
+                        continue;
+                    }
+
+                    // Stack is null, so we can fill it here
+                    if (stackToReturn == null) {
+                        stackToReturn = fetched.clone();
+                        stackToReturn.setAmount(0);
+                    }
+
+                    final int preserveAmount = infinity ? fetched.getAmount() - 1 : fetched.getAmount();
+
+                    if (request.getAmount() <= preserveAmount) {
+                        // Netex - Reduce start
+                        uncontrolAccessOutput(accessor);
+                        // Netex - Reduce end
+                        stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
+                        fetched.setAmount(fetched.getAmount() - request.getAmount());
+                        // Netex - Record start
+                        tryRecord(accessor, request);
+                        // Netex - Record end
+                        return stackToReturn;
+                    } else {
+                        stackToReturn.setAmount(stackToReturn.getAmount() + preserveAmount);
+                        request.receiveAmount(preserveAmount);
+                        fetched.setAmount(fetched.getAmount() - preserveAmount);
+                    }
+                    // </editor-fold>
+                } else {
+                    StorageUnitData data = accessOutputAbleCargoStorageUnitData(entry.getKey());
+                    if (data != null) {
+                        // <editor-fold desc="do drawer">
+                        ItemStack take = data.requestItem0(accessor, request);
+                        if (take != null) {
+                            // Netex - Cache start
+                            minusCacheMiss(accessor, entry.getKey());
+                            found = true;
+                            // Netex - Cache end
+
+                            if (stackToReturn == null) {
+                                stackToReturn = take.clone();
+                            } else {
+                                stackToReturn.setAmount(stackToReturn.getAmount() + take.getAmount());
+                            }
+                            request.receiveAmount(take.getAmount());
+
+                            if (request.getAmount() <= 0) {
+                                // Netex - Reduce start
+                                uncontrolAccessOutput(accessor);
+                                // Netex - Reduce end
+                                // Netex - Record start
+                                tryRecord(accessor, request);
+                                // Netex - Record end
+                                return stackToReturn;
+                            }
+                        } else {
+                            // Netex - Cache start
+                            misses.add(entry.getKey());
+                            // Netex - Cache end
+                        }
+                        // </editor-fold>
+                    } else {
+                        // Netex - Cache start
+                        misses.add(entry.getKey());
+                        // Netex - Cache end
+                    }
+                }
+            }
+
+            // Netex - Cache start
+            if (!found) {
+                for (Location miss : misses) {
+                    addCacheMiss(accessor, miss);
+                }
+            }
+            // Netex - Cache end
+        }
+
+        // Deep storage after loose network inventory (classic Networks withdrawal order)
+        for (BarrelIdentity barrelIdentity : getOutputAbleBarrels()) {
+            // <editor-fold desc="do barrel">
+            final ItemStack itemStack = barrelIdentity.getItemStack();
+
+            if (itemStack == null || !StackUtils.itemsMatch(request, itemStack)) {
+                continue;
+            }
+
+            // Netex - Cache start
+            addCountObservingAccessHistory(accessor, barrelIdentity.getLocation());
+            // Netex - Cache end
+
+            boolean infinity = barrelIdentity instanceof InfinityBarrel;
+            final ItemStack fetched = barrelIdentity.requestItem(request);
+            if (fetched == null || fetched.getType() == Material.AIR || (infinity && fetched.getAmount() == 1)) {
+                continue;
+            }
+
+            // Stack is null, so we can fill it here
+            if (stackToReturn == null) {
+                stackToReturn = fetched.clone();
+                stackToReturn.setAmount(0);
+            }
+
+            final int preserveAmount = infinity ? fetched.getAmount() - 1 : fetched.getAmount();
+
+            if (request.getAmount() <= preserveAmount) {
+                // Netex - Reduce start
+                uncontrolAccessOutput(accessor);
+                // Netex - Reduce end
+                stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
+                fetched.setAmount(fetched.getAmount() - request.getAmount());
+                // Netex - Record start
+                tryRecord(accessor, request);
+                // Netex - Record end
+                return stackToReturn;
+            } else {
+                stackToReturn.setAmount(stackToReturn.getAmount() + preserveAmount);
+                request.receiveAmount(preserveAmount);
+                fetched.setAmount(fetched.getAmount() - preserveAmount);
+            }
+            // </editor-fold>
+        }
+
+        // Units
+        for (StorageUnitData cache : getOutputAbleCargoStorageUnitDatas().keySet()) {
+            // <editor-fold desc="do drawer">
+            ItemStack take = cache.requestItem0(accessor, request);
+            if (take != null) {
+                // Netex - Cache start
+                addCountObservingAccessHistory(accessor, cache.getLastLocation());
+                // Netex - Cache end
+                if (stackToReturn == null) {
+                    stackToReturn = take.clone();
+                } else {
+                    stackToReturn.setAmount(stackToReturn.getAmount() + take.getAmount());
+                }
+                request.receiveAmount(take.getAmount());
+
+                if (request.getAmount() <= 0) {
+                    // Netex - Reduce start
+                    uncontrolAccessOutput(accessor);
+                    // Netex - Reduce end
+                    // Netex - Record start
+                    tryRecord(accessor, request);
+                    // Netex - Record end
+                    return stackToReturn;
+                }
+            }
+            // </editor-fold>
         }
 
         if (stackToReturn == null || stackToReturn.getAmount() == 0) {

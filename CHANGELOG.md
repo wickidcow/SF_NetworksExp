@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.29
+
+### Classic Networks storage routing
+- Restored the original Networks withdrawal priority: **Network Cells → crafter outputs → Greedy storage → exposed deep storage**.
+- Network Cells remain normal loose network storage; they are not forced into an overflow-only role.
+- Grid deposits keep the original behavior: matching deep storage exposed by a Network Monitor can accept items before Cells.
+- Network Pushers remain the active transfer path for moving configured items from the network into an adjacent Slimefun machine or assigned Quantum Storage.
+- Quantum Storage remains manually assigned and never auto-binds itself from a Grid/network deposit.
+- Added in-game Monitor/Pusher/Quantum Storage guidance and verification so classic routing cannot silently drift again.
+
 ## 1.0.28
 
 ### Manual Quantum Storage routing
