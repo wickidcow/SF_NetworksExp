@@ -77,7 +77,8 @@ public class NetworkMonitor extends NetworkDirectional {
 
     @Override
     protected boolean usesDirectionalGridControls() {
-        return false;
+        // Disabling the inspector restores the original six-direction Monitor GUI.
+        return !Networks.getConfigManager().isNetworkMonitorInspectorEnabled();
     }
 
     @Override
