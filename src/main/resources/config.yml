@@ -20,6 +20,10 @@ features:
   # asks the owning controller to rediscover its topology before rebuilding the list.
   network-monitor-inspector:
     enabled: true
+    # Clicking an individual node in the Monitor detail view highlights that block
+    # to the viewing player only. The Monitor never force-loads an unloaded chunk.
+    highlight-connected-nodes: true
+    highlight-seconds: 10
 
   networks-expansion:
     enabled: true
