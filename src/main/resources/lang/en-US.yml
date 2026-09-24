@@ -2153,9 +2153,10 @@ items:
     - Allows the network to interact with
     - an adjacent supported inventory.
     - ''
-    - Also shows every node the Network Controller
-    - currently sees. Hover machine icons for
-    - Total / Active / Inactive counts.
+    - Shows every node the Network Controller sees.
+    - Hover machine types for Total / Active / Inactive.
+    - Click a type for individual nodes and status.
+    - Click a node to highlight it in-world.
     - Use Refresh to force topology rediscovery.
   NTW_IMPORT:
     name: Network Importer
