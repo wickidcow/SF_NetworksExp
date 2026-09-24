@@ -774,8 +774,8 @@ public class NetworkMonitor extends NetworkDirectional {
                 ChatColor.RED + "Inactive " + ChatColor.GRAY + "= root contains the",
                 ChatColor.GRAY + "node but its runtime state has an issue.",
                 "",
-                ChatColor.DARK_GRAY + "The six center controls still set",
-                ChatColor.DARK_GRAY + "the Monitor's storage-facing side."));
+                ChatColor.DARK_GRAY + "Storage direction is now the hopper",
+                ChatColor.DARK_GRAY + "button in the bottom toolbar."));
     }
 
     private static @NotNull ItemStack pageButton(boolean next, int page, int maxPage) {
