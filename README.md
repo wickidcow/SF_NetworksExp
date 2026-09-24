@@ -21,6 +21,21 @@ Networks creates a powerful Slimefun **digital storage and logistics system**. P
 
 The maintained fork preserves the Bukkit plugin name `Networks`, existing Slimefun item IDs, persistent-data namespaces, placed machines, and established storage/database locations wherever practical so existing worlds can upgrade without an intentional format reset.
 
+## 📦 Classic storage routing
+
+This fork preserves the original Networks storage model. A Network Cell is normal loose network storage, not a forced
+overflow-only tier. An assigned Quantum Storage only participates in direct Grid deposit/withdrawal when a Network
+Monitor (or the directional input/output monitor variants) exposes that storage to the network.
+
+A Network Pusher is a separate active transfer path: it withdraws its configured item from the network and inserts it
+into the adjacent Slimefun machine or storage. This means an item inserted through a Grid can legitimately appear in a
+Cell first and then be moved into an assigned Quantum Storage by a Pusher. Empty Quantum Storage never auto-assigns an
+item type; the stored item must be assigned explicitly.
+
+For classic behavior, withdrawal prefers loose Cell inventory before deep storage. That prevents a Pusher aimed at an
+exposed Quantum Storage from preferentially withdrawing the same item from that Quantum Storage instead of draining
+the Cell inventory it is intended to move.
+
 ## 🛡️ Slimefun Legacy maintenance
 
 Current stability work includes:
