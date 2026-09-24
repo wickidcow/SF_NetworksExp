@@ -2158,6 +2158,7 @@ items:
     - Click a type for individual nodes and status.
     - Click a node to highlight it in-world.
     - Use Refresh to force topology rediscovery.
+    - Storage direction is set from the bottom toolbar.
   NTW_IMPORT:
     name: Network Importer
     lore:
