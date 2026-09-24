@@ -5,6 +5,7 @@ import io.github.sefiraat.networks.network.stackcaches.BarrelIdentity;
 import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
 import io.github.sefiraat.networks.network.stackcaches.QuantumCache;
 import io.github.sefiraat.networks.slimefun.network.NetworkQuantumStorage;
+import io.github.sefiraat.networks.utils.StackUtils;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Location;
 import org.bukkit.inventory.ItemStack;
@@ -18,6 +19,21 @@ public class NetworkStorage extends BarrelIdentity {
 
     public NetworkStorage(@NotNull Location location, ItemStack itemStack, long amount, long limit) {
         super(location, itemStack, amount, limit, BarrelType.NETWORKS);
+    }
+
+    /**
+     * NetworkStorage is backed by the live QuantumCache. The root may have cached this BarrelIdentity while the
+     * Quantum Storage was still unassigned, so matching must not rely on the constructor-time item template.
+     */
+    @Override
+    public boolean canAccept(@NotNull ItemStack incoming) {
+        final BlockMenu blockMenu = StorageCacheUtils.getMenu(this.getLocation());
+        if (blockMenu == null) {
+            return false;
+        }
+
+        final QuantumCache cache = NetworkQuantumStorage.getCaches().get(blockMenu.getLocation());
+        return cache != null && StackUtils.itemsMatch(cache, incoming);
     }
 
     @Override

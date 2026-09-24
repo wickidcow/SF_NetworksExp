@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.28
+
+### Manual Quantum Storage routing
+- Keeps the correction from PR #32: empty/unassigned Network Quantum Storage is **not** auto-bound by Grid or network deposits. Players still explicitly assign its item type.
+- Matching assigned Quantum Storage continues to receive items before Network Cells; if it fills, only the remaining amount can fall through to Cells.
+- Fixed a live-cache edge case found during review: if a Quantum Storage was manually assigned after the root had already cached its storage identity, the cached identity could still contain the old null item template and reject deposits until a network rebuild.
+- Network-backed Quantum Storage matching now checks the live `QuantumCache`, so a newly manually assigned storage starts receiving matching items immediately without requiring Refresh/rebuild.
+- Unassigned Quantum Storage remains ignored by ordinary network routing.
+
 ## 1.0.27
 
 ### Network Monitor GUI direction fix

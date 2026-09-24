@@ -11,8 +11,8 @@ permissions:
 # 2.1.112-Legacy-1.0 / Networks-Legacy-2.1.112-1.0
 
 env:
-  VERSION: "1.0.27"
-  OUTPUT_NAME: "SF_Networks1.0.27.jar"
+  VERSION: "1.0.28"
+  OUTPUT_NAME: "SF_Networks1.0.28.jar"
 
 jobs:
   compatibility:
