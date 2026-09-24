@@ -86,6 +86,9 @@ vanilla_pusher = read("src/main/java/io/github/sefiraat/networks/slimefun/networ
 vanilla_grabber = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkVanillaGrabber.java")
 network_remote = read("src/main/java/io/github/sefiraat/networks/slimefun/tools/NetworkRemote.java")
 network_root = read("src/main/java/io/github/sefiraat/networks/network/NetworkRoot.java")
+network_barrel = read("src/main/java/io/github/sefiraat/networks/network/barrel/NetworkStorage.java")
+network_pusher = read("src/main/java/io/github/sefiraat/networks/slimefun/network/pusher/AbstractNetworkPusher.java")
+readme = read("README.md")
 networks_drawer = read("src/main/java/com/ytdd9527/networksexpansion/implementation/machines/unit/NetworksDrawer.java")
 fluffy_barrel = read("src/main/java/io/github/sefiraat/networks/network/barrel/FluffyBarrel.java")
 root_ready_event = read("src/main/java/com/balugaq/netex/api/events/NetworkRootReadyEvent.java")
@@ -266,6 +269,37 @@ require("return !Objects.equals(instanceOne.getBaseColor(), instanceTwo.getBaseC
         "shield metadata comparison still rejects equal shields")
 require("source.clone()" in transfer_utils and "root.addItemStack0(accessor, offered)" in transfer_utils,
         "clone-and-commit network transfer helper is missing")
+
+# Preserve classic Networks storage-routing semantics.
+legacy_withdraw_start = network_root.find("public ItemStack getItemStack(@NotNull ItemRequest request)")
+legacy_withdraw_end = network_root.find("public static void addAmount", legacy_withdraw_start)
+legacy_withdraw = network_root[legacy_withdraw_start:legacy_withdraw_end]
+accessor_withdraw_start = network_root.find("public ItemStack getItemStack0(@NotNull Location accessor")
+accessor_withdraw_end = network_root.find("public void addItem(@NotNull Location accessor", accessor_withdraw_start)
+accessor_withdraw = network_root[accessor_withdraw_start:accessor_withdraw_end]
+require(legacy_withdraw_start >= 0 and accessor_withdraw_start >= 0,
+        "network withdrawal methods are missing")
+require(legacy_withdraw.find("// Cells") < legacy_withdraw.find("// Crafters")
+        < legacy_withdraw.find("Deep storage after loose network inventory"),
+        "deprecated network withdrawal no longer follows classic Cells -> Crafters -> deep-storage priority")
+require(accessor_withdraw.find("// Cells") < accessor_withdraw.find("// Crafters")
+        < accessor_withdraw.find("getPersistentAccessHistory(accessor)")
+        < accessor_withdraw.find("Deep storage after loose network inventory"),
+        "network withdrawal no longer follows classic Cells -> Crafters -> cached deep-storage -> deep-storage priority")
+require("depositIntoUnassignedNetworkStorage" not in network_root
+        and "NetworkQuantumStorage.setItem" not in network_barrel,
+        "empty Quantum Storage must never auto-assign from a network deposit")
+require("monitor.addAll(this.inputOnlyMonitors)" in network_root
+        and "monitor.addAll(this.monitors)" in network_root,
+        "Network Monitor/input-monitor storage exposure path is missing")
+require("NetworkTransferUtils.moveNetworkItemIntoMenu" in network_pusher,
+        "Network Pusher no longer actively withdraws from the network into an adjacent Slimefun menu")
+require("Classic storage routing" in readme
+        and "Cell first" in readme
+        and "Empty Quantum Storage never auto-assigns" in readme,
+        "classic storage-routing documentation is missing")
+require("Monitor exposes it; Pusher feeds it." in locale_text,
+        "Quantum Storage lore no longer explains Monitor/Pusher routing")
 for method in [
     "moveMenuSlotIntoNetwork",
     "moveInventorySlotIntoNetwork",
