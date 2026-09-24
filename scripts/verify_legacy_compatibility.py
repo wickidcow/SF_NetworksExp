@@ -295,7 +295,7 @@ require("monitor.addAll(this.inputOnlyMonitors)" in network_root
 require("NetworkTransferUtils.moveNetworkItemIntoMenu" in network_pusher,
         "Network Pusher no longer actively withdraws from the network into an adjacent Slimefun menu")
 require("Classic storage routing" in readme
-        and "Cell first" in readme
+        and "withdrawal prefers loose Cell inventory before deep storage" in readme
         and "Empty Quantum Storage never auto-assigns" in readme,
         "classic storage-routing documentation is missing")
 require("Monitor exposes it; Pusher feeds it." in locale_text,
