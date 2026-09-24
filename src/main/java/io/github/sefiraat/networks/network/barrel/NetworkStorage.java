@@ -5,6 +5,7 @@ import io.github.sefiraat.networks.network.stackcaches.BarrelIdentity;
 import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
 import io.github.sefiraat.networks.network.stackcaches.QuantumCache;
 import io.github.sefiraat.networks.slimefun.network.NetworkQuantumStorage;
+import io.github.sefiraat.networks.utils.StackUtils;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Location;
 import org.bukkit.inventory.ItemStack;
@@ -18,6 +19,21 @@ public class NetworkStorage extends BarrelIdentity {
 
     public NetworkStorage(@NotNull Location location, ItemStack itemStack, long amount, long limit) {
         super(location, itemStack, amount, limit, BarrelType.NETWORKS);
+    }
+
+    /**
+     * NetworkStorage is backed by a live QuantumCache. An empty Quantum Storage can become assigned after this
+     * BarrelIdentity was created, so matching must consult the live cache instead of the constructor-time template.
+     */
+    @Override
+    public boolean canAccept(@NotNull ItemStack incoming) {
+        final BlockMenu blockMenu = StorageCacheUtils.getMenu(this.getLocation());
+        if (blockMenu == null) {
+            return false;
+        }
+
+        final QuantumCache cache = NetworkQuantumStorage.getCaches().get(blockMenu.getLocation());
+        return cache != null && StackUtils.itemsMatch(cache, incoming);
     }
 
     @Override
@@ -85,8 +101,19 @@ public class NetworkStorage extends BarrelIdentity {
                 if (item == null || item.getType().isAir()) {
                     continue;
                 }
+
                 NetworkQuantumStorage.setItem(blockMenu, item, 0L);
-                break;
+
+                /*
+                 * setItem can reject blacklisted/nested items. Only stop searching the supplied array after the
+                 * live cache was actually assigned, and refresh this BarrelIdentity's template so any legacy
+                 * caller that still inspects it does not retain the old null template.
+                 */
+                final ItemStack assigned = cache.getItemStack();
+                if (assigned != null && !assigned.getType().isAir()) {
+                    setItemStack(assigned.clone());
+                    break;
+                }
             }
         }
 
