@@ -32,9 +32,9 @@ into the adjacent Slimefun machine or storage. This means an item inserted throu
 Cell first and then be moved into an assigned Quantum Storage by a Pusher. Empty Quantum Storage never auto-assigns an
 item type; the stored item must be assigned explicitly.
 
-For classic behavior, withdrawal prefers loose Cell inventory before deep storage. That prevents a Pusher aimed at an
-exposed Quantum Storage from preferentially withdrawing the same item from that Quantum Storage instead of draining
-the Cell inventory it is intended to move.
+For classic behavior, withdrawal follows the original loose-storage order: **Cells → crafter outputs → Greedy storage
+→ exposed deep storage**. That prevents a Pusher aimed at an exposed Quantum Storage from preferentially withdrawing
+the same item from that Quantum Storage instead of draining the Cell inventory it is intended to move.
 
 ## 🛡️ Slimefun Legacy maintenance
 
