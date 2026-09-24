@@ -651,6 +651,38 @@ public class NetworkRoot extends NetworkNode {
             ));
     }
 
+    /**
+     * Resolves storage targets for monitor nodes.
+     *
+     * <p>The classic Network Monitor is intentionally non-directional in this maintained fork: any supported
+     * storage touching one of its six faces is exposed automatically. Input-only and output-only monitor variants
+     * remain directional and contribute only their selected face.
+     */
+    private @NotNull Set<Location> collectMonitorStorageTargets(
+        @NotNull Set<Location> directionalMonitors,
+        boolean includeAutomaticMonitors) {
+
+        final Set<Location> targets = new HashSet<>();
+
+        if (includeAutomaticMonitors) {
+            for (Location monitorLocation : this.monitors) {
+                for (BlockFace face : NetworkDirectional.VALID_FACES) {
+                    targets.add(monitorLocation.clone().add(face.getDirection()));
+                }
+            }
+        }
+
+        for (Location monitorLocation : directionalMonitors) {
+            final BlockFace face = NetworkDirectional.getSelectedFace(monitorLocation);
+            if (face == null || face == BlockFace.SELF) {
+                continue;
+            }
+            targets.add(monitorLocation.clone().add(face.getDirection()));
+        }
+
+        return targets;
+    }
+
     @Deprecated
     @NotNull
     public Set<BarrelIdentity> getBarrels() {
@@ -659,24 +691,9 @@ public class NetworkRoot extends NetworkNode {
             return this.barrels;
         }
 
-        final Set<Location> addedLocations = ConcurrentHashMap.newKeySet();
         final Set<BarrelIdentity> barrelSet = ConcurrentHashMap.newKeySet();
 
-        for (Location cellLocation : this.monitors) {
-            final BlockFace face = NetworkDirectional.getSelectedFace(cellLocation);
-
-            if (face == null) {
-                continue;
-            }
-
-            final Location testLocation = cellLocation.clone().add(face.getDirection());
-
-            if (addedLocations.contains(testLocation)) {
-                continue;
-            } else {
-                addedLocations.add(testLocation);
-            }
-
+        for (Location testLocation : collectMonitorStorageTargets(Set.of(), true)) {
             final BarrelIdentity supportedBarrel = getBarrel(testLocation, false);
             if (supportedBarrel != null) {
                 barrelSet.add(supportedBarrel);
@@ -697,24 +714,9 @@ public class NetworkRoot extends NetworkNode {
             return this.cargoStorageUnitDatas;
         }
 
-        final Set<Location> addedLocations = ConcurrentHashMap.newKeySet();
         final Map<StorageUnitData, Location> dataSet = new ConcurrentHashMap<>();
 
-        for (Location cellLocation : this.monitors) {
-            final BlockFace face = NetworkDirectional.getSelectedFace(cellLocation);
-
-            if (face == null) {
-                continue;
-            }
-
-            final Location testLocation = cellLocation.clone().add(face.getDirection());
-
-            if (addedLocations.contains(testLocation)) {
-                continue;
-            } else {
-                addedLocations.add(testLocation);
-            }
-
+        for (Location testLocation : collectMonitorStorageTargets(Set.of(), true)) {
             final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(testLocation);
 
             if (slimefunItem instanceof NetworksDrawer) {
@@ -1389,28 +1391,13 @@ public class NetworkRoot extends NetworkNode {
         @NotNull Predicate<BarrelIdentity> filter,
         NetworkRootLocateStorageEvent.Strategy strategy,
         boolean includeEmpty) {
-        final Set<Location> addedLocations = ConcurrentHashMap.newKeySet();
+
+        final Set<Location> directionalMonitors = new HashSet<>();
+        directionalMonitors.addAll(this.inputOnlyMonitors);
+        directionalMonitors.addAll(this.outputOnlyMonitors);
+
         final List<BarrelIdentity> barrelSet = new ArrayList<>();
-
-        final Set<Location> monitor = new HashSet<>();
-        monitor.addAll(this.inputOnlyMonitors);
-        monitor.addAll(this.outputOnlyMonitors);
-        monitor.addAll(this.monitors);
-        for (Location cellLocation : monitor) {
-            final BlockFace face = NetworkDirectional.getSelectedFace(cellLocation);
-
-            if (face == null) {
-                continue;
-            }
-
-            final Location testLocation = cellLocation.clone().add(face.getDirection());
-
-            if (addedLocations.contains(testLocation)) {
-                continue;
-            } else {
-                addedLocations.add(testLocation);
-            }
-
+        for (Location testLocation : collectMonitorStorageTargets(directionalMonitors, true)) {
             final BarrelIdentity supportedBarrel = getBarrel(testLocation, includeEmpty);
             if (supportedBarrel != null && filter.test(supportedBarrel)) {
                 barrelSet.add(supportedBarrel);
@@ -1470,27 +1457,9 @@ public class NetworkRoot extends NetworkNode {
             return this.inputAbleBarrels;
         }
 
-        final Set<Location> addedLocations = ConcurrentHashMap.newKeySet();
         final Set<BarrelIdentity> barrelSet = ConcurrentHashMap.newKeySet();
 
-        final Set<Location> monitor = new HashSet<>();
-        monitor.addAll(this.inputOnlyMonitors);
-        monitor.addAll(this.monitors);
-        for (Location cellLocation : monitor) {
-            final BlockFace face = NetworkDirectional.getSelectedFace(cellLocation);
-
-            if (face == null) {
-                continue;
-            }
-
-            final Location testLocation = cellLocation.clone().add(face.getDirection());
-
-            if (addedLocations.contains(testLocation)) {
-                continue;
-            } else {
-                addedLocations.add(testLocation);
-            }
-
+        for (Location testLocation : collectMonitorStorageTargets(this.inputOnlyMonitors, true)) {
             final BarrelIdentity supportedBarrel = getBarrel(testLocation, true);
             if (supportedBarrel != null) {
                 barrelSet.add(supportedBarrel);
@@ -1515,27 +1484,9 @@ public class NetworkRoot extends NetworkNode {
             return this.outputAbleBarrels;
         }
 
-        final Set<Location> addedLocations = ConcurrentHashMap.newKeySet();
         final Set<BarrelIdentity> barrelSet = ConcurrentHashMap.newKeySet();
 
-        final Set<Location> monitor = new HashSet<>();
-        monitor.addAll(this.outputOnlyMonitors);
-        monitor.addAll(this.monitors);
-        for (Location cellLocation : monitor) {
-            final BlockFace face = NetworkDirectional.getSelectedFace(cellLocation);
-
-            if (face == null) {
-                continue;
-            }
-
-            final Location testLocation = cellLocation.clone().add(face.getDirection());
-
-            if (addedLocations.contains(testLocation)) {
-                continue;
-            } else {
-                addedLocations.add(testLocation);
-            }
-
+        for (Location testLocation : collectMonitorStorageTargets(this.outputOnlyMonitors, true)) {
             final BarrelIdentity supportedBarrel = getBarrel(testLocation, false);
             if (supportedBarrel != null) {
                 barrelSet.add(supportedBarrel);
@@ -1559,27 +1510,9 @@ public class NetworkRoot extends NetworkNode {
             return this.inputAbleCargoStorageUnitDatas;
         }
 
-        final Set<Location> addedLocations = ConcurrentHashMap.newKeySet();
         final Map<StorageUnitData, Location> dataSet = new ConcurrentHashMap<>();
 
-        final Set<Location> monitor = new HashSet<>();
-        monitor.addAll(this.inputOnlyMonitors);
-        monitor.addAll(this.monitors);
-        for (Location cellLocation : monitor) {
-            final BlockFace face = NetworkDirectional.getSelectedFace(cellLocation);
-
-            if (face == null) {
-                continue;
-            }
-
-            final Location testLocation = cellLocation.clone().add(face.getDirection());
-
-            if (addedLocations.contains(testLocation)) {
-                continue;
-            } else {
-                addedLocations.add(testLocation);
-            }
-
+        for (Location testLocation : collectMonitorStorageTargets(this.inputOnlyMonitors, true)) {
             final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(testLocation);
 
             if (slimefunItem instanceof NetworksDrawer) {
@@ -1607,27 +1540,9 @@ public class NetworkRoot extends NetworkNode {
             return this.outputAbleCargoStorageUnitDatas;
         }
 
-        final Set<Location> addedLocations = ConcurrentHashMap.newKeySet();
         final Map<StorageUnitData, Location> dataSet = new ConcurrentHashMap<>();
 
-        final Set<Location> monitor = new HashSet<>();
-        monitor.addAll(this.outputOnlyMonitors);
-        monitor.addAll(this.monitors);
-        for (Location cellLocation : monitor) {
-            final BlockFace face = NetworkDirectional.getSelectedFace(cellLocation);
-
-            if (face == null) {
-                continue;
-            }
-
-            final Location testLocation = cellLocation.clone().add(face.getDirection());
-
-            if (addedLocations.contains(testLocation)) {
-                continue;
-            } else {
-                addedLocations.add(testLocation);
-            }
-
+        for (Location testLocation : collectMonitorStorageTargets(this.outputOnlyMonitors, true)) {
             final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(testLocation);
 
             if (slimefunItem instanceof NetworksDrawer) {

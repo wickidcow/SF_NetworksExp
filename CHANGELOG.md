@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.30
+
+### Network Monitor auto-connect
+- Removed storage-direction selection from the standard Network Monitor GUI.
+- The standard Network Monitor now automatically exposes supported storage touching any of its six faces.
+- Multiple supported storage blocks may be exposed by one Monitor when they touch different sides.
+- Input-only and output-only Monitor variants remain directional so their one-way routing stays explicit.
+- Existing manually assigned Quantum Storage behavior is unchanged; empty Quantum Storage still never auto-assigns an item type.
+- The topology inspector keeps all 36 machine-list slots plus Refresh/summary/filter controls without directional selectors.
+
 ## 1.0.29
 
 ### Classic Networks storage routing

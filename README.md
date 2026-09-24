@@ -24,8 +24,9 @@ The maintained fork preserves the Bukkit plugin name `Networks`, existing Slimef
 ## 📦 Classic storage routing
 
 This fork preserves the original Networks storage model. A Network Cell is normal loose network storage, not a forced
-overflow-only tier. An assigned Quantum Storage only participates in direct Grid deposit/withdrawal when a Network
-Monitor (or the directional input/output monitor variants) exposes that storage to the network.
+overflow-only tier. An assigned Quantum Storage participates in direct Grid deposit/withdrawal when a Network Monitor
+exposes it to the network. The standard Network Monitor now auto-detects supported storage touching any of its six
+sides, with no direction setting in its GUI; the dedicated input-only/output-only monitor variants remain directional.
 
 A Network Pusher is a separate active transfer path: it withdraws its configured item from the network and inserts it
 into the adjacent Slimefun machine or storage. This means an item inserted through a Grid can legitimately appear in a
