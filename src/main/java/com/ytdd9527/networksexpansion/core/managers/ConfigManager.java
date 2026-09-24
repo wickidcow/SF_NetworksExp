@@ -92,6 +92,17 @@ public class ConfigManager {
         return Networks.getInstance().getConfig().getBoolean("features.network-monitor-inspector.enabled", true);
     }
 
+    public boolean isNetworkMonitorHighlightEnabled() {
+        return Networks.getInstance().getConfig().getBoolean(
+            "features.network-monitor-inspector.highlight-connected-nodes", true);
+    }
+
+    public int getNetworkMonitorHighlightSeconds() {
+        final int configured = Networks.getInstance().getConfig().getInt(
+            "features.network-monitor-inspector.highlight-seconds", 10);
+        return Math.max(1, Math.min(configured, 30));
+    }
+
     /**
      * Returns whether one optional Networks Expansion subsystem should register.
      * The master Expansion switch always wins, and every subfeature defaults to
