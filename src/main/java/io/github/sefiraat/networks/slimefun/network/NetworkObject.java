@@ -163,7 +163,15 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
                 @Override
                 @ParametersAreNonnullByDefault
                 public void onPlayerPlace(BlockPlaceEvent event) {
+                    /*
+                     * Slimefun has already created its block-data record before invoking BlockPlaceHandler.
+                     * Any late cancellation must therefore remove that just-created record or the next placement
+                     * can see a ghost Slimefun block and drop a duplicate item.
+                     */
                     prePlace(event);
+                    if (event.isCancelled()) {
+                        return;
+                    }
                     onPlace(event);
                     postPlace(event);
                 }
@@ -262,11 +270,19 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
     protected void postBreak(@NotNull BlockBreakEvent event) {
     }
 
+    /**
+     * Fallback placement guard for unusual placement paths where the pre-use event did not run.
+     */
     @OverridingMethodsMustInvokeSuper
     @SuppressWarnings("unused")
     protected void prePlace(@NotNull BlockPlaceEvent event) {
+        if (wouldMergeControllers(event.getBlockPlaced())) {
+            cancelPlace(event);
+        }
+    }
+
+    protected final boolean wouldMergeControllers(@NotNull Block placedBlock) {
         final Set<Location> controllers = new HashSet<>();
-        final Block placedBlock = event.getBlockPlaced();
 
         for (BlockFace face : CHECK_FACES) {
             final Location adjacentLocation = placedBlock.getRelative(face).getLocation();
@@ -286,18 +302,29 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
             }
         }
 
-        final boolean wouldMergeControllers = nodeType == NodeType.CONTROLLER
-            ? !controllers.isEmpty()
-            : controllers.size() > 1;
-        if (wouldMergeControllers) {
-            cancelPlace(event);
-        }
+        return nodeType == NodeType.CONTROLLER ? !controllers.isEmpty() : controllers.size() > 1;
     }
 
     @SuppressWarnings("unused")
     protected void cancelPlace(@NotNull BlockPlaceEvent event) {
-        event.getPlayer().sendMessage(Lang.getString("messages.unsupported-operation.comprehensive.cancel_place"));
+        cleanupCancelledPlacement(event.getBlockPlaced().getLocation());
+        event.getPlayer().sendMessage(getPlacementConflictMessage());
         event.setCancelled(true);
+    }
+
+    protected @NotNull String getPlacementConflictMessage() {
+        return Lang.getString("messages.unsupported-operation.comprehensive.cancel_place");
+    }
+
+    /**
+     * Slimefun creates its block-data row before calling an addon's BlockPlaceHandler. If placement must still be
+     * rejected at that late stage, explicitly remove the new runtime/database state so a later placement cannot
+     * mistake it for an existing block and drop a duplicate Networks item.
+     */
+    protected final void cleanupCancelledPlacement(@NotNull Location location) {
+        PENDING_FIRST_TICK_LOCATIONS.remove(location);
+        NetworkStorage.removeNode(location);
+        Slimefun.getDatabaseManager().getBlockDataController().removeBlock(location);
     }
 
     @OverridingMethodsMustInvokeSuper

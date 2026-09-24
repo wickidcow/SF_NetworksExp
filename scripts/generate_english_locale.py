@@ -35,7 +35,7 @@ ORIGINAL_ITEMS: dict[str, tuple[str, list[str]]] = {
     "NTW_EMPOWERED_AI_CORE": ("Empowered A.I. Core", ["A flourishing artificial intelligence", "resides within this shell."]),
     "NTW_PRISTINE_AI_CORE": ("Pristine A.I. Core", ["A perfected artificial intelligence", "resides within this defined shell."]),
     "NTW_INTERDIMENSIONAL_PRESENCE": ("Interdimensional Presence", ["An artificial intelligence that has", "grown too powerful for just a", "single dimension."]),
-    "NTW_CONTROLLER": ("Network Controller", ["The Network Controller is the brain", "for the whole network. Max 1 per network."]),
+    "NTW_CONTROLLER": ("Network Controller", ["The Network Controller is the brain", "for the whole network. Max 1 per network.", "", "Right-click with an empty hand to view", "node count and controller status."]),
     "NTW_BRIDGE": ("Network Bridge", ["The bridge allows you to cheaply", "connect network objects together."]),
     "NTW_MONITOR": ("Network Monitor", ["Allows the network to interact with", "an adjacent supported inventory.", "", "Also shows every node the Network Controller", "currently sees. Hover machine icons for", "Total / Active / Inactive counts.", "Use Refresh to force topology rediscovery."]),
     "NTW_IMPORT": ("Network Importer", ["Moves items placed inside it into", "the network, up to 9 stacks per", "Slimefun tick.", "Accepts items from Cargo."]),
