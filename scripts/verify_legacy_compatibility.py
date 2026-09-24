@@ -290,9 +290,12 @@ require(accessor_withdraw.find("// Cells") < accessor_withdraw.find("// Crafters
         < accessor_withdraw.find("getPersistentAccessHistory(accessor)")
         < accessor_withdraw.find("Deep storage after loose network inventory"),
         "network withdrawal no longer follows classic Cells -> Crafters -> Greedy -> cached deep-storage -> deep-storage priority")
-require("monitor.addAll(this.inputOnlyMonitors)" in network_root
-        and "monitor.addAll(this.monitors)" in network_root,
-        "Network Monitor/input-monitor storage exposure path is missing")
+require("collectMonitorStorageTargets" in network_root
+        and "NetworkDirectional.VALID_FACES" in network_root
+        and "collectMonitorStorageTargets(this.inputOnlyMonitors, true)" in network_root
+        and "collectMonitorStorageTargets(this.outputOnlyMonitors, true)" in network_root
+        and "face == BlockFace.SELF" in network_root,
+        "Network Monitor automatic adjacent-storage discovery or directional input/output monitor routing is missing")
 require("NetworkTransferUtils.moveNetworkItemIntoMenu" in network_pusher,
         "Network Pusher no longer actively withdraws from the network into an adjacent Slimefun menu")
 require("Classic storage routing" in readme
@@ -405,12 +408,12 @@ require("protected boolean usesDirectionalGridControls()" in network_directional
         and "if (!usesDirectionalGridControls())" in network_directional,
         "directional machines do not expose the specialized-GUI control hook")
 require("protected boolean usesDirectionalGridControls()" in network_monitor
-        and "isNetworkMonitorInspectorEnabled()" in network_monitor
-        and "DIRECTION_SLOT = 37" in network_monitor
-        and "Storage Direction" in network_monitor
-        and "Click: cycle storage direction" in network_monitor
-        and "Shift-click: open selected target" in network_monitor,
-        "Network Monitor compact direction toolbar is missing")
+        and "AUTO_CONNECT_SLOT = 37" in network_monitor
+        and "Storage Auto-Connect" in network_monitor
+        and "No direction setup required." in network_monitor
+        and "addDirectionControl" not in network_monitor
+        and "Storage Direction" not in network_monitor,
+        "Network Monitor GUI must use automatic adjacent-storage discovery without direction controls")
 require("12, 13, 14, 15, 16, 17" in network_monitor
         and "27, 28, 29, 30, 31, 32, 33, 34, 35" in network_monitor,
         "Network Monitor topology list does not own all 36 upper slots")
