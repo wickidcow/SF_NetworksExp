@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.27
+
+### Network Monitor GUI direction fix
+- Fixed the Network Monitor's six inherited directional selectors overwriting machine entries in the topology inspector.
+- The entire upper four rows (36 slots) now belong exclusively to the machine overview/detail list.
+- The Monitor keeps its original adjacent-storage behavior, but direction is configured through one **Storage Direction** hopper button in the bottom toolbar.
+- Click the Storage Direction button to cycle North → East → South → West → Up → Down. Shift-click opens the currently selected adjacent target.
+- The toolbar shows the current direction and adjacent target when loaded, while keeping unloaded neighboring chunks untouched.
+- Other directional Networks machines keep their existing six-direction GUI unchanged.
+
 ## 1.0.26
 
 ### Network Monitor individual-node inspector

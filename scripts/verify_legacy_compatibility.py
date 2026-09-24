@@ -104,6 +104,7 @@ barrel_identity = read("src/main/java/io/github/sefiraat/networks/network/stackc
 barrel_type = read("src/main/java/io/github/sefiraat/networks/network/barrel/BarrelType.java")
 localization_service = read("src/main/java/com/ytdd9527/networksexpansion/core/services/LocalizationService.java")
 network_object = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkObject.java")
+network_directional = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkDirectional.java")
 universal_verifier = read("scripts/verify_universal_jar.py")
 transfer_utils = read("src/main/java/io/github/sefiraat/networks/utils/NetworkTransferUtils.java")
 transfer_audit = read("src/main/java/io/github/sefiraat/networks/utils/TransferAudit.java")
@@ -365,9 +366,19 @@ require("NetworkController.markTopologyDirty(controller)" in network_monitor
 require("world.isChunkLoaded" in network_monitor
         and "loadChunk" not in network_monitor,
         "Network Monitor inspector must never force-load chunks")
-require("getNorthSlot()" not in network_monitor
-        and "super.updateGui(blockMenu)" in network_monitor,
-        "Network Monitor inspector must preserve inherited directional storage controls")
+require("protected boolean usesDirectionalGridControls()" in network_directional
+        and "if (!usesDirectionalGridControls())" in network_directional,
+        "directional machines do not expose the specialized-GUI control hook")
+require("protected boolean usesDirectionalGridControls()" in network_monitor
+        and "isNetworkMonitorInspectorEnabled()" in network_monitor
+        and "DIRECTION_SLOT = 37" in network_monitor
+        and "Storage Direction" in network_monitor
+        and "Click: cycle storage direction" in network_monitor
+        and "Shift-click: open selected target" in network_monitor,
+        "Network Monitor compact direction toolbar is missing")
+require("12, 13, 14, 15, 16, 17" in network_monitor
+        and "27, 28, 29, 30, 31, 32, 33, 34, 35" in network_monitor,
+        "Network Monitor topology list does not own all 36 upper slots")
 require("World world = dropLocation.getWorld()" in transfer_utils
         and "no loaded world was" in transfer_utils,
         "last-resort transfer rollback can still clear an undropped remainder")

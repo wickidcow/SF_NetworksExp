@@ -20,6 +20,7 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.World;
+import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Player;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.inventory.ItemStack;
@@ -42,16 +43,18 @@ import java.util.concurrent.atomic.AtomicLong;
 public class NetworkMonitor extends NetworkDirectional {
 
     /*
-     * Keep the six inherited directional slots untouched so Network Monitor still performs its historical
-     * storage-monitor job. The remaining four upper rows become a read-only topology inspector when enabled.
+     * The entire upper four rows belong to the topology inspector. Network Monitor is still directional, but its
+     * adjacent-inventory target is configured through one compact toolbar button instead of six selectors embedded
+     * in the machine list.
      */
     private static final int[] INSPECTOR_DISPLAY_SLOTS = {
         0, 1, 2, 3, 4, 5, 6, 7, 8,
-        9, 10, 11, 13, 14, 16, 17, 18, 19,
-        21, 23, 24, 25, 26, 27, 28, 29,
-        31, 32, 34, 35
+        9, 10, 11, 12, 13, 14, 15, 16, 17,
+        18, 19, 20, 21, 22, 23, 24, 25, 26,
+        27, 28, 29, 30, 31, 32, 33, 34, 35
     };
     private static final int PAGE_PREVIOUS_SLOT = 36;
+    private static final int DIRECTION_SLOT = 37;
     private static final int SUMMARY_SLOT = 38;
     private static final int REFRESH_SLOT = 40;
     private static final int LEGEND_SLOT = 42;
@@ -70,6 +73,23 @@ public class NetworkMonitor extends NetworkDirectional {
         @NotNull RecipeType recipeType,
         ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe, NodeType.STORAGE_MONITOR);
+    }
+
+    @Override
+    protected boolean usesDirectionalGridControls() {
+        // Disabling the inspector restores the original six-direction Monitor GUI.
+        return !Networks.getConfigManager().isNetworkMonitorInspectorEnabled();
+    }
+
+    @Override
+    protected int @NotNull [] getBackgroundSlots() {
+        return new int[]{
+            0, 1, 2, 3, 4, 5, 6, 7, 8,
+            9, 10, 11, 12, 13, 14, 15, 16, 17,
+            18, 19, 20, 21, 22, 23, 24, 25, 26,
+            27, 28, 29, 30, 31, 32, 33, 34, 35,
+            36, 37, 38, 39, 40, 41, 42, 43, 44
+        };
     }
 
     @Override
@@ -155,6 +175,7 @@ public class NetworkMonitor extends NetworkDirectional {
         }
 
         addPageButtons(blockMenu, monitorLocation, page, maxPage, normalized, snapshot, null);
+        addDirectionControl(blockMenu, monitorLocation);
 
         blockMenu.replaceExistingItem(SUMMARY_SLOT, summaryItem(snapshot, page, maxPage));
         blockMenu.addMenuClickHandler(SUMMARY_SLOT, (player, slot, item, action) -> false);
@@ -212,6 +233,7 @@ public class NetworkMonitor extends NetworkDirectional {
         }
 
         addPageButtons(blockMenu, monitorLocation, page, maxPage, normalized, snapshot, group);
+        addDirectionControl(blockMenu, monitorLocation);
 
         blockMenu.replaceExistingItem(SUMMARY_SLOT, backButton(group));
         blockMenu.addMenuClickHandler(SUMMARY_SLOT, (player, slot, item, action) -> {
@@ -283,6 +305,92 @@ public class NetworkMonitor extends NetworkDirectional {
             }
             return false;
         });
+    }
+
+    private void addDirectionControl(
+        @NotNull BlockMenu blockMenu,
+        @NotNull Location monitorLocation) {
+
+        final BlockFace current = getCurrentDirection(blockMenu);
+        blockMenu.replaceExistingItem(DIRECTION_SLOT, directionItem(blockMenu, current));
+        blockMenu.addMenuClickHandler(DIRECTION_SLOT, (player, slot, item, action) -> {
+            final BlockFace selected = getCurrentDirection(blockMenu);
+
+            if (action.isShiftClicked()) {
+                if (selected == BlockFace.SELF) {
+                    player.sendMessage(ChatColor.YELLOW + "Choose a storage direction first.");
+                } else {
+                    openDirection(player, blockMenu, selected);
+                }
+                return false;
+            }
+
+            final BlockFace next = nextDirection(selected);
+            setDirection(blockMenu, next);
+            RENDERED_STATE_MAP.remove(monitorLocation);
+            renderInspector(blockMenu, true);
+            return false;
+        });
+    }
+
+    private static @NotNull BlockFace nextDirection(@NotNull BlockFace current) {
+        return switch (current) {
+            case NORTH -> BlockFace.EAST;
+            case EAST -> BlockFace.SOUTH;
+            case SOUTH -> BlockFace.WEST;
+            case WEST -> BlockFace.UP;
+            case UP -> BlockFace.DOWN;
+            case DOWN, SELF -> BlockFace.NORTH;
+            default -> BlockFace.NORTH;
+        };
+    }
+
+    private static @NotNull ItemStack directionItem(
+        @NotNull BlockMenu blockMenu,
+        @NotNull BlockFace direction) {
+
+        final List<String> lore = new ArrayList<>();
+        lore.add("");
+        lore.add(ChatColor.GRAY + "Current: " + ChatColor.WHITE
+            + (direction == BlockFace.SELF ? "Not set" : prettyNodeDirection(direction)));
+
+        if (direction != BlockFace.SELF) {
+            final Location targetLocation = blockMenu.getLocation().clone().add(
+                direction.getModX(),
+                direction.getModY(),
+                direction.getModZ());
+            final World world = targetLocation.getWorld();
+            final boolean targetChunkLoaded = world != null
+                && world.isChunkLoaded(targetLocation.getBlockX() >> 4, targetLocation.getBlockZ() >> 4);
+
+            if (!targetChunkLoaded) {
+                lore.add(ChatColor.GRAY + "Target: " + ChatColor.RED + "Chunk unloaded");
+            } else {
+                final SlimefunItem target = StorageCacheUtils.getSfItem(targetLocation);
+                if (target != null) {
+                    lore.add(ChatColor.GRAY + "Target: " + ChatColor.WHITE
+                        + cleanName(DisplayNameUtils.getDisplayName(target.getItem())));
+                } else {
+                    lore.add(ChatColor.GRAY + "Target: " + ChatColor.WHITE
+                        + DisplayNameUtils.getMaterialName(targetLocation.getBlock().getType()));
+                }
+            }
+        }
+
+        lore.add("");
+        lore.add(ChatColor.YELLOW + "Click: cycle storage direction");
+        lore.add(ChatColor.YELLOW + "Shift-click: open selected target");
+        lore.add("");
+        lore.add(ChatColor.DARK_GRAY + "This controls the Monitor's adjacent");
+        lore.add(ChatColor.DARK_GRAY + "storage target only; it does not alter");
+        lore.add(ChatColor.DARK_GRAY + "which network nodes are detected.");
+
+        return control(Material.HOPPER, ChatColor.GOLD + "Storage Direction", lore);
+    }
+
+    private static @NotNull String prettyNodeDirection(@NotNull BlockFace face) {
+        final String name = face.name().toLowerCase(Locale.ROOT);
+        return Character.toUpperCase(name.charAt(0)) + name.substring(1);
     }
 
     private void requestTopologyRefresh(@NotNull BlockMenu blockMenu) {
@@ -667,8 +775,8 @@ public class NetworkMonitor extends NetworkDirectional {
                 ChatColor.RED + "Inactive " + ChatColor.GRAY + "= root contains the",
                 ChatColor.GRAY + "node but its runtime state has an issue.",
                 "",
-                ChatColor.DARK_GRAY + "The six center controls still set",
-                ChatColor.DARK_GRAY + "the Monitor's storage-facing side."));
+                ChatColor.DARK_GRAY + "Storage direction is now the hopper",
+                ChatColor.DARK_GRAY + "button in the bottom toolbar."));
     }
 
     private static @NotNull ItemStack pageButton(boolean next, int page, int maxPage) {

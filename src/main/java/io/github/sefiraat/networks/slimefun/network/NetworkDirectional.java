@@ -194,6 +194,10 @@ public abstract class NetworkDirectional extends NetworkObject {
             return;
         }
 
+        if (!usesDirectionalGridControls()) {
+            return;
+        }
+
         BlockFace direction = getCurrentDirection(blockMenu);
 
         for (BlockFace blockFace : VALID_FACES) {
@@ -307,30 +311,32 @@ public abstract class NetworkDirectional extends NetworkObject {
                     drawBackground(getOtherBackgroundStack(), getOtherBackgroundSlots());
                 }
 
-                addItem(
-                    getNorthSlot(),
-                    getDirectionalSlotPane(BlockFace.NORTH, Material.AIR, false),
-                    (player, i, itemStack, clickAction) -> false);
-                addItem(
-                    getSouthSlot(),
-                    getDirectionalSlotPane(BlockFace.SOUTH, Material.AIR, false),
-                    (player, i, itemStack, clickAction) -> false);
-                addItem(
-                    getEastSlot(),
-                    getDirectionalSlotPane(BlockFace.EAST, Material.AIR, false),
-                    (player, i, itemStack, clickAction) -> false);
-                addItem(
-                    getWestSlot(),
-                    getDirectionalSlotPane(BlockFace.WEST, Material.AIR, false),
-                    (player, i, itemStack, clickAction) -> false);
-                addItem(
-                    getUpSlot(),
-                    getDirectionalSlotPane(BlockFace.UP, Material.AIR, false),
-                    (player, i, itemStack, clickAction) -> false);
-                addItem(
-                    getDownSlot(),
-                    getDirectionalSlotPane(BlockFace.DOWN, Material.AIR, false),
-                    (player, i, itemStack, clickAction) -> false);
+                if (usesDirectionalGridControls()) {
+                    addItem(
+                        getNorthSlot(),
+                        getDirectionalSlotPane(BlockFace.NORTH, Material.AIR, false),
+                        (player, i, itemStack, clickAction) -> false);
+                    addItem(
+                        getSouthSlot(),
+                        getDirectionalSlotPane(BlockFace.SOUTH, Material.AIR, false),
+                        (player, i, itemStack, clickAction) -> false);
+                    addItem(
+                        getEastSlot(),
+                        getDirectionalSlotPane(BlockFace.EAST, Material.AIR, false),
+                        (player, i, itemStack, clickAction) -> false);
+                    addItem(
+                        getWestSlot(),
+                        getDirectionalSlotPane(BlockFace.WEST, Material.AIR, false),
+                        (player, i, itemStack, clickAction) -> false);
+                    addItem(
+                        getUpSlot(),
+                        getDirectionalSlotPane(BlockFace.UP, Material.AIR, false),
+                        (player, i, itemStack, clickAction) -> false);
+                    addItem(
+                        getDownSlot(),
+                        getDirectionalSlotPane(BlockFace.DOWN, Material.AIR, false),
+                        (player, i, itemStack, clickAction) -> false);
+                }
             }
 
             @Override
@@ -346,30 +352,32 @@ public abstract class NetworkDirectional extends NetworkObject {
                     direction = BlockFace.valueOf(string);
                 }
                 SELECTED_DIRECTION_MAP.put(blockMenu.getLocation().clone(), direction);
-                blockMenu.addMenuClickHandler(
-                    getNorthSlot(),
-                    (player, i, itemStack, clickAction) ->
-                        directionClick(player, clickAction, blockMenu, BlockFace.NORTH));
-                blockMenu.addMenuClickHandler(
-                    getSouthSlot(),
-                    (player, i, itemStack, clickAction) ->
-                        directionClick(player, clickAction, blockMenu, BlockFace.SOUTH));
-                blockMenu.addMenuClickHandler(
-                    getEastSlot(),
-                    (player, i, itemStack, clickAction) ->
-                        directionClick(player, clickAction, blockMenu, BlockFace.EAST));
-                blockMenu.addMenuClickHandler(
-                    getWestSlot(),
-                    (player, i, itemStack, clickAction) ->
-                        directionClick(player, clickAction, blockMenu, BlockFace.WEST));
-                blockMenu.addMenuClickHandler(
-                    getUpSlot(),
-                    (player, i, itemStack, clickAction) ->
-                        directionClick(player, clickAction, blockMenu, BlockFace.UP));
-                blockMenu.addMenuClickHandler(
-                    getDownSlot(),
-                    (player, i, itemStack, clickAction) ->
-                        directionClick(player, clickAction, blockMenu, BlockFace.DOWN));
+                if (usesDirectionalGridControls()) {
+                    blockMenu.addMenuClickHandler(
+                        getNorthSlot(),
+                        (player, i, itemStack, clickAction) ->
+                            directionClick(player, clickAction, blockMenu, BlockFace.NORTH));
+                    blockMenu.addMenuClickHandler(
+                        getSouthSlot(),
+                        (player, i, itemStack, clickAction) ->
+                            directionClick(player, clickAction, blockMenu, BlockFace.SOUTH));
+                    blockMenu.addMenuClickHandler(
+                        getEastSlot(),
+                        (player, i, itemStack, clickAction) ->
+                            directionClick(player, clickAction, blockMenu, BlockFace.EAST));
+                    blockMenu.addMenuClickHandler(
+                        getWestSlot(),
+                        (player, i, itemStack, clickAction) ->
+                            directionClick(player, clickAction, blockMenu, BlockFace.WEST));
+                    blockMenu.addMenuClickHandler(
+                        getUpSlot(),
+                        (player, i, itemStack, clickAction) ->
+                            directionClick(player, clickAction, blockMenu, BlockFace.UP));
+                    blockMenu.addMenuClickHandler(
+                        getDownSlot(),
+                        (player, i, itemStack, clickAction) ->
+                            directionClick(player, clickAction, blockMenu, BlockFace.DOWN));
+                }
             }
 
             @Override
@@ -389,6 +397,15 @@ public abstract class NetworkDirectional extends NetworkObject {
                 }
             }
         };
+    }
+
+    /**
+     * Most directional machines use the six fixed direction selectors in the body of their GUI.
+     * Specialized screens such as Network Monitor can disable those selectors and provide a compact
+     * direction control elsewhere without changing the underlying adjacent-inventory behavior.
+     */
+    protected boolean usesDirectionalGridControls() {
+        return true;
     }
 
     @ParametersAreNonnullByDefault
