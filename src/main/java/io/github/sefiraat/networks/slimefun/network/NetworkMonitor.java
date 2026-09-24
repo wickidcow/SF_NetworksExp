@@ -354,14 +354,25 @@ public class NetworkMonitor extends NetworkDirectional {
             + (direction == BlockFace.SELF ? "Not set" : prettyNodeDirection(direction)));
 
         if (direction != BlockFace.SELF) {
-            final Location targetLocation = blockMenu.getBlock().getRelative(direction).getLocation();
-            final SlimefunItem target = StorageCacheUtils.getSfItem(targetLocation);
-            if (target != null) {
-                lore.add(ChatColor.GRAY + "Target: " + ChatColor.WHITE
-                    + cleanName(DisplayNameUtils.getDisplayName(target.getItem())));
+            final Location targetLocation = blockMenu.getLocation().clone().add(
+                direction.getModX(),
+                direction.getModY(),
+                direction.getModZ());
+            final World world = targetLocation.getWorld();
+            final boolean targetChunkLoaded = world != null
+                && world.isChunkLoaded(targetLocation.getBlockX() >> 4, targetLocation.getBlockZ() >> 4);
+
+            if (!targetChunkLoaded) {
+                lore.add(ChatColor.GRAY + "Target: " + ChatColor.RED + "Chunk unloaded");
             } else {
-                lore.add(ChatColor.GRAY + "Target: " + ChatColor.WHITE
-                    + DisplayNameUtils.getMaterialName(targetLocation.getBlock().getType()));
+                final SlimefunItem target = StorageCacheUtils.getSfItem(targetLocation);
+                if (target != null) {
+                    lore.add(ChatColor.GRAY + "Target: " + ChatColor.WHITE
+                        + cleanName(DisplayNameUtils.getDisplayName(target.getItem())));
+                } else {
+                    lore.add(ChatColor.GRAY + "Target: " + ChatColor.WHITE
+                        + DisplayNameUtils.getMaterialName(targetLocation.getBlock().getType()));
+                }
             }
         }
 
