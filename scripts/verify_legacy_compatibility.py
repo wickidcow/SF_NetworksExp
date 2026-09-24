@@ -86,6 +86,7 @@ vanilla_pusher = read("src/main/java/io/github/sefiraat/networks/slimefun/networ
 vanilla_grabber = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkVanillaGrabber.java")
 network_remote = read("src/main/java/io/github/sefiraat/networks/slimefun/tools/NetworkRemote.java")
 network_root = read("src/main/java/io/github/sefiraat/networks/network/NetworkRoot.java")
+quantum_network_storage = read("src/main/java/io/github/sefiraat/networks/network/barrel/NetworkStorage.java")
 networks_drawer = read("src/main/java/com/ytdd9527/networksexpansion/implementation/machines/unit/NetworksDrawer.java")
 fluffy_barrel = read("src/main/java/io/github/sefiraat/networks/network/barrel/FluffyBarrel.java")
 root_ready_event = read("src/main/java/com/balugaq/netex/api/events/NetworkRootReadyEvent.java")
@@ -379,6 +380,18 @@ require("protected boolean usesDirectionalGridControls()" in network_monitor
 require("12, 13, 14, 15, 16, 17" in network_monitor
         and "27, 28, 29, 30, 31, 32, 33, 34, 35" in network_monitor,
         "Network Monitor topology list does not own all 36 upper slots")
+require("depositIntoUnassignedNetworkStorage(accessor, incoming)" in network_root
+        and "instanceof NetworkStorage networkStorage" in network_root
+        and network_root.find("depositIntoUnassignedNetworkStorage(accessor, incoming)")
+            < network_root.find("for (BlockMenu blockMenu : getCellMenus())",
+                                network_root.find("depositIntoUnassignedNetworkStorage(accessor, incoming)")),
+        "Network Cells are no longer the final overflow tier after unassigned Quantum Storage")
+require("public boolean canAccept(@NotNull ItemStack incoming)" in quantum_network_storage
+        and "StackUtils.itemsMatch(cache, incoming)" in quantum_network_storage,
+        "Network Quantum Storage routing does not consult the live QuantumCache")
+require("setItemStack(assigned.clone())" in quantum_network_storage
+        and "if (assigned != null && !assigned.getType().isAir())" in quantum_network_storage,
+        "newly assigned Quantum Storage does not refresh its cached barrel identity")
 require("World world = dropLocation.getWorld()" in transfer_utils
         and "no loaded world was" in transfer_utils,
         "last-resort transfer rollback can still clear an undropped remainder")
