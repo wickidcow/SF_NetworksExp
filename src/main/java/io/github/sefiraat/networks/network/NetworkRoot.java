@@ -1348,7 +1348,9 @@ public class NetworkRoot extends NetworkNode {
                 }
                 final int toRemove = (int) Math.min(power - removed, charge);
                 powerNode.removeCharge(node, toRemove);
-                this.rootPower -= power;
+                // Keep the cached total aligned with the amount actually removed from this node.
+                // Subtracting the whole request for every contributing node can drive rootPower negative.
+                this.rootPower = Math.max(0L, this.rootPower - toRemove);
                 removed = removed + toRemove;
             }
             if (removed >= power) {
@@ -1564,7 +1566,14 @@ public class NetworkRoot extends NetworkNode {
         return dataSet;
     }
 
-    public boolean refreshRootItems() {
+    /**
+     * Returns storage-derived views to the same lazy state as a newly created root.
+     *
+     * <p>Stable controller ticks reuse the topology object graph, so they invalidate these
+     * derived views instead of eagerly rebuilding or copying the full network. The next real
+     * storage operation reconstructs only the views it needs.</p>
+     */
+    public void invalidateRootItems() {
         this.barrels = null;
         this.cargoStorageUnitDatas = null;
         this.inputAbleBarrels = null;
@@ -1576,6 +1585,10 @@ public class NetworkRoot extends NetworkNode {
         this.mapInputAbleCargoStorageUnits = null;
         this.mapOutputAbleCargoStorageUnits = null;
         this.allItemsView = null;
+    }
+
+    public boolean refreshRootItems() {
+        invalidateRootItems();
 
         getBarrels();
         getCargoStorageUnitDatas();
