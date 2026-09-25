@@ -82,6 +82,7 @@ stack_utils = read("src/main/java/io/github/sefiraat/networks/utils/StackUtils.j
 storage_unit = read("src/main/java/com/balugaq/netex/api/data/StorageUnitData.java")
 inventory_util = read("src/main/java/com/balugaq/netex/utils/InventoryUtil.java")
 block_menu_util = read("src/main/java/com/balugaq/netex/utils/BlockMenuUtil.java")
+line_operation_util = read("src/main/java/com/balugaq/netex/utils/LineOperationUtil.java")
 vanilla_pusher = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkVanillaPusher.java")
 vanilla_grabber = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkVanillaGrabber.java")
 network_remote = read("src/main/java/io/github/sefiraat/networks/slimefun/tools/NetworkRemote.java")
@@ -298,6 +299,25 @@ require("collectMonitorStorageTargets" in network_root
         "Network Monitor automatic adjacent-storage discovery or directional input/output monitor routing is missing")
 require("NetworkTransferUtils.moveNetworkItemIntoMenu" in network_pusher,
         "Network Pusher no longer actively withdraws from the network into an adjacent Slimefun menu")
+require("targetBlock.getZ(),\n            template);" in network_pusher
+        and "targetBlock.getZ(),\n            template.clone());" not in network_pusher,
+        "Network Pusher backoff keys must reuse the already-cloned template snapshot")
+require("Map<Location, IdleState> IDLE_STATE_MAP = new ConcurrentHashMap<>()" in auto_crafter
+        and "AtomicInteger misses" in auto_crafter
+        and "AtomicInteger skipTicks" in auto_crafter
+        and "compareAndSet(remaining, remaining - 1)" in auto_crafter
+        and "putIfAbsent(key, created)" in auto_crafter
+        and "IDLE_MISS_MAP" not in auto_crafter
+        and "IDLE_SKIP_MAP" not in auto_crafter,
+        "Auto Crafter idle backoff must avoid per-tick Location/Integer churn")
+require("getOrCreateIngredientPlan(location, instance)" in auto_crafter
+        and "List<IngredientRequest> plan = INGREDIENT_PLAN_MAP.get(location)" in auto_crafter
+        and "INGREDIENT_PLAN_MAP.putIfAbsent(location.clone(), built)" in auto_crafter
+        and "INGREDIENT_PLAN_MAP.computeIfAbsent(\n            location.clone()" not in auto_crafter,
+        "Auto Crafter ingredient cache must avoid cloning Location keys on cache hits")
+require("final int[] requestedAmounts" not in auto_crafter
+        and "(int) ((long) ingredient.amount() * blueprintAmount)" in auto_crafter,
+        "Auto Crafter must not allocate a requested-amount scratch array per craft")
 require("Classic storage routing" in readme
         and "Cells → crafter outputs → Greedy storage" in readme
         and "Empty Quantum Storage never auto-assigns" in readme,
@@ -361,6 +381,25 @@ require("NetworkRoot previous = NETWORKS.put(location, candidate);" in network_c
         and "FailureCircuitBreaker.FailureSnapshot recoverySnapshot" in network_controller
         and "FailureCircuitBreaker.FailureSnapshot previous =" not in network_controller,
         "controller rebuild success handling reuses the previous local variable name")
+require("candidate = cachedRoot;" in network_controller
+        and "refreshStableRoot(candidate, location)" in network_controller
+        and "STABLE_ROOT_REUSES.increment()" in network_controller
+        and "root.invalidateRootItems()" in network_controller
+        and "root.setRootPower(livePower)" in network_controller,
+        "stable Network Controller ticks must reuse topology while refreshing dynamic root state")
+require("public void invalidateRootItems()" in network_root
+        and "invalidateRootItems();" in network_root
+        and "this.rootPower = Math.max(0L, this.rootPower - toRemove)" in network_root,
+        "NetworkRoot stable-reuse invalidation or exact power accounting is missing")
+require("if (!root.allowAccessInput(accessor))" in line_operation_util
+        and "if (!root.allowAccessOutput(accessor))" in line_operation_util
+        and "BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW)" in line_operation_util
+        and "BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.INSERT, template)" in line_operation_util,
+        "line-transfer limiter fast paths are missing")
+require("historyLookupKey(accessor)" in network_root
+        and "location.getX() == location.getBlockX()" in network_root
+        and "return normalizeHistoryLocation(location)" in network_root,
+        "canonical transport limiter lookups must avoid unnecessary Location clones")
 require("(ItemUseHandler) this::onControllerItemUse" in network_controller
         and "wouldMergeControllers(target)" in network_controller
         and "event.cancel()" in network_controller,

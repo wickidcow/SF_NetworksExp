@@ -1348,7 +1348,9 @@ public class NetworkRoot extends NetworkNode {
                 }
                 final int toRemove = (int) Math.min(power - removed, charge);
                 powerNode.removeCharge(node, toRemove);
-                this.rootPower -= power;
+                // Keep the cached total aligned with the amount actually removed from this node.
+                // Subtracting the whole request for every contributing node can drive rootPower negative.
+                this.rootPower = Math.max(0L, this.rootPower - toRemove);
                 removed = removed + toRemove;
             }
             if (removed >= power) {
@@ -1564,7 +1566,14 @@ public class NetworkRoot extends NetworkNode {
         return dataSet;
     }
 
-    public boolean refreshRootItems() {
+    /**
+     * Returns storage-derived views to the same lazy state as a newly created root.
+     *
+     * <p>Stable controller ticks reuse the topology object graph, so they invalidate these
+     * derived views instead of eagerly rebuilding or copying the full network. The next real
+     * storage operation reconstructs only the views it needs.</p>
+     */
+    public void invalidateRootItems() {
         this.barrels = null;
         this.cargoStorageUnitDatas = null;
         this.inputAbleBarrels = null;
@@ -1576,6 +1585,10 @@ public class NetworkRoot extends NetworkNode {
         this.mapInputAbleCargoStorageUnits = null;
         this.mapOutputAbleCargoStorageUnits = null;
         this.allItemsView = null;
+    }
+
+    public boolean refreshRootItems() {
+        invalidateRootItems();
 
         getBarrels();
         getCargoStorageUnitDatas();
@@ -2278,7 +2291,7 @@ public class NetworkRoot extends NetworkNode {
 
     /** Clears per-accessor throttling and storage-location history when a Networks block unloads or breaks. */
     public static void clearAccessHistory(@NotNull Location accessor) {
-        final Location key = normalizeHistoryLocation(accessor);
+        final Location key = historyLookupKey(accessor);
         observingAccessHistory.remove(key);
         persistentAccessHistory.remove(key);
 
@@ -2313,7 +2326,7 @@ public class NetworkRoot extends NetworkNode {
     }
 
     public boolean allowAccessInput(@NotNull Location accessor) {
-        final Location key = normalizeHistoryLocation(accessor);
+        final Location key = historyLookupKey(accessor);
         final Long lastTime = controlledAccessInputHistory.get(key);
         if (lastTime == null) {
             return true;
@@ -2326,7 +2339,7 @@ public class NetworkRoot extends NetworkNode {
     }
 
     public boolean allowAccessOutput(@NotNull Location accessor) {
-        final Location key = normalizeHistoryLocation(accessor);
+        final Location key = historyLookupKey(accessor);
         final Long lastTime = controlledAccessOutputHistory.get(key);
         if (lastTime == null) {
             return true;
@@ -2362,12 +2375,12 @@ public class NetworkRoot extends NetworkNode {
 
     public void reduceTransportInputMiss(@NotNull Location location) {
         transportMissInputHistory.computeIfPresent(
-            normalizeHistoryLocation(location), (ignored, misses) -> misses <= 1 ? null : misses - 1);
+            historyLookupKey(location), (ignored, misses) -> misses <= 1 ? null : misses - 1);
     }
 
     public void reduceTransportOutputMiss(@NotNull Location location) {
         transportMissOutputHistory.computeIfPresent(
-            normalizeHistoryLocation(location), (ignored, misses) -> misses <= 1 ? null : misses - 1);
+            historyLookupKey(location), (ignored, misses) -> misses <= 1 ? null : misses - 1);
     }
 
     public void controlAccessInput(@NotNull Location accessor) {
@@ -2379,13 +2392,30 @@ public class NetworkRoot extends NetworkNode {
     }
 
     public void uncontrolAccessInput(@NotNull Location accessor) {
-        controlledAccessInputHistory.remove(normalizeHistoryLocation(accessor));
+        controlledAccessInputHistory.remove(historyLookupKey(accessor));
         reduceTransportInputMiss(accessor);
     }
 
     public void uncontrolAccessOutput(@NotNull Location accessor) {
-        controlledAccessOutputHistory.remove(normalizeHistoryLocation(accessor));
+        controlledAccessOutputHistory.remove(historyLookupKey(accessor));
         reduceTransportOutputMiss(accessor);
+    }
+
+    /**
+     * Most hot-path accessors come directly from BlockMenu and are already canonical block locations.
+     * Map lookups do not retain the caller's key, so reuse those locations instead of cloning them on
+     * every limiter check. Mutation/insert paths still use normalizeHistoryLocation() and therefore
+     * always retain an owned key.
+     */
+    private static @NotNull Location historyLookupKey(@NotNull Location location) {
+        if (location.getX() == location.getBlockX()
+            && location.getY() == location.getBlockY()
+            && location.getZ() == location.getBlockZ()
+            && location.getYaw() == 0.0F
+            && location.getPitch() == 0.0F) {
+            return location;
+        }
+        return normalizeHistoryLocation(location);
     }
 
     private static @NotNull Location normalizeHistoryLocation(@NotNull Location location) {

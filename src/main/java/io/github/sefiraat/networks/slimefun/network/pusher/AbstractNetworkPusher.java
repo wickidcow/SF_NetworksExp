@@ -223,6 +223,12 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
         @NotNull Block sourceBlock,
         @NotNull Block targetBlock,
         @NotNull ItemStack template) {
+        /*
+         * collectPushRequests() already creates a private one-amount clone for every unique
+         * template. Reuse that immutable per-tick snapshot here; cloning it again for a
+         * backoff lookup created hundreds/thousands of short-lived ItemStacks on large networks.
+         * Failed keys safely retain this snapshot because nothing mutates it after collection.
+         */
         return new PushRequestKey(
             sourceBlock.getWorld().getUID(),
             sourceBlock.getX(),
@@ -231,7 +237,7 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
             targetBlock.getX(),
             targetBlock.getY(),
             targetBlock.getZ(),
-            template.clone());
+            template);
     }
 
     private static boolean isBackedOff(@NotNull PushRequestKey requestKey, long now) {

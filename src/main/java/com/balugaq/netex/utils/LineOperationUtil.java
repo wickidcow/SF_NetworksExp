@@ -265,6 +265,15 @@ public class LineOperationUtil {
         @NotNull BlockMenu blockMenu,
         @NotNull TransportMode transportMode,
         int limitQuantity) {
+        /*
+         * NetworkRoot already rejects every deposit from a miss-limited accessor. Check that state
+         * before discovering transport slots so long line grabbers do not repeatedly scan target
+         * inventories that cannot accept anything until the existing limiter expires.
+         */
+        if (!root.allowAccessInput(accessor)) {
+            return;
+        }
+
         final int[] slots =
             BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
 
@@ -407,12 +416,27 @@ public class LineOperationUtil {
         @NotNull List<ItemStack> templates,
         @NotNull TransportMode transportMode,
         int limitQuantity) {
+        /*
+         * Once NetworkRoot's existing output-miss limiter is active, every template request is a
+         * guaranteed no-op. Avoid item-aware destination-slot discovery and repeated root lookups
+         * until that same historical limiter naturally allows the accessor again.
+         */
+        if (!root.allowAccessOutput(accessor)) {
+            return;
+        }
+
         for (int i = 0; i < templates.size(); i++) {
             ItemStack template = templates.get(i);
             if (template == null || template.getType() == Material.AIR) {
                 continue;
             }
+
             pushItem(accessor, root, blockMenu, template, i, transportMode, limitQuantity);
+
+            // A failed request above may have crossed the existing miss threshold.
+            if (!root.allowAccessOutput(accessor)) {
+                break;
+            }
         }
     }
 
@@ -435,6 +459,10 @@ public class LineOperationUtil {
         int itemIndex,
         @NotNull TransportMode transportMode,
         int limitQuantity) {
+        if (!root.allowAccessOutput(accessor)) {
+            return;
+        }
+
         final ItemRequest itemRequest = new ItemRequest(template, template.getMaxStackSize());
 
         final int[] slots =

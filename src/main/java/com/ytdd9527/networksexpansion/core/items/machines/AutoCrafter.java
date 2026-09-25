@@ -42,6 +42,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @SuppressWarnings("DuplicatedCode")
 public class AutoCrafter extends NetworkObject implements SoftCellBannable, CraftTyped {
@@ -49,8 +50,12 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
     public static final int OUTPUT_SLOT = 16;
     public static final Map<Location, BlueprintInstance> INSTANCE_MAP = new ConcurrentHashMap<>();
     private static final Map<Location, List<IngredientRequest>> INGREDIENT_PLAN_MAP = new ConcurrentHashMap<>();
-    private static final Map<Location, Integer> IDLE_MISS_MAP = new ConcurrentHashMap<>();
-    private static final Map<Location, Integer> IDLE_SKIP_MAP = new ConcurrentHashMap<>();
+    /*
+     * 1,000+ Auto Crafters can be loaded on large servers. Keep idle retry counters in one
+     * long-lived state object per crafter instead of cloning Location keys and replacing boxed
+     * Integers on every skipped ticker pass.
+     */
+    private static final Map<Location, IdleState> IDLE_STATE_MAP = new ConcurrentHashMap<>();
     private static final int[] BACKGROUND_SLOTS = new int[]{3, 4, 5, 12, 13, 14, 21, 22, 23};
     private static final int[] BLUEPRINT_BACKGROUND = new int[]{0, 1, 2, 9, 11, 18, 19, 20};
     private static final int[] OUTPUT_BACKGROUND = new int[]{6, 7, 8, 15, 17, 24, 25, 26};
@@ -102,53 +107,68 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
     }
 
     private static boolean shouldSkipIdleTick(@NotNull Location location) {
-        final Integer remaining = IDLE_SKIP_MAP.get(location);
-        if (remaining == null || remaining <= 0) {
+        final IdleState state = IDLE_STATE_MAP.get(location);
+        if (state == null) {
             return false;
         }
-        if (remaining <= 1) {
-            IDLE_SKIP_MAP.remove(location);
-        } else {
-            IDLE_SKIP_MAP.put(location.clone(), remaining - 1);
+
+        while (true) {
+            final int remaining = state.skipTicks.get();
+            if (remaining <= 0) {
+                return false;
+            }
+            if (state.skipTicks.compareAndSet(remaining, remaining - 1)) {
+                return true;
+            }
         }
-        return true;
     }
 
     private static void recordCraftResult(@NotNull Location location, boolean crafted) {
         if (crafted) {
-            IDLE_MISS_MAP.remove(location);
-            IDLE_SKIP_MAP.remove(location);
+            IDLE_STATE_MAP.remove(location);
             return;
         }
+
+        final IdleState state = getOrCreateIdleState(location);
 
         // A known idle reason may already have selected a more appropriate retry interval.
-        if (IDLE_SKIP_MAP.containsKey(location)) {
-            IDLE_MISS_MAP.remove(location);
+        if (state.skipTicks.get() > 0) {
+            state.misses.set(0);
             return;
         }
 
-        final int misses = IDLE_MISS_MAP.merge(location.clone(), 1, Integer::sum);
+        final int misses = state.misses.incrementAndGet();
         if (misses < IDLE_BACKOFF_THRESHOLD) {
             return;
         }
 
         final int exponent = Math.min(2, misses - IDLE_BACKOFF_THRESHOLD);
         final int skipTicks = Math.min(IDLE_BACKOFF_MAX_TICKS, 1 << exponent);
-        IDLE_SKIP_MAP.put(location.clone(), skipTicks);
+        state.skipTicks.set(skipTicks);
     }
 
     private static void clearRuntimeCache(@NotNull Location location) {
         INSTANCE_MAP.remove(location);
         INGREDIENT_PLAN_MAP.remove(location);
-        IDLE_MISS_MAP.remove(location);
-        IDLE_SKIP_MAP.remove(location);
+        IDLE_STATE_MAP.remove(location);
     }
 
     private static void deferIdleAttempt(@NotNull Location location, int slimefunTicks) {
-        IDLE_MISS_MAP.remove(location);
-        if (slimefunTicks > 0) {
-            IDLE_SKIP_MAP.put(location.clone(), slimefunTicks);
+        final IdleState state = getOrCreateIdleState(location);
+        state.misses.set(0);
+        state.skipTicks.set(Math.max(0, slimefunTicks));
+    }
+
+    private static @NotNull IdleState getOrCreateIdleState(@NotNull Location location) {
+        IdleState state = IDLE_STATE_MAP.get(location);
+        if (state != null) {
+            return state;
         }
+
+        final Location key = location.clone();
+        final IdleState created = new IdleState();
+        final IdleState raced = IDLE_STATE_MAP.putIfAbsent(key, created);
+        return raced == null ? created : raced;
     }
 
     protected boolean craftPreFlight(@NotNull BlockMenu blockMenu) {
@@ -277,8 +297,7 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
          * the network multiple times for an identical item on every Auto Crafter tick.
          */
         final Location location = blockMenu.getLocation();
-        final List<IngredientRequest> ingredientPlan = INGREDIENT_PLAN_MAP.computeIfAbsent(
-            location.clone(), ignored -> buildIngredientPlan(instance));
+        final List<IngredientRequest> ingredientPlan = getOrCreateIngredientPlan(location, instance);
 
         /*
          * Validate the complete scaled recipe before withdrawing anything. Previously the crafter
@@ -287,7 +306,6 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
          * world drop. NetworkRoot#contains(ItemRequest) is non-mutating, so a normal missing ingredient
          * now exits without changing network storage at all.
          */
-        final int[] requestedAmounts = new int[ingredientPlan.size()];
         for (int i = 0; i < ingredientPlan.size(); i++) {
             final IngredientRequest ingredient = ingredientPlan.get(i);
             final long scaledAmount = (long) ingredient.amount() * blueprintAmount;
@@ -298,7 +316,6 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
             }
 
             final int requestedAmount = (int) scaledAmount;
-            requestedAmounts[i] = requestedAmount;
             if (!root.contains(new ItemRequest(ingredient.template(), requestedAmount))) {
                 sendFeedback(location, FeedbackType.NOT_ENOUGH_ITEMS_IN_NETWORK);
                 deferIdleAttempt(location, IDLE_TRANSIENT_TICKS);
@@ -309,7 +326,8 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
         final ItemStack[] fetcheds = new ItemStack[ingredientPlan.size()];
         for (int i = 0; i < ingredientPlan.size(); i++) {
             final IngredientRequest ingredient = ingredientPlan.get(i);
-            final int requestedAmount = requestedAmounts[i];
+            // The scaled amount was range-checked during the non-mutating preflight above.
+            final int requestedAmount = (int) ((long) ingredient.amount() * blueprintAmount);
             final ItemStack fetched = root.getItemStack0(
                 location, new ItemRequest(ingredient.template(), requestedAmount));
             fetcheds[i] = fetched;
@@ -362,6 +380,18 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
         }
         sendFeedback(location, FeedbackType.WORKING);
         return true;
+    }
+
+    private static @NotNull List<IngredientRequest> getOrCreateIngredientPlan(
+        @NotNull Location location, @NotNull BlueprintInstance instance) {
+        List<IngredientRequest> plan = INGREDIENT_PLAN_MAP.get(location);
+        if (plan != null) {
+            return plan;
+        }
+
+        final List<IngredientRequest> built = buildIngredientPlan(instance);
+        final List<IngredientRequest> raced = INGREDIENT_PLAN_MAP.putIfAbsent(location.clone(), built);
+        return raced == null ? built : raced;
     }
 
     private static @NotNull List<IngredientRequest> buildIngredientPlan(@NotNull BlueprintInstance instance) {
@@ -465,6 +495,11 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
 
     public boolean canBlueprintStack() {
         return false;
+    }
+
+    private static final class IdleState {
+        private final AtomicInteger misses = new AtomicInteger();
+        private final AtomicInteger skipTicks = new AtomicInteger();
     }
 
     private record IngredientRequest(@NotNull ItemStack template, int amount) {
