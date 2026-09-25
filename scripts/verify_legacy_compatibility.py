@@ -172,6 +172,8 @@ for alias in ["slimefunCoreJar", "SLIMEFUN_CORE_JAR", "slimefunLegacyJar", "SLIM
 require("com.github.SlimefunGuguProject:Slimefun4:" not in build, "a remote Gugu core dependency is still present")
 require("io.github.thebusybiscuit:Slimefun4:" not in build, "a remote official core dependency is still present")
 require("GuizhanLibPlugin" not in build, "GuizhanLibPlugin build dependency is still present")
+require("com.github.balugaq:JustEnoughGuide:" not in build,
+        "JustEnoughGuide must remain runtime-detected and must not be a brittle JitPack compile dependency")
 require("services.gradle.org/distributions/gradle-9.4.1-bin.zip" in wrapper, "official Gradle wrapper URL is missing")
 require("extends RecipeChoice.ExactChoice" not in simple_recipe_choice,
         "SimpleRecipeChoice still extends final RecipeChoice.ExactChoice")
