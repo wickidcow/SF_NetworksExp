@@ -385,6 +385,10 @@ require("if (!root.allowAccessInput(accessor))" in line_operation_util
         and "BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW)" in line_operation_util
         and "BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.INSERT, template)" in line_operation_util,
         "line-transfer limiter fast paths are missing")
+require("historyLookupKey(accessor)" in network_root
+        and "location.getX() == location.getBlockX()" in network_root
+        and "return normalizeHistoryLocation(location)" in network_root,
+        "canonical transport limiter lookups must avoid unnecessary Location clones")
 require("(ItemUseHandler) this::onControllerItemUse" in network_controller
         and "wouldMergeControllers(target)" in network_controller
         and "event.cancel()" in network_controller,
