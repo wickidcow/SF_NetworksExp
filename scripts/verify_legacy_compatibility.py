@@ -310,6 +310,11 @@ require("Map<Location, IdleState> IDLE_STATE_MAP = new ConcurrentHashMap<>()" in
         and "IDLE_MISS_MAP" not in auto_crafter
         and "IDLE_SKIP_MAP" not in auto_crafter,
         "Auto Crafter idle backoff must avoid per-tick Location/Integer churn")
+require("getOrCreateIngredientPlan(location, instance)" in auto_crafter
+        and "List<IngredientRequest> plan = INGREDIENT_PLAN_MAP.get(location)" in auto_crafter
+        and "INGREDIENT_PLAN_MAP.putIfAbsent(location.clone(), built)" in auto_crafter
+        and "INGREDIENT_PLAN_MAP.computeIfAbsent(\n            location.clone()" not in auto_crafter,
+        "Auto Crafter ingredient cache must avoid cloning Location keys on cache hits")
 require("Classic storage routing" in readme
         and "Cells → crafter outputs → Greedy storage" in readme
         and "Empty Quantum Storage never auto-assigns" in readme,
