@@ -299,6 +299,9 @@ require("collectMonitorStorageTargets" in network_root
         "Network Monitor automatic adjacent-storage discovery or directional input/output monitor routing is missing")
 require("NetworkTransferUtils.moveNetworkItemIntoMenu" in network_pusher,
         "Network Pusher no longer actively withdraws from the network into an adjacent Slimefun menu")
+require("targetBlock.getZ(),\n            template);" in network_pusher
+        and "targetBlock.getZ(),\n            template.clone());" not in network_pusher,
+        "Network Pusher backoff keys must reuse the already-cloned template snapshot")
 require("Map<Location, IdleState> IDLE_STATE_MAP = new ConcurrentHashMap<>()" in auto_crafter
         and "AtomicInteger misses" in auto_crafter
         and "AtomicInteger skipTicks" in auto_crafter
