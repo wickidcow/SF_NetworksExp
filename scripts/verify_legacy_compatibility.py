@@ -299,6 +299,14 @@ require("collectMonitorStorageTargets" in network_root
         "Network Monitor automatic adjacent-storage discovery or directional input/output monitor routing is missing")
 require("NetworkTransferUtils.moveNetworkItemIntoMenu" in network_pusher,
         "Network Pusher no longer actively withdraws from the network into an adjacent Slimefun menu")
+require("Map<Location, IdleState> IDLE_STATE_MAP = new ConcurrentHashMap<>()" in auto_crafter
+        and "AtomicInteger misses" in auto_crafter
+        and "AtomicInteger skipTicks" in auto_crafter
+        and "compareAndSet(remaining, remaining - 1)" in auto_crafter
+        and "putIfAbsent(key, created)" in auto_crafter
+        and "IDLE_MISS_MAP" not in auto_crafter
+        and "IDLE_SKIP_MAP" not in auto_crafter,
+        "Auto Crafter idle backoff must avoid per-tick Location/Integer churn")
 require("Classic storage routing" in readme
         and "Cells → crafter outputs → Greedy storage" in readme
         and "Empty Quantum Storage never auto-assigns" in readme,
