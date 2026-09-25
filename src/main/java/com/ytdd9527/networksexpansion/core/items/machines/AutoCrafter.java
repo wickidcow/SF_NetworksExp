@@ -306,7 +306,6 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
          * world drop. NetworkRoot#contains(ItemRequest) is non-mutating, so a normal missing ingredient
          * now exits without changing network storage at all.
          */
-        final int[] requestedAmounts = new int[ingredientPlan.size()];
         for (int i = 0; i < ingredientPlan.size(); i++) {
             final IngredientRequest ingredient = ingredientPlan.get(i);
             final long scaledAmount = (long) ingredient.amount() * blueprintAmount;
@@ -317,7 +316,6 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
             }
 
             final int requestedAmount = (int) scaledAmount;
-            requestedAmounts[i] = requestedAmount;
             if (!root.contains(new ItemRequest(ingredient.template(), requestedAmount))) {
                 sendFeedback(location, FeedbackType.NOT_ENOUGH_ITEMS_IN_NETWORK);
                 deferIdleAttempt(location, IDLE_TRANSIENT_TICKS);
@@ -328,7 +326,8 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
         final ItemStack[] fetcheds = new ItemStack[ingredientPlan.size()];
         for (int i = 0; i < ingredientPlan.size(); i++) {
             final IngredientRequest ingredient = ingredientPlan.get(i);
-            final int requestedAmount = requestedAmounts[i];
+            // The scaled amount was range-checked during the non-mutating preflight above.
+            final int requestedAmount = (int) ((long) ingredient.amount() * blueprintAmount);
             final ItemStack fetched = root.getItemStack0(
                 location, new ItemRequest(ingredient.template(), requestedAmount));
             fetcheds[i] = fetched;
