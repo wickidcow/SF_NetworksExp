@@ -2291,7 +2291,7 @@ public class NetworkRoot extends NetworkNode {
 
     /** Clears per-accessor throttling and storage-location history when a Networks block unloads or breaks. */
     public static void clearAccessHistory(@NotNull Location accessor) {
-        final Location key = normalizeHistoryLocation(accessor);
+        final Location key = historyLookupKey(accessor);
         observingAccessHistory.remove(key);
         persistentAccessHistory.remove(key);
 
@@ -2375,12 +2375,12 @@ public class NetworkRoot extends NetworkNode {
 
     public void reduceTransportInputMiss(@NotNull Location location) {
         transportMissInputHistory.computeIfPresent(
-            normalizeHistoryLocation(location), (ignored, misses) -> misses <= 1 ? null : misses - 1);
+            historyLookupKey(location), (ignored, misses) -> misses <= 1 ? null : misses - 1);
     }
 
     public void reduceTransportOutputMiss(@NotNull Location location) {
         transportMissOutputHistory.computeIfPresent(
-            normalizeHistoryLocation(location), (ignored, misses) -> misses <= 1 ? null : misses - 1);
+            historyLookupKey(location), (ignored, misses) -> misses <= 1 ? null : misses - 1);
     }
 
     public void controlAccessInput(@NotNull Location accessor) {
@@ -2392,12 +2392,12 @@ public class NetworkRoot extends NetworkNode {
     }
 
     public void uncontrolAccessInput(@NotNull Location accessor) {
-        controlledAccessInputHistory.remove(normalizeHistoryLocation(accessor));
+        controlledAccessInputHistory.remove(historyLookupKey(accessor));
         reduceTransportInputMiss(accessor);
     }
 
     public void uncontrolAccessOutput(@NotNull Location accessor) {
-        controlledAccessOutputHistory.remove(normalizeHistoryLocation(accessor));
+        controlledAccessOutputHistory.remove(historyLookupKey(accessor));
         reduceTransportOutputMiss(accessor);
     }
 
