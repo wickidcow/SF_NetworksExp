@@ -64,6 +64,7 @@ public class NetworkController extends NetworkObject {
     private static final LongAdder FULL_TOPOLOGY_REBUILDS = new LongAdder();
     private static final LongAdder CACHED_TOPOLOGY_COPIES = new LongAdder();
     private static final LongAdder CACHED_TOPOLOGY_FALLBACKS = new LongAdder();
+    private static final LongAdder STABLE_ROOT_REUSES = new LongAdder();
 
     private static volatile boolean circuitBreakerEnabled = true;
     private static volatile FailureCircuitBreaker<Location> controllerCircuitBreaker = new FailureCircuitBreaker<>(
@@ -124,26 +125,16 @@ public class NetworkController extends NetworkObject {
                         || markedDirty
                         || cachedRoot.getMaxNodes() != currentMaxNodes;
 
-                    candidate = new NetworkRoot(
-                        location,
-                        NodeType.CONTROLLER,
-                        currentMaxNodes,
-                        recordFlow.getOrDefault(location, false),
-                        records.get(location));
-
-                    if (fullDiscovery) {
-                        candidate.addAllChildren();
-                        FULL_TOPOLOGY_REBUILDS.increment();
-                    } else if (copyTopology(cachedRoot, candidate)) {
-                        CACHED_TOPOLOGY_COPIES.increment();
-                    } else {
+                    if (!fullDiscovery) {
                         /*
-                         * A cached member disappeared or changed type. The cheap one-pass copy restores any
-                         * definitions it touched before returning false, so a real neighbour discovery can safely
-                         * take over in the same tick without discarding the previously installed runtime root.
+                         * No topology-affecting state changed, so keep the existing object graph instead of
+                         * allocating and copying every node on every controller tick. Dynamic state that a fresh
+                         * root used to recalculate is refreshed explicitly.
                          */
-                        CACHED_TOPOLOGY_FALLBACKS.increment();
-                        fullDiscovery = true;
+                        candidate = cachedRoot;
+                        refreshStableRoot(candidate, location);
+                        STABLE_ROOT_REUSES.increment();
+                    } else {
                         candidate = new NetworkRoot(
                             location,
                             NodeType.CONTROLLER,
@@ -152,17 +143,14 @@ public class NetworkController extends NetworkObject {
                             records.get(location));
                         candidate.addAllChildren();
                         FULL_TOPOLOGY_REBUILDS.increment();
-                    }
+                        candidate.setDisplayParticles(CRAYONS.contains(location));
 
-                    if (CRAYONS.contains(location)) {
-                        candidate.setDisplayParticles(true);
-                    }
-
-                    NetworkRoot previous = NETWORKS.put(location, candidate);
-                    if (fullDiscovery && previous != null && previous != candidate) {
-                        // A real topology change may strand definitions that were part of the old tree but are no
-                        // longer reachable. Clean those assignments only on dirty/full rebuilds, not every tick.
-                        NetworkStorage.clearRuntimeAssignments(previous);
+                        NetworkRoot previous = NETWORKS.put(location, candidate);
+                        if (previous != null && previous != candidate) {
+                            // A real topology change may strand definitions that were part of the old tree but are no
+                            // longer reachable. Clean those assignments only on dirty/full rebuilds, not every tick.
+                            NetworkStorage.clearRuntimeAssignments(previous);
+                        }
                     }
 
                     NodeDefinition definition = NetworkStorage.getNode(location);
@@ -273,6 +261,7 @@ public class NetworkController extends NetworkObject {
         FULL_TOPOLOGY_REBUILDS.reset();
         CACHED_TOPOLOGY_COPIES.reset();
         CACHED_TOPOLOGY_FALLBACKS.reset();
+        STABLE_ROOT_REUSES.reset();
         circuitBreakerEnabled = true;
     }
 
@@ -308,6 +297,10 @@ public class NetworkController extends NetworkObject {
         return CACHED_TOPOLOGY_FALLBACKS.sum();
     }
 
+    public static long getStableRootReuseCount() {
+        return STABLE_ROOT_REUSES.sum();
+    }
+
     public static int getDirtyControllerCount() {
         return DIRTY_CONTROLLERS.size();
     }
@@ -324,6 +317,8 @@ public class NetworkController extends NetworkObject {
     public static void enableRecord(Location root) {
         recordFlow.put(root, true);
         records.putIfAbsent(root, new ItemFlowRecord());
+        // recordFlow/itemFlowRecord are immutable properties of a root; rebuild once when toggled.
+        markTopologyDirty(root);
     }
 
     public static void disableRecord(Location root) {
@@ -332,6 +327,7 @@ public class NetworkController extends NetworkObject {
         if (record != null) {
             record.forceGC();
         }
+        markTopologyDirty(root);
     }
 
     public static @NotNull Map<Location, NetworkRoot> getNetworks() {
@@ -423,10 +419,27 @@ public class NetworkController extends NetworkObject {
     }
 
     /**
-     * Rebuilds the per-tick NetworkRoot object from the last known tree without first allocating a full topology
-     * snapshot. Each cached member is validated directly against the runtime registry as it is copied. If one
-     * disappeared or changed type, any definitions already redirected to the candidate are restored to the old
-     * nodes and the caller falls back to normal neighbour discovery in the same tick.
+     * Refreshes dynamic state that used to come from constructing a fresh root every controller tick.
+     * The topology itself is unchanged and therefore remains shared.
+     */
+    private static void refreshStableRoot(@NotNull NetworkRoot root, @NotNull Location controllerLocation) {
+        long livePower = 0L;
+        for (Location powerNodeLocation : root.getPowerNodes()) {
+            final SlimefunItem item = StorageCacheUtils.getSfItem(powerNodeLocation);
+            if (item instanceof NetworkPowerNode powerNode) {
+                livePower += Math.max(0, powerNode.getCharge(powerNodeLocation));
+            }
+        }
+
+        root.setRootPower(livePower);
+        root.setDisplayParticles(CRAYONS.contains(controllerLocation));
+        root.invalidateRootItems();
+    }
+
+    /**
+     * Rebuilds a replacement NetworkRoot object from the last known tree without first allocating a full topology
+     * snapshot. Retained as a compatibility/diagnostic helper for future state transitions that need a fresh root
+     * object without a complete neighbour discovery.
      */
     private static boolean copyTopology(@NotNull NetworkRoot previous, @NotNull NetworkRoot candidate) {
         Deque<NetworkNode> oldNodes = new ArrayDeque<>();
