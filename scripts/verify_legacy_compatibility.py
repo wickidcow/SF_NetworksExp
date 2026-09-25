@@ -82,6 +82,7 @@ stack_utils = read("src/main/java/io/github/sefiraat/networks/utils/StackUtils.j
 storage_unit = read("src/main/java/com/balugaq/netex/api/data/StorageUnitData.java")
 inventory_util = read("src/main/java/com/balugaq/netex/utils/InventoryUtil.java")
 block_menu_util = read("src/main/java/com/balugaq/netex/utils/BlockMenuUtil.java")
+line_operation_util = read("src/main/java/com/balugaq/netex/utils/LineOperationUtil.java")
 vanilla_pusher = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkVanillaPusher.java")
 vanilla_grabber = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkVanillaGrabber.java")
 network_remote = read("src/main/java/io/github/sefiraat/networks/slimefun/tools/NetworkRemote.java")
@@ -361,6 +362,21 @@ require("NetworkRoot previous = NETWORKS.put(location, candidate);" in network_c
         and "FailureCircuitBreaker.FailureSnapshot recoverySnapshot" in network_controller
         and "FailureCircuitBreaker.FailureSnapshot previous =" not in network_controller,
         "controller rebuild success handling reuses the previous local variable name")
+require("candidate = cachedRoot;" in network_controller
+        and "refreshStableRoot(candidate, location)" in network_controller
+        and "STABLE_ROOT_REUSES.increment()" in network_controller
+        and "root.invalidateRootItems()" in network_controller
+        and "root.setRootPower(livePower)" in network_controller,
+        "stable Network Controller ticks must reuse topology while refreshing dynamic root state")
+require("public void invalidateRootItems()" in network_root
+        and "invalidateRootItems();" in network_root
+        and "this.rootPower = Math.max(0L, this.rootPower - toRemove)" in network_root,
+        "NetworkRoot stable-reuse invalidation or exact power accounting is missing")
+require("if (!root.allowAccessInput(accessor))" in line_operation_util
+        and "if (!root.allowAccessOutput(accessor))" in line_operation_util
+        and "BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW)" in line_operation_util
+        and "BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.INSERT, template)" in line_operation_util,
+        "line-transfer limiter fast paths are missing")
 require("(ItemUseHandler) this::onControllerItemUse" in network_controller
         and "wouldMergeControllers(target)" in network_controller
         and "event.cancel()" in network_controller,
