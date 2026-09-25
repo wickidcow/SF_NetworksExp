@@ -16,7 +16,6 @@ import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -109,8 +108,8 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
             return;
         }
 
-        final Map<ItemStack, Integer> pushRequests = collectPushRequests(blockMenu);
-        if (pushRequests.isEmpty()) {
+        final List<PushRequest> requests = collectPushRequests(blockMenu);
+        if (requests.isEmpty()) {
             return;
         }
 
@@ -121,7 +120,6 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
          * Rotate a bounded window through the unique requests instead. Failed requests additionally use
          * a short adaptive backoff so a full/busy destination is not queried again every single tick.
          */
-        final List<Map.Entry<ItemStack, Integer>> requests = new ArrayList<>(pushRequests.entrySet());
         final int requestCount = requests.size();
         final int attemptBudget = Math.min(MAX_UNIQUE_REQUESTS_PER_TICK, requestCount);
         final long rotationSeed = sourceBlock.getWorld().getGameTime() * MAX_UNIQUE_REQUESTS_PER_TICK
@@ -135,8 +133,8 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
         int attempted = 0;
         boolean movedAny = false;
         for (int offset = 0; offset < requestCount && attempted < attemptBudget; offset++) {
-            final Map.Entry<ItemStack, Integer> request = requests.get((startIndex + offset) % requestCount);
-            final ItemStack template = request.getKey();
+            final PushRequest request = requests.get((startIndex + offset) % requestCount);
+            final ItemStack template = request.template;
             final PushRequestKey requestKey = createRequestKey(sourceBlock, targetBlock, template);
 
             // Cooling requests do not consume the per-tick budget, leaving room for other ingredients.
@@ -160,7 +158,7 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
                 blockMenu.getLocation(),
                 targetMenu,
                 template,
-                request.getValue(),
+                request.amount,
                 slots);
 
             if (moved > 0) {
@@ -189,10 +187,16 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
      * Builds one request per unique template item. Repeated template slots keep their original aggregate
      * transfer allowance while avoiding duplicate destination-routing and network-withdrawal calls.
      */
-    private @NotNull Map<ItemStack, Integer> collectPushRequests(@NotNull BlockMenu blockMenu) {
-        final Map<ItemStack, Integer> requests = new LinkedHashMap<>();
+    private @NotNull List<PushRequest> collectPushRequests(@NotNull BlockMenu blockMenu) {
+        final int[] itemSlots = getItemSlots();
+        final List<PushRequest> requests = new ArrayList<>(itemSlots.length);
 
-        for (int itemSlot : getItemSlots()) {
+        /*
+         * Template counts are tiny (4/9/12), so a compact linear list is cheaper than building
+         * a LinkedHashMap and then copying its entry set into another ArrayList every ticker pass.
+         * We still clone each unique template once so backoff keys own stable one-amount snapshots.
+         */
+        for (int itemSlot : itemSlots) {
             final ItemStack testItem = blockMenu.getItemInSlot(itemSlot);
             if (testItem == null || testItem.getType() == Material.AIR) {
                 continue;
@@ -203,16 +207,16 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
             final int perSlotLimit = Math.max(1, template.getMaxStackSize());
 
             boolean merged = false;
-            for (Map.Entry<ItemStack, Integer> existing : requests.entrySet()) {
-                if (StackUtils.itemsMatch(existing.getKey(), template)) {
-                    existing.setValue(saturatingAdd(existing.getValue(), perSlotLimit));
+            for (PushRequest existing : requests) {
+                if (StackUtils.itemsMatch(existing.template, template)) {
+                    existing.amount = saturatingAdd(existing.amount, perSlotLimit);
                     merged = true;
                     break;
                 }
             }
 
             if (!merged) {
-                requests.put(template, perSlotLimit);
+                requests.add(new PushRequest(template, perSlotLimit));
             }
         }
 
@@ -268,6 +272,16 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
     private static int saturatingAdd(int left, int right) {
         final long sum = (long) left + right;
         return sum >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) sum;
+    }
+
+    private static final class PushRequest {
+        private final ItemStack template;
+        private int amount;
+
+        private PushRequest(@NotNull ItemStack template, int amount) {
+            this.template = template;
+            this.amount = amount;
+        }
     }
 
     private record PushRequestKey(

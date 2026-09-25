@@ -119,6 +119,7 @@ storage_adapter = read("src/main/java/io/github/sefiraat/networks/integrations/s
 storage_adapter_registry = read("src/main/java/io/github/sefiraat/networks/integrations/storage/StorageAdapterRegistry.java")
 control_x = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkControlX.java")
 quantum_storage = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkQuantumStorage.java")
+abstract_transfer = read("src/main/java/com/ytdd9527/networksexpansion/core/items/machines/AbstractTransfer.java")
 auto_crafter = read("src/main/java/com/ytdd9527/networksexpansion/core/items/machines/AutoCrafter.java")
 auto_crafter_batch_planner = read("src/main/java/com/ytdd9527/networksexpansion/core/items/machines/AutoCrafterBatchPlanner.java")
 smart_crafting = read("src/main/java/com/ytdd9527/networksexpansion/implementation/machines/networks/advanced/SmartNetworkCraftingGridNewStyle.java")
@@ -302,6 +303,21 @@ require("NetworkTransferUtils.moveNetworkItemIntoMenu" in network_pusher,
 require("targetBlock.getZ(),\n            template);" in network_pusher
         and "targetBlock.getZ(),\n            template.clone());" not in network_pusher,
         "Network Pusher backoff keys must reuse the already-cloned template snapshot")
+require("private @NotNull List<PushRequest> collectPushRequests" in network_pusher
+        and "new ArrayList<>(itemSlots.length)" in network_pusher
+        and "for (PushRequest existing : requests)" in network_pusher
+        and "requests.add(new PushRequest(template, perSlotLimit))" in network_pusher
+        and "new LinkedHashMap" not in network_pusher
+        and "new ArrayList<>(pushRequests.entrySet())" not in network_pusher,
+        "Network Pusher request planning must avoid per-tick map/entry-copy churn")
+require("final ItemStack[] templates = new ItemStack[slots.length]" in abstract_transfer
+        and "final int[] activeIndexes = new int[slots.length]" in abstract_transfer
+        and "return Arrays.asList(templates)" in abstract_transfer
+        and "putCursorValue(PUSH_TEMPLATE_CURSOR_MAP, location" in abstract_transfer
+        and "putCursorValue(cursorMap, location, nextOffset)" in abstract_transfer
+        and "new ArrayList<>(Collections.nCopies" not in abstract_transfer
+        and "List<Integer> activeIndexes" not in abstract_transfer,
+        "Expansion line-transfer template/cursor hot path must stay allocation-light")
 require("Map<Location, IdleState> IDLE_STATE_MAP = new ConcurrentHashMap<>()" in auto_crafter
         and "AtomicInteger misses" in auto_crafter
         and "AtomicInteger skipTicks" in auto_crafter

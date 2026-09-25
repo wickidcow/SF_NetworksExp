@@ -34,7 +34,7 @@ import org.jetbrains.annotations.Nullable;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -336,18 +336,23 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
 
     private @Nullable List<ItemStack> collectTemplates(@NotNull BlockMenu blockMenu) {
         final int[] slots = getItemSlots();
-        final List<ItemStack> templates = new ArrayList<>(slots.length);
-        final List<Integer> activeIndexes = new ArrayList<>(slots.length);
+        final ItemStack[] templates = new ItemStack[slots.length];
+        final int[] activeIndexes = new int[slots.length];
+        int activeCount = 0;
 
+        /*
+         * This runs in every transfer attempt. Keep the configured slot index intact for P2P mode,
+         * but avoid two ArrayLists plus boxed Integer entries just to discover active templates.
+         */
         for (int index = 0; index < slots.length; index++) {
             final ItemStack template = blockMenu.getItemInSlot(slots[index]);
-            templates.add(template);
+            templates[index] = template;
             if (template != null && template.getType() != Material.AIR) {
-                activeIndexes.add(index);
+                activeIndexes[activeCount++] = index;
             }
         }
 
-        if (activeIndexes.isEmpty()) {
+        if (activeCount == 0) {
             return null;
         }
 
@@ -357,23 +362,22 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
          * every target in a 32/64-block line multiplies expensive item-aware slot checks. Rotate four slot
          * positions per transfer tick instead. Null placeholders retain the original indexes for P2P mode.
          */
-        if (!(this instanceof PushTickOnly) || activeIndexes.size() <= MAX_PUSH_TEMPLATES_PER_TICK) {
-            return templates;
+        if (!(this instanceof PushTickOnly) || activeCount <= MAX_PUSH_TEMPLATES_PER_TICK) {
+            return Arrays.asList(templates);
         }
 
         final Location location = blockMenu.getLocation();
-        final int activeCount = activeIndexes.size();
         final int start = Math.floorMod(PUSH_TEMPLATE_CURSOR_MAP.getOrDefault(location, 0), activeCount);
         final int budget = Math.min(MAX_PUSH_TEMPLATES_PER_TICK, activeCount);
-        final List<ItemStack> scheduled = new ArrayList<>(Collections.nCopies(slots.length, null));
+        final ItemStack[] scheduled = new ItemStack[slots.length];
 
         for (int offset = 0; offset < budget; offset++) {
-            final int templateIndex = activeIndexes.get((start + offset) % activeCount);
-            scheduled.set(templateIndex, templates.get(templateIndex));
+            final int templateIndex = activeIndexes[(start + offset) % activeCount];
+            scheduled[templateIndex] = templates[templateIndex];
         }
 
-        PUSH_TEMPLATE_CURSOR_MAP.put(location.clone(), (start + budget) % activeCount);
-        return scheduled;
+        putCursorValue(PUSH_TEMPLATE_CURSOR_MAP, location, (start + budget) % activeCount);
+        return Arrays.asList(scheduled);
     }
 
     private void finishPushAttempt(@NotNull BlockMenu blockMenu, @NotNull NetworkRoot root) {
@@ -414,7 +418,20 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
         if (nextOffset == 0) {
             cursorMap.remove(location);
         } else {
-            cursorMap.put(location.clone(), nextOffset);
+            putCursorValue(cursorMap, location, nextOffset);
+        }
+    }
+
+    /**
+     * Cursor maps own their Location keys, but an existing key does not need to be cloned again
+     * every transfer tick. Replace the value in-place and clone only the first time a cursor is stored.
+     */
+    private static void putCursorValue(
+        @NotNull Map<Location, Integer> cursorMap,
+        @NotNull Location location,
+        int value) {
+        if (cursorMap.replace(location, value) == null) {
+            cursorMap.put(location.clone(), value);
         }
     }
 
