@@ -315,6 +315,9 @@ require("getOrCreateIngredientPlan(location, instance)" in auto_crafter
         and "INGREDIENT_PLAN_MAP.putIfAbsent(location.clone(), built)" in auto_crafter
         and "INGREDIENT_PLAN_MAP.computeIfAbsent(\n            location.clone()" not in auto_crafter,
         "Auto Crafter ingredient cache must avoid cloning Location keys on cache hits")
+require("final int[] requestedAmounts" not in auto_crafter
+        and "(int) ((long) ingredient.amount() * blueprintAmount)" in auto_crafter,
+        "Auto Crafter must not allocate a requested-amount scratch array per craft")
 require("Classic storage routing" in readme
         and "Cells → crafter outputs → Greedy storage" in readme
         and "Empty Quantum Storage never auto-assigns" in readme,
