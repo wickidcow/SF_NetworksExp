@@ -2326,7 +2326,7 @@ public class NetworkRoot extends NetworkNode {
     }
 
     public boolean allowAccessInput(@NotNull Location accessor) {
-        final Location key = normalizeHistoryLocation(accessor);
+        final Location key = historyLookupKey(accessor);
         final Long lastTime = controlledAccessInputHistory.get(key);
         if (lastTime == null) {
             return true;
@@ -2339,7 +2339,7 @@ public class NetworkRoot extends NetworkNode {
     }
 
     public boolean allowAccessOutput(@NotNull Location accessor) {
-        final Location key = normalizeHistoryLocation(accessor);
+        final Location key = historyLookupKey(accessor);
         final Long lastTime = controlledAccessOutputHistory.get(key);
         if (lastTime == null) {
             return true;
@@ -2399,6 +2399,23 @@ public class NetworkRoot extends NetworkNode {
     public void uncontrolAccessOutput(@NotNull Location accessor) {
         controlledAccessOutputHistory.remove(normalizeHistoryLocation(accessor));
         reduceTransportOutputMiss(accessor);
+    }
+
+    /**
+     * Most hot-path accessors come directly from BlockMenu and are already canonical block locations.
+     * Map lookups do not retain the caller's key, so reuse those locations instead of cloning them on
+     * every limiter check. Mutation/insert paths still use normalizeHistoryLocation() and therefore
+     * always retain an owned key.
+     */
+    private static @NotNull Location historyLookupKey(@NotNull Location location) {
+        if (location.getX() == location.getBlockX()
+            && location.getY() == location.getBlockY()
+            && location.getZ() == location.getBlockZ()
+            && location.getYaw() == 0.0F
+            && location.getPitch() == 0.0F) {
+            return location;
+        }
+        return normalizeHistoryLocation(location);
     }
 
     private static @NotNull Location normalizeHistoryLocation(@NotNull Location location) {
