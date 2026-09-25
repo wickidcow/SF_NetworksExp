@@ -297,8 +297,7 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
          * the network multiple times for an identical item on every Auto Crafter tick.
          */
         final Location location = blockMenu.getLocation();
-        final List<IngredientRequest> ingredientPlan = INGREDIENT_PLAN_MAP.computeIfAbsent(
-            location.clone(), ignored -> buildIngredientPlan(instance));
+        final List<IngredientRequest> ingredientPlan = getOrCreateIngredientPlan(location, instance);
 
         /*
          * Validate the complete scaled recipe before withdrawing anything. Previously the crafter
@@ -382,6 +381,18 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
         }
         sendFeedback(location, FeedbackType.WORKING);
         return true;
+    }
+
+    private static @NotNull List<IngredientRequest> getOrCreateIngredientPlan(
+        @NotNull Location location, @NotNull BlueprintInstance instance) {
+        List<IngredientRequest> plan = INGREDIENT_PLAN_MAP.get(location);
+        if (plan != null) {
+            return plan;
+        }
+
+        final List<IngredientRequest> built = buildIngredientPlan(instance);
+        final List<IngredientRequest> raced = INGREDIENT_PLAN_MAP.putIfAbsent(location.clone(), built);
+        return raced == null ? built : raced;
     }
 
     private static @NotNull List<IngredientRequest> buildIngredientPlan(@NotNull BlueprintInstance instance) {
