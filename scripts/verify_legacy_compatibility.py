@@ -437,6 +437,13 @@ require("historyLookupKey(accessor)" in network_root
         and "location.getX() == location.getBlockX()" in network_root
         and "return normalizeHistoryLocation(location)" in network_root,
         "canonical transport limiter lookups must avoid unnecessary Location clones")
+require(network_root.count("for (Location crafterLocation : crafters)") >= 2
+        and network_root.count("for (Location cellLocation : cells)") >= 2
+        and network_root.count("for (Location greedyLocation : advancedGreedyBlocks)") >= 2
+        and network_root.count("for (Location greedyLocation : greedyBlocks)") >= 2
+        and "BlockMenu blockMenu = StorageCacheUtils.getMenu(crafterLocation)" in network_root
+        and "BlockMenu blockMenu = StorageCacheUtils.getMenu(cellLocation)" in network_root,
+        "NetworkRoot hot contains/withdraw paths must iterate topology locations without temporary menu sets")
 require("(ItemUseHandler) this::onControllerItemUse" in network_controller
         and "wouldMergeControllers(target)" in network_controller
         and "event.cancel()" in network_controller,
