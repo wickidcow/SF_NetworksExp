@@ -293,6 +293,20 @@ require(accessor_withdraw.find("// Cells") < accessor_withdraw.find("// Crafters
         < accessor_withdraw.find("getPersistentAccessHistory(accessor)")
         < accessor_withdraw.find("Deep storage after loose network inventory"),
         "network withdrawal no longer follows classic Cells -> Crafters -> Greedy -> cached deep-storage -> deep-storage priority")
+deposit_start = network_root.find("public void addItemStack0(@NotNull Location accessor")
+deposit_end = network_root.find("public void addTransportInputMiss", deposit_start)
+deposit_path = network_root[deposit_start:deposit_end]
+require(deposit_start >= 0 and deposit_end > deposit_start,
+        "network deposit method is missing")
+require("for (Location greedyLocation : advancedGreedyBlocks)" in deposit_path
+        and "for (Location greedyLocation : greedyBlocks)" in deposit_path
+        and "for (Location cellLocation : cells)" in deposit_path
+        and "StorageCacheUtils.getMenu(greedyLocation)" in deposit_path
+        and "StorageCacheUtils.getMenu(cellLocation)" in deposit_path
+        and "getAdvancedGreedyBlockMenus()" not in deposit_path
+        and "getGreedyBlockMenus()" not in deposit_path
+        and "getCellMenus()" not in deposit_path,
+        "network deposit hot path must traverse topology locations without temporary BlockMenu sets")
 require("collectMonitorStorageTargets" in network_root
         and "NetworkDirectional.VALID_FACES" in network_root
         and "collectMonitorStorageTargets(this.inputOnlyMonitors, true)" in network_root
@@ -444,9 +458,9 @@ require("historyLookupKey(accessor)" in network_root
         and "return normalizeHistoryLocation(location)" in network_root,
         "canonical transport limiter lookups must avoid unnecessary Location clones")
 require(network_root.count("for (Location crafterLocation : crafters)") >= 2
-        and network_root.count("for (Location cellLocation : cells)") >= 2
-        and network_root.count("for (Location greedyLocation : advancedGreedyBlocks)") >= 2
-        and network_root.count("for (Location greedyLocation : greedyBlocks)") >= 2
+        and network_root.count("for (Location cellLocation : cells)") >= 3
+        and network_root.count("for (Location greedyLocation : advancedGreedyBlocks)") >= 3
+        and network_root.count("for (Location greedyLocation : greedyBlocks)") >= 3
         and "BlockMenu blockMenu = StorageCacheUtils.getMenu(crafterLocation)" in network_root
         and "BlockMenu blockMenu = StorageCacheUtils.getMenu(cellLocation)" in network_root,
         "NetworkRoot hot contains/withdraw paths must iterate topology locations without temporary menu sets")
