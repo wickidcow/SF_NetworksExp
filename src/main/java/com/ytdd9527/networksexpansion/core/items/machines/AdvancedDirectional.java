@@ -44,10 +44,10 @@ import org.jetbrains.annotations.Range;
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 @SuppressWarnings("DuplicatedCode")
 public abstract class AdvancedDirectional extends NetworkDirectional {
@@ -64,9 +64,9 @@ public abstract class AdvancedDirectional extends NetworkDirectional {
     private static final int DOWN_SLOT = 33;
     private static final Set<BlockFace> VALID_FACES =
         EnumSet.of(BlockFace.UP, BlockFace.DOWN, BlockFace.NORTH, BlockFace.EAST, BlockFace.SOUTH, BlockFace.WEST);
-    private static final Map<Location, BlockFace> SELECTED_DIRECTION_MAP = new HashMap<>();
-    protected static final Map<Location, Integer> NETWORK_LIMIT_QUANTITY_MAP = new HashMap<>();
-    private static final Map<Location, TransportMode> NETWORK_TRANSPORT_MODE_MAP = new HashMap<>();
+    private static final Map<Location, BlockFace> SELECTED_DIRECTION_MAP = new ConcurrentHashMap<>();
+    protected static final Map<Location, Integer> NETWORK_LIMIT_QUANTITY_MAP = new ConcurrentHashMap<>();
+    private static final Map<Location, TransportMode> NETWORK_TRANSPORT_MODE_MAP = new ConcurrentHashMap<>();
     final NetworkDirectional instance = this;
 
     protected AdvancedDirectional(
@@ -221,11 +221,12 @@ public abstract class AdvancedDirectional extends NetworkDirectional {
 
     @NotNull
     protected BlockFace getCurrentDirection(@NotNull BlockMenu blockMenu) {
-        BlockFace direction = SELECTED_DIRECTION_MAP.get(blockMenu.getLocation().clone());
+        final Location location = blockMenu.getLocation();
+        BlockFace direction = SELECTED_DIRECTION_MAP.get(location);
 
         if (direction == null) {
-            direction = BlockFace.valueOf(StorageCacheUtils.getData(blockMenu.getLocation(), DIRECTION));
-            SELECTED_DIRECTION_MAP.put(blockMenu.getLocation().clone(), direction);
+            direction = BlockFace.valueOf(StorageCacheUtils.getData(location, DIRECTION));
+            putOwned(SELECTED_DIRECTION_MAP, location, direction);
         }
         return direction;
     }
@@ -317,7 +318,7 @@ public abstract class AdvancedDirectional extends NetworkDirectional {
                 } else {
                     direction = BlockFace.valueOf(string);
                 }
-                SELECTED_DIRECTION_MAP.put(location.clone(), direction);
+                putOwned(SELECTED_DIRECTION_MAP, location, direction);
 
                 int limit;
                 if (rawLimit == null) {
@@ -325,7 +326,7 @@ public abstract class AdvancedDirectional extends NetworkDirectional {
                 } else {
                     limit = Integer.parseInt(rawLimit);
                 }
-                NETWORK_LIMIT_QUANTITY_MAP.put(location.clone(), limit);
+                putOwned(NETWORK_LIMIT_QUANTITY_MAP, location, limit);
 
                 TransportMode mode;
                 if (rawMode == null) {
@@ -334,7 +335,7 @@ public abstract class AdvancedDirectional extends NetworkDirectional {
                 } else {
                     mode = TransportMode.valueOf(rawMode);
                 }
-                NETWORK_TRANSPORT_MODE_MAP.put(location.clone(), mode);
+                putOwned(NETWORK_TRANSPORT_MODE_MAP, location, mode);
 
                 blockMenu.addMenuClickHandler(
                     getNorthSlot(),
@@ -440,8 +441,9 @@ public abstract class AdvancedDirectional extends NetworkDirectional {
 
     @ParametersAreNonnullByDefault
     public void setDirection(BlockMenu blockMenu, BlockFace blockFace) {
-        SELECTED_DIRECTION_MAP.put(blockMenu.getLocation().clone(), blockFace);
-        StorageCacheUtils.setData(blockMenu.getBlock().getLocation(), DIRECTION, blockFace.name());
+        final Location location = blockMenu.getLocation();
+        putOwned(SELECTED_DIRECTION_MAP, location, blockFace);
+        StorageCacheUtils.setData(location, DIRECTION, blockFace.name());
     }
 
     @SuppressWarnings("deprecation")
@@ -530,7 +532,7 @@ public abstract class AdvancedDirectional extends NetworkDirectional {
     }
 
     public int getLimitQuantity(@NotNull Location location) {
-        Integer quantity = NETWORK_LIMIT_QUANTITY_MAP.get(location.clone());
+        Integer quantity = NETWORK_LIMIT_QUANTITY_MAP.get(location);
         if (quantity == null) {
             String squantity = StorageCacheUtils.getData(location, LIMIT_KEY);
             if (squantity == null) {
@@ -538,28 +540,51 @@ public abstract class AdvancedDirectional extends NetworkDirectional {
             } else {
                 quantity = Integer.parseInt(squantity);
             }
-            NETWORK_LIMIT_QUANTITY_MAP.put(location.clone(), quantity);
+            putOwned(NETWORK_LIMIT_QUANTITY_MAP, location, quantity);
         }
         return quantity;
     }
 
     public void setLimitQuantity(@NotNull Location location, int quantity) {
-        NETWORK_LIMIT_QUANTITY_MAP.put(location.clone(), quantity);
+        putOwned(NETWORK_LIMIT_QUANTITY_MAP, location, quantity);
         StorageCacheUtils.setData(location, LIMIT_KEY, Integer.toString(quantity));
     }
 
     public @NotNull TransportMode getCurrentTransportMode(@NotNull Location location) {
-        TransportMode mode = NETWORK_TRANSPORT_MODE_MAP.get(location.clone());
+        TransportMode mode = NETWORK_TRANSPORT_MODE_MAP.get(location);
         if (mode == null) {
             mode = TransportMode.valueOf(StorageCacheUtils.getData(location, TRANSPORT_MODE_KEY));
-            NETWORK_TRANSPORT_MODE_MAP.put(location.clone(), mode);
+            putOwned(NETWORK_TRANSPORT_MODE_MAP, location, mode);
         }
         return mode;
     }
 
     public void setTransportMode(@NotNull Location location, TransportMode mode) {
-        NETWORK_TRANSPORT_MODE_MAP.put(location.clone(), mode);
+        putOwned(NETWORK_TRANSPORT_MODE_MAP, location, mode);
         StorageCacheUtils.setData(location, TRANSPORT_MODE_KEY, String.valueOf(mode));
+    }
+
+    /**
+     * Cache lookups happen on every transfer tick. Map#get does not retain its argument, so hot-path
+     * reads use the existing BlockMenu Location directly. Writes clone only when a key is first owned
+     * by the cache, avoiding thousands of short-lived Location allocations on large transfer networks.
+     */
+    private static <T> void putOwned(
+        @NotNull Map<Location, T> map,
+        @NotNull Location location,
+        @NotNull T value) {
+        if (map.replace(location, value) == null) {
+            map.putIfAbsent(location.clone(), value);
+        }
+    }
+
+    @Override
+    protected void onBreak(@NotNull BlockBreakEvent event) {
+        final Location location = event.getBlock().getLocation();
+        SELECTED_DIRECTION_MAP.remove(location);
+        NETWORK_LIMIT_QUANTITY_MAP.remove(location);
+        NETWORK_TRANSPORT_MODE_MAP.remove(location);
+        super.onBreak(event);
     }
 
     @SuppressWarnings("deprecation")
