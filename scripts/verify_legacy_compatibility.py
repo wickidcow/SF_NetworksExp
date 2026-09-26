@@ -457,6 +457,10 @@ require("historyLookupKey(accessor)" in network_root
         and "location.getX() == location.getBlockX()" in network_root
         and "return normalizeHistoryLocation(location)" in network_root,
         "canonical transport limiter lookups must avoid unnecessary Location clones")
+require(network_root.count("List<Location> misses = null;") >= 2
+        and network_root.count("if (misses == null)") >= 5
+        and "List<Location> misses = new ArrayList<>();" not in network_root,
+        "transport access-history miss lists must allocate lazily")
 require(network_root.count("for (Location crafterLocation : crafters)") >= 2
         and network_root.count("for (Location cellLocation : cells)") >= 3
         and network_root.count("for (Location greedyLocation : advancedGreedyBlocks)") >= 3
