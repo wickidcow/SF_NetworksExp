@@ -1852,7 +1852,7 @@ public class NetworkRoot extends NetworkNode {
         if (m != null) {
             // Netex - Cache start
             boolean found = false;
-            List<Location> misses = new ArrayList<>();
+            List<Location> misses = null;
             // Netex - Cache end
             for (Map.Entry<Location, Integer> entry : m.entrySet()) {
                 // try cache first
@@ -1863,6 +1863,9 @@ public class NetworkRoot extends NetworkNode {
 
                     if (itemStack == null || !StackUtils.itemsMatch(request, itemStack)) {
                         // Netex - Cache start
+                        if (misses == null) {
+                            misses = new ArrayList<>();
+                        }
                         misses.add(entry.getKey());
                         // Netex - Cache end
                         continue;
@@ -1934,12 +1937,18 @@ public class NetworkRoot extends NetworkNode {
                             }
                         } else {
                             // Netex - Cache start
-                            misses.add(entry.getKey());
+                            if (misses == null) {
+                            misses = new ArrayList<>();
+                        }
+                        misses.add(entry.getKey());
                             // Netex - Cache end
                         }
                         // </editor-fold>
                     } else {
                         // Netex - Cache start
+                        if (misses == null) {
+                            misses = new ArrayList<>();
+                        }
                         misses.add(entry.getKey());
                         // Netex - Cache end
                     }
@@ -1947,7 +1956,7 @@ public class NetworkRoot extends NetworkNode {
             }
 
             // Netex - Cache start
-            if (!found) {
+            if (!found && misses != null) {
                 for (Location miss : misses) {
                     addCacheMiss(accessor, miss);
                 }
@@ -2077,7 +2086,7 @@ public class NetworkRoot extends NetworkNode {
         if (m != null) {
             // Netex - Cache start
             boolean found = false;
-            List<Location> misses = new ArrayList<>();
+            List<Location> misses = null;
             // Netex - Cache end
             for (Map.Entry<Location, Integer> entry : m.entrySet()) {
                 BarrelIdentity barrelIdentity = accessInputAbleBarrel(entry.getKey());
@@ -2103,6 +2112,9 @@ public class NetworkRoot extends NetworkNode {
                         }
                     } else {
                         // Netex - Cache start
+                        if (misses == null) {
+                            misses = new ArrayList<>();
+                        }
                         misses.add(entry.getKey());
                         // Netex - Cache end
                     }
@@ -2120,7 +2132,10 @@ public class NetworkRoot extends NetworkNode {
                             minusCacheMiss(accessor, entry.getKey());
                             found = true;
                         } else {
-                            misses.add(entry.getKey());
+                            if (misses == null) {
+                            misses = new ArrayList<>();
+                        }
+                        misses.add(entry.getKey());
                         }
                         // Netex - Cache end
 
@@ -2138,7 +2153,7 @@ public class NetworkRoot extends NetworkNode {
             }
 
             // Netex - Cache start
-            if (!found) {
+            if (!found && misses != null) {
                 for (Location miss : misses) {
                     addCacheMiss(accessor, miss);
                 }
