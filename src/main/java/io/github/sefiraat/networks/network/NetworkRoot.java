@@ -239,29 +239,29 @@ public class NetworkRoot extends NetworkNode {
     }
 
     public static void minusCacheMiss(Location location, Location accessLocation) {
-        final Map<Location, Integer> locations = persistentAccessHistory.get(normalizeHistoryLocation(location));
+        final Map<Location, Integer> locations = persistentAccessHistory.get(historyLookupKey(location));
         if (locations != null) {
             locations.computeIfPresent(
-                normalizeHistoryLocation(accessLocation), (ignored, misses) -> misses <= 1 ? null : misses - 1);
+                historyLookupKey(accessLocation), (ignored, misses) -> misses <= 1 ? null : misses - 1);
         }
     }
 
     public static Map<Location, Integer> getPersistentAccessHistory(Location location) {
-        final Map<Location, Integer> cached = persistentAccessHistory.get(normalizeHistoryLocation(location));
+        final Map<Location, Integer> cached = persistentAccessHistory.get(historyLookupKey(location));
         return cached == null ? Map.of() : cached;
     }
 
     public static void removePersistentAccessHistory(Location location) {
-        persistentAccessHistory.remove(normalizeHistoryLocation(location));
+        persistentAccessHistory.remove(historyLookupKey(location));
     }
 
     public static void removePersistentAccessHistory(Location location, Location accessLocation) {
-        final Location key = normalizeHistoryLocation(location);
+        final Location key = historyLookupKey(location);
         final Map<Location, Integer> locations = persistentAccessHistory.get(key);
         if (locations == null) {
             return;
         }
-        locations.remove(normalizeHistoryLocation(accessLocation));
+        locations.remove(historyLookupKey(accessLocation));
         if (locations.isEmpty()) {
             persistentAccessHistory.remove(key, locations);
         }
@@ -279,21 +279,21 @@ public class NetworkRoot extends NetworkNode {
     }
 
     public static Map<Location, Integer> getCountObservingAccessHistory(Location location) {
-        final Map<Location, Integer> cached = observingAccessHistory.get(normalizeHistoryLocation(location));
+        final Map<Location, Integer> cached = observingAccessHistory.get(historyLookupKey(location));
         return cached == null ? Map.of() : cached;
     }
 
     public static void removeCountObservingAccessHistory(Location location) {
-        observingAccessHistory.remove(normalizeHistoryLocation(location));
+        observingAccessHistory.remove(historyLookupKey(location));
     }
 
     public static void removeCountObservingAccessHistory(Location location, Location accessLocation) {
-        final Location key = normalizeHistoryLocation(location);
+        final Location key = historyLookupKey(location);
         final Map<Location, Integer> locations = observingAccessHistory.get(key);
         if (locations == null) {
             return;
         }
-        locations.remove(normalizeHistoryLocation(accessLocation));
+        locations.remove(historyLookupKey(accessLocation));
         if (locations.isEmpty()) {
             observingAccessHistory.remove(key, locations);
         }
