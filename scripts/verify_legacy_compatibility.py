@@ -457,6 +457,13 @@ require("historyLookupKey(accessor)" in network_root
         and "location.getX() == location.getBlockX()" in network_root
         and "return normalizeHistoryLocation(location)" in network_root,
         "canonical transport limiter lookups must avoid unnecessary Location clones")
+require("persistentAccessHistory.get(historyLookupKey(location))" in network_root
+        and "persistentAccessHistory.remove(historyLookupKey(location))" in network_root
+        and "locations.computeIfPresent(\n                historyLookupKey(accessLocation)" in network_root
+        and "observingAccessHistory.get(historyLookupKey(location))" in network_root
+        and "observingAccessHistory.remove(historyLookupKey(location))" in network_root
+        and "computeIfAbsent(normalizeHistoryLocation(location)" in network_root,
+        "persistent/observing history reads must reuse canonical keys while insertions keep owned keys")
 require(network_root.count("List<Location> misses = null;") >= 2
         and network_root.count("if (misses == null)") >= 5
         and "List<Location> misses = new ArrayList<>();" not in network_root,
