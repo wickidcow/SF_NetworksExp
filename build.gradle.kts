@@ -87,7 +87,7 @@ dependencies {
     }
     compileOnly("com.github.balugaq:FluffyMachines:43d7444e4c")
     compileOnly("com.github.TimetownDev:GuguSlimefunLib:45627c6f8e")
-    compileOnly("com.github.balugaq:JustEnoughGuide:7f21e113a2")
+    compileOnly("com.github.wickidcow:SF_JustEnoughGuide:e33f538e07")
     compileOnly(fileTree(mapOf("dir" to "lib", "include" to listOf("*.jar"))))
 }
 
