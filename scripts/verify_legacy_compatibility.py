@@ -352,9 +352,15 @@ require("getOrCreateIngredientPlan(location, instance)" in auto_crafter
         and "INGREDIENT_PLAN_MAP.putIfAbsent(location.clone(), built)" in auto_crafter
         and "INGREDIENT_PLAN_MAP.computeIfAbsent(\n            location.clone()" not in auto_crafter,
         "Auto Crafter ingredient cache must avoid cloning Location keys on cache hits")
-require("final int[] requestedAmounts" not in auto_crafter
-        and "(int) ((long) ingredient.amount() * blueprintAmount)" in auto_crafter,
+require("final int[] requestedAmounts" not in auto_crafter,
         "Auto Crafter must not allocate a requested-amount scratch array per craft")
+require("final ItemRequest[] requests = new ItemRequest[ingredientCount]" in auto_crafter
+        and "final ItemRequest request = new ItemRequest(ingredient.template(), (int) scaledAmount)" in auto_crafter
+        and "if (!root.contains(request))" in auto_crafter
+        and "final ItemRequest request = requests[i]" in auto_crafter
+        and "root.getItemStack0(location, request)" in auto_crafter
+        and "root.getItemStack0(\n                location, new ItemRequest" not in auto_crafter,
+        "Auto Crafter must reuse non-mutating preflight ItemRequests for withdrawal")
 require("Classic storage routing" in readme
         and "Cells → crafter outputs → Greedy storage" in readme
         and "Empty Quantum Storage never auto-assigns" in readme,
