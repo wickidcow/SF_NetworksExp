@@ -2146,7 +2146,11 @@ public class NetworkRoot extends NetworkNode {
             // Netex - Cache end
         }
 
-        for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {
+        for (Location greedyLocation : advancedGreedyBlocks) {
+            BlockMenu blockMenu = StorageCacheUtils.getMenu(greedyLocation);
+            if (blockMenu == null) {
+                continue;
+            }
             final ItemStack template = blockMenu.getItemInSlot(AdvancedGreedyBlock.TEMPLATE_SLOT);
 
             if (template == null || template.getType() == Material.AIR || !StackUtils.itemsMatch(incoming, template)) {
@@ -2166,7 +2170,11 @@ public class NetworkRoot extends NetworkNode {
         }
 
         // Run for matching greedy blocks
-        for (BlockMenu blockMenu : getGreedyBlockMenus()) {
+        for (Location greedyLocation : greedyBlocks) {
+            BlockMenu blockMenu = StorageCacheUtils.getMenu(greedyLocation);
+            if (blockMenu == null) {
+                continue;
+            }
             final ItemStack template = blockMenu.getItemInSlot(NetworkGreedyBlock.TEMPLATE_SLOT);
 
             if (template == null || template.getType() == Material.AIR || !StackUtils.itemsMatch(incoming, template)) {
@@ -2236,8 +2244,9 @@ public class NetworkRoot extends NetworkNode {
             }
         }
 
-        for (BlockMenu blockMenu : getCellMenus()) {
-            if (!isRealCell(blockMenu)) continue;
+        for (Location cellLocation : cells) {
+            BlockMenu blockMenu = StorageCacheUtils.getMenu(cellLocation);
+            if (blockMenu == null || !isRealCell(blockMenu)) continue;
             blockMenu.markDirty();
             BlockMenuUtil.pushItem(blockMenu, incoming, CELL_AVAILABLE_SLOTS);
             if (incoming.getAmount() == 0) {
