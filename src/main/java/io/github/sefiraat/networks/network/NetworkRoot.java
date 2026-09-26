@@ -239,29 +239,29 @@ public class NetworkRoot extends NetworkNode {
     }
 
     public static void minusCacheMiss(Location location, Location accessLocation) {
-        final Map<Location, Integer> locations = persistentAccessHistory.get(normalizeHistoryLocation(location));
+        final Map<Location, Integer> locations = persistentAccessHistory.get(historyLookupKey(location));
         if (locations != null) {
             locations.computeIfPresent(
-                normalizeHistoryLocation(accessLocation), (ignored, misses) -> misses <= 1 ? null : misses - 1);
+                historyLookupKey(accessLocation), (ignored, misses) -> misses <= 1 ? null : misses - 1);
         }
     }
 
     public static Map<Location, Integer> getPersistentAccessHistory(Location location) {
-        final Map<Location, Integer> cached = persistentAccessHistory.get(normalizeHistoryLocation(location));
+        final Map<Location, Integer> cached = persistentAccessHistory.get(historyLookupKey(location));
         return cached == null ? Map.of() : cached;
     }
 
     public static void removePersistentAccessHistory(Location location) {
-        persistentAccessHistory.remove(normalizeHistoryLocation(location));
+        persistentAccessHistory.remove(historyLookupKey(location));
     }
 
     public static void removePersistentAccessHistory(Location location, Location accessLocation) {
-        final Location key = normalizeHistoryLocation(location);
+        final Location key = historyLookupKey(location);
         final Map<Location, Integer> locations = persistentAccessHistory.get(key);
         if (locations == null) {
             return;
         }
-        locations.remove(normalizeHistoryLocation(accessLocation));
+        locations.remove(historyLookupKey(accessLocation));
         if (locations.isEmpty()) {
             persistentAccessHistory.remove(key, locations);
         }
@@ -279,21 +279,21 @@ public class NetworkRoot extends NetworkNode {
     }
 
     public static Map<Location, Integer> getCountObservingAccessHistory(Location location) {
-        final Map<Location, Integer> cached = observingAccessHistory.get(normalizeHistoryLocation(location));
+        final Map<Location, Integer> cached = observingAccessHistory.get(historyLookupKey(location));
         return cached == null ? Map.of() : cached;
     }
 
     public static void removeCountObservingAccessHistory(Location location) {
-        observingAccessHistory.remove(normalizeHistoryLocation(location));
+        observingAccessHistory.remove(historyLookupKey(location));
     }
 
     public static void removeCountObservingAccessHistory(Location location, Location accessLocation) {
-        final Location key = normalizeHistoryLocation(location);
+        final Location key = historyLookupKey(location);
         final Map<Location, Integer> locations = observingAccessHistory.get(key);
         if (locations == null) {
             return;
         }
-        locations.remove(normalizeHistoryLocation(accessLocation));
+        locations.remove(historyLookupKey(accessLocation));
         if (locations.isEmpty()) {
             observingAccessHistory.remove(key, locations);
         }
@@ -1852,7 +1852,7 @@ public class NetworkRoot extends NetworkNode {
         if (m != null) {
             // Netex - Cache start
             boolean found = false;
-            List<Location> misses = new ArrayList<>();
+            List<Location> misses = null;
             // Netex - Cache end
             for (Map.Entry<Location, Integer> entry : m.entrySet()) {
                 // try cache first
@@ -1863,6 +1863,9 @@ public class NetworkRoot extends NetworkNode {
 
                     if (itemStack == null || !StackUtils.itemsMatch(request, itemStack)) {
                         // Netex - Cache start
+                        if (misses == null) {
+                            misses = new ArrayList<>();
+                        }
                         misses.add(entry.getKey());
                         // Netex - Cache end
                         continue;
@@ -1934,12 +1937,18 @@ public class NetworkRoot extends NetworkNode {
                             }
                         } else {
                             // Netex - Cache start
+                            if (misses == null) {
+                                misses = new ArrayList<>();
+                            }
                             misses.add(entry.getKey());
                             // Netex - Cache end
                         }
                         // </editor-fold>
                     } else {
                         // Netex - Cache start
+                        if (misses == null) {
+                            misses = new ArrayList<>();
+                        }
                         misses.add(entry.getKey());
                         // Netex - Cache end
                     }
@@ -1947,7 +1956,7 @@ public class NetworkRoot extends NetworkNode {
             }
 
             // Netex - Cache start
-            if (!found) {
+            if (!found && misses != null) {
                 for (Location miss : misses) {
                     addCacheMiss(accessor, miss);
                 }
@@ -2077,7 +2086,7 @@ public class NetworkRoot extends NetworkNode {
         if (m != null) {
             // Netex - Cache start
             boolean found = false;
-            List<Location> misses = new ArrayList<>();
+            List<Location> misses = null;
             // Netex - Cache end
             for (Map.Entry<Location, Integer> entry : m.entrySet()) {
                 BarrelIdentity barrelIdentity = accessInputAbleBarrel(entry.getKey());
@@ -2103,6 +2112,9 @@ public class NetworkRoot extends NetworkNode {
                         }
                     } else {
                         // Netex - Cache start
+                        if (misses == null) {
+                            misses = new ArrayList<>();
+                        }
                         misses.add(entry.getKey());
                         // Netex - Cache end
                     }
@@ -2120,6 +2132,9 @@ public class NetworkRoot extends NetworkNode {
                             minusCacheMiss(accessor, entry.getKey());
                             found = true;
                         } else {
+                            if (misses == null) {
+                                misses = new ArrayList<>();
+                            }
                             misses.add(entry.getKey());
                         }
                         // Netex - Cache end
@@ -2138,7 +2153,7 @@ public class NetworkRoot extends NetworkNode {
             }
 
             // Netex - Cache start
-            if (!found) {
+            if (!found && misses != null) {
                 for (Location miss : misses) {
                     addCacheMiss(accessor, miss);
                 }
@@ -2146,7 +2161,11 @@ public class NetworkRoot extends NetworkNode {
             // Netex - Cache end
         }
 
-        for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {
+        for (Location greedyLocation : advancedGreedyBlocks) {
+            BlockMenu blockMenu = StorageCacheUtils.getMenu(greedyLocation);
+            if (blockMenu == null) {
+                continue;
+            }
             final ItemStack template = blockMenu.getItemInSlot(AdvancedGreedyBlock.TEMPLATE_SLOT);
 
             if (template == null || template.getType() == Material.AIR || !StackUtils.itemsMatch(incoming, template)) {
@@ -2166,7 +2185,11 @@ public class NetworkRoot extends NetworkNode {
         }
 
         // Run for matching greedy blocks
-        for (BlockMenu blockMenu : getGreedyBlockMenus()) {
+        for (Location greedyLocation : greedyBlocks) {
+            BlockMenu blockMenu = StorageCacheUtils.getMenu(greedyLocation);
+            if (blockMenu == null) {
+                continue;
+            }
             final ItemStack template = blockMenu.getItemInSlot(NetworkGreedyBlock.TEMPLATE_SLOT);
 
             if (template == null || template.getType() == Material.AIR || !StackUtils.itemsMatch(incoming, template)) {
@@ -2236,8 +2259,9 @@ public class NetworkRoot extends NetworkNode {
             }
         }
 
-        for (BlockMenu blockMenu : getCellMenus()) {
-            if (!isRealCell(blockMenu)) continue;
+        for (Location cellLocation : cells) {
+            BlockMenu blockMenu = StorageCacheUtils.getMenu(cellLocation);
+            if (blockMenu == null || !isRealCell(blockMenu)) continue;
             blockMenu.markDirty();
             BlockMenuUtil.pushItem(blockMenu, incoming, CELL_AVAILABLE_SLOTS);
             if (incoming.getAmount() == 0) {
