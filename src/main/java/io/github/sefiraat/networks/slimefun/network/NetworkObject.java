@@ -134,13 +134,15 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
 
                 @Override
                 public void tick(@NotNull Block b, SlimefunItem item, @NotNull SlimefunBlockData data) {
-                    final Location location = b.getLocation();
+                    // SlimefunBlockData already owns the canonical block Location. Reuse it instead
+                    // of allocating Block#getLocation() on every NetworkObject ticker pass.
+                    final Location location = data.getLocation();
                     if (!NetworkStorage.containsKey(location)) {
                         scheduleFirstTick(location);
                         return;
                     }
 
-                    tickHangingBlocks(b);
+                    tickHangingBlocks(location);
                 }
 
                 // no exception
@@ -202,7 +204,7 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
 
                 HangingBlock.loadHangingBlocks(liveData);
                 HangingBlock.doFirstTick(liveData);
-                registerNow(location.getBlock());
+                registerNow(location);
             } finally {
                 PENDING_FIRST_TICK_LOCATIONS.remove(location);
             }
@@ -219,28 +221,36 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
      * before building topology; every other node may safely become available over the next few server ticks.
      */
     protected void addToRegistry(@NotNull Block block) {
-        if (NetworkStorage.containsKey(block.getLocation())) {
+        addToRegistry(block.getLocation());
+    }
+
+    protected void addToRegistry(@NotNull Location location) {
+        if (NetworkStorage.containsKey(location)) {
             return;
         }
         if (nodeType == NodeType.CONTROLLER) {
-            registerNow(block);
+            registerNow(location);
         } else {
-            scheduleFirstTick(block.getLocation());
+            scheduleFirstTick(location);
         }
     }
 
-    private void registerNow(@NotNull Block block) {
-        if (!NetworkStorage.containsKey(block.getLocation())) {
+    private void registerNow(@NotNull Location location) {
+        if (!NetworkStorage.containsKey(location)) {
             final NodeDefinition nodeDefinition = new NodeDefinition(nodeType);
-            NetworkStorage.registerNode(block.getLocation(), nodeDefinition);
+            NetworkStorage.registerNode(location, nodeDefinition);
         }
     }
 
     protected void tickHangingBlocks(@NotNull Block block) {
+        tickHangingBlocks(block.getLocation());
+    }
+
+    protected void tickHangingBlocks(@NotNull Location location) {
         // The first-tick loader populates this registry for real attachments. Ordinary Network blocks should not
         // churn through the shared queue every Slimefun tick just to discover that there is nothing to update.
-        if (!HangingBlock.getHangingBlocks(block.getLocation()).isEmpty()) {
-            scheduledHangingTick.add(block.getLocation());
+        if (!HangingBlock.getHangingBlocks(location).isEmpty()) {
+            scheduledHangingTick.add(location);
         }
     }
 

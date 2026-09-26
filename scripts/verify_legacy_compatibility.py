@@ -109,6 +109,7 @@ barrel_type = read("src/main/java/io/github/sefiraat/networks/network/barrel/Bar
 localization_service = read("src/main/java/com/ytdd9527/networksexpansion/core/services/LocalizationService.java")
 network_object = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkObject.java")
 network_directional = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkDirectional.java")
+advanced_directional = read("src/main/java/com/ytdd9527/networksexpansion/core/items/machines/AdvancedDirectional.java")
 universal_verifier = read("scripts/verify_universal_jar.py")
 transfer_utils = read("src/main/java/io/github/sefiraat/networks/utils/NetworkTransferUtils.java")
 transfer_audit = read("src/main/java/io/github/sefiraat/networks/utils/TransferAudit.java")
@@ -287,7 +288,7 @@ require(legacy_withdraw.find("// Cells") < legacy_withdraw.find("// Crafters")
         < legacy_withdraw.find("Deep storage after loose network inventory"),
         "deprecated network withdrawal no longer follows classic Cells -> Crafters -> Greedy -> deep-storage priority")
 require(accessor_withdraw.find("// Cells") < accessor_withdraw.find("// Crafters")
-        < accessor_withdraw.find("getAdvancedGreedyBlockMenus()")
+        < accessor_withdraw.find("for (Location greedyLocation : advancedGreedyBlocks)")
         < accessor_withdraw.find("// Greedy Blocks")
         < accessor_withdraw.find("getPersistentAccessHistory(accessor)")
         < accessor_withdraw.find("Deep storage after loose network inventory"),
@@ -326,6 +327,26 @@ require("Map<Location, IdleState> IDLE_STATE_MAP = new ConcurrentHashMap<>()" in
         and "IDLE_MISS_MAP" not in auto_crafter
         and "IDLE_SKIP_MAP" not in auto_crafter,
         "Auto Crafter idle backoff must avoid per-tick Location/Integer churn")
+require("NETWORK_LIMIT_QUANTITY_MAP.get(location)" in advanced_directional
+        and "NETWORK_TRANSPORT_MODE_MAP.get(location)" in advanced_directional
+        and "SELECTED_DIRECTION_MAP.get(location)" in advanced_directional
+        and "private static <T> void putOwned" in advanced_directional
+        and "map.replace(location, value)" in advanced_directional
+        and "map.putIfAbsent(location.clone(), value)" in advanced_directional
+        and "NETWORK_LIMIT_QUANTITY_MAP.remove(location)" in advanced_directional
+        and "NETWORK_TRANSPORT_MODE_MAP.remove(location)" in advanced_directional
+        and ".get(location.clone())" not in advanced_directional,
+        "AdvancedDirectional hot-path caches must avoid per-tick Location clones and clear on break")
+require("final Location location = data.getLocation();" in network_object
+        and "tickHangingBlocks(location);" in network_object
+        and "protected void addToRegistry(@NotNull Location location)" in network_object
+        and "private void registerNow(@NotNull Location location)" in network_object,
+        "NetworkObject ticker must reuse SlimefunBlockData location instead of allocating Block locations")
+require("blockMenu == null ? block.getLocation() : blockMenu.getLocation()" in network_directional
+        and "addToRegistry(location);" in network_directional,
+        "NetworkDirectional ticker must reuse the live menu location when available")
+require("final Location location = blockMenu.getLocation();\n                    addToRegistry(location);" in auto_crafter,
+        "Auto Crafter registry checks must reuse the menu location")
 require("getOrCreateIngredientPlan(location, instance)" in auto_crafter
         and "List<IngredientRequest> plan = INGREDIENT_PLAN_MAP.get(location)" in auto_crafter
         and "INGREDIENT_PLAN_MAP.putIfAbsent(location.clone(), built)" in auto_crafter
@@ -416,6 +437,13 @@ require("historyLookupKey(accessor)" in network_root
         and "location.getX() == location.getBlockX()" in network_root
         and "return normalizeHistoryLocation(location)" in network_root,
         "canonical transport limiter lookups must avoid unnecessary Location clones")
+require(network_root.count("for (Location crafterLocation : crafters)") >= 2
+        and network_root.count("for (Location cellLocation : cells)") >= 2
+        and network_root.count("for (Location greedyLocation : advancedGreedyBlocks)") >= 2
+        and network_root.count("for (Location greedyLocation : greedyBlocks)") >= 2
+        and "BlockMenu blockMenu = StorageCacheUtils.getMenu(crafterLocation)" in network_root
+        and "BlockMenu blockMenu = StorageCacheUtils.getMenu(cellLocation)" in network_root,
+        "NetworkRoot hot contains/withdraw paths must iterate topology locations without temporary menu sets")
 require("(ItemUseHandler) this::onControllerItemUse" in network_controller
         and "wouldMergeControllers(target)" in network_controller
         and "event.cancel()" in network_controller,

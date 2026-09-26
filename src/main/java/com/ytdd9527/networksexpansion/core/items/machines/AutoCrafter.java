@@ -91,8 +91,8 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
             public void tick(@NotNull Block block, SlimefunItem slimefunItem, @NotNull SlimefunBlockData data) {
                 BlockMenu blockMenu = data.getBlockMenu();
                 if (blockMenu != null) {
-                    addToRegistry(block);
                     final Location location = blockMenu.getLocation();
+                    addToRegistry(location);
                     if (shouldSkipIdleTick(location)) {
                         return;
                     }
