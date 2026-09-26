@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.wickidcow.networks"
-version = "1.0.33"
+version = "1.0.34"
 
 // Compatibility verifier markers only; these are not project versions or output filenames.
 // version = "2.1.112-Legacy-1.0"
@@ -44,6 +44,20 @@ repositories {
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/")
     maven("https://jitpack.io")
+    // Maintained JEG is consumed from its canonical GitHub release asset rather than
+    // an upstream JitPack commit. This keeps optional JEG API compilation reproducible.
+    ivy {
+        url = uri("https://github.com/wickidcow/SF_JustEnoughGuide/releases/download")
+        patternLayout {
+            artifact("v[revision]/[artifact][revision].jar")
+        }
+        metadataSources {
+            artifact()
+        }
+        content {
+            includeGroup("com.github.wickidcow.release")
+        }
+    }
     maven("https://nexus.neetgames.com/repository/maven-public")
     maven("https://repo.bg-software.com/repository/api/")
     maven("https://repo.rosewooddev.io/repository/public/")
@@ -87,7 +101,7 @@ dependencies {
     }
     compileOnly("com.github.balugaq:FluffyMachines:43d7444e4c")
     compileOnly("com.github.TimetownDev:GuguSlimefunLib:45627c6f8e")
-    compileOnly("com.github.wickidcow:SF_JustEnoughGuide:e33f538e07")
+    compileOnly("com.github.wickidcow.release:SF_JustEnoughGuide:2.1.67")
     compileOnly(fileTree(mapOf("dir" to "lib", "include" to listOf("*.jar"))))
 }
 
