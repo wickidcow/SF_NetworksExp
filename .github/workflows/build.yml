@@ -15,8 +15,8 @@ permissions:
   contents: write
 
 env:
-  VERSION: "1.0.33"
-  OUTPUT_NAME: "SF_Networks1.0.33.jar"
+  VERSION: "1.0.34"
+  OUTPUT_NAME: "SF_Networks1.0.34.jar"
 
 jobs:
   compatibility:
@@ -51,6 +51,29 @@ jobs:
           test "$OUTPUT_NAME" = "SF_Networks${VERSION}.jar"
           grep -Fq 'archiveFileName.set("SF_Networks${project.version}.jar")' build.gradle.kts
           if printf '%s\n%s\n' "$VERSION" "$OUTPUT_NAME" | grep -Eiq '(legacy|english|snapshot)'; then exit 1; fi
+      - name: Verify maintained JEG build dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -Fq 'com.github.balugaq:JustEnoughGuide' build.gradle.kts; then
+            echo 'Networks must not depend on the obsolete upstream JEG JitPack revision.' >&2
+            exit 1
+          fi
+          grep -Fq 'com.github.wickidcow.release:SF_JustEnoughGuide:2.1.67' build.gradle.kts
+          grep -Fq 'v[revision]/[artifact][revision].jar' build.gradle.kts
+          JEG_BRIDGE=src/main/java/com/balugaq/netex/api/interfaces/RecipeCompletableWithGuide.java
+          grep -Fq 'com.balugaq.jeg.api.recipe_complete.source.RecipeCompleteProvider' "$JEG_BRIDGE"
+          grep -Fq 'RecipeCompleteProvider.openSlimefun(session);' "$JEG_BRIDGE"
+          grep -Fq 'isSelectingItemStackToRecipeComplete(player.getUniqueId())' "$JEG_BRIDGE"
+          grep -Fq 'allowSelectingItemStackToRecipeComplete(player.getUniqueId());' "$JEG_BRIDGE"
+          if grep -Fq 'getSlimefunSources()' "$JEG_BRIDGE"; then
+            echo 'Obsolete JEG recipe-source accessor returned.' >&2
+            exit 1
+          fi
+          if grep -Fq 'com.balugaq.jeg.api.recipe_complete.source.base.RecipeCompleteProvider' "$JEG_BRIDGE"; then
+            echo 'Obsolete pre-2.1.67 JEG RecipeCompleteProvider package returned.' >&2
+            exit 1
+          fi
       - name: Verify Networks source contract
         run: python3 scripts/verify_legacy_compatibility.py
       - name: Build exact Slimefun Legacy JAR
