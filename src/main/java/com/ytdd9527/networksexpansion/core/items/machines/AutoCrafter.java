@@ -306,7 +306,9 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
          * world drop. NetworkRoot#contains(ItemRequest) is non-mutating, so a normal missing ingredient
          * now exits without changing network storage at all.
          */
-        for (int i = 0; i < ingredientPlan.size(); i++) {
+        final int ingredientCount = ingredientPlan.size();
+        final ItemRequest[] requests = new ItemRequest[ingredientCount];
+        for (int i = 0; i < ingredientCount; i++) {
             final IngredientRequest ingredient = ingredientPlan.get(i);
             final long scaledAmount = (long) ingredient.amount() * blueprintAmount;
             if (scaledAmount <= 0 || scaledAmount > Integer.MAX_VALUE) {
@@ -315,21 +317,25 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
                 return false;
             }
 
-            final int requestedAmount = (int) scaledAmount;
-            if (!root.contains(new ItemRequest(ingredient.template(), requestedAmount))) {
+            final ItemRequest request = new ItemRequest(ingredient.template(), (int) scaledAmount);
+            requests[i] = request;
+            if (!root.contains(request)) {
                 sendFeedback(location, FeedbackType.NOT_ENOUGH_ITEMS_IN_NETWORK);
                 deferIdleAttempt(location, IDLE_TRANSIENT_TICKS);
                 return false;
             }
         }
 
-        final ItemStack[] fetcheds = new ItemStack[ingredientPlan.size()];
-        for (int i = 0; i < ingredientPlan.size(); i++) {
-            final IngredientRequest ingredient = ingredientPlan.get(i);
-            // The scaled amount was range-checked during the non-mutating preflight above.
-            final int requestedAmount = (int) ((long) ingredient.amount() * blueprintAmount);
-            final ItemStack fetched = root.getItemStack0(
-                location, new ItemRequest(ingredient.template(), requestedAmount));
+        /*
+         * NetworkRoot#contains is non-mutating, so the exact ItemRequest created for preflight can
+         * be reused for withdrawal. This halves ItemRequest/ItemStackCache allocation on successful
+         * Auto Crafter attempts while preserving the atomic preflight-before-commit behavior.
+         */
+        final ItemStack[] fetcheds = new ItemStack[ingredientCount];
+        for (int i = 0; i < ingredientCount; i++) {
+            final ItemRequest request = requests[i];
+            final int requestedAmount = request.getAmount();
+            final ItemStack fetched = root.getItemStack0(location, request);
             fetcheds[i] = fetched;
             if (fetched == null || fetched.getAmount() < requestedAmount) {
                 /*
