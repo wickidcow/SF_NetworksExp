@@ -1938,9 +1938,9 @@ public class NetworkRoot extends NetworkNode {
                         } else {
                             // Netex - Cache start
                             if (misses == null) {
-                            misses = new ArrayList<>();
-                        }
-                        misses.add(entry.getKey());
+                                misses = new ArrayList<>();
+                            }
+                            misses.add(entry.getKey());
                             // Netex - Cache end
                         }
                         // </editor-fold>
@@ -2133,9 +2133,9 @@ public class NetworkRoot extends NetworkNode {
                             found = true;
                         } else {
                             if (misses == null) {
-                            misses = new ArrayList<>();
-                        }
-                        misses.add(entry.getKey());
+                                misses = new ArrayList<>();
+                            }
+                            misses.add(entry.getKey());
                         }
                         // Netex - Cache end
 
