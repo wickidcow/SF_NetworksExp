@@ -291,8 +291,9 @@ public abstract class NetworkDirectional extends NetworkObject {
 
     @OverridingMethodsMustInvokeSuper
     protected void onTick(@Nullable BlockMenu blockMenu, @NotNull Block block) {
-        sendFeedback(block.getLocation(), FeedbackType.TICKING);
-        addToRegistry(block);
+        final Location location = blockMenu == null ? block.getLocation() : blockMenu.getLocation();
+        sendFeedback(location, FeedbackType.TICKING);
+        addToRegistry(location);
         updateGui(blockMenu);
     }
 
