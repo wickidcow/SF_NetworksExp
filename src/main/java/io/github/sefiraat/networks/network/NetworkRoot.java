@@ -1001,7 +1001,7 @@ public class NetworkRoot extends NetworkNode {
     }
 
     public boolean contains(@NotNull ItemRequest request) {
-        return contains(request, requiredAmount);
+        return contains(request, request.getAmount());
     }
 
     /**
