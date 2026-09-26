@@ -337,6 +337,16 @@ require("NETWORK_LIMIT_QUANTITY_MAP.get(location)" in advanced_directional
         and "NETWORK_TRANSPORT_MODE_MAP.remove(location)" in advanced_directional
         and ".get(location.clone())" not in advanced_directional,
         "AdvancedDirectional hot-path caches must avoid per-tick Location clones and clear on break")
+require("final Location location = data.getLocation();" in network_object
+        and "tickHangingBlocks(location);" in network_object
+        and "protected void addToRegistry(@NotNull Location location)" in network_object
+        and "private void registerNow(@NotNull Location location)" in network_object,
+        "NetworkObject ticker must reuse SlimefunBlockData location instead of allocating Block locations")
+require("blockMenu == null ? block.getLocation() : blockMenu.getLocation()" in network_directional
+        and "addToRegistry(location);" in network_directional,
+        "NetworkDirectional ticker must reuse the live menu location when available")
+require("final Location location = blockMenu.getLocation();\n                    addToRegistry(location);" in auto_crafter,
+        "Auto Crafter registry checks must reuse the menu location")
 require("getOrCreateIngredientPlan(location, instance)" in auto_crafter
         and "List<IngredientRequest> plan = INGREDIENT_PLAN_MAP.get(location)" in auto_crafter
         and "INGREDIENT_PLAN_MAP.putIfAbsent(location.clone(), built)" in auto_crafter
