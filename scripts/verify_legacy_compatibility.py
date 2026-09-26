@@ -122,6 +122,7 @@ control_x = read("src/main/java/io/github/sefiraat/networks/slimefun/network/Net
 quantum_storage = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkQuantumStorage.java")
 abstract_transfer = read("src/main/java/com/ytdd9527/networksexpansion/core/items/machines/AbstractTransfer.java")
 auto_crafter = read("src/main/java/com/ytdd9527/networksexpansion/core/items/machines/AutoCrafter.java")
+item_request = read("src/main/java/io/github/sefiraat/networks/network/stackcaches/ItemRequest.java")
 auto_crafter_batch_planner = read("src/main/java/com/ytdd9527/networksexpansion/core/items/machines/AutoCrafterBatchPlanner.java")
 smart_crafting = read("src/main/java/com/ytdd9527/networksexpansion/implementation/machines/networks/advanced/SmartNetworkCraftingGridNewStyle.java")
 crafting_grid = read("src/main/java/io/github/sefiraat/networks/slimefun/network/grid/NetworkCraftingGrid.java")
@@ -159,6 +160,8 @@ require(config.get("features", {}).get("network-monitor-inspector", {}).get("hig
 softdepend = plugin.get("softdepend") or []
 for optional_plugin in ["InfinityExpansion2", "SlimeHUDPlus", "JustEnoughGuide", "LogiTech"]:
     require(optional_plugin in softdepend, f"optional integration is missing from softdepend: {optional_plugin}")
+require("com.github.balugaq:JustEnoughGuide:" not in build,
+        "JustEnoughGuide must remain runtime-detected and must not be a brittle JitPack compile dependency")
 
 # Java/Paper/exact-core build contract.
 require('version = "2.1.112-Legacy-1.0"' in build, "project version is not 1.0 Legacy")
@@ -352,6 +355,18 @@ require("getOrCreateIngredientPlan(location, instance)" in auto_crafter
         and "INGREDIENT_PLAN_MAP.putIfAbsent(location.clone(), built)" in auto_crafter
         and "INGREDIENT_PLAN_MAP.computeIfAbsent(\n            location.clone()" not in auto_crafter,
         "Auto Crafter ingredient cache must avoid cloning Location keys on cache hits")
+require("public boolean contains(@NotNull ItemStackCache requestCache, int requiredAmount)" in network_root
+        and "return contains(request, request.getAmount())" in network_root,
+        "NetworkRoot cached-item availability probe is missing")
+require("new ItemStackCache(template)" in auto_crafter
+        and "root.contains(ingredient.cache(), requestedAmount)" in auto_crafter
+        and "new ItemRequest(ingredient.cache(), requestedAmount)" in auto_crafter
+        and "record IngredientRequest(" in auto_crafter,
+        "Auto Crafter ingredient metadata caches are not reused across preflight/withdrawal")
+require("public ItemRequest(@NotNull ItemStackCache cache, int amount)" in item_request
+        and "this.itemMeta = cache.itemMeta" in item_request
+        and "this.metaCached = cache.metaCached" in item_request,
+        "ItemRequest cached-template constructor is missing")
 require("final int[] requestedAmounts" not in auto_crafter
         and "(int) ((long) ingredient.amount() * blueprintAmount)" in auto_crafter,
         "Auto Crafter must not allocate a requested-amount scratch array per craft")
