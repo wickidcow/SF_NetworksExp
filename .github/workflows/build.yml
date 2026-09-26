@@ -51,14 +51,15 @@ jobs:
           test "$OUTPUT_NAME" = "SF_Networks${VERSION}.jar"
           grep -Fq 'archiveFileName.set("SF_Networks${project.version}.jar")' build.gradle.kts
           if printf '%s\n%s\n' "$VERSION" "$OUTPUT_NAME" | grep -Eiq '(legacy|english|snapshot)'; then exit 1; fi
-      - name: Verify no stale JEG build dependency
+      - name: Verify maintained JEG build dependency
         shell: bash
         run: |
           set -euo pipefail
           if grep -Fq 'com.github.balugaq:JustEnoughGuide' build.gradle.kts; then
-            echo 'Networks must not depend on an obsolete upstream JEG JitPack revision.' >&2
+            echo 'Networks must not depend on the obsolete upstream JEG JitPack revision.' >&2
             exit 1
           fi
+          grep -Fq 'com.github.wickidcow:SF_JustEnoughGuide:v2.1.67' build.gradle.kts
       - name: Verify Networks source contract
         run: python3 scripts/verify_legacy_compatibility.py
       - name: Build exact Slimefun Legacy JAR
