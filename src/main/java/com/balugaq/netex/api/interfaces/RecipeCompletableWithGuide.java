@@ -34,7 +34,7 @@ public interface RecipeCompletableWithGuide {
                     boolean unordered = RecipeCompletableListener.isUnordered(getSlimefunItem());
                     var session = RecipeCompleteSession.create(blockMenu, player, action, slots, unordered, 1);
                     if (session == null) return false;
-                    RecipeCompleteProvider.getSlimefunSources().stream().findFirst().get().openGuide(session);
+                    RecipeCompleteProvider.openSlimefun(session);
                 } catch (Exception ignored) {
                     Lang.getString("messages.unsupported-operation.incompatible-jeg-version");
                 }
