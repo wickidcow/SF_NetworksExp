@@ -109,6 +109,7 @@ barrel_type = read("src/main/java/io/github/sefiraat/networks/network/barrel/Bar
 localization_service = read("src/main/java/com/ytdd9527/networksexpansion/core/services/LocalizationService.java")
 network_object = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkObject.java")
 network_directional = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkDirectional.java")
+advanced_directional = read("src/main/java/com/ytdd9527/networksexpansion/core/items/machines/AdvancedDirectional.java")
 universal_verifier = read("scripts/verify_universal_jar.py")
 transfer_utils = read("src/main/java/io/github/sefiraat/networks/utils/NetworkTransferUtils.java")
 transfer_audit = read("src/main/java/io/github/sefiraat/networks/utils/TransferAudit.java")
@@ -326,6 +327,16 @@ require("Map<Location, IdleState> IDLE_STATE_MAP = new ConcurrentHashMap<>()" in
         and "IDLE_MISS_MAP" not in auto_crafter
         and "IDLE_SKIP_MAP" not in auto_crafter,
         "Auto Crafter idle backoff must avoid per-tick Location/Integer churn")
+require("NETWORK_LIMIT_QUANTITY_MAP.get(location)" in advanced_directional
+        and "NETWORK_TRANSPORT_MODE_MAP.get(location)" in advanced_directional
+        and "SELECTED_DIRECTION_MAP.get(location)" in advanced_directional
+        and "private static <T> void putOwned" in advanced_directional
+        and "map.replace(location, value)" in advanced_directional
+        and "map.putIfAbsent(location.clone(), value)" in advanced_directional
+        and "NETWORK_LIMIT_QUANTITY_MAP.remove(location)" in advanced_directional
+        and "NETWORK_TRANSPORT_MODE_MAP.remove(location)" in advanced_directional
+        and ".get(location.clone())" not in advanced_directional,
+        "AdvancedDirectional hot-path caches must avoid per-tick Location clones and clear on break")
 require("getOrCreateIngredientPlan(location, instance)" in auto_crafter
         and "List<IngredientRequest> plan = INGREDIENT_PLAN_MAP.get(location)" in auto_crafter
         and "INGREDIENT_PLAN_MAP.putIfAbsent(location.clone(), built)" in auto_crafter
