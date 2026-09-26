@@ -1,7 +1,7 @@
 package com.balugaq.netex.api.interfaces;
 
 import com.balugaq.jeg.api.recipe_complete.RecipeCompleteSession;
-import com.balugaq.jeg.api.recipe_complete.source.base.RecipeCompleteProvider;
+import com.balugaq.jeg.api.recipe_complete.source.RecipeCompleteProvider;
 import com.balugaq.jeg.core.listeners.RecipeCompletableListener;
 import com.balugaq.jeg.utils.GuideUtil;
 import com.balugaq.netex.api.helpers.Icon;
@@ -18,7 +18,7 @@ public interface RecipeCompletableWithGuide {
             blockMenu.replaceExistingItem(slot, Icon.JEG_BUTTON);
             blockMenu.addMenuClickHandler(slot, (player, slot1, item, action) -> {
                 try {
-                    if (RecipeCompletableListener.isSelectingItemStackToRecipeComplete(player)) {
+                    if (RecipeCompletableListener.isSelectingItemStackToRecipeComplete(player.getUniqueId())) {
                         var session = RecipeCompleteSession.getSession(player);
                         if (session == null) return false;
                         if (session.getMenu() != null && session.getMenu().getLocation().equals(blockMenu.getLocation())) {
@@ -29,12 +29,12 @@ public interface RecipeCompletableWithGuide {
                         }
                     }
 
-                    RecipeCompletableListener.allowSelectingItemStackToRecipeComplete(player);
+                    RecipeCompletableListener.allowSelectingItemStackToRecipeComplete(player.getUniqueId());
                     int[] slots = RecipeCompletableListener.getIngredientSlots(getSlimefunItem());
                     boolean unordered = RecipeCompletableListener.isUnordered(getSlimefunItem());
                     var session = RecipeCompleteSession.create(blockMenu, player, action, slots, unordered, 1);
                     if (session == null) return false;
-                    RecipeCompleteProvider.getSlimefunSources().stream().findFirst().get().openGuide(session);
+                    RecipeCompleteProvider.openSlimefun(session);
                 } catch (Exception ignored) {
                     Lang.getString("messages.unsupported-operation.incompatible-jeg-version");
                 }
