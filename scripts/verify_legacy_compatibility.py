@@ -160,6 +160,8 @@ require(config.get("features", {}).get("network-monitor-inspector", {}).get("hig
 softdepend = plugin.get("softdepend") or []
 for optional_plugin in ["InfinityExpansion2", "SlimeHUDPlus", "JustEnoughGuide", "LogiTech"]:
     require(optional_plugin in softdepend, f"optional integration is missing from softdepend: {optional_plugin}")
+require("com.github.balugaq:JustEnoughGuide:" not in build,
+        "JustEnoughGuide must remain runtime-detected and must not be a brittle JitPack compile dependency")
 
 # Java/Paper/exact-core build contract.
 require('version = "2.1.112-Legacy-1.0"' in build, "project version is not 1.0 Legacy")
