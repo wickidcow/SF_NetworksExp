@@ -18,7 +18,7 @@ public interface RecipeCompletableWithGuide {
             blockMenu.replaceExistingItem(slot, Icon.JEG_BUTTON);
             blockMenu.addMenuClickHandler(slot, (player, slot1, item, action) -> {
                 try {
-                    if (RecipeCompletableListener.isSelectingItemStackToRecipeComplete(player)) {
+                    if (RecipeCompletableListener.isSelectingItemStackToRecipeComplete(player.getUniqueId())) {
                         var session = RecipeCompleteSession.getSession(player);
                         if (session == null) return false;
                         if (session.getMenu() != null && session.getMenu().getLocation().equals(blockMenu.getLocation())) {
@@ -29,7 +29,7 @@ public interface RecipeCompletableWithGuide {
                         }
                     }
 
-                    RecipeCompletableListener.allowSelectingItemStackToRecipeComplete(player);
+                    RecipeCompletableListener.allowSelectingItemStackToRecipeComplete(player.getUniqueId());
                     int[] slots = RecipeCompletableListener.getIngredientSlots(getSlimefunItem());
                     boolean unordered = RecipeCompletableListener.isUnordered(getSlimefunItem());
                     var session = RecipeCompleteSession.create(blockMenu, player, action, slots, unordered, 1);
