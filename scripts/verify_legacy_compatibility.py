@@ -288,7 +288,7 @@ require(legacy_withdraw.find("// Cells") < legacy_withdraw.find("// Crafters")
         < legacy_withdraw.find("Deep storage after loose network inventory"),
         "deprecated network withdrawal no longer follows classic Cells -> Crafters -> Greedy -> deep-storage priority")
 require(accessor_withdraw.find("// Cells") < accessor_withdraw.find("// Crafters")
-        < accessor_withdraw.find("getAdvancedGreedyBlockMenus()")
+        < accessor_withdraw.find("for (Location greedyLocation : advancedGreedyBlocks)")
         < accessor_withdraw.find("// Greedy Blocks")
         < accessor_withdraw.find("getPersistentAccessHistory(accessor)")
         < accessor_withdraw.find("Deep storage after loose network inventory"),
