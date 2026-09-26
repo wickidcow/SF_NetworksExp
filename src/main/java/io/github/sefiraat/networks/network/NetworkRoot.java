@@ -1026,7 +1026,12 @@ public class NetworkRoot extends NetworkNode {
         }
 
         // Crafters
-        for (BlockMenu blockMenu : getCrafterOutputs()) {
+        // Iterate topology locations directly to avoid allocating a temporary BlockMenu HashSet.
+        for (Location crafterLocation : crafters) {
+            BlockMenu blockMenu = StorageCacheUtils.getMenu(crafterLocation);
+            if (blockMenu == null) {
+                continue;
+            }
             int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
             for (int slot : slots) {
                 final ItemStack itemStack = blockMenu.getItemInSlot(slot);
@@ -1063,7 +1068,11 @@ public class NetworkRoot extends NetworkNode {
             }
         }
 
-        for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {
+        for (Location greedyLocation : advancedGreedyBlocks) {
+            BlockMenu blockMenu = StorageCacheUtils.getMenu(greedyLocation);
+            if (blockMenu == null) {
+                continue;
+            }
             int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
             for (int slot : slots) {
                 final ItemStack itemStack = blockMenu.getItemInSlot(slot);
@@ -1083,7 +1092,11 @@ public class NetworkRoot extends NetworkNode {
         }
 
         // Greedy Blocks
-        for (BlockMenu blockMenu : getGreedyBlockMenus()) {
+        for (Location greedyLocation : greedyBlocks) {
+            BlockMenu blockMenu = StorageCacheUtils.getMenu(greedyLocation);
+            if (blockMenu == null) {
+                continue;
+            }
             int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
             if (slots.length == 0) {
                 continue;
@@ -1104,8 +1117,9 @@ public class NetworkRoot extends NetworkNode {
         }
 
         // Cells
-        for (BlockMenu blockMenu : getCellMenus()) {
-            if (!isRealCell(blockMenu)) continue;
+        for (Location cellLocation : cells) {
+            BlockMenu blockMenu = StorageCacheUtils.getMenu(cellLocation);
+            if (blockMenu == null || !isRealCell(blockMenu)) continue;
             for (int slot : CELL_AVAILABLE_SLOTS) {
                 final ItemStack itemStack = blockMenu.getItemInSlot(slot);
                 if (itemStack == null
@@ -1668,8 +1682,9 @@ public class NetworkRoot extends NetworkNode {
          * item into its assigned destination instead of withdrawing from the destination itself.
          */
         // Cells
-        for (BlockMenu blockMenu : getCellMenus()) {
-            if (!isRealCell(blockMenu)) continue;
+        for (Location cellLocation : cells) {
+            BlockMenu blockMenu = StorageCacheUtils.getMenu(cellLocation);
+            if (blockMenu == null || !isRealCell(blockMenu)) continue;
             for (int slot : CELL_AVAILABLE_SLOTS) {
                 final ItemStack itemStack = blockMenu.getItemInSlot(slot);
                 if (itemStack == null
@@ -1708,7 +1723,11 @@ public class NetworkRoot extends NetworkNode {
         }
 
         // Crafters
-        for (BlockMenu blockMenu : getCrafterOutputs()) {
+        for (Location crafterLocation : crafters) {
+            BlockMenu blockMenu = StorageCacheUtils.getMenu(crafterLocation);
+            if (blockMenu == null) {
+                continue;
+            }
             int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
             for (int slot : slots) {
                 final ItemStack itemStack = blockMenu.getItemInSlot(slot);
@@ -1744,7 +1763,11 @@ public class NetworkRoot extends NetworkNode {
             }
         }
 
-        for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {
+        for (Location greedyLocation : advancedGreedyBlocks) {
+            BlockMenu blockMenu = StorageCacheUtils.getMenu(greedyLocation);
+            if (blockMenu == null) {
+                continue;
+            }
             int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
             for (int slot : slots) {
                 final ItemStack itemStack = blockMenu.getItemInSlot(slot);
@@ -1781,7 +1804,11 @@ public class NetworkRoot extends NetworkNode {
         }
 
         // Greedy Blocks
-        for (BlockMenu blockMenu : getGreedyBlockMenus()) {
+        for (Location greedyLocation : greedyBlocks) {
+            BlockMenu blockMenu = StorageCacheUtils.getMenu(greedyLocation);
+            if (blockMenu == null) {
+                continue;
+            }
             int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
             if (slots.length == 0) {
                 continue;
