@@ -63,6 +63,11 @@ jobs:
           grep -Fq 'v[revision]/[artifact][revision].jar' build.gradle.kts
           JEG_BRIDGE=src/main/java/com/balugaq/netex/api/interfaces/RecipeCompletableWithGuide.java
           grep -Fq 'com.balugaq.jeg.api.recipe_complete.source.RecipeCompleteProvider' "$JEG_BRIDGE"
+          grep -Fq 'RecipeCompleteProvider.openSlimefun(session);' "$JEG_BRIDGE"
+          if grep -Fq 'getSlimefunSources()' "$JEG_BRIDGE"; then
+            echo 'Obsolete JEG recipe-source accessor returned.' >&2
+            exit 1
+          fi
           if grep -Fq 'com.balugaq.jeg.api.recipe_complete.source.base.RecipeCompleteProvider' "$JEG_BRIDGE"; then
             echo 'Obsolete pre-2.1.67 JEG RecipeCompleteProvider package returned.' >&2
             exit 1
