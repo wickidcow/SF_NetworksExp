@@ -21,6 +21,7 @@ import io.github.sefiraat.networks.network.barrel.InfinityBarrel;
 import io.github.sefiraat.networks.network.barrel.NetworkStorage;
 import io.github.sefiraat.networks.network.stackcaches.BarrelIdentity;
 import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
+import io.github.sefiraat.networks.network.stackcaches.ItemStackCache;
 import io.github.sefiraat.networks.network.stackcaches.QuantumCache;
 import io.github.sefiraat.networks.slimefun.network.NetworkCell;
 import io.github.sefiraat.networks.slimefun.network.NetworkDirectional;
@@ -1000,6 +1001,16 @@ public class NetworkRoot extends NetworkNode {
     }
 
     public boolean contains(@NotNull ItemRequest request) {
+        return contains(request, requiredAmount);
+    }
+
+    /**
+     * Allocation-light availability probe for callers that already cache item metadata.
+     */
+    public boolean contains(@NotNull ItemStackCache requestCache, int requiredAmount) {
+        if (requiredAmount <= 0) {
+            return true;
+        }
 
         long found = 0;
 
@@ -1007,7 +1018,7 @@ public class NetworkRoot extends NetworkNode {
         for (BarrelIdentity barrelIdentity : getOutputAbleBarrels()) {
             final ItemStack itemStack = barrelIdentity.getItemStack();
 
-            if (itemStack == null || !StackUtils.itemsMatch(request, itemStack)) {
+            if (itemStack == null || !StackUtils.itemsMatch(requestCache, itemStack)) {
                 continue;
             }
 
@@ -1020,7 +1031,7 @@ public class NetworkRoot extends NetworkNode {
             }
 
             // Escape if found all we need
-            if (found >= request.getAmount()) {
+            if (found >= requiredAmount) {
                 return true;
             }
         }
@@ -1037,14 +1048,14 @@ public class NetworkRoot extends NetworkNode {
                 final ItemStack itemStack = blockMenu.getItemInSlot(slot);
                 if (itemStack == null
                     || itemStack.getType() == Material.AIR
-                    || !StackUtils.itemsMatch(request, itemStack)) {
+                    || !StackUtils.itemsMatch(requestCache, itemStack)) {
                     continue;
                 }
 
                 found += itemStack.getAmount();
 
                 // Escape if found all we need
-                if (found >= request.getAmount()) {
+                if (found >= requiredAmount) {
                     return true;
                 }
             }
@@ -1054,7 +1065,7 @@ public class NetworkRoot extends NetworkNode {
         for (StorageUnitData cache : cacheMap.keySet()) {
             final List<ItemContainer> storedItems = cache.getStoredItems();
             for (ItemContainer itemContainer : storedItems) {
-                if (!StackUtils.itemsMatch(request, itemContainer.getItemStack())) {
+                if (!StackUtils.itemsMatch(requestCache, itemContainer.getItemStack())) {
                     continue;
                 }
 
@@ -1062,7 +1073,7 @@ public class NetworkRoot extends NetworkNode {
                 found += amount;
 
                 // Escape if found all we need
-                if (found >= request.getAmount()) {
+                if (found >= requiredAmount) {
                     return true;
                 }
             }
@@ -1078,14 +1089,14 @@ public class NetworkRoot extends NetworkNode {
                 final ItemStack itemStack = blockMenu.getItemInSlot(slot);
                 if (itemStack == null
                     || itemStack.getType() == Material.AIR
-                    || !StackUtils.itemsMatch(request, itemStack)) {
+                    || !StackUtils.itemsMatch(requestCache, itemStack)) {
                     continue;
                 }
 
                 found += itemStack.getAmount();
 
                 // Escape if found all we need
-                if (found >= request.getAmount()) {
+                if (found >= requiredAmount) {
                     return true;
                 }
             }
@@ -1104,14 +1115,14 @@ public class NetworkRoot extends NetworkNode {
             final ItemStack itemStack = blockMenu.getItemInSlot(slots[0]);
             if (itemStack == null
                 || itemStack.getType() == Material.AIR
-                || !StackUtils.itemsMatch(request, itemStack)) {
+                || !StackUtils.itemsMatch(requestCache, itemStack)) {
                 continue;
             }
 
             found += itemStack.getAmount();
 
             // Escape if found all we need
-            if (found >= request.getAmount()) {
+            if (found >= requiredAmount) {
                 return true;
             }
         }
@@ -1124,14 +1135,14 @@ public class NetworkRoot extends NetworkNode {
                 final ItemStack itemStack = blockMenu.getItemInSlot(slot);
                 if (itemStack == null
                     || itemStack.getType() == Material.AIR
-                    || !StackUtils.itemsMatch(request, itemStack)) {
+                    || !StackUtils.itemsMatch(requestCache, itemStack)) {
                     continue;
                 }
 
                 found += itemStack.getAmount();
 
                 // Escape if found all we need
-                if (found >= request.getAmount()) {
+                if (found >= requiredAmount) {
                     return true;
                 }
             }
