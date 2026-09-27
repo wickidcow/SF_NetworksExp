@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.35
+
+### Sleeping blueprint-less Auto Crafters
+- Auto Crafters with no blueprint now take a minimal idle path instead of entering network/crafting preflight every Slimefun tick.
+- Dormant crafters remain registered as network nodes so removing a blueprint cannot break topology or disconnect machines behind them.
+- Normal Auto Crafters with a buffered output still get a final transfer opportunity; Withholding Auto Crafters retain their output as before.
+- Active crafters keep the existing adaptive idle backoff, recipe batching, power usage, and ingredient safety behavior unchanged.
+- Updated the compatibility source contract so CI guards the topology-preserving sleep path.
+
 ## 1.0.30
 
 ### Network Monitor auto-connect
