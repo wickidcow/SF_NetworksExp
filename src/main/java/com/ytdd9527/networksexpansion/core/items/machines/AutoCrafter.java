@@ -94,11 +94,14 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
                     return;
                 }
 
+                final Location location = blockMenu.getLocation();
+                addToRegistry(location);
+
                 /*
-                 * A blueprint-less Auto Crafter has no crafting work to do. This check intentionally happens
-                 * before registry/root resolution and idle-backoff bookkeeping: large servers can keep thousands
-                 * of dormant crafters loaded, and those machines should cost little more than a single menu-slot
-                 * lookup per Slimefun tick.
+                 * A blueprint-less Auto Crafter has no crafting work to do. Keep the cheap node-registration
+                 * check above so dormant crafters remain part of network topology, but return before resolving
+                 * the root or doing soft-cell, power, recipe, ingredient or idle-backoff work. Large servers can
+                 * keep thousands of dormant crafters loaded, so this path must stay intentionally tiny.
                  *
                  * Normal (non-withholding) crafters are allowed through when an output is still buffered so the
                  * pending result gets one last chance to move back into the network. Withholding crafters keep
@@ -112,8 +115,6 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
                     }
                 }
 
-                final Location location = blockMenu.getLocation();
-                addToRegistry(location);
                 if (shouldSkipIdleTick(location)) {
                     return;
                 }
