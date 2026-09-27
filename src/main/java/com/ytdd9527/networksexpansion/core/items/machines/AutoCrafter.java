@@ -90,20 +90,44 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
             @Override
             public void tick(@NotNull Block block, SlimefunItem slimefunItem, @NotNull SlimefunBlockData data) {
                 BlockMenu blockMenu = data.getBlockMenu();
-                if (blockMenu != null) {
-                    final Location location = blockMenu.getLocation();
-                    addToRegistry(location);
-                    if (shouldSkipIdleTick(location)) {
+                if (blockMenu == null) {
+                    return;
+                }
+
+                /*
+                 * A blueprint-less Auto Crafter has no crafting work to do. This check intentionally happens
+                 * before registry/root resolution and idle-backoff bookkeeping: large servers can keep thousands
+                 * of dormant crafters loaded, and those machines should cost little more than a single menu-slot
+                 * lookup per Slimefun tick.
+                 *
+                 * Normal (non-withholding) crafters are allowed through when an output is still buffered so the
+                 * pending result gets one last chance to move back into the network. Withholding crafters keep
+                 * their output by design, so an empty blueprint slot can sleep regardless of output contents.
+                 */
+                final ItemStack blueprint = blockMenu.getItemInSlot(BLUEPRINT_SLOT);
+                if (isEmpty(blueprint)) {
+                    final ItemStack output = blockMenu.getItemInSlot(OUTPUT_SLOT);
+                    if (withholding || isEmpty(output)) {
                         return;
                     }
-                    recordCraftResult(location, craftPreFlight(blockMenu));
                 }
+
+                final Location location = blockMenu.getLocation();
+                addToRegistry(location);
+                if (shouldSkipIdleTick(location)) {
+                    return;
+                }
+                recordCraftResult(location, craftPreFlight(blockMenu));
             }
         });
     }
 
     public static void updateCache(@NotNull BlockMenu blockMenu) {
         clearRuntimeCache(blockMenu.getLocation());
+    }
+
+    private static boolean isEmpty(@Nullable ItemStack stack) {
+        return stack == null || stack.getType() == Material.AIR || stack.getAmount() <= 0;
     }
 
     private static boolean shouldSkipIdleTick(@NotNull Location location) {
