@@ -359,8 +359,15 @@ require("final Location location = data.getLocation();" in network_object
 require("blockMenu == null ? block.getLocation() : blockMenu.getLocation()" in network_directional
         and "addToRegistry(location);" in network_directional,
         "NetworkDirectional ticker must reuse the live menu location when available")
-require("final Location location = blockMenu.getLocation();\n                    addToRegistry(location);" in auto_crafter,
-        "Auto Crafter registry checks must reuse the menu location")
+auto_crafter_blueprint_fast_path = auto_crafter.find(
+    "final ItemStack blueprint = blockMenu.getItemInSlot(BLUEPRINT_SLOT);")
+auto_crafter_registry_check = auto_crafter.find("addToRegistry(location);")
+require(auto_crafter_blueprint_fast_path >= 0
+        and "if (isEmpty(blueprint))" in auto_crafter
+        and "if (withholding || isEmpty(output))" in auto_crafter
+        and auto_crafter_registry_check > auto_crafter_blueprint_fast_path
+        and "final Location location = blockMenu.getLocation();" in auto_crafter,
+        "Auto Crafter must fast-return blueprint-less idle machines before registry checks")
 require("getOrCreateIngredientPlan(location, instance)" in auto_crafter
         and "List<IngredientRequest> plan = INGREDIENT_PLAN_MAP.get(location)" in auto_crafter
         and "INGREDIENT_PLAN_MAP.putIfAbsent(location.clone(), built)" in auto_crafter
