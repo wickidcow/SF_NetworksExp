@@ -184,10 +184,10 @@ public class NetworkNode {
 
     protected long retrieveBlockCharge() {
         if (this.nodeType == NodeType.POWER_NODE) {
-            int blockCharge = 0;
+            long blockCharge = 0L;
             final SlimefunItem item = StorageCacheUtils.getSlimefunItem(this.nodePosition);
             if (item instanceof NetworkPowerNode powerNode) {
-                blockCharge = powerNode.getCharge(this.nodePosition);
+                blockCharge = powerNode.getChargeLong(this.nodePosition);
             }
             return blockCharge;
         }
