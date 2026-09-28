@@ -140,17 +140,15 @@ public abstract class AdvancedDirectional extends NetworkDirectional {
                     blockFace.name(),
                     DisplayNameUtils.getMaterialName(blockMaterial)));
             final ItemMeta itemMeta = displayStack.getItemMeta();
-            itemMeta.setLore(Lang.getStringList("messages.normal-operation.directional.display_lore"));
+            List<Component> lore = TextUtil.components(
+                Lang.getStringList("messages.normal-operation.directional.display_lore"));
             if (active) {
-                List<String> lore = itemMeta.getLore();
-                if (lore == null) {
-                    lore = new ArrayList<>();
-                }
-                lore.add(Lang.getString("messages.normal-operation.directional.set_facing"));
-                itemMeta.setLore(lore);
+                lore = new ArrayList<>(lore);
+                lore.add(TextUtil.component(Lang.getString("messages.normal-operation.directional.set_facing")));
                 itemMeta.addEnchant(NetworksVersionedEnchantment.LUCK_OF_THE_SEA, 1, true);
                 itemMeta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
             }
+            itemMeta.lore(lore);
             displayStack.setItemMeta(itemMeta);
             return displayStack;
         } else {
