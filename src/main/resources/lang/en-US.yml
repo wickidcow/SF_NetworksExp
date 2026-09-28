@@ -2269,6 +2269,8 @@ items:
     name: Network Quantum Workbench
     lore:
     - Allows the crafting of Quantum Storages.
+  # Internal Slimefun IDs 9/10 predate IDs 1-8. Visible tier numbers follow
+  # actual capacity progression instead of the legacy registration IDs.
   NTW_QUANTUM_STORAGE_0:
     name: Network Quantum Storage (0)
     lore:
@@ -2276,61 +2278,61 @@ items:
     - Assign the item manually.
     - Monitor exposes it; Pusher feeds it.
   NTW_QUANTUM_STORAGE_9:
-    name: Network Quantum Storage (9)
-    lore:
-    - Stores a massive quantity of one assigned item.
-    - Assign the item manually.
-    - Monitor exposes it; Pusher feeds it.
-  NTW_QUANTUM_STORAGE_10:
-    name: Network Quantum Storage (10)
-    lore:
-    - Stores a massive quantity of one assigned item.
-    - Assign the item manually.
-    - Monitor exposes it; Pusher feeds it.
-  NTW_QUANTUM_STORAGE_1:
     name: Network Quantum Storage (1)
     lore:
     - Stores a massive quantity of one assigned item.
     - Assign the item manually.
     - Monitor exposes it; Pusher feeds it.
-  NTW_QUANTUM_STORAGE_2:
+  NTW_QUANTUM_STORAGE_10:
     name: Network Quantum Storage (2)
     lore:
     - Stores a massive quantity of one assigned item.
     - Assign the item manually.
     - Monitor exposes it; Pusher feeds it.
-  NTW_QUANTUM_STORAGE_3:
+  NTW_QUANTUM_STORAGE_1:
     name: Network Quantum Storage (3)
     lore:
     - Stores a massive quantity of one assigned item.
     - Assign the item manually.
     - Monitor exposes it; Pusher feeds it.
-  NTW_QUANTUM_STORAGE_4:
+  NTW_QUANTUM_STORAGE_2:
     name: Network Quantum Storage (4)
     lore:
     - Stores a massive quantity of one assigned item.
     - Assign the item manually.
     - Monitor exposes it; Pusher feeds it.
-  NTW_QUANTUM_STORAGE_5:
+  NTW_QUANTUM_STORAGE_3:
     name: Network Quantum Storage (5)
     lore:
     - Stores a massive quantity of one assigned item.
     - Assign the item manually.
     - Monitor exposes it; Pusher feeds it.
-  NTW_QUANTUM_STORAGE_6:
+  NTW_QUANTUM_STORAGE_4:
     name: Network Quantum Storage (6)
     lore:
     - Stores a massive quantity of one assigned item.
     - Assign the item manually.
     - Monitor exposes it; Pusher feeds it.
-  NTW_QUANTUM_STORAGE_7:
+  NTW_QUANTUM_STORAGE_5:
     name: Network Quantum Storage (7)
     lore:
     - Stores a massive quantity of one assigned item.
     - Assign the item manually.
     - Monitor exposes it; Pusher feeds it.
-  NTW_QUANTUM_STORAGE_8:
+  NTW_QUANTUM_STORAGE_6:
     name: Network Quantum Storage (8)
+    lore:
+    - Stores a massive quantity of one assigned item.
+    - Assign the item manually.
+    - Monitor exposes it; Pusher feeds it.
+  NTW_QUANTUM_STORAGE_7:
+    name: Network Quantum Storage (9)
+    lore:
+    - Stores a massive quantity of one assigned item.
+    - Assign the item manually.
+    - Monitor exposes it; Pusher feeds it.
+  NTW_QUANTUM_STORAGE_8:
+    name: Network Quantum Storage (10)
     lore:
     - Stores a massive quantity of one assigned item.
     - Assign the item manually.
