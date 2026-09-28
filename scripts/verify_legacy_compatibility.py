@@ -333,6 +333,13 @@ require("final ItemStack[] templates = new ItemStack[slots.length]" in abstract_
         and "new ArrayList<>(Collections.nCopies" not in abstract_transfer
         and "List<Integer> activeIndexes" not in abstract_transfer,
         "Expansion line-transfer template/cursor hot path must stay allocation-light")
+require("record LinePassCache" in abstract_transfer
+        and "LINE_PASS_CACHE_MAP.get(location)" in abstract_transfer
+        and "cachedPass.matches(" in abstract_transfer
+        and "for (BlockMenu targetMenu : cachedPass.targets())" in abstract_transfer
+        and "putLinePassCache(location, newPass)" in abstract_transfer
+        and abstract_transfer.count("LINE_PASS_CACHE_MAP.remove(location)") >= 3,
+        "bidirectional line transfers must reuse one validated line traversal per server tick")
 require("Map<Location, IdleState> IDLE_STATE_MAP = new ConcurrentHashMap<>()" in auto_crafter
         and "AtomicInteger misses" in auto_crafter
         and "AtomicInteger skipTicks" in auto_crafter
