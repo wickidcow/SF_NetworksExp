@@ -393,7 +393,7 @@ public class QuantumManager extends NetworkObject {
                     displayStack = new CustomItemStack(
                         displayStack, TextUtil.GRAY + DisplayNameUtils.getDisplayName(barrelItemStack));
                 } else {
-                    SlimefunItem sf = StorageCacheUtils.getSfItem(barrelLocation);
+                    SlimefunItem sf = StorageCacheUtils.getSlimefunItem(barrelLocation);
                     if (sf == null) {
                         displayStack = new CustomItemStack(displayStack, Sorters.NO_ITEM);
                     } else {
