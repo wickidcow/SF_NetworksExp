@@ -427,7 +427,7 @@ public class NetworkController extends NetworkObject {
         for (Location powerNodeLocation : root.getPowerNodes()) {
             final SlimefunItem item = StorageCacheUtils.getSlimefunItem(powerNodeLocation);
             if (item instanceof NetworkPowerNode powerNode) {
-                livePower += Math.max(0, powerNode.getCharge(powerNodeLocation));
+                livePower += Math.max(0, powerNode.getChargeLong(powerNodeLocation));
             }
         }
 
