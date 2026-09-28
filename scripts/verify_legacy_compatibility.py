@@ -336,6 +336,8 @@ require("final ItemStack[] templates = new ItemStack[slots.length]" in abstract_
 require("record LinePassCache" in abstract_transfer
         and "LinePassCache sharedLinePass = null" in abstract_transfer
         and "capturePushLinePass" in abstract_transfer
+        and "PUSH_LINE_CURSOR_MAP.getOrDefault(location, 0).equals(" in abstract_transfer
+        and "GRAB_LINE_CURSOR_MAP.getOrDefault(location, 0)" in abstract_transfer
         and "sharedLinePass = tryPushItem(" in abstract_transfer
         and "limitQuantity,\n                            sharedLinePass);" in abstract_transfer
         and "reusablePass.matches(" in abstract_transfer
