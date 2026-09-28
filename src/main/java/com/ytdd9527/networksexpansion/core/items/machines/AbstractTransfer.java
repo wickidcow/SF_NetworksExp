@@ -56,8 +56,38 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
     private static final Map<Location, Integer> PUSH_TEMPLATE_CURSOR_MAP = new HashMap<>();
     private static final Map<Location, Integer> PUSH_LINE_CURSOR_MAP = new HashMap<>();
     private static final Map<Location, Integer> GRAB_LINE_CURSOR_MAP = new HashMap<>();
+    private static final Map<Location, LinePassCache> LINE_PASS_CACHE_MAP = new HashMap<>();
     private static final Map<Location, Integer> LAST_TRANSFER_SERVER_TICK = new ConcurrentHashMap<>();
     private final TransferConfiguration config;
+
+    /**
+     * A single bidirectional line-transfer tick historically walked the exact same line twice: once for
+     * push and once for grab. Cache only the already-validated target menus for the current server tick so
+     * the second phase can reuse that traversal. The cache never survives into a later tick, so broken-line
+     * detection and cursor rotation keep their existing semantics across ticks.
+     */
+    private record LinePassCache(
+        int serverTick,
+        @NotNull BlockFace direction,
+        int limit,
+        int startOffset,
+        int maxTargets,
+        @NotNull List<BlockMenu> targets,
+        int nextOffset) {
+
+        private boolean matches(
+            int currentServerTick,
+            @NotNull BlockFace currentDirection,
+            int currentLimit,
+            int currentStartOffset,
+            int currentMaxTargets) {
+            return serverTick == currentServerTick
+                && direction == currentDirection
+                && limit == currentLimit
+                && startOffset == currentStartOffset
+                && maxTargets == currentMaxTargets;
+        }
+    }
 
     protected AbstractTransfer(
         @NotNull ItemGroup itemGroup,
@@ -396,6 +426,7 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
 
         if (targetBudget <= 0 || targetBudget >= config.maxDistance) {
             cursorMap.remove(location);
+            LINE_PASS_CACHE_MAP.remove(location);
             LineOperationUtil.doOperation(
                 location,
                 direction,
@@ -407,18 +438,57 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
         }
 
         final int startOffset = cursorMap.getOrDefault(location, 0);
-        final int nextOffset = LineOperationUtil.doBudgetedOperation(
-            location,
-            direction,
-            config.maxDistance,
-            startOffset,
-            targetBudget,
-            consumer);
+        final int currentServerTick = Bukkit.getCurrentTick();
+        final LinePassCache cachedPass = LINE_PASS_CACHE_MAP.get(location);
+        final int nextOffset;
+
+        if (cachedPass != null
+            && cachedPass.matches(
+                currentServerTick,
+                direction,
+                config.maxDistance,
+                startOffset,
+                targetBudget)) {
+            for (BlockMenu targetMenu : cachedPass.targets()) {
+                consumer.accept(targetMenu);
+            }
+            nextOffset = cachedPass.nextOffset();
+        } else {
+            final List<BlockMenu> visitedTargets = new ArrayList<>(Math.min(targetBudget, config.maxDistance));
+            nextOffset = LineOperationUtil.doBudgetedOperation(
+                location,
+                direction,
+                config.maxDistance,
+                startOffset,
+                targetBudget,
+                (targetMenu) -> {
+                    visitedTargets.add(targetMenu);
+                    consumer.accept(targetMenu);
+                });
+
+            final LinePassCache newPass = new LinePassCache(
+                currentServerTick,
+                direction,
+                config.maxDistance,
+                startOffset,
+                targetBudget,
+                visitedTargets,
+                nextOffset);
+            putLinePassCache(location, newPass);
+        }
 
         if (nextOffset == 0) {
             cursorMap.remove(location);
         } else {
             putCursorValue(cursorMap, location, nextOffset);
+        }
+    }
+
+    private static void putLinePassCache(
+        @NotNull Location location,
+        @NotNull LinePassCache pass) {
+        if (LINE_PASS_CACHE_MAP.replace(location, pass) == null) {
+            LINE_PASS_CACHE_MAP.put(location.clone(), pass);
         }
     }
 
@@ -441,6 +511,7 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
         final Location location = blockMenu.getLocation();
         PUSH_LINE_CURSOR_MAP.remove(location);
         GRAB_LINE_CURSOR_MAP.remove(location);
+        LINE_PASS_CACHE_MAP.remove(location);
     }
 
     @Override
@@ -452,6 +523,7 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
         PUSH_TEMPLATE_CURSOR_MAP.remove(location);
         PUSH_LINE_CURSOR_MAP.remove(location);
         GRAB_LINE_CURSOR_MAP.remove(location);
+        LINE_PASS_CACHE_MAP.remove(location);
         LAST_TRANSFER_SERVER_TICK.remove(location);
     }
 
