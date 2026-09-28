@@ -1,5 +1,6 @@
 package io.github.sefiraat.networks.utils;
 
+import com.ytdd9527.networksexpansion.utils.TextUtil;
 import java.util.Locale;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
