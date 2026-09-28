@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.37
+
+### Paper 26.3 API modernization
+- Replaced the for-removal `StorageCacheUtils.getSfItem(Location)` alias with `getSlimefunItem(Location)` throughout Networks.
+- Replaced the deprecated BlockStorage inventory lookup in the shared machine break helper without changing cached-menu semantics.
+- Migrated power reads and charge removal to Slimefun's long-capacity energy API across Legacy, United, and Gugu compatibility targets.
+- Modernized Network Monitor, directional controls, localization action bars, and selected ItemMeta name/lore paths to Adventure components while preserving existing legacy color formatting.
+- Added regression guards for removed storage APIs and legacy text conversion.
+- Intentionally leaves ItemDifferenter's version-sensitive custom model, fire-resistant, and map component comparisons for a separate compatibility-focused pass.
+
 ## 1.0.36
 
 ### Quantum Storage tier names
