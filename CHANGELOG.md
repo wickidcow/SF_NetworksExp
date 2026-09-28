@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.36
+
+### Quantum Storage tier names
+- Fixed the player-facing Quantum Storage tier numbers so the capacity progression displays as 0 through 14 in order.
+- Preserved the historical internal Slimefun IDs used by existing worlds, placed blocks, recipes, and saved storage data.
+- Added a regression test that locks the legacy-ID-to-visible-tier mapping so registration order cannot leak back into Guide, SlimeHUD, item, or block GUI names.
+
 ## 1.0.35
 
 ### Sleeping blueprint-less Auto Crafters
