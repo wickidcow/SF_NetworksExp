@@ -425,7 +425,7 @@ public class NetworkRoot extends NetworkNode {
 
     @Nullable
     public static BarrelIdentity getBarrel(@NotNull Location barrelLocation, boolean includeEmpty) {
-        SlimefunItem item = StorageCacheUtils.getSfItem(barrelLocation);
+        SlimefunItem item = StorageCacheUtils.getSlimefunItem(barrelLocation);
         BlockMenu menu = StorageCacheUtils.getMenu(barrelLocation);
         if (menu == null) {
             return null;
@@ -470,7 +470,7 @@ public class NetworkRoot extends NetworkNode {
                 if (blockMenu == null) {
                     return;
                 }
-                if (StorageCacheUtils.getSfItem(location) instanceof NetworkCell) {
+                if (StorageCacheUtils.getSlimefunItem(location) instanceof NetworkCell) {
                     cells.add(location);
                 }
             }
@@ -489,7 +489,7 @@ public class NetworkRoot extends NetworkNode {
                 if (blockMenu == null) {
                     return;
                 }
-                if (StorageCacheUtils.getSfItem(location) instanceof NetworkGreedyBlock) {
+                if (StorageCacheUtils.getSlimefunItem(location) instanceof NetworkGreedyBlock) {
                     greedyBlocks.add(location);
                 }
             }
@@ -510,7 +510,7 @@ public class NetworkRoot extends NetworkNode {
                 if (blockMenu == null) {
                     return;
                 }
-                if (StorageCacheUtils.getSfItem(location) instanceof AdvancedGreedyBlock) {
+                if (StorageCacheUtils.getSlimefunItem(location) instanceof AdvancedGreedyBlock) {
                     advancedGreedyBlocks.add(location);
                 }
             }
@@ -717,7 +717,7 @@ public class NetworkRoot extends NetworkNode {
         final Map<StorageUnitData, Location> dataSet = new ConcurrentHashMap<>();
 
         for (Location testLocation : collectMonitorStorageTargets(Set.of(), true)) {
-            final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(testLocation);
+            final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(testLocation);
 
             if (slimefunItem instanceof NetworksDrawer) {
                 final StorageUnitData data = getCargoStorageUnitData(testLocation);
@@ -1354,7 +1354,7 @@ public class NetworkRoot extends NetworkNode {
 
         int removed = 0;
         for (Location node : powerNodes) {
-            final SlimefunItem item = StorageCacheUtils.getSfItem(node);
+            final SlimefunItem item = StorageCacheUtils.getSlimefunItem(node);
             if (item instanceof NetworkPowerNode powerNode) {
                 final int charge = powerNode.getCharge(node);
                 if (charge <= 0) {
@@ -1451,7 +1451,7 @@ public class NetworkRoot extends NetworkNode {
                 addedLocations.add(testLocation);
             }
 
-            final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(testLocation);
+            final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(testLocation);
 
             if (slimefunItem instanceof NetworksDrawer) {
                 final StorageUnitData data = getCargoStorageUnitData(testLocation);
@@ -1529,7 +1529,7 @@ public class NetworkRoot extends NetworkNode {
         final Map<StorageUnitData, Location> dataSet = new ConcurrentHashMap<>();
 
         for (Location testLocation : collectMonitorStorageTargets(this.inputOnlyMonitors, true)) {
-            final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(testLocation);
+            final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(testLocation);
 
             if (slimefunItem instanceof NetworksDrawer) {
                 final StorageUnitData data = getCargoStorageUnitData(testLocation);
@@ -1559,7 +1559,7 @@ public class NetworkRoot extends NetworkNode {
         final Map<StorageUnitData, Location> dataSet = new ConcurrentHashMap<>();
 
         for (Location testLocation : collectMonitorStorageTargets(this.outputOnlyMonitors, true)) {
-            final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(testLocation);
+            final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(testLocation);
 
             if (slimefunItem instanceof NetworksDrawer) {
                 final StorageUnitData data = getCargoStorageUnitData(testLocation);
@@ -2489,6 +2489,6 @@ public class NetworkRoot extends NetworkNode {
     }
 
     public static boolean isRealCell(BlockMenu menu) {
-        return StorageCacheUtils.getSfItem(menu.getLocation()) instanceof NetworkCell;
+        return StorageCacheUtils.getSlimefunItem(menu.getLocation()) instanceof NetworkCell;
     }
 }
