@@ -837,7 +837,7 @@ public class NetworkMonitor extends NetworkDirectional {
         final ItemStack item = new ItemStack(material);
         final ItemMeta meta = item.getItemMeta();
         if (meta != null) {
-            meta.setDisplayName(name);
+            meta.displayName(TextUtil.component(name));
             meta.lore(TextUtil.components(lore));
             item.setItemMeta(meta);
         }
