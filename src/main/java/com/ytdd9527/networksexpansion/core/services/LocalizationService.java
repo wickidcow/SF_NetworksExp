@@ -12,9 +12,7 @@ import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.items.CustomItemStack;
 import lombok.Getter;
 import lombok.Setter;
-import net.md_5.bungee.api.ChatMessageType;
-import net.md_5.bungee.api.chat.BaseComponent;
-import net.md_5.bungee.api.chat.TextComponent;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Material;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -122,16 +120,13 @@ public class LocalizationService {
         send(sender, MessageFormat.format(getString("messages." + messageKey), args));
     }
 
-    @SuppressWarnings("deprecation")
     @ParametersAreNonnullByDefault
     public void sendActionbarMessage(Player p, String messageKey, Object... args) {
         Preconditions.checkArgument(p != null, "Player cannot be null");
         Preconditions.checkArgument(messageKey != null, "Message key cannot be null");
 
         String message = MessageFormat.format(getString("messages." + messageKey), args);
-
-        BaseComponent[] components = TextComponent.fromLegacyText(color(message));
-        p.spigot().sendMessage(ChatMessageType.ACTION_BAR, components);
+        p.sendActionBar(TextUtil.component(color(message)));
     }
 
     public final void addDefaultLanguage(@NotNull String langFilename) {
@@ -341,18 +336,15 @@ public class LocalizationService {
             Keys.customNewKey(this.getPlugin(), id), this.getItemBy(this.recipesKey, id, itemStack, extraLore));
     }
 
-    @SuppressWarnings("deprecation")
     private <T extends ItemStack> @NotNull T appendLore(
         @NotNull T itemStack, @Nullable String @Nullable ... extraLore) {
         Preconditions.checkArgument(itemStack != null, MSG_ITEMSTACK_NULL);
         if (extraLore != null && extraLore.length != 0) {
             ItemMeta meta = itemStack.getItemMeta();
-            List<String> lore = meta.hasLore() ? meta.getLore() : new ArrayList<>();
-            if (lore == null) {
-                lore = new ArrayList<>();
-            }
-            lore.addAll(color(Arrays.asList(extraLore)));
-            meta.setLore(lore);
+            List<Component> existing = meta.lore();
+            List<Component> lore = existing == null ? new ArrayList<>() : new ArrayList<>(existing);
+            lore.addAll(TextUtil.components(color(Arrays.asList(extraLore))));
+            meta.lore(lore);
             itemStack.setItemMeta(meta);
         }
 
