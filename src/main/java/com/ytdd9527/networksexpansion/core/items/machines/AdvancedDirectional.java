@@ -628,17 +628,17 @@ public abstract class AdvancedDirectional extends NetworkDirectional {
     public void updateShowIcon(@NotNull Location location) {
         ItemStack clone = Icon.SHOW_ICON.clone();
         ItemMeta itemMeta = clone.getItemMeta();
-        List<String> lore = new ArrayList<>();
-        List<String> old = itemMeta.getLore();
+        List<Component> lore = new ArrayList<>();
+        List<Component> old = itemMeta.lore();
         if (old != null) {
             lore.addAll(old);
         }
         lore.set(
             0,
-            String.format(
+            TextUtil.component(String.format(
                 Lang.getString("messages.normal-operation.directional.limit_quantity"),
-                getLimitQuantity(location)));
-        itemMeta.setLore(lore);
+                getLimitQuantity(location))));
+        itemMeta.lore(lore);
         clone.setItemMeta(itemMeta);
 
         BlockMenu blockMenu = StorageCacheUtils.getMenu(location);
@@ -653,21 +653,21 @@ public abstract class AdvancedDirectional extends NetworkDirectional {
     public void updateTransportModeIcon(@NotNull Location location) {
         ItemStack clone = Icon.TRANSPORT_MODE_ICON.clone();
         ItemMeta itemMeta = clone.getItemMeta();
-        List<String> lore = new ArrayList<>();
-        List<String> old = itemMeta.getLore();
+        List<Component> lore = new ArrayList<>();
+        List<Component> old = itemMeta.lore();
         if (old != null) {
             lore.addAll(old);
         }
         lore.set(
             0,
-            String.format(
+            TextUtil.component(String.format(
                 Lang.getString("messages.normal-operation.directional.transport_mode"),
-                ""));
+                "")));
         TransportMode current = getCurrentTransportMode(location);
         for (TransportMode mode : TransportMode.values()) {
-            lore.add(ChatColors.color((mode == current ? "&a" : "&c") + "- " + mode.getRawName()));
+            lore.add(TextUtil.component(ChatColors.color((mode == current ? "&a" : "&c") + "- " + mode.getRawName())));
         }
-        itemMeta.setLore(lore);
+        itemMeta.lore(lore);
         clone.setItemMeta(itemMeta);
 
         BlockMenu blockMenu = StorageCacheUtils.getMenu(location);
