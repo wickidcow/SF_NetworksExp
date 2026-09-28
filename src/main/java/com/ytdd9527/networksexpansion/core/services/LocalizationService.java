@@ -58,6 +58,17 @@ public class LocalizationService {
     private static final String MSG_MATERIAL_NULL = "Material cannot be null";
     private static final String MSG_ITEMSTACK_NULL = "ItemStack cannot be null";
     private static final String MSG_TEXTURE_NULL = "Texture cannot be null";
+    private static final Map<String, String> LEGACY_QUANTUM_STORAGE_NAMES = Map.ofEntries(
+        Map.entry("items.NTW_QUANTUM_STORAGE_9.name", "Network Quantum Storage (9)"),
+        Map.entry("items.NTW_QUANTUM_STORAGE_10.name", "Network Quantum Storage (10)"),
+        Map.entry("items.NTW_QUANTUM_STORAGE_1.name", "Network Quantum Storage (1)"),
+        Map.entry("items.NTW_QUANTUM_STORAGE_2.name", "Network Quantum Storage (2)"),
+        Map.entry("items.NTW_QUANTUM_STORAGE_3.name", "Network Quantum Storage (3)"),
+        Map.entry("items.NTW_QUANTUM_STORAGE_4.name", "Network Quantum Storage (4)"),
+        Map.entry("items.NTW_QUANTUM_STORAGE_5.name", "Network Quantum Storage (5)"),
+        Map.entry("items.NTW_QUANTUM_STORAGE_6.name", "Network Quantum Storage (6)"),
+        Map.entry("items.NTW_QUANTUM_STORAGE_7.name", "Network Quantum Storage (7)"),
+        Map.entry("items.NTW_QUANTUM_STORAGE_8.name", "Network Quantum Storage (8)"));
     private final @NotNull JavaPlugin plugin;
     private final @NotNull String langFolderName;
     private final @NotNull File langFolder;
@@ -167,11 +178,47 @@ public class LocalizationService {
             }
             InputStreamReader defaultReader = new InputStreamReader(resource, StandardCharsets.UTF_8);
             FileConfiguration defaultConfig = YamlConfiguration.loadConfiguration(defaultReader);
-            this.langMap.put(langFilename, new Language(langFilename, langFile, defaultConfig));
+            Language language = new Language(langFilename, langFile, defaultConfig);
+            if (migrateLegacyQuantumStorageNames(langFilename, language.getLang(), defaultConfig)) {
+                language.save();
+                clearRuntimeCache();
+            }
+            this.langMap.put(langFilename, language);
             this.languages.add(langFilename);
         } catch (java.io.IOException exception) {
             this.plugin.getLogger().log(Level.SEVERE, "Failed to close language resource " + resourcePath, exception);
         }
+    }
+
+    static boolean migrateLegacyQuantumStorageNames(
+        @NotNull String langFilename,
+        @NotNull FileConfiguration currentConfig,
+        @NotNull FileConfiguration defaultConfig) {
+
+        if (!"en-US".equals(langFilename)) {
+            return false;
+        }
+
+        boolean changed = false;
+        for (Map.Entry<String, String> entry : LEGACY_QUANTUM_STORAGE_NAMES.entrySet()) {
+            String path = entry.getKey();
+            String current = currentConfig.getString(path);
+            String corrected = defaultConfig.getString(path);
+
+            /*
+             * Existing language files intentionally survive plugin upgrades. Only replace the exact
+             * stock legacy label so server owners who customized or translated a Quantum Storage name
+             * keep their value. The bundled default supplies the corrected player-facing tier number.
+             */
+            if (entry.getValue().equals(current)
+                && corrected != null
+                && !corrected.equals(current)) {
+                currentConfig.set(path, corrected);
+                changed = true;
+            }
+        }
+
+        return changed;
     }
 
     @NotNull
