@@ -183,7 +183,9 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
         final boolean capturePushLinePass = !(this instanceof GrabTickOnly)
             && !(this instanceof PushTickOnly)
             && !(this instanceof VanillaTransfer)
-            && (config.defaultGrabTick <= 1 || getGrabTickCounter(location) == 0);
+            && (config.defaultGrabTick <= 1 || getGrabTickCounter(location) == 0)
+            && PUSH_LINE_CURSOR_MAP.getOrDefault(location, 0).equals(
+                GRAB_LINE_CURSOR_MAP.getOrDefault(location, 0));
 
         if (!(this instanceof GrabTickOnly)) {
             if (config.defaultPushTick > 1) {
