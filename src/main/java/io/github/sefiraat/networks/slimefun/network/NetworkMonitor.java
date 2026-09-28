@@ -2,6 +2,7 @@ package io.github.sefiraat.networks.slimefun.network;
 
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
+import com.ytdd9527.networksexpansion.utils.TextUtil;
 import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.network.NetworkRoot;
@@ -15,7 +16,6 @@ import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
@@ -309,16 +309,16 @@ public class NetworkMonitor extends NetworkDirectional {
     private void addAutoConnectInfo(@NotNull BlockMenu blockMenu) {
         final List<String> lore = List.of(
             "",
-            ChatColor.GRAY + "Automatically exposes supported storage",
-            ChatColor.GRAY + "touching any side of this Monitor.",
+            TextUtil.GRAY + "Automatically exposes supported storage",
+            TextUtil.GRAY + "touching any side of this Monitor.",
             "",
-            ChatColor.GREEN + "No direction setup required.",
-            ChatColor.DARK_GRAY + "Input/Output-only Monitors remain directional."
+            TextUtil.GREEN + "No direction setup required.",
+            TextUtil.DARK_GRAY + "Input/Output-only Monitors remain directional."
         );
 
         blockMenu.replaceExistingItem(
             AUTO_CONNECT_SLOT,
-            control(Material.HOPPER, ChatColor.GREEN + "Storage Auto-Connect", lore));
+            control(Material.HOPPER, TextUtil.GREEN + "Storage Auto-Connect", lore));
         blockMenu.addMenuClickHandler(AUTO_CONNECT_SLOT, (player, slot, item, action) -> false);
     }
 
@@ -535,23 +535,24 @@ public class NetworkMonitor extends NetworkDirectional {
         final ItemMeta meta = display.getItemMeta();
 
         if (meta != null) {
-            meta.setDisplayName(ChatColor.WHITE + group.displayName() + ChatColor.GRAY + "  x" + group.total());
+            meta.displayName(TextUtil.component(
+                TextUtil.WHITE + group.displayName() + TextUtil.GRAY + "  x" + group.total()));
 
             final List<String> lore = new ArrayList<>();
             lore.add("");
-            lore.add(ChatColor.GRAY + "Total connected: " + ChatColor.WHITE + group.total());
-            lore.add(ChatColor.GREEN + "Active: " + group.active());
-            lore.add(ChatColor.RED + "Inactive: " + group.inactive());
+            lore.add(TextUtil.GRAY + "Total connected: " + TextUtil.WHITE + group.total());
+            lore.add(TextUtil.GREEN + "Active: " + group.active());
+            lore.add(TextUtil.RED + "Inactive: " + group.inactive());
 
             if (!group.nodeTypes().isEmpty()) {
-                lore.add(ChatColor.GRAY + "Node type: " + ChatColor.WHITE + nodeTypes(group.nodeTypes()));
+                lore.add(TextUtil.GRAY + "Node type: " + TextUtil.WHITE + nodeTypes(group.nodeTypes()));
             }
 
             lore.add("");
-            lore.add(ChatColor.YELLOW + "Click to view each connected node.");
-            lore.add(ChatColor.DARK_GRAY + "Inactive nodes are listed first");
-            lore.add(ChatColor.DARK_GRAY + "inside the detail view.");
-            meta.setLore(lore);
+            lore.add(TextUtil.YELLOW + "Click to view each connected node.");
+            lore.add(TextUtil.DARK_GRAY + "Inactive nodes are listed first");
+            lore.add(TextUtil.DARK_GRAY + "inside the detail view.");
+            meta.lore(TextUtil.components(lore));
             display.setItemMeta(meta);
         }
 
@@ -569,35 +570,35 @@ public class NetworkMonitor extends NetworkDirectional {
 
         if (meta != null) {
             final Location location = node.location();
-            meta.setDisplayName(
-                (node.health() == NodeHealth.ACTIVE ? ChatColor.GREEN : ChatColor.RED)
-                    + group.displayName() + ChatColor.GRAY + " #" + ordinal);
+            meta.displayName(TextUtil.component(
+                (node.health() == NodeHealth.ACTIVE ? TextUtil.GREEN : TextUtil.RED)
+                    + group.displayName() + TextUtil.GRAY + " #" + ordinal));
 
             final List<String> lore = new ArrayList<>();
             lore.add("");
-            lore.add(ChatColor.GRAY + "Status: " + node.health().coloredLabel());
+            lore.add(TextUtil.GRAY + "Status: " + node.health().coloredLabel());
             if (node.health() != NodeHealth.ACTIVE) {
-                lore.add(ChatColor.GRAY + "Reason: " + ChatColor.RED + node.health().description());
+                lore.add(TextUtil.GRAY + "Reason: " + TextUtil.RED + node.health().description());
             }
-            lore.add(ChatColor.GRAY + "World: " + ChatColor.WHITE + worldName(location));
-            lore.add(ChatColor.GRAY + "Location: " + ChatColor.WHITE
+            lore.add(TextUtil.GRAY + "World: " + TextUtil.WHITE + worldName(location));
+            lore.add(TextUtil.GRAY + "Location: " + TextUtil.WHITE
                 + location.getBlockX() + ", " + location.getBlockY() + ", " + location.getBlockZ());
             if (node.nodeType() != null) {
-                lore.add(ChatColor.GRAY + "Node type: " + ChatColor.WHITE + prettyNodeType(node.nodeType()));
+                lore.add(TextUtil.GRAY + "Node type: " + TextUtil.WHITE + prettyNodeType(node.nodeType()));
             }
             if (node.sfId() != null && !node.sfId().isBlank()) {
-                lore.add(ChatColor.GRAY + "Slimefun ID: " + ChatColor.DARK_GRAY + node.sfId());
+                lore.add(TextUtil.GRAY + "Slimefun ID: " + TextUtil.DARK_GRAY + node.sfId());
             }
 
             lore.add("");
             if (node.health() == NodeHealth.CHUNK_UNLOADED) {
-                lore.add(ChatColor.DARK_GRAY + "Chunk is unloaded; Monitor will");
-                lore.add(ChatColor.DARK_GRAY + "not force-load it for diagnostics.");
+                lore.add(TextUtil.DARK_GRAY + "Chunk is unloaded; Monitor will");
+                lore.add(TextUtil.DARK_GRAY + "not force-load it for diagnostics.");
             } else {
-                lore.add(ChatColor.YELLOW + "Click to highlight this block.");
+                lore.add(TextUtil.YELLOW + "Click to highlight this block.");
             }
 
-            meta.setLore(lore);
+            meta.lore(TextUtil.components(lore));
             display.setItemMeta(meta);
         }
 
@@ -612,37 +613,37 @@ public class NetworkMonitor extends NetworkDirectional {
         final List<String> lore = new ArrayList<>();
         lore.add("");
         if (!snapshot.connected()) {
-            lore.add(ChatColor.RED + "No active NetworkRoot found.");
-            lore.add(ChatColor.GRAY + "Use Refresh after the controller");
-            lore.add(ChatColor.GRAY + "and this monitor are connected.");
+            lore.add(TextUtil.RED + "No active NetworkRoot found.");
+            lore.add(TextUtil.GRAY + "Use Refresh after the controller");
+            lore.add(TextUtil.GRAY + "and this monitor are connected.");
         } else {
-            lore.add(ChatColor.GRAY + "Connected nodes: " + ChatColor.WHITE
+            lore.add(TextUtil.GRAY + "Connected nodes: " + TextUtil.WHITE
                 + snapshot.totalNodes() + " / " + snapshot.maxNodes());
-            lore.add(ChatColor.GREEN + "Active: " + snapshot.activeNodes());
-            lore.add(ChatColor.RED + "Inactive: " + snapshot.inactiveNodes());
-            lore.add(ChatColor.GRAY + "Machine types: " + ChatColor.WHITE + snapshot.groups().size());
-            lore.add(ChatColor.GRAY + "Page: " + ChatColor.WHITE + (page + 1) + " / " + (maxPage + 1));
-            lore.add(ChatColor.GRAY + "Network state: "
-                + (snapshot.overburdened() ? ChatColor.RED + "Overburdened" : ChatColor.GREEN + "OK"));
+            lore.add(TextUtil.GREEN + "Active: " + snapshot.activeNodes());
+            lore.add(TextUtil.RED + "Inactive: " + snapshot.inactiveNodes());
+            lore.add(TextUtil.GRAY + "Machine types: " + TextUtil.WHITE + snapshot.groups().size());
+            lore.add(TextUtil.GRAY + "Page: " + TextUtil.WHITE + (page + 1) + " / " + (maxPage + 1));
+            lore.add(TextUtil.GRAY + "Network state: "
+                + (snapshot.overburdened() ? TextUtil.RED + "Overburdened" : TextUtil.GREEN + "OK"));
         }
         lore.add("");
-        lore.add(ChatColor.YELLOW + "Click a machine type for individual nodes.");
-        lore.add(ChatColor.DARK_GRAY + "This is the controller's current");
-        lore.add(ChatColor.DARK_GRAY + "Networks topology, not EnergyNet.");
+        lore.add(TextUtil.YELLOW + "Click a machine type for individual nodes.");
+        lore.add(TextUtil.DARK_GRAY + "This is the controller's current");
+        lore.add(TextUtil.DARK_GRAY + "Networks topology, not EnergyNet.");
 
-        return control(Material.COMPASS, ChatColor.GOLD + "Network Overview", lore);
+        return control(Material.COMPASS, TextUtil.GOLD + "Network Overview", lore);
     }
 
     private static @NotNull ItemStack backButton(@NotNull MachineGroup group) {
         return control(
             Material.OAK_DOOR,
-            ChatColor.WHITE + "Back to Machine Types",
+            TextUtil.WHITE + "Back to Machine Types",
             List.of(
                 "",
-                ChatColor.GRAY + "Currently viewing:",
-                ChatColor.WHITE + group.displayName(),
+                TextUtil.GRAY + "Currently viewing:",
+                TextUtil.WHITE + group.displayName(),
                 "",
-                ChatColor.YELLOW + "Click to return."));
+                TextUtil.YELLOW + "Click to return."));
     }
 
     private static @NotNull ItemStack groupFilterItem(
@@ -652,60 +653,60 @@ public class NetworkMonitor extends NetworkDirectional {
 
         return control(
             filter.material(),
-            ChatColor.AQUA + "Filter: " + filter.displayName(),
+            TextUtil.AQUA + "Filter: " + filter.displayName(),
             List.of(
                 "",
-                ChatColor.GRAY + "Machine: " + ChatColor.WHITE + group.displayName(),
-                ChatColor.GRAY + "Total: " + ChatColor.WHITE + group.total(),
-                ChatColor.GREEN + "Active: " + group.active(),
-                ChatColor.RED + "Inactive: " + group.inactive(),
-                ChatColor.GRAY + "Currently shown: " + ChatColor.WHITE + visibleCount,
+                TextUtil.GRAY + "Machine: " + TextUtil.WHITE + group.displayName(),
+                TextUtil.GRAY + "Total: " + TextUtil.WHITE + group.total(),
+                TextUtil.GREEN + "Active: " + group.active(),
+                TextUtil.RED + "Inactive: " + group.inactive(),
+                TextUtil.GRAY + "Currently shown: " + TextUtil.WHITE + visibleCount,
                 "",
-                ChatColor.YELLOW + "Click to cycle All / Active / Inactive."));
+                TextUtil.YELLOW + "Click to cycle All / Active / Inactive."));
     }
 
     private static @NotNull ItemStack refreshItem(boolean refreshing) {
         if (refreshing) {
             return control(
                 Material.YELLOW_DYE,
-                ChatColor.YELLOW + "Refreshing Network...",
+                TextUtil.YELLOW + "Refreshing Network...",
                 List.of(
                     "",
-                    ChatColor.GRAY + "Controller topology rediscovery",
-                    ChatColor.GRAY + "has been queued."));
+                    TextUtil.GRAY + "Controller topology rediscovery",
+                    TextUtil.GRAY + "has been queued."));
         }
 
         return control(
             Material.LIME_DYE,
-            ChatColor.GREEN + "Refresh Network",
+            TextUtil.GREEN + "Refresh Network",
             List.of(
                 "",
-                ChatColor.GRAY + "Forces the Network Controller to",
-                ChatColor.GRAY + "rediscover its connected nodes,",
-                ChatColor.GRAY + "then rebuilds this machine list.",
+                TextUtil.GRAY + "Forces the Network Controller to",
+                TextUtil.GRAY + "rediscover its connected nodes,",
+                TextUtil.GRAY + "then rebuilds this machine list.",
                 "",
-                ChatColor.YELLOW + "Use after adding/removing machines."));
+                TextUtil.YELLOW + "Use after adding/removing machines."));
     }
 
     private static @NotNull ItemStack legendItem() {
         return control(
             Material.BOOK,
-            ChatColor.AQUA + "Monitor Help",
+            TextUtil.AQUA + "Monitor Help",
             List.of(
                 "",
-                ChatColor.GRAY + "Hover a machine icon to see:",
-                ChatColor.WHITE + "Total / Active / Inactive",
+                TextUtil.GRAY + "Hover a machine icon to see:",
+                TextUtil.WHITE + "Total / Active / Inactive",
                 "",
-                ChatColor.YELLOW + "Click a machine type to inspect",
-                ChatColor.YELLOW + "each individual connected node.",
+                TextUtil.YELLOW + "Click a machine type to inspect",
+                TextUtil.YELLOW + "each individual connected node.",
                 "",
-                ChatColor.GREEN + "Active " + ChatColor.GRAY + "= loaded, resolved,",
-                ChatColor.GRAY + "and assigned to this NetworkRoot.",
-                ChatColor.RED + "Inactive " + ChatColor.GRAY + "= root contains the",
-                ChatColor.GRAY + "node but its runtime state has an issue.",
+                TextUtil.GREEN + "Active " + TextUtil.GRAY + "= loaded, resolved,",
+                TextUtil.GRAY + "and assigned to this NetworkRoot.",
+                TextUtil.RED + "Inactive " + TextUtil.GRAY + "= root contains the",
+                TextUtil.GRAY + "node but its runtime state has an issue.",
                 "",
-                ChatColor.DARK_GRAY + "Storage direction is now the hopper",
-                ChatColor.DARK_GRAY + "button in the bottom toolbar."));
+                TextUtil.DARK_GRAY + "Storage direction is now the hopper",
+                TextUtil.DARK_GRAY + "button in the bottom toolbar."));
     }
 
     private static @NotNull ItemStack pageButton(boolean next, int page, int maxPage) {
@@ -713,10 +714,10 @@ public class NetworkMonitor extends NetworkDirectional {
         final String label = next ? "Next Page" : "Previous Page";
         return control(
             enabled ? Material.ARROW : Material.GRAY_DYE,
-            (enabled ? ChatColor.WHITE : ChatColor.DARK_GRAY) + label,
+            (enabled ? TextUtil.WHITE : TextUtil.DARK_GRAY) + label,
             List.of(
                 "",
-                ChatColor.GRAY + "Page " + (page + 1) + " / " + (maxPage + 1)));
+                TextUtil.GRAY + "Page " + (page + 1) + " / " + (maxPage + 1)));
     }
 
     private static @NotNull ItemStack background() {
@@ -733,37 +734,37 @@ public class NetworkMonitor extends NetworkDirectional {
         final World world = location.getWorld();
 
         if (!Networks.getConfigManager().isNetworkMonitorHighlightEnabled()) {
-            player.sendMessage(ChatColor.YELLOW + "Network Monitor highlighting is disabled in config.");
+            player.sendMessage(TextUtil.YELLOW + "Network Monitor highlighting is disabled in config.");
             sendNodeCoordinates(player, location);
             return;
         }
 
         if (world == null) {
-            player.sendMessage(ChatColor.RED + "This node's world is not available.");
+            player.sendMessage(TextUtil.RED + "This node's world is not available.");
             return;
         }
 
         if (!world.isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
-            player.sendMessage(ChatColor.RED + "That node's chunk is unloaded; it will not be force-loaded.");
+            player.sendMessage(TextUtil.RED + "That node's chunk is unloaded; it will not be force-loaded.");
             sendNodeCoordinates(player, location);
             return;
         }
 
         if (!player.getWorld().equals(world)) {
-            player.sendMessage(ChatColor.YELLOW + "That node is in another world and cannot be highlighted here.");
+            player.sendMessage(TextUtil.YELLOW + "That node is in another world and cannot be highlighted here.");
             sendNodeCoordinates(player, location);
             return;
         }
 
         if (player.getLocation().distanceSquared(location) > MAX_VISIBLE_HIGHLIGHT_DISTANCE_SQUARED) {
-            player.sendMessage(ChatColor.YELLOW + "That node is too far away for a useful particle highlight.");
+            player.sendMessage(TextUtil.YELLOW + "That node is too far away for a useful particle highlight.");
             sendNodeCoordinates(player, location);
             return;
         }
 
         final int seconds = Networks.getConfigManager().getNetworkMonitorHighlightSeconds();
         player.sendMessage(
-            ChatColor.GREEN + "Highlighting network node for " + seconds + "s at "
+            TextUtil.GREEN + "Highlighting network node for " + seconds + "s at "
                 + coordinateText(location));
 
         new BukkitRunnable() {
@@ -820,7 +821,7 @@ public class NetworkMonitor extends NetworkDirectional {
     }
 
     private static void sendNodeCoordinates(@NotNull Player player, @NotNull Location location) {
-        player.sendMessage(ChatColor.GRAY + "Node: " + ChatColor.WHITE + coordinateText(location));
+        player.sendMessage(TextUtil.GRAY + "Node: " + TextUtil.WHITE + coordinateText(location));
     }
 
     private static @NotNull String coordinateText(@NotNull Location location) {
@@ -837,7 +838,7 @@ public class NetworkMonitor extends NetworkDirectional {
         final ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             meta.setDisplayName(name);
-            meta.setLore(lore);
+            meta.lore(TextUtil.components(lore));
             item.setItemMeta(meta);
         }
         return item;
@@ -848,7 +849,7 @@ public class NetworkMonitor extends NetworkDirectional {
     }
 
     private static @NotNull String cleanName(@NotNull String name) {
-        final String stripped = ChatColor.stripColor(name);
+        final String stripped = TextUtil.stripColor(name);
         return stripped == null || stripped.isBlank() ? "Unknown Machine" : stripped;
     }
 
@@ -984,7 +985,7 @@ public class NetworkMonitor extends NetworkDirectional {
         }
 
         private @NotNull String coloredLabel() {
-            return (this == ACTIVE ? ChatColor.GREEN : ChatColor.RED) + label;
+            return (this == ACTIVE ? TextUtil.GREEN : TextUtil.RED) + label;
         }
 
         private @NotNull String description() {
