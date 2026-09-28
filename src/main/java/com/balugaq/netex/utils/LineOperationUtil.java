@@ -87,9 +87,9 @@ public class LineOperationUtil {
     /**
      * Runs a bounded pass across a contiguous Slimefun line and returns the offset to resume from next tick.
      *
-     * <p>The method still validates every skipped position from the start of the line, so a broken line keeps
-     * the same stop-at-first-gap semantics as {@link #doOperation(Location, BlockFace, int, boolean, boolean, Consumer)}.
-     * Only the expensive consumer work is rotated across ticks.</p>
+     * <p>When resuming from a saved cursor, the already-processed prefix is skipped without repeating storage
+     * lookups. A gap introduced behind the cursor is detected when the cursor wraps to the beginning on the next
+     * cycle. The current segment still stops immediately at the first missing menu.</p>
      *
      * @return 0 when the line ended/reset, otherwise the zero-based offset to resume from
      */
@@ -107,9 +107,27 @@ public class LineOperationUtil {
 
         final int effectiveStart = startOffset >= 0 && startOffset < limit ? startOffset : 0;
         final Location location = startLocation.clone();
-        int processed = 0;
 
-        for (int i = 0; i < limit; i++) {
+        /*
+         * Resume directly at the saved cursor instead of walking every already-processed block and
+         * calling StorageCacheUtils.getMenu(...) on it again. A gap introduced behind the cursor can
+         * remain unnoticed only until the cursor wraps, at which point the next pass starts from zero
+         * and restores the historical stop-at-first-gap behavior. This removes the repeated O(offset)
+         * prefix scan that made long line-transfer setups progressively more expensive.
+         */
+        if (effectiveStart > 0) {
+            switch (direction) {
+                case NORTH -> location.setZ(location.getZ() - effectiveStart);
+                case SOUTH -> location.setZ(location.getZ() + effectiveStart);
+                case EAST -> location.setX(location.getX() + effectiveStart);
+                case WEST -> location.setX(location.getX() - effectiveStart);
+                case UP -> location.setY(location.getY() + effectiveStart);
+                case DOWN -> location.setY(location.getY() - effectiveStart);
+            }
+        }
+
+        int processed = 0;
+        for (int i = effectiveStart; i < limit; i++) {
             switch (direction) {
                 case NORTH -> location.setZ(location.getZ() - 1);
                 case SOUTH -> location.setZ(location.getZ() + 1);
@@ -122,10 +140,6 @@ public class LineOperationUtil {
             final BlockMenu blockMenu = StorageCacheUtils.getMenu(location);
             if (blockMenu == null) {
                 return 0;
-            }
-
-            if (i < effectiveStart) {
-                continue;
             }
 
             consumer.accept(blockMenu);

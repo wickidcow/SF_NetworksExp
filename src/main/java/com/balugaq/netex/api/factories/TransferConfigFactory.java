@@ -10,8 +10,8 @@ public class TransferConfigFactory {
     public static final int ADVANCED_DEFAULT_TRANSPORT_LIMIT = 3456;
     public static final int ADVANCED_LINE_TRANSFER_TARGET_BUDGET = 8;
     public static final int ADVANCED_LINE_GRABBER_TARGET_BUDGET = 12;
-    public static final int LINE_TRANSFER_TARGET_BUDGET = 16;
-    public static final int LINE_GRABBER_TARGET_BUDGET = 16;
+    public static final int LINE_TRANSFER_TARGET_BUDGET = 8;
+    public static final int LINE_GRABBER_TARGET_BUDGET = 12;
     public static final int DEFAULT_MAX_DISTANCE = 64;
     public static final String MAX_DISTANCE = "max-distance";
     public static final String PUSHITEM_TICK = "pushitem-tick";
