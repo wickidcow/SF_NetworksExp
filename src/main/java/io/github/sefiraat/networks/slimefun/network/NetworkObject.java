@@ -296,7 +296,7 @@ public abstract class NetworkObject extends SpecialSlimefunItem implements Admin
 
         for (BlockFace face : CHECK_FACES) {
             final Location adjacentLocation = placedBlock.getRelative(face).getLocation();
-            final SlimefunItem adjacentItem = StorageCacheUtils.getSfItem(adjacentLocation);
+            final SlimefunItem adjacentItem = StorageCacheUtils.getSlimefunItem(adjacentLocation);
             if (adjacentItem instanceof NetworkController) {
                 controllers.add(adjacentLocation);
             }
