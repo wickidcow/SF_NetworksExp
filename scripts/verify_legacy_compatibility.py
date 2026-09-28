@@ -245,6 +245,12 @@ for forbidden in [
 ]:
     require(forbidden not in java_sources, f"unsafe Bukkit asynchronous scheduling remains: {forbidden}")
 require("useSynchronizedMachineTickers()" in java_sources, "machine ticker synchronization bridge is missing")
+require("StorageCacheUtils.getSfItem(" not in java_sources,
+        "deprecated-for-removal StorageCacheUtils.getSfItem call returned")
+require("BlockStorage.getInventory(" not in java_sources,
+        "deprecated BlockStorage inventory lookup returned")
+require("org.bukkit.ChatColor" not in network_monitor,
+        "Network Monitor returned to deprecated Bukkit ChatColor")
 require("DEFAULT_LANGUAGE = \"en-US\"" in networks_java, "Networks default language is not en-US")
 require("GuizhanUpdater" not in networks_java, "automatic Guizhan updater code is still present")
 require("PinyinHelper" not in java_sources, "Pinyin runtime search remains in Java sources")
