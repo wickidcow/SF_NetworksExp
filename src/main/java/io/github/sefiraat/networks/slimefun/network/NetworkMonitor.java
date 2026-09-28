@@ -403,7 +403,7 @@ public class NetworkMonitor extends NetworkDirectional {
             final String sfId = data == null ? null : data.getSfId();
             SlimefunItem slimefunItem = sfId == null ? null : SlimefunItem.getById(sfId);
             if (slimefunItem == null && chunkLoaded) {
-                slimefunItem = StorageCacheUtils.getSfItem(location);
+                slimefunItem = StorageCacheUtils.getSlimefunItem(location);
             }
 
             final NodeHealth health = nodeHealth(root, definition, data, slimefunItem, chunkLoaded);
