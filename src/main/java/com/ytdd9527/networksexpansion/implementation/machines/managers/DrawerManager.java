@@ -373,7 +373,7 @@ public class DrawerManager extends NetworkObject {
                     displayStack = new CustomItemStack(
                         displayStack, TextUtil.GRAY + DisplayNameUtils.getDisplayName(dataItemStack));
                 } else {
-                    SlimefunItem sf = StorageCacheUtils.getSfItem(dataLocation);
+                    SlimefunItem sf = StorageCacheUtils.getSlimefunItem(dataLocation);
                     if (sf == null) {
                         displayStack = new CustomItemStack(displayStack, Sorters.NO_ITEM);
                     } else {
