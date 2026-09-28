@@ -23,7 +23,7 @@ public class FluffyBarrel extends BarrelIdentity {
         super(location, itemStack, amount, limit, BarrelType.FLUFFY);
         this.voidExcess = voidExcess;
         BlockMenu menu = StorageCacheUtils.getMenu(getLocation());
-        Barrel barrel = (Barrel) StorageCacheUtils.getSfItem(getLocation());
+        Barrel barrel = (Barrel) StorageCacheUtils.getSlimefunItem(getLocation());
         if (barrel != null) {
             barrel.updateMenu(getLocation().getBlock(), menu, true, (int) getLimit());
         }
