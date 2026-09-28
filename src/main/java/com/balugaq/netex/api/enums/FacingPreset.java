@@ -109,7 +109,7 @@ public enum FacingPreset {
             }
         }
 
-        var to_sf = StorageCacheUtils.getSfItem(to.getLocation());
+        var to_sf = StorageCacheUtils.getSlimefunItem(to.getLocation());
         if (to_sf == null) return false;
         var fid = to_sf.getId();
         if (from.getSfId().contains("NTW_")) {
