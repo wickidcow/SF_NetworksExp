@@ -24,8 +24,8 @@ public final class DisplayNameUtils {
         }
 
         ItemMeta itemMeta = itemStack.getItemMeta();
-        if (itemMeta != null && itemMeta.hasDisplayName()) {
-            return itemMeta.getDisplayName();
+        if (itemMeta != null && itemMeta.displayName() != null) {
+            return TextUtil.legacy(itemMeta.displayName());
         }
 
         return getMaterialName(itemStack.getType());
