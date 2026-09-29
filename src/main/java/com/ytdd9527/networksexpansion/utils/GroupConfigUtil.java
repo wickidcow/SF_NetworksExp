@@ -3,7 +3,7 @@ package com.ytdd9527.networksexpansion.utils;
 import com.balugaq.netex.api.groups.MainItemGroup;
 import com.balugaq.netex.api.groups.SubFlexItemGroup;
 import io.github.sefiraat.networks.utils.Keys;
-import io.github.thebusybiscuit.slimefun4.libraries.dough.items.CustomItemStack;
+import io.github.bakedlibs.dough.items.CustomItemStack;
 import lombok.experimental.UtilityClass;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;

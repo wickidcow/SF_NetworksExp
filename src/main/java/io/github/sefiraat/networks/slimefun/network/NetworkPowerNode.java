@@ -37,6 +37,12 @@ public class NetworkPowerNode extends NetworkObject implements EnergyNetComponen
     }
 
     @Override
+    public long getCapacityLong() {
+        return this.capacity;
+    }
+
+    @SuppressWarnings("deprecation") // Required Legacy int-capacity bridge; deprecated by United/Gugu.
+    @Override
     public int getCapacity() {
         return this.capacity;
     }
