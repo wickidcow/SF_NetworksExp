@@ -776,23 +776,23 @@ public class LineOperationUtil {
             return;
         }
 
-        int existingCharge = component.getCharge(location);
+        final long existingCharge = component.getChargeLong(location);
 
-        final int capacity = component.getCapacity();
-        final int space = capacity - existingCharge;
+        final long capacity = component.getCapacityLong();
+        final long space = capacity - existingCharge;
 
-        if (space <= 0) {
+        if (space <= 0L) {
             return;
         }
 
-        final int possibleGeneration = Math.min(rate, space);
+        final long possibleGeneration = Math.min((long) rate, space);
         final long power = root.getRootPower();
 
-        if (power <= 0) {
+        if (power <= 0L) {
             return;
         }
 
-        final int gen = power < possibleGeneration ? (int) power : possibleGeneration;
+        final long gen = Math.min(power, possibleGeneration);
 
         component.addCharge(location, gen);
         root.removeRootPower(gen);

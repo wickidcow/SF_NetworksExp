@@ -208,7 +208,7 @@ public class TypeItemGroup extends FlexItemGroup {
                         Lang.getString("messages.guide.click-to-research"),
                         "",
                         Lang.getString("messages.guide.cost")
-                            + research.getCost()
+                            + research.getLevelCost()
                             + Lang.getString("messages.guide.cost-level"));
                     chestMenu.addItem(MAIN_CONTENT[i], ItemStackUtil.getCleanItem(icon));
                     chestMenu.addMenuClickHandler(MAIN_CONTENT[i], (p, slot, item, action) -> {

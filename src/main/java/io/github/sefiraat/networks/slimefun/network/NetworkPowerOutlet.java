@@ -70,29 +70,29 @@ public class NetworkPowerOutlet extends NetworkDirectional {
         }
 
         final String charge = blockData.getData("energy-charge");
-        int chargeInt = 0;
+        long storedCharge = 0L;
         if (charge != null) {
-            chargeInt = Integer.parseInt(charge);
+            storedCharge = Long.parseLong(charge);
         }
 
-        final int capacity = component.getCapacity();
-        final int space = capacity - chargeInt;
+        final long capacity = component.getCapacityLong();
+        final long space = capacity - storedCharge;
 
-        if (space <= 0) {
+        if (space <= 0L) {
             sendFeedback(menu.getLocation(), FeedbackType.FULL_ENERGY_BUFFER);
             return;
         }
 
-        final int possibleGeneration = Math.min(rate, space);
+        final long possibleGeneration = Math.min((long) rate, space);
         final NetworkRoot root = definition.getNode().getRoot();
         final long power = root.getRootPower();
 
-        if (power <= 0) {
+        if (power <= 0L) {
             sendFeedback(menu.getLocation(), FeedbackType.NOT_ENOUGH_POWER);
             return;
         }
 
-        final int gen = power < possibleGeneration ? (int) power : possibleGeneration;
+        final long gen = Math.min(power, possibleGeneration);
 
         component.addCharge(targetBlock.getLocation(), gen);
         root.removeRootPower(gen);

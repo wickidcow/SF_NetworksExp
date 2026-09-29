@@ -14,9 +14,9 @@ import io.github.thebusybiscuit.slimefun4.core.guide.SlimefunGuideMode;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.utils.ChestMenuUtils;
 import me.mrCookieSlime.CSCoreLibPlugin.general.Inventory.ChestMenu;
-import net.md_5.bungee.api.ChatColor;
-import net.md_5.bungee.api.chat.ClickEvent;
-import net.md_5.bungee.api.chat.TextComponent;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
@@ -103,11 +103,11 @@ public class MainFlexGroup extends FlexItemGroup {
         // Docs
         menu.replaceExistingItem(DOCS, DOCS_ITEM_STACK);
         menu.addMenuClickHandler(DOCS, (player1, i1, itemStack1, clickAction) -> {
-            final TextComponent link = new TextComponent(Lang.getString("icons.docs_icon.click_to_visit_wiki"));
-            link.setColor(ChatColor.YELLOW);
-            link.setClickEvent(
-                new ClickEvent(ClickEvent.Action.OPEN_URL, "https://slimefun-addons-wiki.guizhanss.cn/networks/"));
-            player.spigot().sendMessage(link);
+            Component link = Component.text(
+                    Lang.getString("icons.docs_icon.click_to_visit_wiki"),
+                    NamedTextColor.YELLOW)
+                .clickEvent(ClickEvent.openUrl("https://slimefun-addons-wiki.guizhanss.cn/networks/"));
+            player.sendMessage(link);
             return false;
         });
 

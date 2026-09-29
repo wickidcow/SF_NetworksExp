@@ -232,6 +232,21 @@ require("Main Item Group" not in locale_text and "Sub Menu " not in locale_text,
         "placeholder expansion guide names remain player-facing")
 
 # Runtime compatibility and thread ownership.
+require("getPluginMeta()" in runtime_compatibility
+        and "Bukkit.getPluginCommand(\"slimefun\")" in runtime_compatibility
+        and "command.getPlugin() != plugin" in runtime_compatibility
+        and ".getDescription()" not in runtime_compatibility,
+        "runtime core detection must use PluginMeta and the live Slimefun command")
+require("component.getChargeLong(location)" in line_operation_util
+        and "component.getCapacityLong()" in line_operation_util
+        and "component.addCharge(location, gen)" in line_operation_util,
+        "line-transfer power output must use the long energy API")
+type_item_group = read("src/main/java/com/balugaq/netex/api/groups/TypeItemGroup.java")
+require("research.getLevelCost()" in type_item_group and "research.getCost()" not in type_item_group,
+        "guide research cost must use the non-deprecated level-cost API")
+require("hasLocationName()" not in item_differenter
+        and "getLocationName()" not in item_differenter,
+        "Item Differenter must not compare obsolete MapMeta location-name aliases")
 require('MINIMUM_MINECRAFT = "1.21.11"' in runtime_compatibility, "Minecraft runtime floor is missing")
 require("MINIMUM_JAVA = 21" in runtime_compatibility, "Java runtime floor is missing")
 require("SLIMEFUN_LEGACY" in runtime_compatibility, "Legacy runtime detection is missing")

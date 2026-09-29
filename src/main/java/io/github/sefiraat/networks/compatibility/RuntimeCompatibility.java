@@ -3,14 +3,13 @@ package io.github.sefiraat.networks.compatibility;
 import io.github.sefiraat.networks.Networks;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
-import org.bukkit.plugin.PluginDescriptionFile;
+import io.papermc.paper.plugin.configuration.PluginMeta;
+import org.bukkit.command.PluginCommand;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -29,7 +28,7 @@ public final class RuntimeCompatibility {
 
     public static @NotNull CompatibilityReport inspect(@NotNull Networks plugin) {
         Plugin slimefun = Bukkit.getPluginManager().getPlugin("Slimefun");
-        String coreVersion = slimefun == null ? "missing" : slimefun.getDescription().getVersion();
+        String coreVersion = slimefun == null ? "missing" : slimefun.getPluginMeta().getVersion();
         CoreVariant coreVariant = detectCore(slimefun);
         String minecraftVersion = Bukkit.getMinecraftVersion();
         int javaFeature = Runtime.version().feature();
@@ -70,18 +69,18 @@ public final class RuntimeCompatibility {
             return CoreVariant.OFFICIAL_OR_UNKNOWN;
         }
 
-        PluginDescriptionFile description = plugin.getDescription();
+        PluginMeta meta = plugin.getPluginMeta();
         String fingerprint = String.join(" ",
-            description.getName(),
-            description.getVersion(),
-            nullToEmpty(description.getDescription()),
-            nullToEmpty(description.getWebsite()))
+            meta.getName(),
+            meta.getVersion(),
+            nullToEmpty(meta.getDescription()),
+            nullToEmpty(meta.getWebsite()))
             .toLowerCase(Locale.ROOT);
 
         return classifyCore(
             fingerprint,
             hasPluginClass(plugin, LEGACY_MARKER_CLASS),
-            hasUnitedCommandAlias(description),
+            hasUnitedCommandAlias(plugin),
             hasPluginClass(plugin, GUGU_MARKER_CLASS));
     }
 
@@ -129,24 +128,15 @@ public final class RuntimeCompatibility {
     }
 
     /** Slimefun United publishes the unique aliases "sfu" and "slimefununited". */
-    static boolean hasUnitedCommandAlias(@NotNull PluginDescriptionFile description) {
-        Map<String, Map<String, Object>> commands = description.getCommands();
-        if (commands == null) {
+    static boolean hasUnitedCommandAlias(@NotNull Plugin plugin) {
+        PluginCommand command = Bukkit.getPluginCommand("slimefun");
+        if (command == null || command.getPlugin() != plugin) {
             return false;
         }
-        Map<String, Object> slimefunCommand = commands.get("slimefun");
-        if (slimefunCommand == null) {
-            return false;
-        }
-        Object aliases = slimefunCommand.get("aliases");
-        if (aliases instanceof String alias) {
-            return isUnitedAlias(alias);
-        }
-        if (aliases instanceof Collection<?> collection) {
-            for (Object alias : collection) {
-                if (alias != null && isUnitedAlias(alias.toString())) {
-                    return true;
-                }
+
+        for (String alias : command.getAliases()) {
+            if (isUnitedAlias(alias)) {
+                return true;
             }
         }
         return false;
