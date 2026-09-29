@@ -119,7 +119,7 @@ public class NetworkControlX extends NetworkDirectional implements SoftCellBanna
             return;
         }
 
-        final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(targetBlock.getLocation());
+        final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(targetBlock.getLocation());
 
         if (slimefunItem != null) {
             sendFeedback(blockMenu.getLocation(), FeedbackType.BLOCK_CANNOT_BE_CUT);
@@ -173,7 +173,7 @@ public class NetworkControlX extends NetworkDirectional implements SoftCellBanna
                 return;
             }
 
-            if (StorageCacheUtils.getSfItem(targetBlock.getLocation()) != null) {
+            if (StorageCacheUtils.getSlimefunItem(targetBlock.getLocation()) != null) {
                 sendFeedback(blockMenu.getLocation(), FeedbackType.BLOCK_CANNOT_BE_CUT);
                 return;
             }

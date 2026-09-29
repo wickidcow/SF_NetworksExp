@@ -37,7 +37,7 @@ public class NetworkAdminDebugger extends SpecialSlimefunItem {
         if (optional.isPresent()) {
             final Block block = optional.get();
             final Player player = e.getPlayer();
-            final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(block.getLocation());
+            final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(block.getLocation());
             if (!player.isOp()) {
                 player.sendMessage(Lang.getString("messages.unsupported-operation.debugger.player_is_not_op"));
                 return;

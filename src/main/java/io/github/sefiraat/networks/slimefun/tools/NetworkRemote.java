@@ -56,7 +56,7 @@ public class NetworkRemote extends SpecialSlimefunItem {
                 final Optional<Block> optional = e.getClickedBlock();
                 if (optional.isPresent()) {
                     final Block block = optional.get();
-                    final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(block.getLocation());
+                    final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(block.getLocation());
                     if (Slimefun.getProtectionManager().hasPermission(player, block, Interaction.INTERACT_BLOCK)
                         && (slimefunItem instanceof NetworkGrid
                         || slimefunItem instanceof NetworkCraftingGrid
@@ -125,7 +125,7 @@ public class NetworkRemote extends SpecialSlimefunItem {
             return;
         }
 
-        final SlimefunItem liveItem = StorageCacheUtils.getSfItem(location);
+        final SlimefunItem liveItem = StorageCacheUtils.getSlimefunItem(location);
         if (!isGrid(liveItem)) {
             player.sendMessage(Lang.getString("messages.unsupported-operation.remote.not_a_grid_found"));
             return;
@@ -142,7 +142,7 @@ public class NetworkRemote extends SpecialSlimefunItem {
             () -> {
                 // Revalidate after the deferred load callback. A grid can be broken or replaced between the
                 // remote click and this callback, especially around chunk unload/reload boundaries.
-                final SlimefunItem currentItem = StorageCacheUtils.getSfItem(location);
+                final SlimefunItem currentItem = StorageCacheUtils.getSlimefunItem(location);
                 final boolean allowed = player.hasPermission("slimefun.inventory.bypass")
                     || Slimefun.getProtectionManager()
                     .hasPermission(player, location, Interaction.INTERACT_BLOCK);

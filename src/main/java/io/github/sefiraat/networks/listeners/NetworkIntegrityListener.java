@@ -137,7 +137,7 @@ public final class NetworkIntegrityListener implements Listener {
     }
 
     private boolean isProtectedNetworkBlock(@NotNull Block block) {
-        final SlimefunItem item = StorageCacheUtils.getSfItem(block.getLocation());
+        final SlimefunItem item = StorageCacheUtils.getSlimefunItem(block.getLocation());
         return item != null && ExplosiveToolListener.isProtectedNetworkBlock(item);
     }
 
@@ -162,7 +162,7 @@ public final class NetworkIntegrityListener implements Listener {
                 continue;
             }
 
-            final SlimefunItem liveItem = StorageCacheUtils.getSfItem(location);
+            final SlimefunItem liveItem = StorageCacheUtils.getSlimefunItem(location);
             if (!(liveItem instanceof NetworkObject networkObject)
                 || networkObject.getNodeType() != definition.getType()) {
                 staleLocations.add(location);
@@ -183,7 +183,7 @@ public final class NetworkIntegrityListener implements Listener {
                 return;
             }
 
-            SlimefunItem liveItem = StorageCacheUtils.getSfItem(key);
+            SlimefunItem liveItem = StorageCacheUtils.getSlimefunItem(key);
             if (key.getBlock().getType().isAir()
                 || !(liveItem instanceof NetworkObject networkObject)
                 || networkObject.getNodeType() != current.getType()) {

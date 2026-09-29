@@ -123,7 +123,7 @@ public class NetworkWirelessTransmitter extends NetworkObject {
             return;
         }
 
-        final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(linkedLocation);
+        final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(linkedLocation);
         if (!(slimefunItem instanceof NetworkWirelessReceiver)) {
             linkedLocations.remove(location);
             return;

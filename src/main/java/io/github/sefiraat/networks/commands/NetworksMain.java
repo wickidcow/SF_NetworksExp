@@ -74,7 +74,7 @@ public class NetworksMain implements TabExecutor {
             return;
         }
 
-        final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(targetBlock.getLocation());
+        final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(targetBlock.getLocation());
         if (slimefunItem == null) {
             player.sendMessage(Lang.getString("messages.commands.must-admin-debuggable"));
             return;
@@ -107,7 +107,7 @@ public class NetworksMain implements TabExecutor {
             return;
         }
 
-        final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(targetBlock.getLocation());
+        final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(targetBlock.getLocation());
         if (slimefunItem == null) {
             player.sendMessage(Lang.getString("messages.commands.must-look-at-quantum-storage"));
             return;
@@ -162,7 +162,7 @@ public class NetworksMain implements TabExecutor {
             return;
         }
 
-        final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(targetBlock.getLocation());
+        final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(targetBlock.getLocation());
         if (slimefunItem == null) {
             player.sendMessage(Lang.getString("messages.commands.must-look-at-drawer"));
             return;
@@ -206,7 +206,7 @@ public class NetworksMain implements TabExecutor {
             return;
         }
 
-        final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(targetBlock.getLocation());
+        final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(targetBlock.getLocation());
         if (slimefunItem == null) {
             player.sendMessage(Lang.getString("messages.commands.must-look-at-drawer"));
             return;
@@ -238,7 +238,7 @@ public class NetworksMain implements TabExecutor {
             return;
         }
 
-        final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(targetBlock.getLocation());
+        final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(targetBlock.getLocation());
         if (slimefunItem == null) {
             player.sendMessage(Lang.getString("messages.commands.must-look-at-drawer"));
             return;
@@ -318,7 +318,7 @@ public class NetworksMain implements TabExecutor {
             return;
         }
 
-        final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(targetBlock.getLocation());
+        final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(targetBlock.getLocation());
         if (slimefunItem == null) {
             player.sendMessage(Lang.getString("messages.commands.must-look-at-drawer"));
             return;
@@ -703,7 +703,7 @@ public class NetworksMain implements TabExecutor {
                         return true;
                     }
 
-                    final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(targetBlock.getLocation());
+                    final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(targetBlock.getLocation());
                     if (slimefunItem == null) {
                         player.sendMessage(Lang.getString("messages.commands.must-admin-debuggable"));
                         return true;
@@ -744,7 +744,7 @@ public class NetworksMain implements TabExecutor {
                         player.sendMessage("Cache: " + cchName);
                         @SuppressWarnings("unchecked") Map<Location, Integer> locations = (Map<Location, Integer>) value;
                         Map<String, Integer> formatted = locations.entrySet().stream().map(e -> {
-                            SlimefunItem sf = StorageCacheUtils.getSfItem(e.getKey());
+                            SlimefunItem sf = StorageCacheUtils.getSlimefunItem(e.getKey());
                             if (sf == null) {
                                 return Map.entry(e.getKey().toString(), e.getValue());
                             }

@@ -29,7 +29,7 @@ public class NetworkCrayon extends SpecialSlimefunItem {
             if (optional.isPresent()) {
                 final Block block = optional.get();
                 final Player player = e.getPlayer();
-                final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(block.getLocation());
+                final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(block.getLocation());
                 if (slimefunItem instanceof NetworkController) {
                     toggleCrayon(block, player);
                     e.cancel();
