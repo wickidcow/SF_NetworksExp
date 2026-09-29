@@ -8,7 +8,7 @@ import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import com.ytdd9527.networksexpansion.utils.ReflectionUtil;
 import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.utils.Keys;
-import io.github.bakedlibs.dough.config.Config;
+import io.github.thebusybiscuit.slimefun4.libraries.dough.config.Config;
 import io.github.bakedlibs.dough.items.CustomItemStack;
 import io.github.thebusybiscuit.slimefun4.utils.ChatUtils;
 import lombok.Data;
@@ -38,6 +38,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 @NullMarked
+@SuppressWarnings("deprecation") // Cross-core Config/MenuClickHandler compatibility boundary.
 public @Data class Keybinds implements ChestMenu.MenuClickHandler, Keyed {
     private static final Map<NamespacedKey, LinkedHashMap<Keybind, Action>> defaultKeybinds = new HashMap<>();
     private static final Map<NamespacedKey, Set<Keybind>> usableKeybind = new HashMap<>();
