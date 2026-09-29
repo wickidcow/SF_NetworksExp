@@ -232,6 +232,13 @@ require("services.gradle.org/distributions/gradle-9.4.1-bin.zip" in wrapper, "of
 require("extends RecipeChoice.ExactChoice" not in simple_recipe_choice,
         "SimpleRecipeChoice still extends final RecipeChoice.ExactChoice")
 require("implements RecipeChoice" in simple_recipe_choice, "SimpleRecipeChoice no longer implements RecipeChoice")
+require('version = "1.0.45"' in build, "Gradle public version must remain 1.0.45")
+require('VERSION: "1.0.45"' in build_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.45.jar"' in build_workflow,
+        "release workflow public version/JAR name must remain 1.0.45")
+require('VERSION: "1.0.45"' in compatibility_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.45.jar"' in compatibility_workflow,
+        "compatibility workflow public version/JAR name must remain 1.0.45")
 
 # Three exact Slimefun families.
 workflow_invariants = [
