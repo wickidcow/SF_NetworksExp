@@ -166,7 +166,7 @@ public class NetworkStorage {
             return null;
         }
 
-        final var slimefunItem = StorageCacheUtils.getSfItem(key);
+        final var slimefunItem = StorageCacheUtils.getSlimefunItem(key);
         if (!(slimefunItem instanceof NetworkObject networkObject)
             || networkObject.getNodeType() != definition.getType()) {
             invalidateStaleNode(key, definition);

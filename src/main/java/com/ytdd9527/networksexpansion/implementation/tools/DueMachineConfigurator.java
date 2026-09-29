@@ -39,7 +39,7 @@ public class DueMachineConfigurator extends SpecialSlimefunItem {
             final Optional<Block> optional = e.getClickedBlock();
             if (optional.isPresent()) {
                 final Block block = optional.get();
-                final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(block.getLocation());
+                final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(block.getLocation());
 
                 if (Slimefun.getProtectionManager().hasPermission(player, block, Interaction.INTERACT_BLOCK)) {
                     if (slimefunItem instanceof DueMachine dueMachine) {

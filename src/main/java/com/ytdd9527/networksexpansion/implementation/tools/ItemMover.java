@@ -264,7 +264,7 @@ public class ItemMover extends SpecialSlimefunItem implements DistinctiveItem {
 
     @Nullable
     public static BarrelIdentity getBarrel(@NotNull Player player, @NotNull Location location) {
-        final SlimefunItem sfitem = StorageCacheUtils.getSfItem(location);
+        final SlimefunItem sfitem = StorageCacheUtils.getSlimefunItem(location);
 
         if (sfitem == null) {
             return null;
@@ -464,7 +464,7 @@ public class ItemMover extends SpecialSlimefunItem implements DistinctiveItem {
             }
         }
 
-        SlimefunItem sfitem = StorageCacheUtils.getSfItem(location);
+        SlimefunItem sfitem = StorageCacheUtils.getSlimefunItem(location);
         return Slimefun.getPermissionsService().hasPermission(player, sfitem);
     }
 

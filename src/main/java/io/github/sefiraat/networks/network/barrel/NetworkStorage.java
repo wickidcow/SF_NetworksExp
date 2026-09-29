@@ -56,7 +56,7 @@ public class NetworkStorage extends BarrelIdentity {
 
     @Override
     public void depositItemStack(ItemStack @NotNull [] itemsToDeposit) {
-        if (StorageCacheUtils.getSfItem(this.getLocation()) instanceof NetworkQuantumStorage) {
+        if (StorageCacheUtils.getSlimefunItem(this.getLocation()) instanceof NetworkQuantumStorage) {
             final BlockMenu blockMenu = StorageCacheUtils.getMenu(this.getLocation());
             if (blockMenu == null) {
                 return;

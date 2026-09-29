@@ -2,7 +2,8 @@ package com.ytdd9527.networksexpansion.utils;
 
 import io.github.sefiraat.networks.Networks;
 import lombok.experimental.UtilityClass;
-import org.bukkit.ChatColor;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Color;
 import org.jetbrains.annotations.NotNull;
 
@@ -14,10 +15,16 @@ import java.util.Random;
  * @author Final_ROOT
  * @since 2.0
  */
-@SuppressWarnings({"deprecation", "DuplicatedCode"})
+@SuppressWarnings("DuplicatedCode")
 @UtilityClass
 public class TextUtil {
     public static final String PLACEHOLDER = "†";
+    private static final String LEGACY_CODES = "0123456789AaBbCcDdEeFfKkLlMmNnOoRrXx";
+    private static final LegacyComponentSerializer LEGACY_COMPONENTS = LegacyComponentSerializer.builder()
+        .character('§')
+        .hexColors()
+        .useUnusualXRepeatedCharacterHexFormat()
+        .build();
     public static final String COLOR_NORMAL = "§x§8§8§f§f§f§f";
     public static final String COLOR_STRESS = "§x§f§f§f§f§8§8";
     public static final String COLOR_ACTION = "§x§f§f§8§8§0§0";
@@ -238,10 +245,33 @@ public class TextUtil {
     }
 
     public static @NotNull String color(@NotNull String s) {
-        return ChatColor.translateAlternateColorCodes('&', s);
+        char[] chars = s.toCharArray();
+        for (int i = 0; i < chars.length - 1; i++) {
+            if (chars[i] == '&' && LEGACY_CODES.indexOf(chars[i + 1]) >= 0) {
+                chars[i] = '§';
+                chars[i + 1] = Character.toLowerCase(chars[i + 1]);
+            }
+        }
+        return new String(chars);
     }
 
-    public static @NotNull String stripColor(String s) {
-        return ChatColor.stripColor(s);
+    public static String stripColor(String s) {
+        return s == null ? null : s.replaceAll("(?i)§[0-9A-FK-ORX]", "");
+    }
+
+    public static @NotNull Component component(@NotNull String legacyText) {
+        return LEGACY_COMPONENTS.deserialize(legacyText);
+    }
+
+    public static @NotNull List<Component> components(@NotNull List<String> legacyLines) {
+        List<Component> components = new ArrayList<>(legacyLines.size());
+        for (String line : legacyLines) {
+            components.add(component(line));
+        }
+        return components;
+    }
+
+    public static @NotNull String legacy(@NotNull Component component) {
+        return LEGACY_COMPONENTS.serialize(component);
     }
 }

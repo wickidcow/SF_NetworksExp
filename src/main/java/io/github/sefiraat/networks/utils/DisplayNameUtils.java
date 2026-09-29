@@ -1,5 +1,6 @@
 package io.github.sefiraat.networks.utils;
 
+import com.ytdd9527.networksexpansion.utils.TextUtil;
 import java.util.Locale;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
@@ -24,8 +25,8 @@ public final class DisplayNameUtils {
         }
 
         ItemMeta itemMeta = itemStack.getItemMeta();
-        if (itemMeta != null && itemMeta.hasDisplayName()) {
-            return itemMeta.getDisplayName();
+        if (itemMeta != null && itemMeta.displayName() != null) {
+            return TextUtil.legacy(itemMeta.displayName());
         }
 
         return getMaterialName(itemStack.getType());

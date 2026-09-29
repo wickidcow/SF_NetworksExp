@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.39
+
+### Paper 26.3 API modernization
+- Replaced all deprecated-for-removal `StorageCacheUtils.getSfItem(Location)` calls with `getSlimefunItem(Location)` across Networks, including integrations, listeners, admin tools, diagnostics, and network controls.
+- Replaced the deprecated `BlockStorage.getInventory` break-handler lookup with the equivalent cached block-data menu path without force-loading data.
+- Migrated manual-crafter and network power reads/removals to the long-capacity Slimefun energy API shared by Legacy, United, and Gugu.
+- Modernized Network Monitor, directional controls, localization action bars, and selected ItemMeta display/lore paths to Adventure-backed APIs while preserving legacy color rendering.
+- Added cross-core source-contract guards for the storage API migration and Adventure text bridge without adding a Gugu-specific test dependency.
+- Preserved existing network routing, topology, item IDs, recipes, persistence formats, transfer quantities, and storage behavior.
+- Left ItemDifferenter's version-sensitive custom-model-data, fire-resistant, and map component comparisons for a separate compatibility-focused pass.
+
 ## 1.0.38
 
 ### Bidirectional line-transfer traversal reuse

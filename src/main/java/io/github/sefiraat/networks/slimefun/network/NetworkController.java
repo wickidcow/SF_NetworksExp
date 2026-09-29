@@ -425,9 +425,9 @@ public class NetworkController extends NetworkObject {
     private static void refreshStableRoot(@NotNull NetworkRoot root, @NotNull Location controllerLocation) {
         long livePower = 0L;
         for (Location powerNodeLocation : root.getPowerNodes()) {
-            final SlimefunItem item = StorageCacheUtils.getSfItem(powerNodeLocation);
+            final SlimefunItem item = StorageCacheUtils.getSlimefunItem(powerNodeLocation);
             if (item instanceof NetworkPowerNode powerNode) {
-                livePower += Math.max(0, powerNode.getCharge(powerNodeLocation));
+                livePower += Math.max(0, powerNode.getChargeLong(powerNodeLocation));
             }
         }
 

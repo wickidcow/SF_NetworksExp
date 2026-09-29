@@ -6,7 +6,7 @@ import io.github.sefiraat.networks.utils.StackUtils;
 import io.github.thebusybiscuit.slimefun4.core.handlers.BlockBreakHandler;
 import io.github.thebusybiscuit.slimefun4.core.handlers.BlockPlaceHandler;
 import lombok.experimental.UtilityClass;
-import me.mrCookieSlime.Slimefun.api.BlockStorage;
+import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Location;
 import org.bukkit.event.block.BlockBreakEvent;
@@ -63,8 +63,11 @@ public final class MachineUtil {
                 @NotNull ItemStack itemStack,
                 @NotNull List<ItemStack> list) {
                 Location location = blockBreakEvent.getBlock().getLocation();
-                BlockMenu blockMenu = BlockStorage.getInventory(location);
-                blockMenu.dropItems(location, slot);
+                var blockData = StorageCacheUtils.getBlock(location);
+                if (blockData != null && blockData.getBlockMenu() != null) {
+                    BlockMenu blockMenu = blockData.getBlockMenu();
+                    blockMenu.dropItems(location, slot);
+                }
             }
         };
     }

@@ -202,7 +202,7 @@ public abstract class NetworkDirectional extends NetworkObject {
 
         for (BlockFace blockFace : VALID_FACES) {
             final Block block = blockMenu.getBlock().getRelative(blockFace);
-            final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(block.getLocation());
+            final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(block.getLocation());
             if (slimefunItem != null) {
                 switch (blockFace) {
                     case NORTH -> blockMenu.replaceExistingItem(
@@ -425,7 +425,7 @@ public abstract class NetworkDirectional extends NetworkObject {
             blockMenu.getBlock().getRelative(blockFace).getLocation());
         if (targetMenu != null) {
             final Location location = targetMenu.getLocation();
-            final SlimefunItem item = StorageCacheUtils.getSfItem(location);
+            final SlimefunItem item = StorageCacheUtils.getSlimefunItem(location);
             if (item != null
                 && (player.hasPermission("slimefun.inventory.bypass") || item.canUse(player, true))
                 && (player.hasPermission("slimefun.inventory.bypass")

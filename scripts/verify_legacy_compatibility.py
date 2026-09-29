@@ -130,6 +130,7 @@ recipe_registry = read("src/main/java/com/balugaq/netex/api/helpers/SupportedCra
 runtime_stability = read("RUNTIME_STABILITY.md")
 main_flex_group = read("src/main/java/io/github/sefiraat/networks/slimefun/groups/MainFlexGroup.java")
 setup_util = read("src/main/java/com/ytdd9527/networksexpansion/setup/SetupUtil.java")
+text_util = read("src/main/java/com/ytdd9527/networksexpansion/utils/TextUtil.java")
 java_sources = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "src/main/java").rglob("*.java"))
 
 # Stable world/plugin identity.
@@ -245,6 +246,28 @@ for forbidden in [
 ]:
     require(forbidden not in java_sources, f"unsafe Bukkit asynchronous scheduling remains: {forbidden}")
 require("useSynchronizedMachineTickers()" in java_sources, "machine ticker synchronization bridge is missing")
+legacy_getsfitem_files = [
+    str(path.relative_to(ROOT))
+    for path in (ROOT / "src/main/java").rglob("*.java")
+    if "StorageCacheUtils.getSfItem(" in path.read_text(encoding="utf-8")
+]
+require(
+    not legacy_getsfitem_files,
+    "deprecated-for-removal StorageCacheUtils.getSfItem call returned in: "
+    + ", ".join(legacy_getsfitem_files),
+)
+require("BlockStorage.getInventory(" not in java_sources,
+        "deprecated BlockStorage inventory lookup returned")
+require("org.bukkit.ChatColor" not in network_monitor,
+        "Network Monitor returned to deprecated Bukkit ChatColor")
+require(
+    "net.kyori.adventure.text.Component" in text_util
+    and "LegacyComponentSerializer" in text_util
+    and "public static @NotNull Component component" in text_util
+    and "public static @NotNull List<Component> components" in text_util
+    and "public static @NotNull String legacy" in text_util,
+    "Adventure-backed legacy text bridge is missing",
+)
 require("DEFAULT_LANGUAGE = \"en-US\"" in networks_java, "Networks default language is not en-US")
 require("GuizhanUpdater" not in networks_java, "automatic Guizhan updater code is still present")
 require("PinyinHelper" not in java_sources, "Pinyin runtime search remains in Java sources")
@@ -418,7 +441,7 @@ require("instanceof InventoryHolder" in control_x,
         "Control X inventory-container rejection is missing")
 require(control_x.find("instanceof InventoryHolder") < control_x.find("addItemStack0"),
         "Control X must reject inventory containers before network insertion")
-require("invalidateStaleNode" in network_storage and "StorageCacheUtils.getSfItem" in network_storage,
+require("invalidateStaleNode" in network_storage and "StorageCacheUtils.getSlimefunItem" in network_storage,
         "lazy stale physical-node invalidation is missing")
 require("StorageUnitData.clearAccessHistory(key)" in network_storage
         and "StorageUnitData.clearAllAccessHistory()" in network_storage,

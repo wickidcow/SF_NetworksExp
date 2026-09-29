@@ -26,7 +26,7 @@ public class ExplosiveToolListener implements Listener {
         for (Block block : event.getAdditionalBlocks()) {
             final Location location = block.getLocation();
 
-            final SlimefunItem item = StorageCacheUtils.getSfItem(location);
+            final SlimefunItem item = StorageCacheUtils.getSlimefunItem(location);
             if (item != null && isProtectedNetworkBlock(item)) {
                 blocksToRemove.add(block);
                 Networks.getInstance()

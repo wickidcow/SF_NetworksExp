@@ -2,6 +2,7 @@ package com.ytdd9527.networksexpansion.implementation.machines.manual;
 
 import com.balugaq.netex.api.helpers.Icon;
 import com.ytdd9527.networksexpansion.implementation.ExpansionItems;
+import com.ytdd9527.networksexpansion.utils.TextUtil;
 import io.github.sefiraat.networks.network.NodeType;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
 import io.github.sefiraat.networks.utils.StackUtils;
@@ -121,7 +122,9 @@ public class ItemDifferenter extends NetworkObject {
     public static ItemStack getResultIcon(String result, boolean isSimilar) {
         ItemStack i = Icon.DIFF_RESULT_ICON.clone();
         ItemMeta meta = i.getItemMeta();
-        meta.setDisplayName((result.equals("no-item") ? "" : ("isSimilar: " + isSimilar + " | ")) + meta.getDisplayName() + result);
+        String currentName = meta.displayName() == null ? "" : TextUtil.legacy(meta.displayName());
+        meta.displayName(TextUtil.component(
+            (result.equals("no-item") ? "" : ("isSimilar: " + isSimilar + " | ")) + currentName + result));
         i.setItemMeta(meta);
         return i;
     }
@@ -262,7 +265,7 @@ public class ItemDifferenter extends NetworkObject {
 
         if (true) {
             if (itemMeta.hasLore() && cachedMeta.hasLore()) {
-                if (!Objects.equals(itemMeta.getLore(), cachedMeta.getLore())) {
+                if (!Objects.equals(itemMeta.lore(), cachedMeta.lore())) {
                     return "neq.lore";
                 }
             } else if (itemMeta.hasLore() != cachedMeta.hasLore()) {
@@ -300,7 +303,7 @@ public class ItemDifferenter extends NetworkObject {
         }
 
         // Check the display name
-        if (!itemMeta.hasDisplayName() || Objects.equals(itemMeta.getDisplayName(), cachedMeta.getDisplayName())) {
+        if (!itemMeta.hasDisplayName() || Objects.equals(itemMeta.displayName(), cachedMeta.displayName())) {
             return "eq";
         } else {
             return "neq.displayname";

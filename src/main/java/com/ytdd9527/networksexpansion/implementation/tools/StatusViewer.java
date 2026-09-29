@@ -41,7 +41,7 @@ public class StatusViewer extends SpecialSlimefunItem {
         if (optional.isPresent()) {
             final Block block = optional.get();
             final Player player = e.getPlayer();
-            final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(block.getLocation());
+            final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(block.getLocation());
             final Location location = block.getLocation();
             if (slimefunItem != null) {
                 if (FeedbackSendable.hasSubscribed(player, location)) {

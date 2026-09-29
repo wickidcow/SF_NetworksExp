@@ -135,7 +135,7 @@ public final class NetworksDoctor {
             }
 
             try {
-                final SlimefunItem item = StorageCacheUtils.getSfItem(location);
+                final SlimefunItem item = StorageCacheUtils.getSlimefunItem(location);
                 if (!(item instanceof NetworkController)) {
                     issues++;
                     addSample(details, "Stale controller fault state: " + format(location));
@@ -169,7 +169,7 @@ public final class NetworksDoctor {
             }
 
             try {
-                final SlimefunItem item = StorageCacheUtils.getSfItem(location);
+                final SlimefunItem item = StorageCacheUtils.getSlimefunItem(location);
                 if (!(item instanceof NetworkQuantumStorage)) {
                     issues++;
                     addSample(details, "Stale quantum cache: " + format(location));

@@ -27,6 +27,7 @@ import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
+import net.kyori.adventure.text.Component;
 import io.github.sefiraat.networks.utils.DisplayNameUtils;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -106,7 +107,6 @@ public abstract class AdvancedDirectional extends NetworkDirectional {
         });
     }
 
-    @SuppressWarnings("deprecation")
     @NotNull
     public static ItemStack getDirectionalSlotPane(
         @NotNull BlockFace blockFace, @NotNull SlimefunItem slimefunItem, boolean active) {
@@ -117,22 +117,19 @@ public abstract class AdvancedDirectional extends NetworkDirectional {
                 blockFace.name(),
                 TextUtil.stripColor(slimefunItem.getItemName()))));
         final ItemMeta itemMeta = displayStack.getItemMeta();
-        itemMeta.setLore(Lang.getStringList("messages.normal-operation.directional.display_lore"));
+        List<Component> lore = TextUtil.components(
+            Lang.getStringList("messages.normal-operation.directional.display_lore"));
         if (active) {
-            List<String> lore = itemMeta.getLore();
-            if (lore == null) {
-                lore = new ArrayList<>();
-            }
-            lore.add(Lang.getString("messages.normal-operation.directional.set_facing"));
-            itemMeta.setLore(lore);
+            lore = new ArrayList<>(lore);
+            lore.add(TextUtil.component(Lang.getString("messages.normal-operation.directional.set_facing")));
             itemMeta.addEnchant(NetworksVersionedEnchantment.LUCK_OF_THE_SEA, 1, true);
             itemMeta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
         }
+        itemMeta.lore(lore);
         displayStack.setItemMeta(itemMeta);
         return displayStack;
     }
 
-    @SuppressWarnings("deprecation")
     @NotNull
     public static ItemStack getDirectionalSlotPane(
         @NotNull BlockFace blockFace, @NotNull Material blockMaterial, boolean active) {
@@ -144,17 +141,15 @@ public abstract class AdvancedDirectional extends NetworkDirectional {
                     blockFace.name(),
                     DisplayNameUtils.getMaterialName(blockMaterial)));
             final ItemMeta itemMeta = displayStack.getItemMeta();
-            itemMeta.setLore(Lang.getStringList("messages.normal-operation.directional.display_lore"));
+            List<Component> lore = TextUtil.components(
+                Lang.getStringList("messages.normal-operation.directional.display_lore"));
             if (active) {
-                List<String> lore = itemMeta.getLore();
-                if (lore == null) {
-                    lore = new ArrayList<>();
-                }
-                lore.add(Lang.getString("messages.normal-operation.directional.set_facing"));
-                itemMeta.setLore(lore);
+                lore = new ArrayList<>(lore);
+                lore.add(TextUtil.component(Lang.getString("messages.normal-operation.directional.set_facing")));
                 itemMeta.addEnchant(NetworksVersionedEnchantment.LUCK_OF_THE_SEA, 1, true);
                 itemMeta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
             }
+            itemMeta.lore(lore);
             displayStack.setItemMeta(itemMeta);
             return displayStack;
         } else {
@@ -180,7 +175,7 @@ public abstract class AdvancedDirectional extends NetworkDirectional {
 
         for (BlockFace blockFace : VALID_FACES) {
             final Block block = blockMenu.getBlock().getRelative(blockFace);
-            final SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(block.getLocation());
+            final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(block.getLocation());
             if (slimefunItem != null) {
                 switch (blockFace) {
                     case NORTH -> blockMenu.replaceExistingItem(
@@ -628,17 +623,17 @@ public abstract class AdvancedDirectional extends NetworkDirectional {
     public void updateShowIcon(@NotNull Location location) {
         ItemStack clone = Icon.SHOW_ICON.clone();
         ItemMeta itemMeta = clone.getItemMeta();
-        List<String> lore = new ArrayList<>();
-        List<String> old = itemMeta.getLore();
+        List<Component> lore = new ArrayList<>();
+        List<Component> old = itemMeta.lore();
         if (old != null) {
             lore.addAll(old);
         }
         lore.set(
             0,
-            String.format(
+            TextUtil.component(String.format(
                 Lang.getString("messages.normal-operation.directional.limit_quantity"),
-                getLimitQuantity(location)));
-        itemMeta.setLore(lore);
+                getLimitQuantity(location))));
+        itemMeta.lore(lore);
         clone.setItemMeta(itemMeta);
 
         BlockMenu blockMenu = StorageCacheUtils.getMenu(location);
@@ -653,21 +648,21 @@ public abstract class AdvancedDirectional extends NetworkDirectional {
     public void updateTransportModeIcon(@NotNull Location location) {
         ItemStack clone = Icon.TRANSPORT_MODE_ICON.clone();
         ItemMeta itemMeta = clone.getItemMeta();
-        List<String> lore = new ArrayList<>();
-        List<String> old = itemMeta.getLore();
+        List<Component> lore = new ArrayList<>();
+        List<Component> old = itemMeta.lore();
         if (old != null) {
             lore.addAll(old);
         }
         lore.set(
             0,
-            String.format(
+            TextUtil.component(String.format(
                 Lang.getString("messages.normal-operation.directional.transport_mode"),
-                ""));
+                "")));
         TransportMode current = getCurrentTransportMode(location);
         for (TransportMode mode : TransportMode.values()) {
-            lore.add(ChatColors.color((mode == current ? "&a" : "&c") + "- " + mode.getRawName()));
+            lore.add(TextUtil.component(ChatColors.color((mode == current ? "&a" : "&c") + "- " + mode.getRawName())));
         }
-        itemMeta.setLore(lore);
+        itemMeta.lore(lore);
         clone.setItemMeta(itemMeta);
 
         BlockMenu blockMenu = StorageCacheUtils.getMenu(location);

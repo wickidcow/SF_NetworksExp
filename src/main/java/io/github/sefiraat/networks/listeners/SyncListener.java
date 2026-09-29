@@ -29,7 +29,7 @@ public class SyncListener implements Listener {
     public void onBlockBreak(@NotNull BlockBreakEvent e) {
         Networks.getInstance().debug(MessageFormat.format("Listened BlockBreakEvent at {0}", e.getBlock().getLocation()));
         NetworkUtils.clearNetwork(e.getBlock().getLocation());
-        SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(e.getBlock().getLocation());
+        SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(e.getBlock().getLocation());
         if (slimefunItem != null && slimefunItem.getAddon() instanceof Networks) {
             NetworksBlockBreakEvent event = new NetworksBlockBreakEvent(e.getBlock(), e.getPlayer());
             Bukkit.getPluginManager().callEvent(event);
@@ -43,7 +43,7 @@ public class SyncListener implements Listener {
     public void onBlockPlace(@NotNull BlockPlaceEvent e) {
         Networks.getInstance().debug(MessageFormat.format("Listened BlockPlaceEvent at {0}", e.getBlock().getLocation()));
         NetworkUtils.clearNetwork(e.getBlock().getLocation());
-        SlimefunItem slimefunItem = StorageCacheUtils.getSfItem(e.getBlock().getLocation());
+        SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(e.getBlock().getLocation());
         if (slimefunItem != null && slimefunItem.getAddon() instanceof Networks) {
             NetworksBlockPlaceEvent event = new NetworksBlockPlaceEvent(e.getBlock(), e.getPlayer());
             Bukkit.getPluginManager().callEvent(event);

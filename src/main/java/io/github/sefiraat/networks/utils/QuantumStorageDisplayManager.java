@@ -149,7 +149,7 @@ public final class QuantumStorageDisplayManager {
             }
 
             final Block block = world.getBlockAt(key.x(), key.y(), key.z());
-            if (!(StorageCacheUtils.getSfItem(block.getLocation()) instanceof NetworkQuantumStorage)) {
+            if (!(StorageCacheUtils.getSlimefunItem(block.getLocation()) instanceof NetworkQuantumStorage)) {
                 continue;
             }
 
@@ -293,7 +293,7 @@ public final class QuantumStorageDisplayManager {
             }
 
             final Block block = world.getBlockAt(key.x(), key.y(), key.z());
-            if (StorageCacheUtils.getSfItem(block.getLocation()) instanceof NetworkQuantumStorage) {
+            if (StorageCacheUtils.getSlimefunItem(block.getLocation()) instanceof NetworkQuantumStorage) {
                 // The Slimefun block is present but its cache has not been rebuilt yet.
                 continue;
             }
@@ -353,7 +353,7 @@ public final class QuantumStorageDisplayManager {
             }
 
             final Block block = result.getHitBlock();
-            if (!(StorageCacheUtils.getSfItem(block.getLocation()) instanceof NetworkQuantumStorage)) {
+            if (!(StorageCacheUtils.getSlimefunItem(block.getLocation()) instanceof NetworkQuantumStorage)) {
                 continue;
             }
 

@@ -230,7 +230,7 @@ public class LinkerGrid extends NetworkObject {
 
     @NotNull
     public static ItemStack getIcon(ItemFlowRecord.@NotNull TransportAction action) {
-        SlimefunItem sf = StorageCacheUtils.getSfItem(action.accessor());
+        SlimefunItem sf = StorageCacheUtils.getSlimefunItem(action.accessor());
         if (sf == null) {
             return Icon.UNKNOWN_ITEM.clone();
         } else {

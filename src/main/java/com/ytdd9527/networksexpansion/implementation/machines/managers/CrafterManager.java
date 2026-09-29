@@ -731,7 +731,7 @@ public class CrafterManager extends NetworkObject {
         public static CrafterMetaData getMetaData(NetworkRoot root, BlockMenu crafterMenu) {
             Location location = crafterMenu.getLocation();
             CraftType craftType = CraftType.CRAFTING;
-            if (StorageCacheUtils.getSfItem(location) instanceof CraftTyped craftTyped) {
+            if (StorageCacheUtils.getSlimefunItem(location) instanceof CraftTyped craftTyped) {
                 craftType = craftTyped.craftType();
             }
 
@@ -748,7 +748,7 @@ public class CrafterManager extends NetworkObject {
             }
 
             if (instance != null) {
-                SlimefunItem sf = StorageCacheUtils.getSfItem(location);
+                SlimefunItem sf = StorageCacheUtils.getSlimefunItem(location);
                 if (sf instanceof AdvancedAutoCrafter) {
                     return new CrafterMetaData(location, instance, blueprint.getAmount(), true, craftType);
                 } else {

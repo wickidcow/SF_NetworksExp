@@ -4,6 +4,7 @@ import com.balugaq.netex.api.enums.FacingPreset;
 import com.balugaq.netex.api.helpers.Icon;
 import com.balugaq.netex.utils.Lang;
 import com.balugaq.netex.utils.NetworksVersionedEnchantment;
+import com.ytdd9527.networksexpansion.utils.TextUtil;
 import io.github.sefiraat.networks.network.NodeType;
 import io.github.sefiraat.networks.slimefun.network.NetworkDirectional;
 import io.github.sefiraat.networks.utils.Keys;
@@ -17,6 +18,7 @@ import io.github.thebusybiscuit.slimefun4.libraries.dough.protection.Interaction
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
@@ -187,18 +189,16 @@ public class FacingPresetter extends NetworkDirectional {
             if (SlimefunItem.getByItem(item) instanceof NetworkDirectional) {
                 ItemMeta meta = item.getItemMeta();
                 var pdc = meta.getPersistentDataContainer();
-                List<String> lore = meta.getLore();
-                if (lore == null) {
-                    lore = new ArrayList<>();
-                }
+                List<Component> existingLore = meta.lore();
+                List<Component> lore = existingLore == null ? new ArrayList<>() : new ArrayList<>(existingLore);
                 if (!pdc.has(Keys.FACING_PRESET)) {
                     pdc.set(Keys.FACING_PRESET, PersistentDataType.STRING, facingPreset.name());
 
-                    lore.add(String.format(
+                    lore.add(TextUtil.component(String.format(
                         Lang.getString("messages.completed-operation.directional.presetted_facing"),
                         facingPreset.name()
-                    ));
-                    meta.setLore(lore);
+                    )));
+                    meta.lore(lore);
                     item.setItemMeta(meta);
                     blockMenu.replaceExistingItem(slot, item);
                     success = true;
@@ -207,11 +207,11 @@ public class FacingPresetter extends NetworkDirectional {
                     if (!lore.isEmpty()) {
                         lore.remove(lore.size() - 1);
                     }
-                    lore.add(String.format(
+                    lore.add(TextUtil.component(String.format(
                         Lang.getString("messages.completed-operation.directional.presetted_facing"),
                         facingPreset.name()
-                    ));
-                    meta.setLore(lore);
+                    )));
+                    meta.lore(lore);
                     pdc.set(Keys.FACING_PRESET, PersistentDataType.STRING, facingPreset.name());
                     item.setItemMeta(meta);
                     blockMenu.replaceExistingItem(slot, item);

@@ -150,7 +150,7 @@ public class NetworkNode {
                 try {
                     // Re-read the live Slimefun identity on the server thread. If the controller was already broken,
                     // replaced, or cleaned up by another path, there is nothing left for this task to drop.
-                    SlimefunItem liveItem = StorageCacheUtils.getSfItem(controllerLocation);
+                    SlimefunItem liveItem = StorageCacheUtils.getSlimefunItem(controllerLocation);
                     if (!(liveItem instanceof NetworkController)) {
                         return;
                     }
@@ -184,10 +184,10 @@ public class NetworkNode {
 
     protected long retrieveBlockCharge() {
         if (this.nodeType == NodeType.POWER_NODE) {
-            int blockCharge = 0;
-            final SlimefunItem item = StorageCacheUtils.getSfItem(this.nodePosition);
+            long blockCharge = 0L;
+            final SlimefunItem item = StorageCacheUtils.getSlimefunItem(this.nodePosition);
             if (item instanceof NetworkPowerNode powerNode) {
-                blockCharge = powerNode.getCharge(this.nodePosition);
+                blockCharge = powerNode.getChargeLong(this.nodePosition);
             }
             return blockCharge;
         }

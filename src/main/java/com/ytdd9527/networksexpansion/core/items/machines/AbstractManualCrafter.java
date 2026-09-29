@@ -119,7 +119,7 @@ public abstract class AbstractManualCrafter extends SpecialSlimefunItem implemen
                 continue;
             }
 
-            if (getCharge(blockMenu.getLocation()) >= recipe.getConsumeEnergy()) {
+            if (getChargeLong(blockMenu.getLocation()) >= recipe.getConsumeEnergy()) {
                 if (recipe.getHandler() != null) {
                     success = recipe.getHandler().handle(player, blockMenu);
                 } else {
@@ -201,7 +201,7 @@ public abstract class AbstractManualCrafter extends SpecialSlimefunItem implemen
         }
 
         if (recipe.getConsumeEnergy() > 0) {
-            removeCharge(blockMenu.getLocation(), recipe.getConsumeEnergy());
+            removeCharge(blockMenu.getLocation(), (long) recipe.getConsumeEnergy());
         }
         player.sendMessage(Lang.getString("messages.completed-operation.manual_crafter.success"));
         sendFeedback(blockMenu.getLocation(), FeedbackType.SUCCESS);
@@ -299,7 +299,7 @@ public abstract class AbstractManualCrafter extends SpecialSlimefunItem implemen
         }
 
         if (recipe.getConsumeEnergy() > 0) {
-            removeCharge(blockMenu.getLocation(), recipe.getConsumeEnergy());
+            removeCharge(blockMenu.getLocation(), (long) recipe.getConsumeEnergy());
         }
         player.sendMessage(Lang.getString("messages.completed-operation.manual_crafter.success"));
         sendFeedback(blockMenu.getLocation(), FeedbackType.SUCCESS);
