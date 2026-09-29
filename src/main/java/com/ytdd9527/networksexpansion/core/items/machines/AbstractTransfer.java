@@ -59,6 +59,31 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
     private static final Map<Location, Integer> LAST_TRANSFER_SERVER_TICK = new ConcurrentHashMap<>();
     private final TransferConfiguration config;
 
+    /**
+     * A single bidirectional line-transfer tick historically walked the exact same line twice: once for
+     * push and once for grab. Hold the already-validated targets only on the current onTick call stack so
+     * the second phase can reuse that traversal without retaining BlockMenu references after the tick.
+     */
+    private record LinePassCache(
+        @NotNull BlockFace direction,
+        int limit,
+        int startOffset,
+        int maxTargets,
+        @NotNull List<BlockMenu> targets,
+        int nextOffset) {
+
+        private boolean matches(
+            @NotNull BlockFace currentDirection,
+            int currentLimit,
+            int currentStartOffset,
+            int currentMaxTargets) {
+            return direction == currentDirection
+                && limit == currentLimit
+                && startOffset == currentStartOffset
+                && maxTargets == currentMaxTargets;
+        }
+    }
+
     protected AbstractTransfer(
         @NotNull ItemGroup itemGroup,
         @NotNull SlimefunItemStack item,
@@ -154,6 +179,13 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
 
         final TransportMode currentTransportMode = getCurrentTransportMode(blockMenu.getLocation());
         final int limitQuantity = getLimitQuantity(blockMenu.getLocation());
+        LinePassCache sharedLinePass = null;
+        final boolean capturePushLinePass = !(this instanceof GrabTickOnly)
+            && !(this instanceof PushTickOnly)
+            && !(this instanceof VanillaTransfer)
+            && (config.defaultGrabTick <= 1 || getGrabTickCounter(location) == 0)
+            && PUSH_LINE_CURSOR_MAP.getOrDefault(location, 0).equals(
+                GRAB_LINE_CURSOR_MAP.getOrDefault(location, 0));
 
         if (!(this instanceof GrabTickOnly)) {
             if (config.defaultPushTick > 1) {
@@ -163,7 +195,13 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
                     if (this instanceof VanillaTransfer) {
                         tryVanillaPushItem(blockMenu, root, direction, currentTransportMode, limitQuantity);
                     } else {
-                        tryPushItem(blockMenu, root, direction, currentTransportMode, limitQuantity);
+                        sharedLinePass = tryPushItem(
+                            blockMenu,
+                            root,
+                            direction,
+                            currentTransportMode,
+                            limitQuantity,
+                            capturePushLinePass);
                     }
                 }
                 currentPushTick = (currentPushTick + 1) % config.defaultPushTick;
@@ -173,7 +211,13 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
                 if (this instanceof VanillaTransfer) {
                     tryVanillaPushItem(blockMenu, root, direction, currentTransportMode, limitQuantity);
                 } else {
-                    tryPushItem(blockMenu, root, direction, currentTransportMode, limitQuantity);
+                    sharedLinePass = tryPushItem(
+                        blockMenu,
+                        root,
+                        direction,
+                        currentTransportMode,
+                        limitQuantity,
+                        capturePushLinePass);
                 }
             }
         }
@@ -186,7 +230,13 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
                     if (this instanceof VanillaTransfer) {
                         tryVanillaGrabItem(blockMenu, root, direction, currentTransportMode, limitQuantity);
                     } else {
-                        tryGrabItem(blockMenu, root, direction, currentTransportMode, limitQuantity);
+                        tryGrabItem(
+                            blockMenu,
+                            root,
+                            direction,
+                            currentTransportMode,
+                            limitQuantity,
+                            sharedLinePass);
                     }
                 }
                 currentGrabTick = (currentGrabTick + 1) % config.defaultGrabTick;
@@ -196,7 +246,13 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
                 if (this instanceof VanillaTransfer) {
                     tryVanillaGrabItem(blockMenu, root, direction, currentTransportMode, limitQuantity);
                 } else {
-                    tryGrabItem(blockMenu, root, direction, currentTransportMode, limitQuantity);
+                    tryGrabItem(
+                        blockMenu,
+                        root,
+                        direction,
+                        currentTransportMode,
+                        limitQuantity,
+                        sharedLinePass);
                 }
             }
         }
@@ -230,37 +286,45 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
         GRAB_TICKER_MAP.put(location, grabTick);
     }
 
-    private void tryPushItem(
+    private @Nullable LinePassCache tryPushItem(
         @NotNull BlockMenu blockMenu,
         @NotNull NetworkRoot root,
         @NotNull BlockFace direction,
         @NotNull TransportMode mode,
-        int limitQuantity) {
+        int limitQuantity,
+        boolean captureLinePass) {
         if (root.getRootPower() < config.defaultRequiredPower) {
             sendFeedback(blockMenu.getLocation(), FeedbackType.NOT_ENOUGH_POWER);
-            return;
+            return null;
         }
 
         final List<ItemStack> templates = collectTemplates(blockMenu);
         if (templates == null) {
             PUSH_LINE_CURSOR_MAP.remove(blockMenu.getLocation());
             finishPushAttempt(blockMenu, root);
-            return;
+            return null;
         }
 
-        runLineOperation(
+        final LinePassCache linePass = runLineOperation(
             blockMenu,
             direction,
             PUSH_LINE_CURSOR_MAP,
+            null,
+            captureLinePass,
             (targetMenu) -> LineOperationUtil.pushItem(
                 targetMenu.getLocation(), root, targetMenu, templates, mode, limitQuantity));
 
         finishPushAttempt(blockMenu, root);
+        return linePass;
     }
 
-    @ParametersAreNonnullByDefault
     private void tryGrabItem(
-        BlockMenu blockMenu, NetworkRoot root, BlockFace direction, TransportMode mode, int limitQuantity) {
+        @NotNull BlockMenu blockMenu,
+        @NotNull NetworkRoot root,
+        @NotNull BlockFace direction,
+        @NotNull TransportMode mode,
+        int limitQuantity,
+        @Nullable LinePassCache reusablePass) {
         if (root.getRootPower() < config.defaultRequiredPower) {
             sendFeedback(blockMenu.getLocation(), FeedbackType.NOT_ENOUGH_POWER);
             return;
@@ -270,6 +334,8 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
             blockMenu,
             direction,
             GRAB_LINE_CURSOR_MAP,
+            reusablePass,
+            false,
             (targetMenu) -> LineOperationUtil.grabItem(
                 targetMenu.getLocation(), root, targetMenu, mode, limitQuantity));
 
@@ -385,10 +451,12 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
         sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
     }
 
-    private void runLineOperation(
+    private @Nullable LinePassCache runLineOperation(
         @NotNull BlockMenu sourceMenu,
         @NotNull BlockFace direction,
         @NotNull Map<Location, Integer> cursorMap,
+        @Nullable LinePassCache reusablePass,
+        boolean captureLinePass,
         @NotNull Consumer<BlockMenu> consumer) {
 
         final Location location = sourceMenu.getLocation();
@@ -403,23 +471,60 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
                 false,
                 false,
                 consumer);
-            return;
+            return null;
         }
 
         final int startOffset = cursorMap.getOrDefault(location, 0);
-        final int nextOffset = LineOperationUtil.doBudgetedOperation(
-            location,
-            direction,
-            config.maxDistance,
-            startOffset,
-            targetBudget,
-            consumer);
+        final int nextOffset;
+        LinePassCache capturedPass = null;
+
+        if (reusablePass != null
+            && reusablePass.matches(
+                direction,
+                config.maxDistance,
+                startOffset,
+                targetBudget)) {
+            for (BlockMenu targetMenu : reusablePass.targets()) {
+                consumer.accept(targetMenu);
+            }
+            nextOffset = reusablePass.nextOffset();
+        } else if (captureLinePass) {
+            final List<BlockMenu> visitedTargets = new ArrayList<>(Math.min(targetBudget, config.maxDistance));
+            nextOffset = LineOperationUtil.doBudgetedOperation(
+                location,
+                direction,
+                config.maxDistance,
+                startOffset,
+                targetBudget,
+                (targetMenu) -> {
+                    visitedTargets.add(targetMenu);
+                    consumer.accept(targetMenu);
+                });
+
+            capturedPass = new LinePassCache(
+                direction,
+                config.maxDistance,
+                startOffset,
+                targetBudget,
+                visitedTargets,
+                nextOffset);
+        } else {
+            nextOffset = LineOperationUtil.doBudgetedOperation(
+                location,
+                direction,
+                config.maxDistance,
+                startOffset,
+                targetBudget,
+                consumer);
+        }
 
         if (nextOffset == 0) {
             cursorMap.remove(location);
         } else {
             putCursorValue(cursorMap, location, nextOffset);
         }
+
+        return capturedPass;
     }
 
     /**

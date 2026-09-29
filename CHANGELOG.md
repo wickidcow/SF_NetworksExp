@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.38
+
+### Bidirectional line-transfer traversal reuse
+- Reuses the validated push traversal for the grab phase only when both phases run in the same tick and their line cursors are aligned.
+- Keeps the shared target list strictly tick-local; no BlockMenu or inventory references are retained across ticks.
+- Falls back to the existing independent scan whenever cadence, cursor position, transfer type, or line state does not qualify for safe reuse.
+- Preserves push-then-grab ordering, target budgets, transfer quantities, power cost, cursor rotation, and vanilla/push-only/grab-only behavior.
+- Adds a regression guard so the optimization cannot silently become a persistent cross-tick menu cache.
+
 ## 1.0.37
 
 ### Line-transfer performance
