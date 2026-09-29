@@ -350,7 +350,6 @@ public class CrafterManager extends NetworkObject {
         }
     }
 
-    @SuppressWarnings("deprecation")
     public void updateDisplay(@Nullable BlockMenu managerMenu) {
         if (managerMenu == null) {
             return;
@@ -421,7 +420,7 @@ public class CrafterManager extends NetworkObject {
                             displayStack = generateUnsuitableStack(data.craftType(), craftTyped.craftType());
                             List<String> lore = getLoreAddition(data);
                             ItemMeta itemMeta = displayStack.getItemMeta();
-                            itemMeta.setLore(lore);
+                            itemMeta.lore(TextUtil.components(lore));
                             displayStack.setItemMeta(itemMeta);
                             managerMenu.replaceExistingItem(getDisplaySlots()[i], displayStack);
                             continue;
@@ -453,7 +452,7 @@ public class CrafterManager extends NetworkObject {
 
                 List<String> lore = getLoreAddition(data);
 
-                itemMeta.setLore(lore);
+                itemMeta.lore(TextUtil.components(lore));
                 displayStack.setItemMeta(itemMeta);
                 managerMenu.replaceExistingItem(getDisplaySlots()[i], displayStack);
                 managerMenu.addMenuClickHandler(getDisplaySlots()[i], new ChestMenu.AdvancedMenuClickHandler() {

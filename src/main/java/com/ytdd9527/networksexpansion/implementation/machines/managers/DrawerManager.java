@@ -294,7 +294,6 @@ public class DrawerManager extends NetworkObject {
         });
     }
 
-    @SuppressWarnings("deprecation")
     public void updateDisplay(@Nullable BlockMenu blockMenu) {
         if (blockMenu == null) {
             return;
@@ -387,7 +386,7 @@ public class DrawerManager extends NetworkObject {
 
                 List<String> lore = getLoreAddition(data);
 
-                itemMeta.setLore(lore);
+                itemMeta.lore(TextUtil.components(lore));
                 displayStack.setItemMeta(itemMeta);
                 blockMenu.replaceExistingItem(getDisplaySlots()[i], displayStack);
                 blockMenu.addMenuClickHandler(getDisplaySlots()[i], (player, slot, item, action) -> {

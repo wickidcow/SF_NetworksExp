@@ -262,7 +262,6 @@ public class LinkerGrid extends NetworkObject {
         mainMenu(root, blockMenu, gridCache);
     }
 
-    @SuppressWarnings("deprecation")
     public void mainMenu(@NotNull NetworkRoot root, @NotNull BlockMenu blockMenu, @NotNull GridCache gridCache) {
         List<ItemStack> entries = AbstractGridNewStyle.getEntries0(root, gridCache).stream().map(Map.Entry::getKey).toList();
 
@@ -317,7 +316,7 @@ public class LinkerGrid extends NetworkObject {
 
                 List<String> lore = getLoreAddition(stack);
 
-                itemMeta.setLore(lore);
+                itemMeta.lore(TextUtil.components(lore));
                 displayStack.setItemMeta(itemMeta);
                 blockMenu.replaceExistingItem(getDisplaySlots()[i], displayStack);
                 blockMenu.addMenuClickHandler(getDisplaySlots()[i], (player, slot, item, action) -> {
