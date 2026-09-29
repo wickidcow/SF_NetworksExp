@@ -408,7 +408,7 @@ public class QuantumManager extends NetworkObject {
 
                 List<String> lore = getLoreAddition(barrel);
 
-                itemMeta.setLore(lore);
+                itemMeta.lore(TextUtil.components(lore));
                 displayStack.setItemMeta(itemMeta);
                 blockMenu.replaceExistingItem(getDisplaySlots()[i], displayStack);
                 blockMenu.addMenuClickHandler(getDisplaySlots()[i], (player, slot, item, action) -> {

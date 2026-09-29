@@ -233,7 +233,7 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
                     isVoidExcess(l)));
 
             // Update item display
-            List<ItemContainer> itemStored = storages.get(l).getStoredItems();
+            List<ItemContainer> itemStored = storages.get(l).copyStoredItems();
             for (int i = 0; i < DISPLAY_SLOTS.length; i++) {
                 if (i < itemStored.size()) {
                     ItemContainer each = itemStored.get(i);
@@ -247,7 +247,7 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
     }
 
     public static boolean contains(Location l, ItemStack itemStack) {
-        for (ItemContainer each : storages.get(l).getStoredItems()) {
+        for (ItemContainer each : storages.get(l).copyStoredItems()) {
             if (StackUtils.itemsMatch(each.getSampleDirectly(), itemStack)) {
                 return true;
             }
@@ -426,7 +426,7 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
                         display.add(i);
                     }
                     int index = display.indexOf(slot);
-                    final var stored = storages.get(l).getStoredItems();
+                    final var stored = storages.get(l).copyStoredItems();
                     if (stored.size() <= index) {
                         return false;
                     }
@@ -547,7 +547,7 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
         final QuickTransferMode mode = quickTransferModes.get(location);
 
         if (isQuantum) {
-            for (ItemContainer each : thisStorage.getStoredItems()) {
+            for (ItemContainer each : thisStorage.copyStoredItems()) {
                 final ItemStack sample = each.getSampleDirectly();
                 if (StackUtils.itemsMatch(sample, toTransfer)) {
                     final ItemMeta meta = itemStack.getItemMeta();
@@ -695,7 +695,7 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
                 }
             }
 
-            for (ItemContainer each : thisStorage.getStoredItems()) {
+            for (ItemContainer each : thisStorage.copyStoredItems()) {
                 final ItemStack sample = each.getSampleDirectly();
                 if (StackUtils.itemsMatch(sample, toTransfer)) {
                     switch (mode) {
@@ -959,7 +959,7 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
             return;
         }
         if (!isLocked(l)) {
-            for (ItemContainer each : data.getStoredItems()) {
+            for (ItemContainer each : data.copyStoredItems()) {
                 if (each.getAmount() == 0) {
                     data.removeItem(each.getId());
                 }

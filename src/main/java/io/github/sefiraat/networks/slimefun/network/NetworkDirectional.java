@@ -161,8 +161,9 @@ public abstract class NetworkDirectional extends NetworkObject {
                     blockFace.name(),
                     DisplayNameUtils.getMaterialName(blockMaterial)));
             final ItemMeta itemMeta = displayStack.getItemMeta();
-            List<Component> lore = TextUtil.components(Lang.getStringList("messages.normal-operation.directional.display_lore"));
-        itemMeta.lore(lore);
+            List<Component> lore =
+                TextUtil.components(Lang.getStringList("messages.normal-operation.directional.display_lore"));
+            itemMeta.lore(lore);
             if (active) {
                 lore.add(TextUtil.component(Lang.getString("messages.normal-operation.directional.set_facing")));
                 itemMeta.lore(lore);

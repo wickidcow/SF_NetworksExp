@@ -21,7 +21,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
-@SuppressWarnings("DuplicatedCode")
+@SuppressWarnings({"deprecation", "DuplicatedCode"}) // Public Bungee ChatColor getter retained for addon compatibility.
 @Getter
 public enum Theme {
     GOLD(ChatColor.GOLD, Lang.getString("theme.gold")),
