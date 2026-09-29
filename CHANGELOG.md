@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.37
+
+### Line-transfer performance
+- Reduced the default work budget for normal Line Transfer from 16 targets per pass to 8, matching the proven Advanced Line Transfer budget.
+- Reduced normal Line Transfer Grabber from 16 targets per pass to 12.
+- Fixed budgeted line traversal so resumed passes jump directly to their saved cursor instead of re-scanning every already-processed block from the line origin.
+- Preserved contiguous-line behavior by revalidating the full prefix again when the cursor wraps to the start of the next cycle.
+
+### Quantum Storage upgrade migration
+- Existing English language files now migrate the old stock Quantum Storage names to the corrected visible tier sequence 0 through 14.
+- Historical internal Slimefun IDs, capacity progression, upgrade recipes, placed blocks, and saved Quantum Storage data remain unchanged.
+- Custom administrator-edited Quantum Storage names are preserved; only exact legacy stock names are replaced.
+- Added regression coverage for both the stock-name migration and custom-name preservation.
+
 ## 1.0.36
 
 ### Quantum Storage tier names
