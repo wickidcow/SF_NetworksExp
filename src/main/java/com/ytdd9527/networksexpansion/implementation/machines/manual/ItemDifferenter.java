@@ -211,7 +211,7 @@ public class ItemDifferenter extends NetworkObject {
         final boolean hasDamageResistantTwo = cachedMeta.hasDamageResistant();
         if (hasDamageResistantOne) {
             if (!hasDamageResistantTwo
-                || !Objects.equals(itemMeta.getDamageResistant(), cachedMeta.getDamageResistant())) {
+                || !itemMeta.getDamageResistant().getKey().equals(cachedMeta.getDamageResistant().getKey())) {
                 return "neq.fireresistant";
             }
         } else if (hasDamageResistantTwo) {
