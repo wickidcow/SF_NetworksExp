@@ -13,6 +13,7 @@ import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
 import io.github.sefiraat.networks.network.stackcaches.BlueprintInstance;
 import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
+import io.github.sefiraat.networks.network.stackcaches.ItemStackCache;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
 import io.github.sefiraat.networks.utils.Keys;
 import io.github.sefiraat.networks.utils.NetworkTransferUtils;
@@ -332,7 +333,6 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
          * now exits without changing network storage at all.
          */
         final int ingredientCount = ingredientPlan.size();
-        final ItemRequest[] requests = new ItemRequest[ingredientCount];
         for (int i = 0; i < ingredientCount; i++) {
             final IngredientRequest ingredient = ingredientPlan.get(i);
             final long scaledAmount = (long) ingredient.amount() * blueprintAmount;
@@ -342,9 +342,8 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
                 return false;
             }
 
-            final ItemRequest request = new ItemRequest(ingredient.template(), (int) scaledAmount);
-            requests[i] = request;
-            if (!root.contains(request)) {
+            final int requestedAmount = (int) scaledAmount;
+            if (!root.contains(ingredient.cache(), requestedAmount)) {
                 sendFeedback(location, FeedbackType.NOT_ENOUGH_ITEMS_IN_NETWORK);
                 deferIdleAttempt(location, IDLE_TRANSIENT_TICKS);
                 return false;
@@ -352,14 +351,14 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
         }
 
         /*
-         * NetworkRoot#contains is non-mutating, so the exact ItemRequest created for preflight can
-         * be reused for withdrawal. This halves ItemRequest/ItemStackCache allocation on successful
-         * Auto Crafter attempts while preserving the atomic preflight-before-commit behavior.
+         * Ingredient metadata is resolved into the cached blueprint plan and reused on every preflight.
+         * Only successful craft attempts allocate the mutable ItemRequest objects required for withdrawal.
          */
         final ItemStack[] fetcheds = new ItemStack[ingredientCount];
         for (int i = 0; i < ingredientCount; i++) {
-            final ItemRequest request = requests[i];
-            final int requestedAmount = request.getAmount();
+            final IngredientRequest ingredient = ingredientPlan.get(i);
+            final int requestedAmount = (int) ((long) ingredient.amount() * blueprintAmount);
+            final ItemRequest request = new ItemRequest(ingredient.cache(), requestedAmount);
             final ItemStack fetched = root.getItemStack0(location, request);
             fetcheds[i] = fetched;
             if (fetched == null || fetched.getAmount() < requestedAmount) {
@@ -436,7 +435,8 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
             for (int i = 0; i < plan.size(); i++) {
                 final IngredientRequest existing = plan.get(i);
                 if (StackUtils.itemsMatch(existing.template(), requested)) {
-                    plan.set(i, new IngredientRequest(existing.template(), existing.amount() + requested.getAmount()));
+                    plan.set(i, new IngredientRequest(
+                        existing.template(), existing.cache(), existing.amount() + requested.getAmount()));
                     merged = true;
                     break;
                 }
@@ -445,7 +445,7 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
             if (!merged) {
                 final ItemStack template = requested.clone();
                 template.setAmount(1);
-                plan.add(new IngredientRequest(template, requested.getAmount()));
+                plan.add(new IngredientRequest(template, new ItemStackCache(template), requested.getAmount()));
             }
         }
         return List.copyOf(plan);
@@ -533,6 +533,9 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
         private final AtomicInteger skipTicks = new AtomicInteger();
     }
 
-    private record IngredientRequest(@NotNull ItemStack template, int amount) {
+    private record IngredientRequest(
+        @NotNull ItemStack template,
+        @NotNull ItemStackCache cache,
+        int amount) {
     }
 }

@@ -122,6 +122,7 @@ control_x = read("src/main/java/io/github/sefiraat/networks/slimefun/network/Net
 quantum_storage = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkQuantumStorage.java")
 abstract_transfer = read("src/main/java/com/ytdd9527/networksexpansion/core/items/machines/AbstractTransfer.java")
 auto_crafter = read("src/main/java/com/ytdd9527/networksexpansion/core/items/machines/AutoCrafter.java")
+item_request = read("src/main/java/io/github/sefiraat/networks/network/stackcaches/ItemRequest.java")
 auto_crafter_batch_planner = read("src/main/java/com/ytdd9527/networksexpansion/core/items/machines/AutoCrafterBatchPlanner.java")
 smart_crafting = read("src/main/java/com/ytdd9527/networksexpansion/implementation/machines/networks/advanced/SmartNetworkCraftingGridNewStyle.java")
 crafting_grid = read("src/main/java/io/github/sefiraat/networks/slimefun/network/grid/NetworkCraftingGrid.java")
@@ -410,15 +411,21 @@ require("getOrCreateIngredientPlan(location, instance)" in auto_crafter
         and "INGREDIENT_PLAN_MAP.putIfAbsent(location.clone(), built)" in auto_crafter
         and "INGREDIENT_PLAN_MAP.computeIfAbsent(\n            location.clone()" not in auto_crafter,
         "Auto Crafter ingredient cache must avoid cloning Location keys on cache hits")
-require("final int[] requestedAmounts" not in auto_crafter,
-        "Auto Crafter must not allocate a requested-amount scratch array per craft")
-require("final ItemRequest[] requests = new ItemRequest[ingredientCount]" in auto_crafter
-        and "final ItemRequest request = new ItemRequest(ingredient.template(), (int) scaledAmount)" in auto_crafter
-        and "if (!root.contains(request))" in auto_crafter
-        and "final ItemRequest request = requests[i]" in auto_crafter
-        and "root.getItemStack0(location, request)" in auto_crafter
-        and "root.getItemStack0(\n                location, new ItemRequest" not in auto_crafter,
-        "Auto Crafter must reuse non-mutating preflight ItemRequests for withdrawal")
+require("final int[] requestedAmounts" not in auto_crafter
+        and "final ItemRequest[] requests" not in auto_crafter,
+        "Auto Crafter must not allocate per-attempt request scratch arrays")
+require("public boolean contains(@NotNull ItemStackCache requestCache, int requiredAmount)" in network_root
+        and "return contains(request, request.getAmount())" in network_root,
+        "NetworkRoot cached-item availability probe is missing")
+require("new ItemStackCache(template)" in auto_crafter
+        and "root.contains(ingredient.cache(), requestedAmount)" in auto_crafter
+        and "new ItemRequest(ingredient.cache(), requestedAmount)" in auto_crafter
+        and "record IngredientRequest(" in auto_crafter,
+        "Auto Crafter ingredient metadata caches are not reused across preflight/withdrawal")
+require("public ItemRequest(@NotNull ItemStackCache cache, int amount)" in item_request
+        and "this.itemMeta = cache.itemMeta" in item_request
+        and "this.metaCached = cache.metaCached" in item_request,
+        "ItemRequest cached-template constructor is missing")
 require("Classic storage routing" in readme
         and "Cells → crafter outputs → Greedy storage" in readme
         and "Empty Quantum Storage never auto-assigns" in readme,
