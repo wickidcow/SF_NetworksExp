@@ -304,6 +304,13 @@ require("isFireResistant()" not in item_differenter
         "Item Differenter returned to deprecated or obsolete item-meta comparison APIs")
 require("getCapacityLong() < recipe.getConsumeEnergy()" in read("src/main/java/com/ytdd9527/networksexpansion/core/items/machines/AbstractManualCrafter.java"),
         "manual crafter returned to deprecated int energy-capacity checks")
+require("powerNode.getChargeLong(node)" in network_root
+        and "powerNode.removeCharge(node, toRemove)" in network_root
+        and "long removed = 0L" in network_root
+        and "final long toRemove" in network_root,
+        "NetworkRoot returned to int-narrowed energy removal")
+require('@SuppressWarnings("deprecation")\npublic class NetworkRoot' not in network_root,
+        "NetworkRoot returned to a class-wide deprecation suppression")
 require("getBasePotionData()" not in vanilla_inventory_wrapper
         and "PotionData" not in vanilla_inventory_wrapper
         and "MinecraftVersion.V1_20_5" not in vanilla_inventory_wrapper

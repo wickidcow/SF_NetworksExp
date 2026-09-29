@@ -55,7 +55,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-@SuppressWarnings("deprecation")
 public class NetworkRoot extends NetworkNode {
     public static final int persistentThreshold = Networks.getConfigManager().getPersistentThreshold();
     public static final int cacheMissThreshold = Networks.getConfigManager().getCacheMissThreshold();
@@ -1363,15 +1362,15 @@ public class NetworkRoot extends NetworkNode {
             return;
         }
 
-        int removed = 0;
+        long removed = 0L;
         for (Location node : powerNodes) {
             final SlimefunItem item = StorageCacheUtils.getSlimefunItem(node);
             if (item instanceof NetworkPowerNode powerNode) {
-                final int charge = powerNode.getCharge(node);
-                if (charge <= 0) {
+                final long charge = powerNode.getChargeLong(node);
+                if (charge <= 0L) {
                     continue;
                 }
-                final int toRemove = (int) Math.min(power - removed, charge);
+                final long toRemove = Math.min(power - removed, charge);
                 powerNode.removeCharge(node, toRemove);
                 // Keep the cached total aligned with the amount actually removed from this node.
                 // Subtracting the whole request for every contributing node can drive rootPower negative.
