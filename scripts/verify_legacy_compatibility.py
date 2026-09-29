@@ -125,6 +125,12 @@ auto_crafter = read("src/main/java/com/ytdd9527/networksexpansion/core/items/mac
 auto_crafter_batch_planner = read("src/main/java/com/ytdd9527/networksexpansion/core/items/machines/AutoCrafterBatchPlanner.java")
 smart_crafting = read("src/main/java/com/ytdd9527/networksexpansion/implementation/machines/networks/advanced/SmartNetworkCraftingGridNewStyle.java")
 crafting_grid = read("src/main/java/io/github/sefiraat/networks/slimefun/network/grid/NetworkCraftingGrid.java")
+network_import = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkImport.java")
+network_export = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkExport.java")
+network_grabber = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkGrabber.java")
+advanced_import = read("src/main/java/com/ytdd9527/networksexpansion/implementation/machines/networks/advanced/AdvancedImport.java")
+advanced_export = read("src/main/java/com/ytdd9527/networksexpansion/implementation/machines/networks/advanced/AdvancedExport.java")
+network_grid = read("src/main/java/io/github/sefiraat/networks/slimefun/network/grid/NetworkGrid.java")
 crafting_grid_new = read("src/main/java/com/ytdd9527/networksexpansion/implementation/machines/networks/advanced/NetworkCraftingGridNewStyle.java")
 recipe_registry = read("src/main/java/com/balugaq/netex/api/helpers/SupportedCraftingTableRecipes.java")
 runtime_stability = read("RUNTIME_STABILITY.md")
@@ -497,6 +503,28 @@ require("if (!root.allowAccessInput(accessor))" in line_operation_util
         and "BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW)" in line_operation_util
         and "BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.INSERT, template)" in line_operation_util,
         "line-transfer limiter fast paths are missing")
+require("checkedInitialAccess = false" in network_import
+        and "root.allowAccessInput(accessor)" in network_import
+        and "FeedbackType.ROOT_LIMITING_ACCESS_INPUT" in network_import,
+        "classic Network Import limiter short-circuit is missing")
+require("root.allowAccessOutput(accessor)" in network_export
+        and "FeedbackType.ROOT_LIMITING_ACCESS_OUTPUT" in network_export,
+        "classic Network Export limiter short-circuit is missing")
+require(network_grabber.count("root.allowAccessInput(accessor)") >= 2
+        and "FeedbackType.ROOT_LIMITING_ACCESS_INPUT" in network_grabber,
+        "classic Network Grabber limiter short-circuit is missing")
+require("checkedInitialAccess = false" in advanced_import
+        and "root.allowAccessInput(accessor)" in advanced_import
+        and "FeedbackType.ROOT_LIMITING_ACCESS_INPUT" in advanced_import,
+        "Advanced Import limiter short-circuit is missing")
+require("checkedInitialAccess = false" in advanced_export
+        and "root.allowAccessOutput(accessor)" in advanced_export
+        and "movedNow == 0" in advanced_export
+        and "FeedbackType.ROOT_LIMITING_ACCESS_OUTPUT" in advanced_export,
+        "Advanced Export limiter short-circuit is missing")
+require("CACHE_MAP.remove(event.getBlock().getLocation())" in network_grid
+        and "CACHE_MAP.remove(event.getBlock().getLocation())" in crafting_grid,
+        "Network Grid cache cleanup on block break is missing")
 require("historyLookupKey(accessor)" in network_root
         and "location.getX() == location.getBlockX()" in network_root
         and "return normalizeHistoryLocation(location)" in network_root,
