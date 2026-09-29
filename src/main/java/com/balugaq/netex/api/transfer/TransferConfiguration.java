@@ -4,7 +4,7 @@ import com.balugaq.netex.api.enums.TransportMode;
 import com.balugaq.netex.api.interfaces.GrabTickOnly;
 import com.balugaq.netex.api.interfaces.PushTickOnly;
 import com.balugaq.netex.utils.Lang;
-import io.github.thebusybiscuit.slimefun4.libraries.dough.items.CustomItemStack;
+import io.github.bakedlibs.dough.items.CustomItemStack;
 import lombok.Data;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
