@@ -139,6 +139,7 @@ main_flex_group = read("src/main/java/io/github/sefiraat/networks/slimefun/group
 setup_util = read("src/main/java/com/ytdd9527/networksexpansion/setup/SetupUtil.java")
 text_util = read("src/main/java/com/ytdd9527/networksexpansion/utils/TextUtil.java")
 vanilla_inventory_wrapper = read("src/main/java/com/balugaq/netex/api/data/VanillaInventoryWrapper.java")
+item_differenter = read("src/main/java/com/ytdd9527/networksexpansion/implementation/machines/manual/ItemDifferenter.java")
 java_sources = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "src/main/java").rglob("*.java"))
 
 # Stable world/plugin identity.
@@ -281,6 +282,19 @@ require("getBasePotionData()" not in vanilla_inventory_wrapper
         and "MinecraftVersion.V1_20_5" not in vanilla_inventory_wrapper
         and "getBasePotionType()" in vanilla_inventory_wrapper,
         "Vanilla inventory wrapper returned to the removed pre-1.20.5 potion API")
+require('@SuppressWarnings("removal")' not in item_differenter
+        and "isFireResistant()" not in item_differenter
+        and "hasCustomModelData()" not in item_differenter
+        and "getCustomModelData()" not in item_differenter
+        and "getBasePotionData()" not in item_differenter
+        and "StackUtils.IS_1_20_5" not in item_differenter
+        and "StackUtils.IS_1_21" not in item_differenter
+        and "hasDamageResistant()" in item_differenter
+        and "getDamageResistant()" in item_differenter
+        and "hasCustomModelDataComponent()" in item_differenter
+        and "getCustomModelDataComponent()" in item_differenter
+        and "getBasePotionType()" in item_differenter,
+        "Item Differenter returned to deprecated/removal-marked item component APIs")
 require("DEFAULT_LANGUAGE = \"en-US\"" in networks_java, "Networks default language is not en-US")
 require("GuizhanUpdater" not in networks_java, "automatic Guizhan updater code is still present")
 require("PinyinHelper" not in java_sources, "Pinyin runtime search remains in Java sources")
