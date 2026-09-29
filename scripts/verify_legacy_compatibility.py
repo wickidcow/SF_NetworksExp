@@ -324,8 +324,10 @@ require("getChargeLong(location)" in read("src/main/java/com/balugaq/netex/utils
 require("getCapacityLong()" in read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkPowerOutlet.java")
         and "final long gen" in read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkPowerOutlet.java"),
         "Network Power Outlet returned to int energy APIs")
-require("getDescription()" not in read("src/main/java/io/github/sefiraat/networks/compatibility/RuntimeCompatibility.java")
-        and "getPluginMeta()" in read("src/main/java/io/github/sefiraat/networks/compatibility/RuntimeCompatibility.java"),
+runtime_compatibility_source = read("src/main/java/io/github/sefiraat/networks/compatibility/RuntimeCompatibility.java")
+require("plugin.getDescription()" not in runtime_compatibility_source
+        and "slimefun.getDescription()" not in runtime_compatibility_source
+        and "getPluginMeta()" in runtime_compatibility_source,
         "runtime compatibility returned to deprecated plugin metadata")
 require("net.md_5.bungee.api" not in main_flex_group
         and "ClickEvent.openUrl" in main_flex_group,
