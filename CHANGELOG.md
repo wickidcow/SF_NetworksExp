@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.43
+
+### Line-transfer budget migration
+- Corrects the shipped normal Line Transfer budgets so the 1.0.37 performance defaults actually take effect: normal bidirectional Line Transfer and PLUS process 8 targets per pass, while their Grabber variants process 12.
+- Migrates existing stock `2.1.112-legacy-1.0` configs only when those four keys still contain the old bundled value of 16.
+- Preserves administrator-tuned values that differ from the old stock value.
+- Advances the config marker to `2.1.112-legacy-1.1` so the migration runs once.
+- Keeps line cursor rotation, transfer quantities, tick cadence, power rules, and persistence behavior unchanged.
+
 ## 1.0.42
 
 ### Brewing inventory API cleanup

@@ -17,6 +17,9 @@ import java.io.Reader;
 
 public class ConfigManager {
 
+    private static final String LEGACY_CONFIG_VERSION_1_0 = "2.1.112-legacy-1.0";
+    private static final String LEGACY_CONFIG_VERSION_1_1 = "2.1.112-legacy-1.1";
+
     private boolean warnedAsyncTickerOverride;
 
     public ConfigManager() {
@@ -37,6 +40,8 @@ public class ConfigManager {
         final FileConfiguration resourceConfig = YamlConfiguration.loadConfiguration(reader);
         final FileConfiguration existingConfig = YamlConfiguration.loadConfiguration(existingFile);
 
+        migrateStockPerformanceDefaults(existingConfig);
+
         for (String key : resourceConfig.getKeys(false)) {
             checkKey(existingConfig, resourceConfig, key);
         }
@@ -49,6 +54,32 @@ public class ConfigManager {
             existingConfig.save(existingFile);
         } catch (IOException e) {
             Debug.trace(e);
+        }
+    }
+
+    /**
+     * Migrates only the old bundled performance values. Administrator tuning is preserved.
+     */
+    private void migrateStockPerformanceDefaults(@NotNull FileConfiguration existingConfig) {
+        if (!LEGACY_CONFIG_VERSION_1_0.equals(existingConfig.getString("config-version"))) {
+            return;
+        }
+
+        migrateStockInt(existingConfig, "items.NTW_EXPANSION_LINE_TRANSFER.max-targets-per-tick", 16, 8);
+        migrateStockInt(existingConfig, "items.NTW_EXPANSION_LINE_TRANSFER_GRABBER.max-targets-per-tick", 16, 12);
+        migrateStockInt(existingConfig, "items.NTW_EXPANSION_LINE_TRANSFER_PLUS.max-targets-per-tick", 16, 8);
+        migrateStockInt(existingConfig, "items.NTW_EXPANSION_LINE_TRANSFER_PLUS_GRABBER.max-targets-per-tick", 16, 12);
+        existingConfig.set("config-version", LEGACY_CONFIG_VERSION_1_1);
+    }
+
+    private void migrateStockInt(
+        @NotNull FileConfiguration existingConfig,
+        @NotNull String path,
+        int oldStockValue,
+        int newStockValue
+    ) {
+        if (existingConfig.getInt(path, Integer.MIN_VALUE) == oldStockValue) {
+            existingConfig.set(path, newStockValue);
         }
     }
 

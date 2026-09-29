@@ -5,7 +5,7 @@ auto-update: false
 language: en-US
 
 # Do not change this value unless you know what you are doing.
-config-version: 2.1.112-legacy-1.0
+config-version: 2.1.112-legacy-1.1
 
 # Do not change this value unless you know what you are doing.
 debug: false
@@ -143,12 +143,12 @@ items:
   NTW_EXPANSION_LINE_TRANSFER_GRABBER:
     max-distance: 32
     grabitem-tick: 1
-    max-targets-per-tick: 16
+    max-targets-per-tick: 12
   NTW_EXPANSION_LINE_TRANSFER:
     max-distance: 32
     pushitem-tick: 1
     grabitem-tick: 1
-    max-targets-per-tick: 16
+    max-targets-per-tick: 8
   NTW_EXPANSION_LINE_TRANSFER_PLUS_PUSHER:
     max-distance: 64
     pushitem-tick: 1
@@ -161,12 +161,12 @@ items:
   NTW_EXPANSION_LINE_TRANSFER_PLUS_GRABBER:
     max-distance: 64
     grabitem-tick: 1
-    max-targets-per-tick: 16
+    max-targets-per-tick: 12
   NTW_EXPANSION_LINE_TRANSFER_PLUS:
     max-distance: 64
     pushitem-tick: 1
     grabitem-tick: 1
-    max-targets-per-tick: 16
+    max-targets-per-tick: 8
     required-power: 5000
   NTW_EXPANSION_ADVANCED_LINE_TRANSFER_PUSHER:
     max-distance: 32

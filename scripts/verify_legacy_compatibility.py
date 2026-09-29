@@ -74,6 +74,7 @@ workflow = build_workflow + "\n" + compatibility_workflow
 simple_recipe_choice = read("src/main/java/com/balugaq/netex/api/data/SimpleRecipeChoice.java")
 wrapper = read("gradle/wrapper/gradle-wrapper.properties")
 networks_java = read("src/main/java/io/github/sefiraat/networks/Networks.java")
+config_manager = read("src/main/java/com/ytdd9527/networksexpansion/core/managers/ConfigManager.java")
 network_storage = read("src/main/java/io/github/sefiraat/networks/NetworkStorage.java")
 query_queue = read("src/main/java/com/ytdd9527/networksexpansion/utils/databases/QueryQueue.java")
 data_source = read("src/main/java/com/ytdd9527/networksexpansion/utils/databases/DataSource.java")
@@ -700,10 +701,10 @@ require("Stack identical encoded blueprints to set batch size." in locale_text
 
 items_config = config.get("items", {})
 expected_line_budgets = {
-    "NTW_EXPANSION_LINE_TRANSFER": 16,
-    "NTW_EXPANSION_LINE_TRANSFER_GRABBER": 16,
-    "NTW_EXPANSION_LINE_TRANSFER_PLUS": 16,
-    "NTW_EXPANSION_LINE_TRANSFER_PLUS_GRABBER": 16,
+    "NTW_EXPANSION_LINE_TRANSFER": 8,
+    "NTW_EXPANSION_LINE_TRANSFER_GRABBER": 12,
+    "NTW_EXPANSION_LINE_TRANSFER_PLUS": 8,
+    "NTW_EXPANSION_LINE_TRANSFER_PLUS_GRABBER": 12,
     "NTW_EXPANSION_ADVANCED_LINE_TRANSFER": 8,
     "NTW_EXPANSION_ADVANCED_LINE_TRANSFER_GRABBER": 12,
     "NTW_EXPANSION_ADVANCED_LINE_TRANSFER_PLUS": 8,
@@ -828,8 +829,15 @@ require("FORBIDDEN_PREFIXES" in universal_verifier
 # 1.0 Legacy release safety foundation.
 require('version = "2.1.112-Legacy-1.0"' in build,
         "1.0 Legacy project version is missing")
-require(config.get("config-version") == "2.1.112-legacy-1.0",
-        "1.0 Legacy config version is missing")
+require(config.get("config-version") == "2.1.112-legacy-1.1",
+        "Networks config performance-migration version is missing")
+require('LEGACY_CONFIG_VERSION_1_0 = "2.1.112-legacy-1.0"' in config_manager
+        and 'LEGACY_CONFIG_VERSION_1_1 = "2.1.112-legacy-1.1"' in config_manager
+        and "migrateStockPerformanceDefaults(existingConfig)" in config_manager
+        and config_manager.count("migrateStockInt(existingConfig") == 4
+        and "oldStockValue" in config_manager
+        and "newStockValue" in config_manager,
+        "stock line-transfer budget migration is missing")
 require(config.get("database", {}).get("integrity-check") is True
         and config.get("database", {}).get("recovery-journal") is True
         and config.get("database", {}).get("startup-backups", {}).get("enabled") is True,
