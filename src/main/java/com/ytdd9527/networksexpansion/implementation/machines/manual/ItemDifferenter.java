@@ -467,17 +467,11 @@ public class ItemDifferenter extends NetworkObject {
             if (instanceOne.hasMapView() != instanceTwo.hasMapView()) {
                 return "neq.map.view.has";
             }
-            if (instanceOne.hasLocationName() != instanceTwo.hasLocationName()) {
-                return "neq.map.loactionname.has";
-            }
             if (instanceOne.hasColor() != instanceTwo.hasColor()) {
                 return "neq.map.color.has";
             }
             if (!Objects.equals(instanceOne.getMapView(), instanceTwo.getMapView())) {
                 return "neq.map.view.get";
-            }
-            if (!Objects.equals(instanceOne.getLocationName(), instanceTwo.getLocationName())) {
-                return "neq.map.locationname.get";
             }
             if (!Objects.equals(instanceOne.getColor(), instanceTwo.getColor())) {
                 return "neq.map.color.get";
