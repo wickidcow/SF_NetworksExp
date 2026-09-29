@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.40
+
+### AutoCrafter ingredient metadata cache
+- Reuses one resolved ItemStack metadata cache per aggregated blueprint ingredient across AutoCrafter ticks.
+- Adds an allocation-light NetworkRoot availability probe that accepts an existing ItemStackCache and requested amount.
+- Creates withdrawal ItemRequests from the same resolved cache while preserving the existing complete-recipe preflight, withdrawal order, rollback safety, power cost, and throughput.
+- Keeps the current successful-craft optimization that reuses each ItemRequest for the withdrawal phase.
+- Adds regression guards for the cached-template path across Legacy, United, and Gugu builds.
+
 ## 1.0.39
 
 ### Paper 26.3 API modernization

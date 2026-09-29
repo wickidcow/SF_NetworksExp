@@ -13,6 +13,7 @@ import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
 import io.github.sefiraat.networks.network.stackcaches.BlueprintInstance;
 import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
+import io.github.sefiraat.networks.network.stackcaches.ItemStackCache;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
 import io.github.sefiraat.networks.utils.Keys;
 import io.github.sefiraat.networks.utils.NetworkTransferUtils;
@@ -342,9 +343,9 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
                 return false;
             }
 
-            final ItemRequest request = new ItemRequest(ingredient.template(), (int) scaledAmount);
+            final ItemRequest request = new ItemRequest(ingredient.cache(), (int) scaledAmount);
             requests[i] = request;
-            if (!root.contains(request)) {
+            if (!root.contains(ingredient.cache(), request.getAmount())) {
                 sendFeedback(location, FeedbackType.NOT_ENOUGH_ITEMS_IN_NETWORK);
                 deferIdleAttempt(location, IDLE_TRANSIENT_TICKS);
                 return false;
@@ -436,7 +437,8 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
             for (int i = 0; i < plan.size(); i++) {
                 final IngredientRequest existing = plan.get(i);
                 if (StackUtils.itemsMatch(existing.template(), requested)) {
-                    plan.set(i, new IngredientRequest(existing.template(), existing.amount() + requested.getAmount()));
+                    plan.set(i, new IngredientRequest(
+                        existing.template(), existing.cache(), existing.amount() + requested.getAmount()));
                     merged = true;
                     break;
                 }
@@ -445,7 +447,7 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
             if (!merged) {
                 final ItemStack template = requested.clone();
                 template.setAmount(1);
-                plan.add(new IngredientRequest(template, requested.getAmount()));
+                plan.add(new IngredientRequest(template, new ItemStackCache(template), requested.getAmount()));
             }
         }
         return List.copyOf(plan);
@@ -533,6 +535,9 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
         private final AtomicInteger skipTicks = new AtomicInteger();
     }
 
-    private record IngredientRequest(@NotNull ItemStack template, int amount) {
+    private record IngredientRequest(
+        @NotNull ItemStack template,
+        @NotNull ItemStackCache cache,
+        int amount) {
     }
 }
