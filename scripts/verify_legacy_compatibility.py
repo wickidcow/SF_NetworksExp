@@ -245,8 +245,16 @@ for forbidden in [
 ]:
     require(forbidden not in java_sources, f"unsafe Bukkit asynchronous scheduling remains: {forbidden}")
 require("useSynchronizedMachineTickers()" in java_sources, "machine ticker synchronization bridge is missing")
-require("StorageCacheUtils.getSfItem(" not in java_sources,
-        "deprecated-for-removal StorageCacheUtils.getSfItem call returned")
+legacy_getsfitem_files = [
+    str(path.relative_to(ROOT))
+    for path in (ROOT / "src/main/java").rglob("*.java")
+    if "StorageCacheUtils.getSfItem(" in path.read_text(encoding="utf-8")
+]
+require(
+    not legacy_getsfitem_files,
+    "deprecated-for-removal StorageCacheUtils.getSfItem call returned in: "
+    + ", ".join(legacy_getsfitem_files),
+)
 require("BlockStorage.getInventory(" not in java_sources,
         "deprecated BlockStorage inventory lookup returned")
 require("org.bukkit.ChatColor" not in network_monitor,
