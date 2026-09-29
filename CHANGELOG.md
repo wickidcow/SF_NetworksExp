@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.45
+
+### Cross-core API hardening and deprecation cleanup
+- Completes the current Slimefun Legacy deprecation pass and makes Legacy deprecation/removal warnings release-blocking with `-Werror`, while United/Gugu compatibility-only warnings remain non-blocking.
+- Replaces deprecated Networks storage snapshots with the maintained copy/direct-view APIs, including Drawer Manager and Networks Drawer paths, while preserving stored item order and persistence behavior.
+- Modernizes remaining ItemMeta display/lore paths to Adventure-backed components across manager screens, directional controls, item-flow views, drawer binding, blueprint migration, and shared icon/theme helpers.
+- Replaces deprecated Research cost access with `getLevelCost()`, removes the unused `HIDE_ADDITIONAL_TOOLTIP` compatibility wrapper, and narrows broad deprecation suppressions to documented cross-core API boundaries.
+- Keeps the public Bungee `ChatColor` Theme getter as an explicit compatibility boundary so existing addons are not broken by a maintenance release.
+- Pins maintained JEG 2.1.67 by SHA-256 in CI, retries transient GitHub release-download failures, validates the JAR/API class before compilation, and still supports the canonical dependency path for local builds.
+- Verifies the same universal Java 21 JAR against current Slimefun Legacy, Slimefun United, and Slimefun Gugu exact-core builds.
+- Preserves existing item IDs, recipes, storage formats, network routing, transfer quantities, quantum ordering, and world data.
+
 ## 1.0.44
 
 ### Item Differenter API modernization
