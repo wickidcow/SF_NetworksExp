@@ -420,7 +420,7 @@ require("instanceof InventoryHolder" in control_x,
         "Control X inventory-container rejection is missing")
 require(control_x.find("instanceof InventoryHolder") < control_x.find("addItemStack0"),
         "Control X must reject inventory containers before network insertion")
-require("invalidateStaleNode" in network_storage and "StorageCacheUtils.getSfItem" in network_storage,
+require("invalidateStaleNode" in network_storage and "StorageCacheUtils.getSlimefunItem" in network_storage,
         "lazy stale physical-node invalidation is missing")
 require("StorageUnitData.clearAccessHistory(key)" in network_storage
         and "StorageUnitData.clearAllAccessHistory()" in network_storage,
