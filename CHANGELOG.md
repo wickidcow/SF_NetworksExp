@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.44
+
+### Item Differenter API modernization
+- Replaces deprecated fire-resistance checks with the current damage-resistance API and the fire damage-type tag.
+- Replaces deprecated integer custom-model-data checks with full CustomModelDataComponent comparison across floats, flags, strings, and colors.
+- Removes the unreachable pre-1.20.5 PotionData fallback and compares current PotionType data directly.
+- Removes obsolete 1.20.5/1.21 version gates from ItemDifferenter because Networks' supported Minecraft floor is 1.21.11.
+- Preserves Item Differenter result keys and Slimefun/PDC/enchantment/lore/meta comparison behavior.
+
 ## 1.0.43
 
 ### Line-transfer budget migration

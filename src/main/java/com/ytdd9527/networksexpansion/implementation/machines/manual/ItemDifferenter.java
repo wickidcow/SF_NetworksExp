@@ -44,6 +44,8 @@ import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.inventory.meta.SuspiciousStewMeta;
 import org.bukkit.inventory.meta.TropicalFishBucketMeta;
 import org.bukkit.inventory.meta.WritableBookMeta;
+import org.bukkit.inventory.meta.components.CustomModelDataComponent;
+import org.bukkit.tag.DamageTypeTags;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.ParametersAreNonnullByDefault;
@@ -206,71 +208,59 @@ public class ItemDifferenter extends NetworkObject {
             return "neq.attribute";
         }
 
-        if (StackUtils.IS_1_20_5) {
-            // Check if fire-resistant
-            if (itemMeta.isFireResistant() != cachedMeta.isFireResistant()) {
-                return "neq.fireresistant";
-            }
-
-            // Check if unbreakable
-            if (itemMeta.isUnbreakable() != cachedMeta.isUnbreakable()) {
-                return "neq.unbreakable";
-            }
-
-            // Check if hide tooltip
-            if (itemMeta.isHideTooltip() != cachedMeta.isHideTooltip()) {
-                return "neq.hidetooltip";
-            }
-
-            // Check rarity
-            final boolean hasRarityOne = itemMeta.hasRarity();
-            final boolean hasRarityTwo = cachedMeta.hasRarity();
-            if (hasRarityOne) {
-                if (!hasRarityTwo || itemMeta.getRarity() != cachedMeta.getRarity()) {
-                    return "neq.rarity";
-                }
-            } else if (hasRarityTwo) {
-                return "neq.rarity";
-            }
-
-            // Check food components
-            if (itemMeta.hasFood() && cachedMeta.hasFood()) {
-                if (!Objects.equals(itemMeta.getFood(), cachedMeta.getFood())) {
-                    return "neq.food";
-                }
-            } else if (itemMeta.hasFood() != cachedMeta.hasFood()) {
-                return "neq.food";
-            }
-
-            // Check tool components
-            if (itemMeta.hasTool() && cachedMeta.hasTool()) {
-                if (!Objects.equals(itemMeta.getTool(), cachedMeta.getTool())) {
-                    return "neq.tool";
-                }
-            } else if (itemMeta.hasTool() != cachedMeta.hasTool()) {
-                return "neq.tool";
-            }
-
-            if (StackUtils.IS_1_21) {
-                // Check jukebox playable
-                if (itemMeta.hasJukeboxPlayable() && cachedMeta.hasJukeboxPlayable()) {
-                    if (!Objects.equals(itemMeta.getJukeboxPlayable(), cachedMeta.getJukeboxPlayable())) {
-                        return "neq.jukeboxplayable";
-                    }
-                } else if (itemMeta.hasJukeboxPlayable() != cachedMeta.hasJukeboxPlayable()) {
-                    return "neq.jukeboxplayable";
-                }
-            }
+        // Networks supports 1.21.11+, so compare the current item-component APIs directly.
+        if (isFireResistant(itemMeta) != isFireResistant(cachedMeta)) {
+            return "neq.fireresistant";
         }
 
-        if (true) {
-            if (itemMeta.hasLore() && cachedMeta.hasLore()) {
-                if (!Objects.equals(itemMeta.lore(), cachedMeta.lore())) {
-                    return "neq.lore";
-                }
-            } else if (itemMeta.hasLore() != cachedMeta.hasLore()) {
+        if (itemMeta.isUnbreakable() != cachedMeta.isUnbreakable()) {
+            return "neq.unbreakable";
+        }
+
+        if (itemMeta.isHideTooltip() != cachedMeta.isHideTooltip()) {
+            return "neq.hidetooltip";
+        }
+
+        final boolean hasRarityOne = itemMeta.hasRarity();
+        final boolean hasRarityTwo = cachedMeta.hasRarity();
+        if (hasRarityOne) {
+            if (!hasRarityTwo || itemMeta.getRarity() != cachedMeta.getRarity()) {
+                return "neq.rarity";
+            }
+        } else if (hasRarityTwo) {
+            return "neq.rarity";
+        }
+
+        if (itemMeta.hasFood() && cachedMeta.hasFood()) {
+            if (!Objects.equals(itemMeta.getFood(), cachedMeta.getFood())) {
+                return "neq.food";
+            }
+        } else if (itemMeta.hasFood() != cachedMeta.hasFood()) {
+            return "neq.food";
+        }
+
+        if (itemMeta.hasTool() && cachedMeta.hasTool()) {
+            if (!Objects.equals(itemMeta.getTool(), cachedMeta.getTool())) {
+                return "neq.tool";
+            }
+        } else if (itemMeta.hasTool() != cachedMeta.hasTool()) {
+            return "neq.tool";
+        }
+
+        if (itemMeta.hasJukeboxPlayable() && cachedMeta.hasJukeboxPlayable()) {
+            if (!Objects.equals(itemMeta.getJukeboxPlayable(), cachedMeta.getJukeboxPlayable())) {
+                return "neq.jukeboxplayable";
+            }
+        } else if (itemMeta.hasJukeboxPlayable() != cachedMeta.hasJukeboxPlayable()) {
+            return "neq.jukeboxplayable";
+        }
+
+        if (itemMeta.hasLore() && cachedMeta.hasLore()) {
+            if (!Objects.equals(itemMeta.lore(), cachedMeta.lore())) {
                 return "neq.lore";
             }
+        } else if (itemMeta.hasLore() != cachedMeta.hasLore()) {
+            return "neq.lore";
         }
 
         // Slimefun ID check no need to worry about distinction, covered in PDC + lore
@@ -281,21 +271,17 @@ public class ItemDifferenter extends NetworkObject {
         }
         if (optionalStackId1.isPresent()) {
             if (optionalStackId1.get().equals(optionalStackId2.get())) {
-                if (true) {
-                    // Custom model data is different, no match
-                    final boolean hasCustomOne = itemMeta.hasCustomModelData();
-                    final boolean hasCustomTwo = cachedMeta.hasCustomModelData();
-                    if (hasCustomOne) {
-                        if (!hasCustomTwo || itemMeta.getCustomModelData() != cachedMeta.getCustomModelData()) {
-                            return "neq.custommodeldata";
-                        }
-                    } else {
-                        if (!hasCustomTwo) {
-                            return "eq";
-                        } else {
-                            return "neq.custommodeldata";
-                        }
+                final boolean hasCustomOne = itemMeta.hasCustomModelDataComponent();
+                final boolean hasCustomTwo = cachedMeta.hasCustomModelDataComponent();
+                if (hasCustomOne) {
+                    if (!hasCustomTwo
+                        || !sameCustomModelData(
+                            itemMeta.getCustomModelDataComponent(),
+                            cachedMeta.getCustomModelDataComponent())) {
+                        return "neq.custommodeldata";
                     }
+                } else if (hasCustomTwo) {
+                    return "neq.custommodeldata";
                 }
                 return "eq";
             }
@@ -312,7 +298,20 @@ public class ItemDifferenter extends NetworkObject {
         // Everything should match if we've managed to get here
     }
 
-    @SuppressWarnings("removal")
+    private static boolean isFireResistant(@NotNull ItemMeta meta) {
+        return meta.hasDamageResistant() && Objects.equals(meta.getDamageResistant(), DamageTypeTags.IS_FIRE);
+    }
+
+    private static boolean sameCustomModelData(
+        @NotNull CustomModelDataComponent first,
+        @NotNull CustomModelDataComponent second
+    ) {
+        return first.getFloats().equals(second.getFloats())
+            && first.getFlags().equals(second.getFlags())
+            && first.getStrings().equals(second.getStrings())
+            && first.getColors().equals(second.getColors());
+    }
+
     public static String canQuickEscapeMetaVariant(@NotNull ItemMeta metaOne, @NotNull ItemMeta metaTwo) {
         // Damageable (first as everything can be damageable apparently)
         if (metaOne instanceof Damageable instanceOne && metaTwo instanceof Damageable instanceTwo) {
@@ -487,14 +486,8 @@ public class ItemDifferenter extends NetworkObject {
 
         // Potion
         if (metaOne instanceof PotionMeta instanceOne && metaTwo instanceof PotionMeta instanceTwo) {
-            if (StackUtils.IS_1_20_5) {
-                if (instanceOne.getBasePotionType() != instanceTwo.getBasePotionType()) {
-                    return "neq.potion.type.get";
-                }
-            } else {
-                if (!Objects.equals(instanceOne.getBasePotionData(), instanceTwo.getBasePotionData())) {
-                    return "neq.potion.data.get";
-                }
+            if (instanceOne.getBasePotionType() != instanceTwo.getBasePotionType()) {
+                return "neq.potion.type.get";
             }
             if (instanceOne.hasCustomEffects() != instanceTwo.hasCustomEffects()) {
                 return "neq.potion.customeeffect.has";
@@ -573,34 +566,31 @@ public class ItemDifferenter extends NetworkObject {
             }
         }
 
-        if (StackUtils.IS_1_20_5) {
-            // Writable Book
-            if (metaOne instanceof WritableBookMeta instanceOne && metaTwo instanceof WritableBookMeta instanceTwo) {
-                if (instanceOne.getPageCount() != instanceTwo.getPageCount()) {
-                    return "neq.writablebook.page.count";
-                }
-                if (!Objects.equals(instanceOne.getPages(), instanceTwo.getPages())) {
-                    return "neq.writablebook.page.get";
-                }
+        // Writable Book
+        if (metaOne instanceof WritableBookMeta instanceOne && metaTwo instanceof WritableBookMeta instanceTwo) {
+            if (instanceOne.getPageCount() != instanceTwo.getPageCount()) {
+                return "neq.writablebook.page.count";
             }
-            if (StackUtils.IS_1_21) {
-                // Ominous Bottle
-                if (metaOne instanceof OminousBottleMeta instanceOne
-                    && metaTwo instanceof OminousBottleMeta instanceTwo) {
-                    if (instanceOne.hasAmplifier() != instanceTwo.hasAmplifier()) {
-                        return "neq.ominous.amplifier.has";
-                    }
+            if (!Objects.equals(instanceOne.getPages(), instanceTwo.getPages())) {
+                return "neq.writablebook.page.get";
+            }
+        }
 
-                    if (instanceOne.getAmplifier() != instanceTwo.getAmplifier()) {
-                        return "neq.ominous.amplifier.get";
-                    }
-                }
-                // Shield
-                if (metaOne instanceof ShieldMeta instanceOne && metaTwo instanceof ShieldMeta instanceTwo) {
-                    if (!Objects.equals(instanceOne.getBaseColor(), instanceTwo.getBaseColor())) {
-                        return "neq.shield.basecolor";
-                    }
-                }
+        // Ominous Bottle
+        if (metaOne instanceof OminousBottleMeta instanceOne && metaTwo instanceof OminousBottleMeta instanceTwo) {
+            if (instanceOne.hasAmplifier() != instanceTwo.hasAmplifier()) {
+                return "neq.ominous.amplifier.has";
+            }
+
+            if (instanceOne.getAmplifier() != instanceTwo.getAmplifier()) {
+                return "neq.ominous.amplifier.get";
+            }
+        }
+
+        // Shield
+        if (metaOne instanceof ShieldMeta instanceOne && metaTwo instanceof ShieldMeta instanceTwo) {
+            if (!Objects.equals(instanceOne.getBaseColor(), instanceTwo.getBaseColor())) {
+                return "neq.shield.basecolor";
             }
         }
 

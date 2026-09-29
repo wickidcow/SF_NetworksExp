@@ -139,6 +139,7 @@ runtime_stability = read("RUNTIME_STABILITY.md")
 main_flex_group = read("src/main/java/io/github/sefiraat/networks/slimefun/groups/MainFlexGroup.java")
 setup_util = read("src/main/java/com/ytdd9527/networksexpansion/setup/SetupUtil.java")
 text_util = read("src/main/java/com/ytdd9527/networksexpansion/utils/TextUtil.java")
+item_differenter = read("src/main/java/com/ytdd9527/networksexpansion/implementation/machines/manual/ItemDifferenter.java")
 vanilla_inventory_wrapper = read("src/main/java/com/balugaq/netex/api/data/VanillaInventoryWrapper.java")
 java_sources = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "src/main/java").rglob("*.java"))
 
@@ -277,6 +278,17 @@ require(
     and "public static @NotNull String legacy" in text_util,
     "Adventure-backed legacy text bridge is missing",
 )
+require("isFireResistant()" not in item_differenter
+        and "hasCustomModelData()" not in item_differenter
+        and "getCustomModelData()" not in item_differenter
+        and "getBasePotionData()" not in item_differenter
+        and "StackUtils.IS_1_20_5" not in item_differenter
+        and "StackUtils.IS_1_21" not in item_differenter
+        and "DamageTypeTags.IS_FIRE" in item_differenter
+        and "hasCustomModelDataComponent()" in item_differenter
+        and "sameCustomModelData(" in item_differenter
+        and "getBasePotionType()" in item_differenter,
+        "Item Differenter returned to deprecated or obsolete item-meta comparison APIs")
 require("getBasePotionData()" not in vanilla_inventory_wrapper
         and "PotionData" not in vanilla_inventory_wrapper
         and "MinecraftVersion.V1_20_5" not in vanilla_inventory_wrapper
