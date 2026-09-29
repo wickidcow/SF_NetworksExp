@@ -115,7 +115,7 @@ tasks {
     compileJava {
         options.release.set(21)
         options.encoding = "UTF-8"
-        options.compilerArgs.add("-Xlint:-removal")
+        options.compilerArgs.addAll(listOf("-Xlint:deprecation", "-Xlint:-removal"))
     }
     processResources {
         filesMatching("plugin.yml") { expand(project.properties) }
