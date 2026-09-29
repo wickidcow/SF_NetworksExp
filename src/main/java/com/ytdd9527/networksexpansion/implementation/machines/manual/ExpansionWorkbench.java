@@ -128,6 +128,12 @@ public class ExpansionWorkbench extends AbstractManualCrafter {
     }
 
     @Override
+    public long getCapacityLong() {
+        return 0L;
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
     public int getCapacity() {
         return 0;
     }

@@ -37,6 +37,12 @@ public class NetworkPowerNode extends NetworkObject implements EnergyNetComponen
     }
 
     @Override
+    public long getCapacityLong() {
+        return this.capacity;
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
     public int getCapacity() {
         return this.capacity;
     }
