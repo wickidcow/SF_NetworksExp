@@ -6,6 +6,7 @@ import com.ytdd9527.networksexpansion.utils.itemstacks.ItemStackUtil;
 import io.github.sefiraat.networks.utils.Theme;
 import io.github.bakedlibs.dough.items.CustomItemStack;
 import io.github.thebusybiscuit.slimefun4.utils.ChestMenuUtils;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -13,7 +14,6 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * @author Final_ROOT
@@ -191,16 +191,16 @@ public class Icon {
         Lang.getIcon("linker-type-quantum-link", Material.NETHER_STAR);
 
     // pages are 1-based
-    @SuppressWarnings("deprecation")
     @NotNull
     public static ItemStack getPageStack(@NotNull ItemStack origin, int currentPage, int maxPage) {
         ItemStack clone = origin.clone();
         ItemMeta meta = clone.getItemMeta();
         if (meta != null) {
-            List<String> lore = Optional.ofNullable(meta.getLore()).orElse(new ArrayList<>());
-            lore.add(TextUtil.GRAY + Lang.getString("messages.normal-operation.common.page") + " " + TextUtil.GREEN
-                + currentPage + " / " + maxPage);
-            meta.setLore(lore);
+            List<Component> lore = meta.lore() == null ? new ArrayList<>() : new ArrayList<>(meta.lore());
+            lore.add(TextUtil.component(
+                TextUtil.GRAY + Lang.getString("messages.normal-operation.common.page") + " " + TextUtil.GREEN
+                    + currentPage + " / " + maxPage));
+            meta.lore(lore);
             clone.setItemMeta(meta);
         }
         return clone;
