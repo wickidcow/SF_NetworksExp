@@ -38,6 +38,7 @@ import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.bakedlibs.dough.items.CustomItemStack;
 import io.github.thebusybiscuit.slimefun4.libraries.dough.protection.Interaction;
 import io.github.thebusybiscuit.slimefun4.utils.ChestMenuUtils;
+import net.kyori.adventure.text.Component;
 import me.ddggdd135.guguslimefunlib.GuguSlimefunLib;
 import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
@@ -69,7 +70,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
-@SuppressWarnings({"deprecation", "DuplicatedCode"})
+@SuppressWarnings("DuplicatedCode")
 public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveItem, ModellableItem {
     private static final boolean DEFAULT_USE_SPECIAL_MODEL = false;
     private static final Map<Location, StorageUnitData> storages = new ConcurrentHashMap<>();
@@ -299,19 +300,17 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
     public static @NotNull ItemStack bindId(@NotNull ItemStack itemSample, int id) {
         final ItemStack item = itemSample.clone();
         final ItemMeta meta = item.getItemMeta();
-        List<String> lore;
+        List<Component> lore;
         if (meta != null) {
-            lore = meta.getLore();
-            if (lore == null) {
-                lore = new ArrayList<>();
-            }
-            lore.add(String.format(Lang.getString("messages.completed-operation.drawer.bound_id"), id));
+            lore = meta.lore() == null ? new ArrayList<>() : new ArrayList<>(meta.lore());
+            lore.add(TextUtil.component(
+                String.format(Lang.getString("messages.completed-operation.drawer.bound_id"), id)));
             if (Networks.getSupportedPluginManager().isGuguSlimefunLib()) {
-                lore.add(String.format(
+                lore.add(TextUtil.component(String.format(
                     Lang.getString("messages.completed-operation.drawer.server-uuid"),
-                    GuguSlimefunLib.getServerUUID()));
+                    GuguSlimefunLib.getServerUUID())));
             }
-            meta.setLore(lore);
+            meta.lore(lore);
             meta.getPersistentDataContainer().set(idKey, PersistentDataType.INTEGER, id);
             if (Networks.getSupportedPluginManager().isGuguSlimefunLib()) {
                 meta.getPersistentDataContainer().set(serverKey, DataType.UUID, GuguSlimefunLib.getServerUUID());
@@ -325,19 +324,17 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
         @NotNull ItemStack itemSample, int id, boolean lock, boolean voidExcess) {
         final ItemStack item = itemSample.clone();
         final ItemMeta meta = item.getItemMeta();
-        List<String> lore;
+        List<Component> lore;
         if (meta != null) {
-            lore = meta.getLore();
-            if (lore == null) {
-                lore = new ArrayList<>();
-            }
-            lore.add(String.format(Lang.getString("messages.completed-operation.drawer.bound_id"), id));
+            lore = meta.lore() == null ? new ArrayList<>() : new ArrayList<>(meta.lore());
+            lore.add(TextUtil.component(
+                String.format(Lang.getString("messages.completed-operation.drawer.bound_id"), id)));
             if (Networks.getSupportedPluginManager().isGuguSlimefunLib()) {
-                lore.add(String.format(
+                lore.add(TextUtil.component(String.format(
                     Lang.getString("messages.completed-operation.drawer.server-uuid"),
-                    GuguSlimefunLib.getServerUUID()));
+                    GuguSlimefunLib.getServerUUID())));
             }
-            meta.setLore(lore);
+            meta.lore(lore);
             meta.getPersistentDataContainer().set(idKey, PersistentDataType.INTEGER, id);
             meta.getPersistentDataContainer().set(lockKey, PersistentDataType.BOOLEAN, lock);
             meta.getPersistentDataContainer().set(voidExcessKey, PersistentDataType.BOOLEAN, voidExcess);

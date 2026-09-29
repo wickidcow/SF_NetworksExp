@@ -45,7 +45,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-@SuppressWarnings("deprecation")
 public class StorageUnitUpgradeTable extends SpecialSlimefunItem implements AdminDebuggable {
     private static final Map<ItemStack[], ItemStack> recipes = new HashMap<>();
     public static final RecipeType TYPE = new RecipeType(

@@ -21,7 +21,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
-@SuppressWarnings({"deprecation", "DuplicatedCode"})
+@SuppressWarnings("DuplicatedCode")
 @Getter
 public enum Theme {
     GOLD(ChatColor.GOLD, Lang.getString("theme.gold")),
@@ -111,7 +111,9 @@ public enum Theme {
         ItemStack itemStack = ItemStackUtil.getCleanItem(sfis);
         String name = sfis.getDisplayName();
         ItemMeta meta = sfis.getItemMeta();
-        List<String> lore = meta == null ? new ArrayList<>() : meta.getLore();
+        List<String> lore = meta == null || meta.lore() == null
+            ? new ArrayList<>()
+            : meta.lore().stream().map(TextUtil::legacy).toList();
         return themedSlimefunItemStack(
             id,
             itemStack,
@@ -156,7 +158,9 @@ public enum Theme {
         ItemStack itemStack = ItemStackUtil.getCleanItem(sfis);
         String name = sfis.getDisplayName();
         ItemMeta meta = sfis.getItemMeta();
-        List<String> lore = meta == null ? new ArrayList<>() : meta.getLore();
+        List<String> lore = meta == null || meta.lore() == null
+            ? new ArrayList<>()
+            : meta.lore().stream().map(TextUtil::legacy).toList();
         return random(
             id,
             itemStack,
@@ -222,7 +226,9 @@ public enum Theme {
         });
         String name = sfis.getDisplayName();
         ItemMeta meta = sfis.getItemMeta();
-        List<String> lore = meta == null ? new ArrayList<>() : meta.getLore();
+        List<String> lore = meta == null || meta.lore() == null
+            ? new ArrayList<>()
+            : meta.lore().stream().map(TextUtil::legacy).toList();
         return model(
             id,
             texture.get(),
@@ -279,10 +285,9 @@ public enum Theme {
             return itemStack;
         }
 
-        List<String> lore = meta.getLore();
-        if (lore == null) {
-            lore = new ArrayList<>();
-        }
+        List<String> lore = meta.lore() == null
+            ? new ArrayList<>()
+            : meta.lore().stream().map(TextUtil::legacy).toList();
 
         ChatColor passiveColor = Theme.PASSIVE.getColor();
         List<String> finalLore = new ArrayList<>();

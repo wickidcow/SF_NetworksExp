@@ -316,7 +316,6 @@ public class ItemFlowViewer extends NetworkObject {
         }
     }
 
-    @SuppressWarnings("deprecation")
     public void subMenu(
         @NotNull NetworkRoot root,
         @NotNull BlockMenu blockMenu,
@@ -363,7 +362,7 @@ public class ItemFlowViewer extends NetworkObject {
 
                 List<String> lore = getLoreAddition(action);
 
-                itemMeta.setLore(lore);
+                itemMeta.lore(TextUtil.components(lore));
                 displayStack.setItemMeta(itemMeta);
                 blockMenu.replaceExistingItem(getDisplaySlots()[i], displayStack);
                 blockMenu.addMenuClickHandler(getDisplaySlots()[i], (player, slot, item, a) -> {
@@ -386,7 +385,6 @@ public class ItemFlowViewer extends NetworkObject {
         sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
     }
 
-    @SuppressWarnings("deprecation")
     public void mainMenu(@NotNull NetworkRoot root, @NotNull BlockMenu blockMenu, @NotNull GridCache gridCache) {
         List<DisplayEntry> entries = getRecords(root, gridCache);
 
@@ -442,7 +440,7 @@ public class ItemFlowViewer extends NetworkObject {
 
                 List<String> lore = getLoreAddition(entry);
 
-                itemMeta.setLore(lore);
+                itemMeta.lore(TextUtil.components(lore));
                 displayStack.setItemMeta(itemMeta);
                 blockMenu.replaceExistingItem(getDisplaySlots()[i], displayStack);
                 blockMenu.addMenuClickHandler(getDisplaySlots()[i], (player, slot, item, action) -> {

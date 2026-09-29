@@ -28,6 +28,7 @@ import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
 import io.github.sefiraat.networks.utils.DisplayNameUtils;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -58,7 +59,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-@SuppressWarnings({"deprecation", "DuplicatedCode"})
+@SuppressWarnings("DuplicatedCode")
 public abstract class NetworkDirectional extends NetworkObject {
 
     public static final String DIRECTION = "direction";
@@ -137,14 +138,11 @@ public abstract class NetworkDirectional extends NetworkObject {
                 blockFace.name(),
                 TextUtil.stripColor(slimefunItem.getItemName()))));
         final ItemMeta itemMeta = displayStack.getItemMeta();
-        itemMeta.setLore(Lang.getStringList("messages.normal-operation.directional.display_lore"));
+        List<Component> lore = TextUtil.components(Lang.getStringList("messages.normal-operation.directional.display_lore"));
+        itemMeta.lore(lore);
         if (active) {
-            List<String> lore = itemMeta.getLore();
-            if (lore == null) {
-                lore = new ArrayList<>();
-            }
-            lore.add(Lang.getString("messages.normal-operation.directional.set_facing"));
-            itemMeta.setLore(lore);
+            lore.add(TextUtil.component(Lang.getString("messages.normal-operation.directional.set_facing")));
+            itemMeta.lore(lore);
             itemMeta.addEnchant(NetworksVersionedEnchantment.LUCK_OF_THE_SEA, 1, true);
             itemMeta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
         }
@@ -163,14 +161,11 @@ public abstract class NetworkDirectional extends NetworkObject {
                     blockFace.name(),
                     DisplayNameUtils.getMaterialName(blockMaterial)));
             final ItemMeta itemMeta = displayStack.getItemMeta();
-            itemMeta.setLore(Lang.getStringList("messages.normal-operation.directional.display_lore"));
+            List<Component> lore = TextUtil.components(Lang.getStringList("messages.normal-operation.directional.display_lore"));
+        itemMeta.lore(lore);
             if (active) {
-                List<String> lore = itemMeta.getLore();
-                if (lore == null) {
-                    lore = new ArrayList<>();
-                }
-                lore.add(Lang.getString("messages.normal-operation.directional.set_facing"));
-                itemMeta.setLore(lore);
+                lore.add(TextUtil.component(Lang.getString("messages.normal-operation.directional.set_facing")));
+                itemMeta.lore(lore);
                 itemMeta.addEnchant(NetworksVersionedEnchantment.LUCK_OF_THE_SEA, 1, true);
                 itemMeta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
             }
