@@ -1,6 +1,5 @@
 package com.balugaq.netex.api.data;
 
-import com.balugaq.netex.api.enums.MinecraftVersion;
 import com.bgsoftware.wildchests.api.WildChestsAPI;
 import io.github.sefiraat.networks.Networks;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
@@ -21,7 +20,6 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.PotionMeta;
-import org.bukkit.potion.PotionData;
 import org.bukkit.potion.PotionType;
 import org.jspecify.annotations.NullMarked;
 
@@ -72,15 +70,8 @@ public class VanillaInventoryWrapper extends BlockMenu {
                     final ItemStack stack = inv.getContents()[i];
                     if (stack != null && stack.getType() != Material.AIR) {
                         if (stack.getItemMeta() instanceof PotionMeta potionMeta) {
-                            if (Networks.getInstance().getMCVersion().isAtLeast(MinecraftVersion.V1_20_5)) {
-                                if (potionMeta.getBasePotionType() != PotionType.WATER) {
-                                    list.add(i);
-                                }
-                            } else {
-                                PotionData bpd = potionMeta.getBasePotionData();
-                                if (bpd != null && bpd.getType() != PotionType.WATER) {
-                                    list.add(i);
-                                }
+                            if (potionMeta.getBasePotionType() != PotionType.WATER) {
+                                list.add(i);
                             }
                         } else {
                             list.add(i);

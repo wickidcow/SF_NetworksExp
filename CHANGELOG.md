@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.42
+
+### Brewing inventory API cleanup
+- Removes the obsolete pre-1.20.5 PotionData fallback from VanillaInventoryWrapper.
+- Uses PotionMeta#getBasePotionType() directly, matching Networks' supported Minecraft floor of 1.21.11+.
+- Removes the now-unused MinecraftVersion branch and PotionData import from this hot inventory wrapper.
+- Adds a regression guard so the removal-marked potion API cannot return.
+
 ## 1.0.41
 
 ### Server-scale transport and grid cleanup

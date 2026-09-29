@@ -138,6 +138,7 @@ runtime_stability = read("RUNTIME_STABILITY.md")
 main_flex_group = read("src/main/java/io/github/sefiraat/networks/slimefun/groups/MainFlexGroup.java")
 setup_util = read("src/main/java/com/ytdd9527/networksexpansion/setup/SetupUtil.java")
 text_util = read("src/main/java/com/ytdd9527/networksexpansion/utils/TextUtil.java")
+vanilla_inventory_wrapper = read("src/main/java/com/balugaq/netex/api/data/VanillaInventoryWrapper.java")
 java_sources = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "src/main/java").rglob("*.java"))
 
 # Stable world/plugin identity.
@@ -275,6 +276,11 @@ require(
     and "public static @NotNull String legacy" in text_util,
     "Adventure-backed legacy text bridge is missing",
 )
+require("getBasePotionData()" not in vanilla_inventory_wrapper
+        and "PotionData" not in vanilla_inventory_wrapper
+        and "MinecraftVersion.V1_20_5" not in vanilla_inventory_wrapper
+        and "getBasePotionType()" in vanilla_inventory_wrapper,
+        "Vanilla inventory wrapper returned to the removed pre-1.20.5 potion API")
 require("DEFAULT_LANGUAGE = \"en-US\"" in networks_java, "Networks default language is not en-US")
 require("GuizhanUpdater" not in networks_java, "automatic Guizhan updater code is still present")
 require("PinyinHelper" not in java_sources, "Pinyin runtime search remains in Java sources")
