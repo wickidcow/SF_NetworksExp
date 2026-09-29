@@ -9,6 +9,7 @@
 - Replaces deprecated Research cost access with `getLevelCost()`, removes the unused `HIDE_ADDITIONAL_TOOLTIP` compatibility wrapper, and narrows broad deprecation suppressions to documented cross-core API boundaries.
 - Keeps the public Bungee `ChatColor` Theme getter as an explicit compatibility boundary so existing addons are not broken by a maintenance release.
 - Pins maintained JEG 2.1.67 by SHA-256 in CI, retries transient GitHub release-download failures, validates the JAR/API class before compilation, and still supports the canonical dependency path for local builds.
+- Reuses the exact Slimefun Legacy core JAR that passed the compatibility matrix for final release packaging, eliminating moving-branch drift and the duplicate Legacy rebuild.
 - Verifies the same universal Java 21 JAR against current Slimefun Legacy, Slimefun United, and Slimefun Gugu exact-core builds.
 - Preserves existing item IDs, recipes, storage formats, network routing, transfer quantities, quantum ordering, and world data.
 

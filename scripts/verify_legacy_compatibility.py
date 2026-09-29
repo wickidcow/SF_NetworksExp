@@ -240,6 +240,19 @@ require('VERSION: "1.0.45"' in build_workflow
 require('VERSION: "1.0.45"' in compatibility_workflow
         and 'OUTPUT_NAME: "SF_Networks1.0.45.jar"' in compatibility_workflow,
         "compatibility workflow public version/JAR name must remain 1.0.45")
+require("actions/upload-artifact@v7" in compatibility_workflow
+        and "name: slimefun-legacy-core" in compatibility_workflow
+        and "Slimefun-Legacy-Core.jar" in compatibility_workflow,
+        "compatibility workflow must preserve the exact tested Legacy core JAR")
+require("actions/download-artifact@v8" in build_workflow
+        and "name: slimefun-legacy-core" in build_workflow
+        and "Slimefun-Legacy-Core.jar" in build_workflow,
+        "release workflow must consume the exact tested Legacy core JAR")
+require("repository: wickidcow/Slimefun-Legacy" not in build_workflow
+        and "build_slimefun_core.sh .ci/slimefun-core legacy" not in build_workflow,
+        "release packaging must not rebuild a moving Slimefun Legacy branch")
+require("if: needs.compatibility.result == 'success'" in build_workflow,
+        "release packaging must run only after the compatibility workflow succeeds")
 
 # Three exact Slimefun families.
 workflow_invariants = [

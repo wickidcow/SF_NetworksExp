@@ -104,6 +104,23 @@ jobs:
       - name: Verify core-independent universal JAR contract
         run: python3 scripts/verify_universal_jar.py "$NETWORKS_JAR" "$VERSION"
 
+      - name: Stage tested Legacy core JAR
+        if: matrix.key == 'legacy'
+        shell: bash
+        run: |
+          mkdir -p .ci/release-core
+          cp "$SLIMEFUN_CORE_JAR" .ci/release-core/Slimefun-Legacy-Core.jar
+          test -s .ci/release-core/Slimefun-Legacy-Core.jar
+          sha256sum .ci/release-core/Slimefun-Legacy-Core.jar
+      - name: Upload tested Legacy core JAR
+        if: matrix.key == 'legacy'
+        uses: actions/upload-artifact@v7
+        with:
+          name: slimefun-legacy-core
+          path: .ci/release-core/Slimefun-Legacy-Core.jar
+          if-no-files-found: error
+          retention-days: 1
+
   result:
     name: Compatibility result
     if: always()

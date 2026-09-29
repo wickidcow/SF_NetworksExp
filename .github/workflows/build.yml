@@ -30,23 +30,23 @@ jobs:
   build:
     name: Build Networks JAR
     needs: compatibility
-    if: always()
+    if: needs.compatibility.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Check out Networks
         uses: actions/checkout@v6
-      - name: Check out Slimefun Legacy
-        uses: actions/checkout@v6
+      - name: Download tested Slimefun Legacy core
+        uses: actions/download-artifact@v8
         with:
-          repository: wickidcow/Slimefun-Legacy
-          ref: master
-          path: .ci/slimefun-core
-      - name: Set up Java 25 for Slimefun Legacy
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "25"
-          cache: gradle
+          name: slimefun-legacy-core
+          path: .ci/release-core
+      - name: Locate tested Slimefun Legacy JAR
+        shell: bash
+        run: |
+          CORE_JAR="$PWD/.ci/release-core/Slimefun-Legacy-Core.jar"
+          test -s "$CORE_JAR"
+          echo "SLIMEFUN_CORE_JAR=$CORE_JAR" >> "$GITHUB_ENV"
+          sha256sum "$CORE_JAR"
       - name: Verify canonical release identity
         shell: bash
         run: |
@@ -80,15 +80,6 @@ jobs:
           fi
       - name: Verify Networks source contract
         run: python3 scripts/verify_legacy_compatibility.py
-      - name: Build exact Slimefun Legacy JAR
-        shell: bash
-        run: bash scripts/build_slimefun_core.sh .ci/slimefun-core legacy
-      - name: Locate exact Slimefun Legacy JAR
-        shell: bash
-        run: |
-          CORE_JAR="$(python3 scripts/find_slimefun_jar.py .ci/slimefun-core)"
-          test -f "$CORE_JAR"
-          echo "SLIMEFUN_CORE_JAR=$CORE_JAR" >> "$GITHUB_ENV"
       - name: Set up Java 21 for Networks
         uses: actions/setup-java@v5
         with:
