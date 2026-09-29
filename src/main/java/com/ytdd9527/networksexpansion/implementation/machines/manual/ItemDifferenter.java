@@ -575,24 +575,25 @@ public class ItemDifferenter extends NetworkObject {
                 return "neq.writablebook.page.get";
             }
         }
-            // Ominous Bottle
-            if (metaOne instanceof OminousBottleMeta instanceOne
-                && metaTwo instanceof OminousBottleMeta instanceTwo) {
-                if (instanceOne.hasAmplifier() != instanceTwo.hasAmplifier()) {
-                    return "neq.ominous.amplifier.has";
-                }
 
-                if (instanceOne.getAmplifier() != instanceTwo.getAmplifier()) {
-                    return "neq.ominous.amplifier.get";
-                }
-            }
-            // Shield
-            if (metaOne instanceof ShieldMeta instanceOne && metaTwo instanceof ShieldMeta instanceTwo) {
-                if (!Objects.equals(instanceOne.getBaseColor(), instanceTwo.getBaseColor())) {
-                    return "neq.shield.basecolor";
-                }
+        // Ominous Bottle
+        if (metaOne instanceof OminousBottleMeta instanceOne
+            && metaTwo instanceof OminousBottleMeta instanceTwo) {
+            if (instanceOne.hasAmplifier() != instanceTwo.hasAmplifier()) {
+                return "neq.ominous.amplifier.has";
             }
 
+            if (instanceOne.getAmplifier() != instanceTwo.getAmplifier()) {
+                return "neq.ominous.amplifier.get";
+            }
+        }
+
+        // Shield
+        if (metaOne instanceof ShieldMeta instanceOne && metaTwo instanceof ShieldMeta instanceTwo) {
+            if (!Objects.equals(instanceOne.getBaseColor(), instanceTwo.getBaseColor())) {
+                return "neq.shield.basecolor";
+            }
+        }
 
         // Cannot escape via any meta extension check
         return null;
