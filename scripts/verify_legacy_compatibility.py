@@ -279,6 +279,8 @@ require(
     "Adventure-backed legacy text bridge is missing",
 )
 require("isFireResistant()" not in item_differenter
+        and "hasLocationName()" not in item_differenter
+        and "getLocationName()" not in item_differenter
         and "hasCustomModelData()" not in item_differenter
         and "getCustomModelData()" not in item_differenter
         and "getBasePotionData()" not in item_differenter
@@ -289,6 +291,8 @@ require("isFireResistant()" not in item_differenter
         and "sameCustomModelData(" in item_differenter
         and "getBasePotionType()" in item_differenter,
         "Item Differenter returned to deprecated or obsolete item-meta comparison APIs")
+require("getCapacityLong() < recipe.getConsumeEnergy()" in read("src/main/java/com/ytdd9527/networksexpansion/core/items/machines/AbstractManualCrafter.java"),
+        "manual crafter returned to deprecated int energy-capacity checks")
 require("getBasePotionData()" not in vanilla_inventory_wrapper
         and "PotionData" not in vanilla_inventory_wrapper
         and "MinecraftVersion.V1_20_5" not in vanilla_inventory_wrapper
