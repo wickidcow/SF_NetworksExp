@@ -235,7 +235,8 @@ require("Main Item Group" not in locale_text and "Sub Menu " not in locale_text,
 require("getPluginMeta()" in runtime_compatibility
         and "Bukkit.getPluginCommand(\"slimefun\")" in runtime_compatibility
         and "command.getPlugin() != plugin" in runtime_compatibility
-        and ".getDescription()" not in runtime_compatibility,
+        and "plugin.getDescription()" not in runtime_compatibility
+        and "slimefun.getDescription()" not in runtime_compatibility,
         "runtime core detection must use PluginMeta and the live Slimefun command")
 require("component.getChargeLong(location)" in line_operation_util
         and "component.getCapacityLong()" in line_operation_util
