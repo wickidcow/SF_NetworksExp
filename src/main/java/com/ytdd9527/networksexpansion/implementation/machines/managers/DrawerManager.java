@@ -195,9 +195,8 @@ public class DrawerManager extends NetworkObject {
         menu.open(player);
     }
 
-    @SuppressWarnings("deprecation")
     public static @Nullable ItemStack getItemStack(@NotNull StorageUnitData entry) {
-        List<ItemContainer> itemContainers = entry.getStoredItems();
+        List<ItemContainer> itemContainers = entry.copyStoredItems();
         if (itemContainers.isEmpty()) {
             return null;
         } else {
