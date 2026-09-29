@@ -132,9 +132,9 @@ def main() -> int:
                 )
 
             config_version = str(config.get("config-version", ""))
-            if config_version.lower() != "2.1.112-legacy-1.0":
+            if config_version.lower() != "2.1.112-legacy-1.1":
                 raise SystemExit(
-                    f"config.yml is not the 1.0 Legacy configuration: {config_version!r}"
+                    f"config.yml is not the current Legacy configuration: {config_version!r}"
                 )
 
             database = config.get("database") or {}
