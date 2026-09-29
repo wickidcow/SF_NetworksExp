@@ -184,8 +184,17 @@ for alias in ["slimefunCoreJar", "SLIMEFUN_CORE_JAR", "slimefunLegacyJar", "SLIM
 require("com.github.SlimefunGuguProject:Slimefun4:" not in build, "a remote Gugu core dependency is still present")
 require("io.github.thebusybiscuit:Slimefun4:" not in build, "a remote official core dependency is still present")
 require("GuizhanLibPlugin" not in build, "GuizhanLibPlugin build dependency is still present")
-require("io.github.thebusybiscuit.slimefun4.libraries.dough.items.CustomItemStack" not in java_sources,
-        "deprecated Slimefun Dough CustomItemStack alias returned")
+legacy_custom_item_stack_files = [
+    str(path.relative_to(ROOT))
+    for path in (ROOT / "src/main/java").rglob("*.java")
+    if "io.github.thebusybiscuit.slimefun4.libraries.dough.items.CustomItemStack"
+    in path.read_text(encoding="utf-8")
+]
+require(
+    not legacy_custom_item_stack_files,
+    "deprecated Slimefun Dough CustomItemStack alias returned in: "
+    + ", ".join(legacy_custom_item_stack_files),
+)
 require("services.gradle.org/distributions/gradle-9.4.1-bin.zip" in wrapper, "official Gradle wrapper URL is missing")
 require("extends RecipeChoice.ExactChoice" not in simple_recipe_choice,
         "SimpleRecipeChoice still extends final RecipeChoice.ExactChoice")
