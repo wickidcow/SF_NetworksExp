@@ -411,7 +411,7 @@ public class LinkerGrid extends NetworkObject {
         Location location = null;
         if (type == LinkerType.QuantumLink) {
             // only check quantum storage
-            for (var b : root.getBarrels()) {
+            for (var b : root.getOutputAbleBarrels()) {
                 if (StackUtils.itemsMatch(b, itemStack)) {
                     location = b.getLocation();
                     break;
@@ -420,12 +420,12 @@ public class LinkerGrid extends NetworkObject {
             return location;
         }
 
-        for (var b : root.getBarrels()) {
+        for (var b : root.getOutputAbleBarrels()) {
             if (StackUtils.itemsMatch(b, itemStack)) {
                 return b.getLocation();
             }
         }
-        for (var c : root.getCargoStorageUnitDatas().keySet()) {
+        for (var c : root.getOutputAbleCargoStorageUnitDatas().keySet()) {
             for (var ic : c.getStoredItemsDirectly()) {
                 if (StackUtils.itemsMatch(ic, itemStack)) {
                     return c.getLastLocation();

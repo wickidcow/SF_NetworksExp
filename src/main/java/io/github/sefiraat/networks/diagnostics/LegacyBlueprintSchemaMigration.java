@@ -5,10 +5,10 @@ import io.github.sefiraat.networks.slimefun.NetworksSlimefunItemStacks;
 import io.github.sefiraat.networks.utils.DisplayNameUtils;
 import io.github.sefiraat.networks.utils.Keys;
 import io.github.sefiraat.networks.utils.Theme;
+import com.ytdd9527.networksexpansion.utils.TextUtil;
 import io.github.sefiraat.networks.utils.datatypes.DataTypeMethods;
 import io.github.sefiraat.networks.utils.datatypes.PersistentCraftingBlueprintType;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
-import org.bukkit.ChatColor;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.jetbrains.annotations.NotNull;
@@ -70,17 +70,18 @@ final class LegacyBlueprintSchemaMigration {
         }
 
         ItemMeta canonicalMeta = NetworksSlimefunItemStacks.CRAFTING_BLUEPRINT.getItemMeta();
-        String englishName = canonicalMeta.hasDisplayName() && !containsCjk(canonicalMeta.getDisplayName())
-            ? canonicalMeta.getDisplayName()
-            : ChatColor.AQUA + "Crafting Blueprint";
+        String canonicalName = legacyDisplayName(canonicalMeta);
+        String englishName = canonicalName != null && !containsCjk(canonicalName)
+            ? canonicalName
+            : TextUtil.AQUA + "Crafting Blueprint";
         List<String> lore = buildEnglishLore(instance);
-        boolean changed = !englishName.equals(meta.getDisplayName()) || !lore.equals(meta.getLore());
+        boolean changed = !englishName.equals(legacyDisplayName(meta)) || !lore.equals(legacyLore(meta));
         if (!changed) {
             return false;
         }
 
-        meta.setDisplayName(englishName);
-        meta.setLore(lore);
+        meta.displayName(TextUtil.component(englishName));
+        meta.lore(TextUtil.components(lore));
         item.setItemMeta(meta);
         return true;
     }
@@ -105,15 +106,16 @@ final class LegacyBlueprintSchemaMigration {
         SlimefunItem slimefunItem = SlimefunItem.getByItem(item);
         if (slimefunItem != null) {
             ItemMeta canonicalMeta = slimefunItem.getItem().getItemMeta();
-            if (canonicalMeta.hasDisplayName() && !containsCjk(canonicalMeta.getDisplayName())) {
-                return ChatColor.stripColor(canonicalMeta.getDisplayName());
+            String canonicalName = legacyDisplayName(canonicalMeta);
+            if (canonicalName != null && !containsCjk(canonicalName)) {
+                return TextUtil.stripColor(canonicalName);
             }
             return humanize(slimefunItem.getId());
         }
 
         String displayName = DisplayNameUtils.getDisplayName(item);
         if (!containsCjk(displayName)) {
-            return ChatColor.stripColor(displayName);
+            return TextUtil.stripColor(displayName);
         }
         return humanize(item.getType().name());
     }
@@ -142,17 +144,28 @@ final class LegacyBlueprintSchemaMigration {
     }
 
     private static boolean containsCjk(@NotNull ItemMeta meta) {
-        if (meta.hasDisplayName() && containsCjk(meta.getDisplayName())) {
+        if (containsCjk(legacyDisplayName(meta))) {
             return true;
         }
-        if (meta.hasLore()) {
-            for (String line : meta.getLore()) {
+        List<String> lore = legacyLore(meta);
+        if (lore != null) {
+            for (String line : lore) {
                 if (containsCjk(line)) {
                     return true;
                 }
             }
         }
         return false;
+    }
+
+    private static @Nullable String legacyDisplayName(@NotNull ItemMeta meta) {
+        return meta.displayName() == null ? null : TextUtil.legacy(meta.displayName());
+    }
+
+    private static @Nullable List<String> legacyLore(@NotNull ItemMeta meta) {
+        return meta.lore() == null
+            ? null
+            : meta.lore().stream().map(TextUtil::legacy).toList();
     }
 
     private static boolean containsCjk(@Nullable String text) {

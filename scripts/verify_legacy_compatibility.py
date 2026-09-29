@@ -311,6 +311,34 @@ require("powerNode.getChargeLong(node)" in network_root
         "NetworkRoot returned to int-narrowed energy removal")
 require('@SuppressWarnings("deprecation")\npublic class NetworkRoot' not in network_root,
         "NetworkRoot returned to a class-wide deprecation suppression")
+require("getStoredItems()" not in network_root
+        and "getStoredItemsDirectly()" in network_root,
+        "NetworkRoot returned to allocating deprecated drawer snapshots")
+require("getOutputAbleBarrels()" in read("src/main/java/com/balugaq/netex/integrations/logitech/LinkerGrid.java")
+        and "getOutputAbleCargoStorageUnitDatas()" in read("src/main/java/com/balugaq/netex/integrations/logitech/LinkerGrid.java"),
+        "LogiTech linker returned to deprecated storage views")
+require("getChargeLong(location)" in read("src/main/java/com/balugaq/netex/utils/LineOperationUtil.java")
+        and "getCapacityLong()" in read("src/main/java/com/balugaq/netex/utils/LineOperationUtil.java")
+        and "component.addCharge(location, gen)" in read("src/main/java/com/balugaq/netex/utils/LineOperationUtil.java"),
+        "line power output returned to int energy APIs")
+require("getCapacityLong()" in read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkPowerOutlet.java")
+        and "final long gen" in read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkPowerOutlet.java"),
+        "Network Power Outlet returned to int energy APIs")
+require("getDescription()" not in read("src/main/java/io/github/sefiraat/networks/compatibility/RuntimeCompatibility.java")
+        and "getPluginMeta()" in read("src/main/java/io/github/sefiraat/networks/compatibility/RuntimeCompatibility.java"),
+        "runtime compatibility returned to deprecated plugin metadata")
+require("net.md_5.bungee.api" not in main_flex_group
+        and "ClickEvent.openUrl" in main_flex_group,
+        "Networks root guide returned to deprecated Bungee chat APIs")
+blueprint_migration = read("src/main/java/io/github/sefiraat/networks/diagnostics/LegacyBlueprintSchemaMigration.java")
+require("org.bukkit.ChatColor" not in blueprint_migration
+        and ".setDisplayName(" not in blueprint_migration
+        and ".setLore(" not in blueprint_migration
+        and ".getDisplayName()" not in blueprint_migration
+        and ".getLore()" not in blueprint_migration
+        and "meta.displayName(" in blueprint_migration
+        and "meta.lore(" in blueprint_migration,
+        "blueprint migration returned to deprecated text APIs")
 require("getBasePotionData()" not in vanilla_inventory_wrapper
         and "PotionData" not in vanilla_inventory_wrapper
         and "MinecraftVersion.V1_20_5" not in vanilla_inventory_wrapper

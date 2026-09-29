@@ -582,7 +582,7 @@ public class NetworkRoot extends NetworkNode {
         // Cargo storage units
         Map<StorageUnitData, Location> cacheMap = getOutputAbleCargoStorageUnitDatas();
         for (StorageUnitData cache : cacheMap.keySet()) {
-            for (ItemContainer itemContainer : cache.getStoredItems()) {
+            for (ItemContainer itemContainer : cache.getStoredItemsDirectly()) {
                 addAmount(itemStacks, itemContainer.getSample(), itemContainer.getAmount());
             }
         }
@@ -1062,7 +1062,7 @@ public class NetworkRoot extends NetworkNode {
 
         Map<StorageUnitData, Location> cacheMap = getOutputAbleCargoStorageUnitDatas();
         for (StorageUnitData cache : cacheMap.keySet()) {
-            final List<ItemContainer> storedItems = cache.getStoredItems();
+            final var storedItems = cache.getStoredItemsDirectly();
             for (ItemContainer itemContainer : storedItems) {
                 if (!StackUtils.itemsMatch(requestCache, itemContainer.getItemStack())) {
                     continue;
@@ -1183,7 +1183,7 @@ public class NetworkRoot extends NetworkNode {
         }
         Map<StorageUnitData, Location> cacheMap = getOutputAbleCargoStorageUnitDatas();
         for (StorageUnitData cache : cacheMap.keySet()) {
-            final List<ItemContainer> storedItems = cache.getStoredItems();
+            final var storedItems = cache.getStoredItemsDirectly();
             for (ItemContainer itemContainer : storedItems) {
                 if (StackUtils.itemsMatch(itemContainer, itemStack)) {
                     totalAmount += itemContainer.getAmount();
@@ -1253,7 +1253,7 @@ public class NetworkRoot extends NetworkNode {
         }
         Map<StorageUnitData, Location> cacheMap = getOutputAbleCargoStorageUnitDatas();
         for (StorageUnitData cache : cacheMap.keySet()) {
-            final List<ItemContainer> storedItems = cache.getStoredItems();
+            final var storedItems = cache.getStoredItemsDirectly();
             for (ItemContainer itemContainer : storedItems) {
                 for (ItemStack itemStack : itemStacks) {
                     if (StackUtils.itemsMatch(itemContainer, itemStack)) {
