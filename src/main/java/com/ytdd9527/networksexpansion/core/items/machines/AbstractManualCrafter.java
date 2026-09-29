@@ -115,7 +115,7 @@ public abstract class AbstractManualCrafter extends SpecialSlimefunItem implemen
     public void craft(@NotNull Player player, @NotNull BlockMenu blockMenu) {
         boolean success = false;
         for (SuperRecipe recipe : getRecipes()) {
-            if (getCapacity() < recipe.getConsumeEnergy()) {
+            if (getCapacityLong() < recipe.getConsumeEnergy()) {
                 continue;
             }
 
