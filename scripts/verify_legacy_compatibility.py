@@ -279,6 +279,11 @@ require(
 )
 require("BlockStorage.getInventory(" not in java_sources,
         "deprecated BlockStorage inventory lookup returned")
+require("HIDE_ADDITIONAL_TOOLTIP" not in java_sources,
+        "deprecated HIDE_ADDITIONAL_TOOLTIP compatibility wrapper returned")
+require("research.getCost()" not in read("src/main/java/com/balugaq/netex/api/groups/TypeItemGroup.java")
+        and "research.getLevelCost()" in read("src/main/java/com/balugaq/netex/api/groups/TypeItemGroup.java"),
+        "TypeItemGroup returned to deprecated Research#getCost()")
 require("org.bukkit.ChatColor" not in network_monitor,
         "Network Monitor returned to deprecated Bukkit ChatColor")
 require(
