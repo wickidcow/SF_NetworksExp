@@ -27,6 +27,18 @@ if (!slimefunCoreJar.isFile) {
     )
 }
 
+val maintainedJegJarPath = providers.gradleProperty("jegJar")
+    .orElse(providers.environmentVariable("JEG_JAR"))
+    .orNull
+val maintainedJegJar = maintainedJegJarPath?.let { file(it) }
+
+if (maintainedJegJar != null && !maintainedJegJar.isFile) {
+    throw GradleException(
+        "Maintained JEG JAR not found at '${maintainedJegJar.absolutePath}'. " +
+            "Pass -PjegJar=/path/to/SF_JustEnoughGuide2.1.67.jar or set JEG_JAR."
+    )
+}
+
 java {
     toolchain { languageVersion.set(JavaLanguageVersion.of(25)) }
     sourceCompatibility = JavaVersion.VERSION_21
@@ -101,7 +113,11 @@ dependencies {
     }
     compileOnly("com.github.balugaq:FluffyMachines:43d7444e4c")
     compileOnly("com.github.TimetownDev:GuguSlimefunLib:45627c6f8e")
-    compileOnly("com.github.wickidcow.release:SF_JustEnoughGuide:2.1.67")
+    if (maintainedJegJar != null) {
+        compileOnly(files(maintainedJegJar))
+    } else {
+        compileOnly("com.github.wickidcow.release:SF_JustEnoughGuide:2.1.67")
+    }
     compileOnly(fileTree(mapOf("dir" to "lib", "include" to listOf("*.jar"))))
 }
 

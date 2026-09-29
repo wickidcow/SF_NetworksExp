@@ -95,11 +95,16 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: gradle
+      - name: Download maintained JEG API JAR
+        shell: bash
+        run: |
+          bash scripts/download_jeg.sh
+          echo "JEG_JAR=$PWD/.ci/jeg/SF_JustEnoughGuide2.1.67.jar" >> "$GITHUB_ENV"
       - name: Build and test Networks
         shell: bash
         run: |
           chmod +x gradlew
-          ./gradlew clean build --no-daemon -PslimefunCoreJar="$SLIMEFUN_CORE_JAR"
+          ./gradlew clean build --no-daemon -PslimefunCoreJar="$SLIMEFUN_CORE_JAR" -PjegJar="$JEG_JAR"
       - name: Locate canonical Networks JAR
         shell: bash
         run: |

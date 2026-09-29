@@ -184,6 +184,19 @@ for alias in ["slimefunCoreJar", "SLIMEFUN_CORE_JAR", "slimefunLegacyJar", "SLIM
 require("com.github.SlimefunGuguProject:Slimefun4:" not in build, "a remote Gugu core dependency is still present")
 require("io.github.thebusybiscuit:Slimefun4:" not in build, "a remote official core dependency is still present")
 require("GuizhanLibPlugin" not in build, "GuizhanLibPlugin build dependency is still present")
+require('providers.gradleProperty("jegJar")' in build
+        and 'providers.environmentVariable("JEG_JAR")' in build
+        and "compileOnly(files(maintainedJegJar))" in build,
+        "verified local JEG dependency override is missing")
+jeg_download = read("scripts/download_jeg.sh")
+require("8456be1a05715f38536f217ad2136aff18e38b6e9591a41c9814e89d0576253a" in jeg_download
+        and "SF_JustEnoughGuide2.1.67.jar" in jeg_download
+        and "RecipeCompleteProvider.class" in jeg_download
+        and "--retry-all-errors" in jeg_download,
+        "pinned retrying JEG release downloader is missing")
+require(workflow.count("bash scripts/download_jeg.sh") >= 2
+        and workflow.count('-PjegJar="$JEG_JAR"') >= 2,
+        "JEG CI download/override is not wired into compatibility and release builds")
 legacy_custom_item_stack_files = [
     str(path.relative_to(ROOT))
     for path in (ROOT / "src/main/java").rglob("*.java")
