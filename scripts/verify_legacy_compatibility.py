@@ -197,6 +197,13 @@ require("8456be1a05715f38536f217ad2136aff18e38b6e9591a41c9814e89d0576253a" in je
 require(workflow.count("bash scripts/download_jeg.sh") >= 2
         and workflow.count('-PjegJar="$JEG_JAR"') >= 2,
         "JEG CI download/override is not wired into compatibility and release builds")
+require('providers.gradleProperty("strictDeprecation")' in build
+        and 'options.compilerArgs.add("-Werror")' in build,
+        "strict Legacy deprecation compiler gate is missing")
+require('strict_deprecation: "true"' in compatibility_workflow
+        and '-PstrictDeprecation="${{ matrix.strict_deprecation }}"' in compatibility_workflow
+        and "-PstrictDeprecation=true" in build_workflow,
+        "Legacy/release deprecation warnings are not release-blocking")
 legacy_custom_item_stack_files = [
     str(path.relative_to(ROOT))
     for path in (ROOT / "src/main/java").rglob("*.java")

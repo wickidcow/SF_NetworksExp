@@ -32,6 +32,10 @@ val maintainedJegJarPath = providers.gradleProperty("jegJar")
     .orNull
 val maintainedJegJar = maintainedJegJarPath?.let { file(it) }
 
+val strictDeprecationWarnings = providers.gradleProperty("strictDeprecation")
+    .map(String::toBoolean)
+    .orElse(false)
+
 if (maintainedJegJar != null && !maintainedJegJar.isFile) {
     throw GradleException(
         "Maintained JEG JAR not found at '${maintainedJegJar.absolutePath}'. " +
@@ -132,6 +136,9 @@ tasks {
         options.release.set(21)
         options.encoding = "UTF-8"
         options.compilerArgs.addAll(listOf("-Xlint:deprecation", "-Xlint:removal"))
+        if (strictDeprecationWarnings.get()) {
+            options.compilerArgs.add("-Werror")
+        }
     }
     processResources {
         filesMatching("plugin.yml") { expand(project.properties) }

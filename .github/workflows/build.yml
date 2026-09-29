@@ -104,7 +104,7 @@ jobs:
         shell: bash
         run: |
           chmod +x gradlew
-          ./gradlew clean build --no-daemon -PslimefunCoreJar="$SLIMEFUN_CORE_JAR" -PjegJar="$JEG_JAR"
+          ./gradlew clean build --no-daemon -PslimefunCoreJar="$SLIMEFUN_CORE_JAR" -PjegJar="$JEG_JAR" -PstrictDeprecation=true
       - name: Locate canonical Networks JAR
         shell: bash
         run: |

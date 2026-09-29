@@ -28,18 +28,21 @@ jobs:
             ref: master
             core_java: "25"
             cache: gradle
+            strict_deprecation: "true"
           - key: united
             display: Slimefun United
             repository: Slimefun-United/Slimefun-United
             ref: dev
             core_java: "21"
             cache: maven
+            strict_deprecation: "false"
           - key: gugu
             display: Slimefun Gugu
             repository: SlimefunGuguProject/Slimefun4
             ref: master
             core_java: "21"
             cache: gradle
+            strict_deprecation: "false"
 
     steps:
       - name: Check out Networks
@@ -89,7 +92,7 @@ jobs:
         shell: bash
         run: |
           chmod +x gradlew
-          ./gradlew clean test shadowJar --no-daemon -PslimefunCoreJar="$SLIMEFUN_CORE_JAR" -PjegJar="$JEG_JAR"
+          ./gradlew clean test shadowJar --no-daemon -PslimefunCoreJar="$SLIMEFUN_CORE_JAR" -PjegJar="$JEG_JAR" -PstrictDeprecation="${{ matrix.strict_deprecation }}"
       - name: Locate canonical compatibility JAR
         shell: bash
         run: |
