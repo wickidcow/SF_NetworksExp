@@ -426,12 +426,12 @@ require("public ItemRequest(@NotNull ItemStackCache cache, int amount)" in item_
 require("final int[] requestedAmounts" not in auto_crafter,
         "Auto Crafter must not allocate a requested-amount scratch array per craft")
 require("final ItemRequest[] requests = new ItemRequest[ingredientCount]" in auto_crafter
-        and "final ItemRequest request = new ItemRequest(ingredient.template(), (int) scaledAmount)" in auto_crafter
-        and "if (!root.contains(request))" in auto_crafter
+        and "final ItemRequest request = new ItemRequest(ingredient.cache(), (int) scaledAmount)" in auto_crafter
+        and "root.contains(ingredient.cache(), request.getAmount())" in auto_crafter
         and "final ItemRequest request = requests[i]" in auto_crafter
         and "root.getItemStack0(location, request)" in auto_crafter
         and "root.getItemStack0(\n                location, new ItemRequest" not in auto_crafter,
-        "Auto Crafter must reuse non-mutating preflight ItemRequests for withdrawal")
+        "Auto Crafter must reuse cached preflight ItemRequests for withdrawal")
 require("Classic storage routing" in readme
         and "Cells → crafter outputs → Greedy storage" in readme
         and "Empty Quantum Storage never auto-assigns" in readme,
