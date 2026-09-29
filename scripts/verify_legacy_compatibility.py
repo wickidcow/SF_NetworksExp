@@ -130,6 +130,7 @@ recipe_registry = read("src/main/java/com/balugaq/netex/api/helpers/SupportedCra
 runtime_stability = read("RUNTIME_STABILITY.md")
 main_flex_group = read("src/main/java/io/github/sefiraat/networks/slimefun/groups/MainFlexGroup.java")
 setup_util = read("src/main/java/com/ytdd9527/networksexpansion/setup/SetupUtil.java")
+text_util = read("src/main/java/com/ytdd9527/networksexpansion/utils/TextUtil.java")
 java_sources = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "src/main/java").rglob("*.java"))
 
 # Stable world/plugin identity.
@@ -259,6 +260,14 @@ require("BlockStorage.getInventory(" not in java_sources,
         "deprecated BlockStorage inventory lookup returned")
 require("org.bukkit.ChatColor" not in network_monitor,
         "Network Monitor returned to deprecated Bukkit ChatColor")
+require(
+    "net.kyori.adventure.text.Component" in text_util
+    and "LegacyComponentSerializer" in text_util
+    and "public static @NotNull Component component" in text_util
+    and "public static @NotNull List<Component> components" in text_util
+    and "public static @NotNull String legacy" in text_util,
+    "Adventure-backed legacy text bridge is missing",
+)
 require("DEFAULT_LANGUAGE = \"en-US\"" in networks_java, "Networks default language is not en-US")
 require("GuizhanUpdater" not in networks_java, "automatic Guizhan updater code is still present")
 require("PinyinHelper" not in java_sources, "Pinyin runtime search remains in Java sources")
