@@ -180,7 +180,18 @@ require("options.release.set(21)" in build, "Java 21 release target is missing")
 require("languageVersion.set(JavaLanguageVersion.of(21))" in build, "Java 21 Gradle toolchain is missing")
 require("paper-api:1.21.11-R0.1-SNAPSHOT" in build, "Paper 1.21.11 API baseline is missing")
 
-public_version_match = re.search(r'^version = "([^"]+)"require("compileOnly(files(slimefunCoreJar))" in build, "exact local Slimefun core dependency is missing")
+public_version_match = re.search(r'^version = "([^"]+)"$', build, re.MULTILINE)
+require(public_version_match is not None, "public Gradle version is missing")
+public_version = public_version_match.group(1) if public_version_match else ""
+require(
+    f'VERSION: "{public_version}"' in build_workflow
+    and f'OUTPUT_NAME: "SF_Networks{public_version}.jar"' in build_workflow
+    and f'VERSION: "{public_version}"' in compatibility_workflow
+    and f'OUTPUT_NAME: "SF_Networks{public_version}.jar"' in compatibility_workflow,
+    "Gradle/workflow public version markers are inconsistent",
+)
+require(f"## {public_version}" in changelog, "current public version is missing from CHANGELOG.md")
+require("compileOnly(files(slimefunCoreJar))" in build, "exact local Slimefun core dependency is missing")
 for alias in ["slimefunCoreJar", "SLIMEFUN_CORE_JAR", "slimefunLegacyJar", "SLIMEFUN_LEGACY_JAR", "SLIMEFUN_COMPATIBILITY_JAR"]:
     require(alias in build, f"exact-core dependency alias missing: {alias}")
 require("com.github.SlimefunGuguProject:Slimefun4:" not in build, "a remote Gugu core dependency is still present")
