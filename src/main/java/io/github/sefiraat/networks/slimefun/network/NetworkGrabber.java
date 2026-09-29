@@ -5,6 +5,7 @@ import com.balugaq.netex.api.enums.FeedbackType;
 import com.balugaq.netex.api.interfaces.SoftCellBannable;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import io.github.sefiraat.networks.NetworkStorage;
+import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
 import io.github.sefiraat.networks.utils.NetworkTransferUtils;
@@ -50,7 +51,10 @@ public class NetworkGrabber extends NetworkDirectional implements SoftCellBannab
             return;
         }
 
-        if (checkSoftCellBan(blockMenu.getLocation(), definition.getNode().getRoot())) {
+        final NetworkRoot root = definition.getNode().getRoot();
+        final var accessor = blockMenu.getLocation();
+
+        if (checkSoftCellBan(accessor, root)) {
             return;
         }
 
@@ -59,7 +63,7 @@ public class NetworkGrabber extends NetworkDirectional implements SoftCellBannab
             blockMenu.getBlock().getRelative(direction).getLocation());
 
         if (targetMenu == null) {
-            sendFeedback(blockMenu.getLocation(), FeedbackType.NO_TARGET_BLOCK);
+            sendFeedback(accessor, FeedbackType.NO_TARGET_BLOCK);
             return;
         }
 
@@ -69,20 +73,29 @@ public class NetworkGrabber extends NetworkDirectional implements SoftCellBannab
             return;
         }
 
+        if (!root.allowAccessInput(accessor)) {
+            sendFeedback(accessor, FeedbackType.ROOT_LIMITING_ACCESS_INPUT);
+            return;
+        }
+
         int[] slots = BlockMenuUtil.getSafeTransportSlots(targetMenu, ItemTransportFlow.WITHDRAW);
 
         for (int slot : slots) {
             final ItemStack itemStack = targetMenu.getItemInSlot(slot);
 
             if (itemStack != null && itemStack.getType() != Material.AIR) {
-                final int moved = NetworkTransferUtils.moveMenuSlotIntoNetwork(
-                    definition.getNode().getRoot(), blockMenu.getLocation(), targetMenu, slot);
+                final int moved = NetworkTransferUtils.moveMenuSlotIntoNetwork(root, accessor, targetMenu, slot);
                 if (moved > 0) {
-                    sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
-                    if (definition.getNode().getRoot().isDisplayParticles()) {
-                        showParticle(blockMenu.getLocation(), direction);
+                    sendFeedback(accessor, FeedbackType.WORKING);
+                    if (root.isDisplayParticles()) {
+                        showParticle(accessor, direction);
                     }
                     break;
+                }
+
+                if (!root.allowAccessInput(accessor)) {
+                    sendFeedback(accessor, FeedbackType.ROOT_LIMITING_ACCESS_INPUT);
+                    return;
                 }
             }
         }

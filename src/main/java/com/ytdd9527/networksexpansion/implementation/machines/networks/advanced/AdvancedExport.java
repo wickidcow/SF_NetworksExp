@@ -124,29 +124,48 @@ public class AdvancedExport extends NetworkObject implements RecipeDisplayItem {
             return;
         }
 
+        final NetworkRoot root = definition.getNode().getRoot();
+        final var accessor = blockMenu.getLocation();
         boolean hasRequest = false;
+        boolean checkedInitialAccess = false;
         int moved = 0;
+
         for (int testItemSlot : getTestSlots()) {
             final ItemStack template = blockMenu.getItemInSlot(testItemSlot);
             if (template == null || template.getType() == Material.AIR) {
                 continue;
             }
             hasRequest = true;
-            moved += NetworkTransferUtils.moveNetworkItemIntoMenu(
-                definition.getNode().getRoot(),
-                blockMenu.getLocation(),
+
+            if (!checkedInitialAccess) {
+                checkedInitialAccess = true;
+                if (!root.allowAccessOutput(accessor)) {
+                    sendFeedback(accessor, FeedbackType.ROOT_LIMITING_ACCESS_OUTPUT);
+                    return;
+                }
+            }
+
+            final int movedNow = NetworkTransferUtils.moveNetworkItemIntoMenu(
+                root,
+                accessor,
                 blockMenu,
                 template,
                 template.getAmount(),
                 getOutputSlots());
+            moved += movedNow;
+
+            if (movedNow == 0 && !root.allowAccessOutput(accessor)) {
+                sendFeedback(accessor, FeedbackType.ROOT_LIMITING_ACCESS_OUTPUT);
+                return;
+            }
         }
 
         if (!hasRequest) {
-            sendFeedback(blockMenu.getLocation(), FeedbackType.NO_ITEM_REQUEST);
+            sendFeedback(accessor, FeedbackType.NO_ITEM_REQUEST);
         } else if (moved > 0) {
-            sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
+            sendFeedback(accessor, FeedbackType.WORKING);
         } else {
-            sendFeedback(blockMenu.getLocation(), FeedbackType.NO_ENOUGH_SPACE);
+            sendFeedback(accessor, FeedbackType.NO_ENOUGH_SPACE);
         }
     }
 

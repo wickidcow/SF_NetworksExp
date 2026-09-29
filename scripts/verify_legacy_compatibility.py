@@ -126,6 +126,12 @@ item_request = read("src/main/java/io/github/sefiraat/networks/network/stackcach
 auto_crafter_batch_planner = read("src/main/java/com/ytdd9527/networksexpansion/core/items/machines/AutoCrafterBatchPlanner.java")
 smart_crafting = read("src/main/java/com/ytdd9527/networksexpansion/implementation/machines/networks/advanced/SmartNetworkCraftingGridNewStyle.java")
 crafting_grid = read("src/main/java/io/github/sefiraat/networks/slimefun/network/grid/NetworkCraftingGrid.java")
+network_import = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkImport.java")
+network_export = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkExport.java")
+network_grabber = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkGrabber.java")
+advanced_import = read("src/main/java/com/ytdd9527/networksexpansion/implementation/machines/networks/advanced/AdvancedImport.java")
+advanced_export = read("src/main/java/com/ytdd9527/networksexpansion/implementation/machines/networks/advanced/AdvancedExport.java")
+network_grid = read("src/main/java/io/github/sefiraat/networks/slimefun/network/grid/NetworkGrid.java")
 crafting_grid_new = read("src/main/java/com/ytdd9527/networksexpansion/implementation/machines/networks/advanced/NetworkCraftingGridNewStyle.java")
 recipe_registry = read("src/main/java/com/balugaq/netex/api/helpers/SupportedCraftingTableRecipes.java")
 runtime_stability = read("RUNTIME_STABILITY.md")
@@ -432,6 +438,30 @@ require("final ItemRequest[] requests = new ItemRequest[ingredientCount]" in aut
         and "root.getItemStack0(location, request)" in auto_crafter
         and "root.getItemStack0(\n                location, new ItemRequest" not in auto_crafter,
         "Auto Crafter must reuse cached preflight ItemRequests for withdrawal")
+require("root.allowAccessInput(accessor)" in network_import
+        and "FeedbackType.ROOT_LIMITING_ACCESS_INPUT" in network_import,
+        "Network Import must honor the root input limiter before repeated transport work")
+require("root.allowAccessOutput(accessor)" in network_export
+        and "FeedbackType.ROOT_LIMITING_ACCESS_OUTPUT" in network_export,
+        "Network Export must honor the root output limiter before network lookup work")
+require(network_grabber.count("root.allowAccessInput(accessor)") >= 2
+        and "FeedbackType.ROOT_LIMITING_ACCESS_INPUT" in network_grabber,
+        "Network Grabber must stop source-slot scans when the root input limiter is active")
+require(advanced_import.count("root.allowAccessInput(accessor)") >= 2
+        and "FeedbackType.ROOT_LIMITING_ACCESS_INPUT" in advanced_import,
+        "Advanced Import must stop occupied-slot scans when the root input limiter is active")
+require(advanced_export.count("root.allowAccessOutput(accessor)") >= 2
+        and "movedNow == 0" in advanced_export
+        and "FeedbackType.ROOT_LIMITING_ACCESS_OUTPUT" in advanced_export,
+        "Advanced Export must stop template scans when the root output limiter becomes active")
+require("protected void postBreak(@NotNull BlockBreakEvent event)" in network_grid
+        and "super.postBreak(event)" in network_grid
+        and "CACHE_MAP.remove(event.getBlock().getLocation())" in network_grid,
+        "Network Grid must release its GridCache entry when broken")
+require("protected void postBreak(@NotNull BlockBreakEvent event)" in crafting_grid
+        and "super.postBreak(event)" in crafting_grid
+        and "CACHE_MAP.remove(event.getBlock().getLocation())" in crafting_grid,
+        "Network Crafting Grid must release its GridCache entry when broken")
 require("Classic storage routing" in readme
         and "Cells → crafter outputs → Greedy storage" in readme
         and "Empty Quantum Storage never auto-assigns" in readme,

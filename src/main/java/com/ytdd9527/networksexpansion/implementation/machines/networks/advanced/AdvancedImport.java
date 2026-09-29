@@ -93,6 +93,8 @@ public class AdvancedImport extends NetworkObject implements RecipeDisplayItem {
         }
 
         final NetworkRoot root = definition.getNode().getRoot();
+        final var accessor = blockMenu.getLocation();
+        boolean checkedInitialAccess = false;
 
         for (int inputSlot : INPUT_SLOTS) {
             final ItemStack itemStack = blockMenu.getItemInSlot(inputSlot);
@@ -100,9 +102,21 @@ public class AdvancedImport extends NetworkObject implements RecipeDisplayItem {
             if (itemStack == null || itemStack.getType() == Material.AIR) {
                 continue;
             }
-            if (NetworkTransferUtils.moveMenuSlotIntoNetwork(
-                root, blockMenu.getLocation(), blockMenu, inputSlot) > 0) {
-                sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
+
+            if (!checkedInitialAccess) {
+                checkedInitialAccess = true;
+                if (!root.allowAccessInput(accessor)) {
+                    sendFeedback(accessor, FeedbackType.ROOT_LIMITING_ACCESS_INPUT);
+                    return;
+                }
+            }
+
+            final int moved = NetworkTransferUtils.moveMenuSlotIntoNetwork(root, accessor, blockMenu, inputSlot);
+            if (moved > 0) {
+                sendFeedback(accessor, FeedbackType.WORKING);
+            } else if (!root.allowAccessInput(accessor)) {
+                sendFeedback(accessor, FeedbackType.ROOT_LIMITING_ACCESS_INPUT);
+                return;
             }
         }
     }

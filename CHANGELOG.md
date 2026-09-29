@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.41
+
+### Server-scale transport and grid cleanup
+- Reuses the existing NetworkRoot transport-miss limiter to skip importer, exporter, grabber, Advanced Import, and Advanced Export work that cannot succeed while an accessor is already limited.
+- Preserves the historical limiter threshold and recovery timing; no new cooldown, tick delay, slot order, quantity limit, or transfer rule is introduced.
+- Stops long occupied-slot and template scans as soon as an attempted transfer activates the existing limiter.
+- Preserves empty-import and empty-template feedback semantics.
+- Removes Network Grid and Network Crafting Grid cache entries when their blocks are broken, while still invoking the shared NetworkObject break lifecycle.
+- Adds source-contract guards for all five limiter short-circuits and both grid-cache cleanup paths.
+
 ## 1.0.40
 
 ### AutoCrafter ingredient metadata cache
