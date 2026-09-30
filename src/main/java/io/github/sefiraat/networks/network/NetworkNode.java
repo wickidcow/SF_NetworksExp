@@ -143,8 +143,13 @@ public class NetworkNode {
                     currentNode.addChild(networkNode);
 
                     nodeStack.push(networkNode);
+                    /*
+                     * testDefinition came directly from NetworkStorage#getNode, so this physical node is
+                     * already present in the authoritative registry and chunk index. Full topology discovery
+                     * only needs to attach the fresh runtime NetworkNode; re-registering the same definition
+                     * would repeat key normalization, CHM compute and ChunkPosition/index work for every node.
+                     */
                     testDefinition.setNode(networkNode);
-                    NetworkStorage.registerNode(testLocation, testDefinition);
                 }
             }
         }

@@ -702,6 +702,9 @@ require("final Location probeLocation = baseLocation.clone();" in network_node
         and "final Location testLocation = probeLocation.clone();" in network_node
         and "currentNode.nodePosition.clone().add(face.getDirection())" not in network_node,
         "full topology discovery must reuse one neighbour probe Location per visited node")
+require("testDefinition.setNode(networkNode);" in network_node
+        and "NetworkStorage.registerNode(testLocation, testDefinition);" not in network_node,
+        "full topology discovery must not re-register definitions already returned by NetworkStorage")
 require("public void invalidateRootItems()" in network_root
         and "invalidateRootItems();" in network_root
         and "this.rootPower = Math.max(0L, this.rootPower - toRemove)" in network_root,
