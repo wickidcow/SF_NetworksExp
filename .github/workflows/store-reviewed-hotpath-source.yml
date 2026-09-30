@@ -1,0 +1,70 @@
+name: Store Reviewed Networks Source Objects
+
+on:
+  push:
+    branches: ['work/storage-hotpath-source-review']
+
+permissions:
+  contents: write
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: d9ffb4467c8bed3b137894fe6f2862838ea36cea
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: wickidcow/Slimefun-Legacy
+          ref: d35bf86be90f6d01c80321efacaa58048d983c4d
+          path: reviewed-inputs
+          persist-credentials: false
+      - name: Store only the exact five code objects already tested by run 36779495717
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64, gzip, hashlib, json, os, subprocess
+          from pathlib import Path
+          def blob(data):
+              return hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+          packed = b''.join(Path(f'reviewed-inputs/.audit/networks-hotpath.{i}').read_bytes() for i in range(3))
+          assert blob(packed) == '1b6ca5083dd2b9a610095084636248c7cb640715'
+          entries = json.loads(gzip.decompress(packed))
+          assert len(entries) == 5
+          outputs = {}
+          for entry in entries:
+              path = Path(entry['path'])
+              assert not path.is_absolute() and '..' not in path.parts
+              assert str(path).startswith(('src/main/java/', 'src/test/java/'))
+              if entry['old'] is None:
+                  assert not path.exists()
+                  text = entry['content']
+              else:
+                  assert blob(path.read_bytes()) == entry['old']
+                  text = path.read_text()
+                  for old, new in entry['replacements']:
+                      assert text.count(old) == 1
+                      text = text.replace(old, new)
+              data = text.encode()
+              assert blob(data) == entry['new']
+              outputs[str(path)] = (data, entry['new'])
+          result = {}
+          for path, (data, expected) in outputs.items():
+              request = json.dumps({'content': base64.b64encode(data).decode(), 'encoding': 'base64'})
+              response = subprocess.run(['gh', 'api', '--method', 'POST', f"repos/{os.environ['GITHUB_REPOSITORY']}/git/blobs", '--input', '-', '--jq', '.sha'], input=request, text=True, capture_output=True, check=True)
+              assert response.stdout.strip() == expected, path
+              result[path] = expected
+              print('TESTED_SOURCE_BLOB', expected, path)
+          Path('reviewed-source-manifest.json').write_text(json.dumps(result, indent=2))
+          print('No branch, tag or release was changed. Source objects require a separately reviewed commit.')
+          PY
+      - uses: actions/upload-artifact@v7
+        with:
+          name: reviewed-hotpath-source-manifest
+          path: reviewed-source-manifest.json
+          retention-days: 14
+          if-no-files-found: error
