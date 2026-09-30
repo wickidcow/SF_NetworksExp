@@ -514,6 +514,8 @@ require("collectMonitorStorageTargets" in network_root
         "Network Monitor automatic adjacent-storage discovery or directional input/output monitor routing is missing")
 require("NetworkTransferUtils.moveNetworkItemIntoMenu" in network_pusher,
         "Network Pusher no longer actively withdraws from the network into an adjacent Slimefun menu")
+require('new IntRangeSetting(this, "recipe_buffer_batches", 1, DEFAULT_RECIPE_BUFFER_BATCHES, 64);' in network_pusher,
+        "Network Pusher recipe_buffer_batches must use IntRangeSetting(min, defaultValue, max) ordering")
 require("targetBlock.getZ(),\n            template);" in network_pusher
         and "targetBlock.getZ(),\n            template.clone());" not in network_pusher,
         "Network Pusher backoff keys must reuse the already-cloned template snapshot")
