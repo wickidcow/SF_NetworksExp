@@ -76,7 +76,7 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
         ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe, NodeType.PUSHER);
         this.recipeBufferBatches =
-            new IntRangeSetting(this, "recipe_buffer_batches", DEFAULT_RECIPE_BUFFER_BATCHES, 1, 64);
+            new IntRangeSetting(this, "recipe_buffer_batches", 1, DEFAULT_RECIPE_BUFFER_BATCHES, 64);
         addItemSetting(this.recipeBufferBatches);
         for (int slot : getItemSlots()) {
             this.getSlotsToDrop().add(slot);
