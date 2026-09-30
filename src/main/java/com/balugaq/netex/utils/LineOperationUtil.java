@@ -38,6 +38,7 @@ public class LineOperationUtil {
 
     private static final LongAdder PUSH_SOURCE_MISSES = new LongAdder();
     private static final LongAdder PUSH_SOURCE_MISS_SKIPS = new LongAdder();
+    private static final LongAdder PUSH_REQUEST_REUSES = new LongAdder();
 
     /**
      * Tick-local memo for a line-transfer push pass.
@@ -49,9 +50,12 @@ public class LineOperationUtil {
      */
     public static final class PushAvailabilityMemo {
         private final boolean[] sourceUnavailable;
+        private final ItemRequest[] requests;
 
         public PushAvailabilityMemo(int templateCount) {
-            this.sourceUnavailable = new boolean[Math.max(0, templateCount)];
+            final int size = Math.max(0, templateCount);
+            this.sourceUnavailable = new boolean[size];
+            this.requests = new ItemRequest[size];
         }
 
         private boolean shouldSkip(int itemIndex) {
@@ -69,6 +73,27 @@ public class LineOperationUtil {
             sourceUnavailable[itemIndex] = true;
             PUSH_SOURCE_MISSES.increment();
         }
+
+        private @NotNull ItemRequest requestFor(int itemIndex, @NotNull ItemStack template) {
+            if (itemIndex < 0 || itemIndex >= requests.length) {
+                return new ItemRequest(template, template.getMaxStackSize());
+            }
+
+            ItemRequest request = requests[itemIndex];
+            if (request == null) {
+                request = new ItemRequest(template, template.getMaxStackSize());
+                requests[itemIndex] = request;
+            } else {
+                /*
+                 * NetworkRoot mutates ItemRequest#amount while withdrawing. Every destination target
+                 * starts with the same historical max-stack request and then narrows it for the actual
+                 * mode/slot capacity below, so reset only that mutable amount before reuse.
+                 */
+                request.setAmount(template.getMaxStackSize());
+                PUSH_REQUEST_REUSES.increment();
+            }
+            return request;
+        }
     }
 
     public static long getPushSourceMissCount() {
@@ -77,6 +102,10 @@ public class LineOperationUtil {
 
     public static long getPushSourceMissSkipCount() {
         return PUSH_SOURCE_MISS_SKIPS.sum();
+    }
+
+    public static long getPushRequestReuseCount() {
+        return PUSH_REQUEST_REUSES.sum();
     }
 
     public static void doOperation(
@@ -548,7 +577,9 @@ public class LineOperationUtil {
             return;
         }
 
-        final ItemRequest itemRequest = new ItemRequest(template, template.getMaxStackSize());
+        final ItemRequest itemRequest = availabilityMemo == null
+            ? new ItemRequest(template, template.getMaxStackSize())
+            : availabilityMemo.requestFor(itemIndex, template);
 
         final int[] slots =
             BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.INSERT, template);

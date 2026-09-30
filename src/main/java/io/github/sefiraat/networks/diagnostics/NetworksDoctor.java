@@ -417,8 +417,9 @@ public final class NetworksDoctor {
             + ", coalesced=" + TopologyDirtyQueue.getCoalescedCount()
             + ", flushed=" + TopologyDirtyQueue.getFlushedCount()
             + ", window=" + TopologyDirtyQueue.getDebounceSfTicks() + " SF tick(s)");
-        details.add("Line transfer source misses: confirmed=" + LineOperationUtil.getPushSourceMissCount()
-            + ", template-target checks skipped=" + LineOperationUtil.getPushSourceMissSkipCount());
+        details.add("Line transfer push memo: source misses=" + LineOperationUtil.getPushSourceMissCount()
+            + ", template-target checks skipped=" + LineOperationUtil.getPushSourceMissSkipCount()
+            + ", ItemRequest reuses=" + LineOperationUtil.getPushRequestReuseCount());
     }
 
     private static boolean isLoaded(@NotNull Location location) {
