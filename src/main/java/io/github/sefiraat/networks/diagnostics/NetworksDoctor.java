@@ -1,5 +1,7 @@
 package io.github.sefiraat.networks.diagnostics;
 
+import com.balugaq.netex.utils.LineOperationUtil;
+
 import com.balugaq.netex.api.data.StorageUnitData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
@@ -415,6 +417,8 @@ public final class NetworksDoctor {
             + ", coalesced=" + TopologyDirtyQueue.getCoalescedCount()
             + ", flushed=" + TopologyDirtyQueue.getFlushedCount()
             + ", window=" + TopologyDirtyQueue.getDebounceSfTicks() + " SF tick(s)");
+        details.add("Line transfer source misses: confirmed=" + LineOperationUtil.getPushSourceMissCount()
+            + ", template-target checks skipped=" + LineOperationUtil.getPushSourceMissSkipCount());
     }
 
     private static boolean isLoaded(@NotNull Location location) {

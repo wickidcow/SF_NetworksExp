@@ -23,16 +23,61 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Consumer;
 
 @SuppressWarnings("DuplicatedCode")
 @UtilityClass
 public class LineOperationUtil {
     public static final Location UNKNOWN_LOCATION = new Location(null, 0, 0, 0);
+
+    private static final LongAdder PUSH_SOURCE_MISSES = new LongAdder();
+    private static final LongAdder PUSH_SOURCE_MISS_SKIPS = new LongAdder();
+
+    /**
+     * Tick-local memo for a line-transfer push pass.
+     *
+     * <p>Once a real network withdrawal for one configured template returns no item, the source
+     * network has already been searched for that template. Reuse that confirmed miss for the
+     * remaining target menus in this pass instead of repeating destination-slot discovery and
+     * another full network withdrawal search for every block in the line.</p>
+     */
+    public static final class PushAvailabilityMemo {
+        private final boolean[] sourceUnavailable;
+
+        public PushAvailabilityMemo(int templateCount) {
+            this.sourceUnavailable = new boolean[Math.max(0, templateCount)];
+        }
+
+        private boolean shouldSkip(int itemIndex) {
+            if (itemIndex < 0 || itemIndex >= sourceUnavailable.length || !sourceUnavailable[itemIndex]) {
+                return false;
+            }
+            PUSH_SOURCE_MISS_SKIPS.increment();
+            return true;
+        }
+
+        private void markSourceUnavailable(int itemIndex) {
+            if (itemIndex < 0 || itemIndex >= sourceUnavailable.length || sourceUnavailable[itemIndex]) {
+                return;
+            }
+            sourceUnavailable[itemIndex] = true;
+            PUSH_SOURCE_MISSES.increment();
+        }
+    }
+
+    public static long getPushSourceMissCount() {
+        return PUSH_SOURCE_MISSES.sum();
+    }
+
+    public static long getPushSourceMissSkipCount() {
+        return PUSH_SOURCE_MISS_SKIPS.sum();
+    }
 
     public static void doOperation(
         @NotNull Location startLocation,
@@ -430,6 +475,17 @@ public class LineOperationUtil {
         @NotNull List<ItemStack> templates,
         @NotNull TransportMode transportMode,
         int limitQuantity) {
+        pushItem(accessor, root, blockMenu, templates, transportMode, limitQuantity, null);
+    }
+
+    public static void pushItem(
+        @NotNull Location accessor,
+        @NotNull NetworkRoot root,
+        @NotNull BlockMenu blockMenu,
+        @NotNull List<ItemStack> templates,
+        @NotNull TransportMode transportMode,
+        int limitQuantity,
+        @Nullable PushAvailabilityMemo availabilityMemo) {
         /*
          * Once NetworkRoot's existing output-miss limiter is active, every template request is a
          * guaranteed no-op. Avoid item-aware destination-slot discovery and repeated root lookups
@@ -445,7 +501,7 @@ public class LineOperationUtil {
                 continue;
             }
 
-            pushItem(accessor, root, blockMenu, template, i, transportMode, limitQuantity);
+            pushItem(accessor, root, blockMenu, template, i, transportMode, limitQuantity, availabilityMemo);
 
             // A failed request above may have crossed the existing miss threshold.
             if (!root.allowAccessOutput(accessor)) {
@@ -473,6 +529,21 @@ public class LineOperationUtil {
         int itemIndex,
         @NotNull TransportMode transportMode,
         int limitQuantity) {
+        pushItem(accessor, root, blockMenu, template, itemIndex, transportMode, limitQuantity, null);
+    }
+
+    public static void pushItem(
+        @NotNull Location accessor,
+        @NotNull NetworkRoot root,
+        @NotNull BlockMenu blockMenu,
+        @NotNull ItemStack template,
+        int itemIndex,
+        @NotNull TransportMode transportMode,
+        int limitQuantity,
+        @Nullable PushAvailabilityMemo availabilityMemo) {
+        if (availabilityMemo != null && availabilityMemo.shouldSkip(itemIndex)) {
+            return;
+        }
         if (!root.allowAccessOutput(accessor)) {
             return;
         }
@@ -505,7 +576,7 @@ public class LineOperationUtil {
                 }
                 itemRequest.setAmount(Math.min(freeSpace, limitQuantity));
 
-                final ItemStack retrieved = root.getItemStack0(accessor, itemRequest);
+                final ItemStack retrieved = requestNetworkItem(root, accessor, itemRequest, itemIndex, availabilityMemo);
                 if (retrieved != null && retrieved.getType() != Material.AIR) {
                     NetworkTransferUtils.commitNetworkWithdrawal(root, accessor, blockMenu, retrieved, slots);
                 }
@@ -522,7 +593,7 @@ public class LineOperationUtil {
                     }
                     itemRequest.setAmount(Math.min(itemRequest.getAmount(), free));
 
-                    final ItemStack retrieved = root.getItemStack0(accessor, itemRequest);
+                    final ItemStack retrieved = requestNetworkItem(root, accessor, itemRequest, itemIndex, availabilityMemo);
                     if (retrieved != null && retrieved.getType() != Material.AIR) {
                         free -= NetworkTransferUtils.commitNetworkWithdrawal(
                             root, accessor, blockMenu, retrieved, slot);
@@ -555,7 +626,7 @@ public class LineOperationUtil {
                     }
                     itemRequest.setAmount(Math.min(itemRequest.getAmount(), free));
 
-                    final ItemStack retrieved = root.getItemStack0(accessor, itemRequest);
+                    final ItemStack retrieved = requestNetworkItem(root, accessor, itemRequest, itemIndex, availabilityMemo);
                     if (retrieved != null && retrieved.getType() != Material.AIR) {
                         free -= NetworkTransferUtils.commitNetworkWithdrawal(
                             root, accessor, blockMenu, retrieved, slot);
@@ -570,14 +641,14 @@ public class LineOperationUtil {
                     break;
                 }
                 final int slot = slots[0];
-                pushSlot(accessor, root, itemRequest, blockMenu, template, slot, limitQuantity);
+                pushSlot(accessor, root, itemRequest, blockMenu, template, slot, limitQuantity, itemIndex, availabilityMemo);
             }
             case LAST_ONLY -> {
                 if (slots.length == 0) {
                     break;
                 }
                 final int slot = slots[slots.length - 1];
-                pushSlot(accessor, root, itemRequest, blockMenu, template, slot, limitQuantity);
+                pushSlot(accessor, root, itemRequest, blockMenu, template, slot, limitQuantity, itemIndex, availabilityMemo);
             }
             case FIRST_STOP -> {
                 int freeSpace = 0;
@@ -604,7 +675,7 @@ public class LineOperationUtil {
                 }
                 itemRequest.setAmount(Math.min(freeSpace, limitQuantity));
 
-                final ItemStack retrieved = root.getItemStack0(accessor, itemRequest);
+                final ItemStack retrieved = requestNetworkItem(root, accessor, itemRequest, itemIndex, availabilityMemo);
                 if (retrieved != null && retrieved.getType() != Material.AIR) {
                     NetworkTransferUtils.commitNetworkWithdrawal(root, accessor, blockMenu, retrieved, slots);
                 }
@@ -635,7 +706,7 @@ public class LineOperationUtil {
                         }
                         itemRequest.setAmount(Math.min(freeSpace, limitQuantity));
 
-                        final ItemStack retrieved = root.getItemStack0(accessor, itemRequest);
+                        final ItemStack retrieved = requestNetworkItem(root, accessor, itemRequest, itemIndex, availabilityMemo);
                         if (retrieved != null && retrieved.getType() != Material.AIR) {
                             NetworkTransferUtils.commitNetworkWithdrawal(root, accessor, blockMenu, retrieved, slots);
                         }
@@ -645,7 +716,7 @@ public class LineOperationUtil {
             case VOID -> {
                 itemRequest.setAmount(limitQuantity);
 
-                final ItemStack retrieved = root.getItemStack0(accessor, itemRequest);
+                final ItemStack retrieved = requestNetworkItem(root, accessor, itemRequest, itemIndex, availabilityMemo);
                 if (retrieved != null && retrieved.getType() != Material.AIR) {
                     BlockMenuUtil.pushItem(blockMenu, retrieved, slots);
                 }
@@ -676,7 +747,7 @@ public class LineOperationUtil {
                     }
                     final int toRequest = Math.min(deficit, availableSpace);
                     itemRequest.setAmount(toRequest);
-                    final ItemStack retrieved = root.getItemStack0(accessor, itemRequest);
+                    final ItemStack retrieved = requestNetworkItem(root, accessor, itemRequest, itemIndex, availabilityMemo);
                     if (retrieved != null && retrieved.getType() != Material.AIR) {
                         NetworkTransferUtils.commitNetworkWithdrawal(
                             root, accessor, blockMenu, retrieved, slots);
@@ -689,7 +760,7 @@ public class LineOperationUtil {
                 }
 
                 int slot = slots[itemIndex];
-                pushSlot(accessor, root, itemRequest, blockMenu, template, slot, limitQuantity);
+                pushSlot(accessor, root, itemRequest, blockMenu, template, slot, limitQuantity, itemIndex, availabilityMemo);
             }
             case P2P_SPECIFIED_QUANTITY -> {
                 if (itemIndex >= slots.length) {
@@ -717,7 +788,7 @@ public class LineOperationUtil {
                 }
 
                 itemRequest.setAmount(toRequest);
-                final ItemStack retrieved = root.getItemStack0(accessor, itemRequest);
+                final ItemStack retrieved = requestNetworkItem(root, accessor, itemRequest, itemIndex, availabilityMemo);
                 if (retrieved != null && retrieved.getType() != Material.AIR) {
                     NetworkTransferUtils.commitNetworkWithdrawal(root, accessor, blockMenu, retrieved, slot);
                 }
@@ -733,6 +804,20 @@ public class LineOperationUtil {
         @NotNull ItemStack template,
         int slot,
         int limitQuantity
+    ) {
+        pushSlot(accessor, root, itemRequest, blockMenu, template, slot, limitQuantity, -1, null);
+    }
+
+    private static void pushSlot(
+        @NotNull Location accessor,
+        @NotNull NetworkRoot root,
+        @NotNull ItemRequest itemRequest,
+        @NotNull BlockMenu blockMenu,
+        @NotNull ItemStack template,
+        int slot,
+        int limitQuantity,
+        int itemIndex,
+        @Nullable PushAvailabilityMemo availabilityMemo
     ) {
         final ItemStack itemStack = blockMenu.getItemInSlot(slot);
         if (itemStack == null || itemStack.getType() == Material.AIR) {
@@ -754,10 +839,24 @@ public class LineOperationUtil {
         }
         itemRequest.setAmount(Math.min(itemRequest.getAmount(), limitQuantity));
 
-        final ItemStack retrieved = root.getItemStack0(accessor, itemRequest);
+        final ItemStack retrieved = requestNetworkItem(root, accessor, itemRequest, itemIndex, availabilityMemo);
         if (retrieved != null && retrieved.getType() != Material.AIR) {
             NetworkTransferUtils.commitNetworkWithdrawal(root, accessor, blockMenu, retrieved, slot);
         }
+    }
+
+    private static @Nullable ItemStack requestNetworkItem(
+        @NotNull NetworkRoot root,
+        @NotNull Location accessor,
+        @NotNull ItemRequest itemRequest,
+        int itemIndex,
+        @Nullable PushAvailabilityMemo availabilityMemo) {
+        final ItemStack retrieved = root.getItemStack0(accessor, itemRequest);
+        if ((retrieved == null || retrieved.getType() == Material.AIR || retrieved.getAmount() <= 0)
+            && availabilityMemo != null) {
+            availabilityMemo.markSourceUnavailable(itemIndex);
+        }
+        return retrieved;
     }
 
     public static void outPower(@NotNull Location location, @NotNull NetworkRoot root, int rate) {

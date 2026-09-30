@@ -305,6 +305,8 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
             return null;
         }
 
+        final LineOperationUtil.PushAvailabilityMemo availabilityMemo =
+            new LineOperationUtil.PushAvailabilityMemo(templates.size());
         final LinePassCache linePass = runLineOperation(
             blockMenu,
             direction,
@@ -312,7 +314,13 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
             null,
             captureLinePass,
             (targetMenu) -> LineOperationUtil.pushItem(
-                targetMenu.getLocation(), root, targetMenu, templates, mode, limitQuantity));
+                targetMenu.getLocation(),
+                root,
+                targetMenu,
+                templates,
+                mode,
+                limitQuantity,
+                availabilityMemo));
 
         finishPushAttempt(blockMenu, root);
         return linePass;
@@ -359,6 +367,8 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
             return;
         }
 
+        final LineOperationUtil.PushAvailabilityMemo availabilityMemo =
+            new LineOperationUtil.PushAvailabilityMemo(templates.size());
         LineOperationUtil.doVanillaOperation(
             blockMenu.getLocation(),
             direction,
@@ -371,7 +381,8 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
                 menu,
                 templates,
                 mode,
-                limitQuantity));
+                limitQuantity,
+                availabilityMemo));
 
         finishPushAttempt(blockMenu, root);
     }

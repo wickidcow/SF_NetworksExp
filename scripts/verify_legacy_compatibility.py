@@ -700,6 +700,17 @@ require("if (!root.allowAccessInput(accessor))" in line_operation_util
         and "BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW)" in line_operation_util
         and "BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.INSERT, template)" in line_operation_util,
         "line-transfer limiter fast paths are missing")
+require("class PushAvailabilityMemo" in line_operation_util
+        and "sourceUnavailable" in line_operation_util
+        and "requestNetworkItem(root, accessor, itemRequest, itemIndex, availabilityMemo)" in line_operation_util
+        and "PUSH_SOURCE_MISSES.increment()" in line_operation_util
+        and "PUSH_SOURCE_MISS_SKIPS.increment()" in line_operation_util
+        and "new LineOperationUtil.PushAvailabilityMemo(templates.size())" in abstract_transfer,
+        "line-transfer push passes must memo confirmed source misses across target menus")
+require("Line transfer source misses: confirmed=" in doctor
+        and "getPushSourceMissCount()" in doctor
+        and "getPushSourceMissSkipCount()" in doctor,
+        "Networks Doctor line-transfer source-miss telemetry is missing")
 require("historyLookupKey(accessor)" in network_root
         and "location.getX() == location.getBlockX()" in network_root
         and "return normalizeHistoryLocation(location)" in network_root,
