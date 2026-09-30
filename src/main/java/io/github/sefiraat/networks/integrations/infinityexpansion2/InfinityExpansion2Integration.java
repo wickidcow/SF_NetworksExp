@@ -47,6 +47,7 @@ public final class InfinityExpansion2Integration implements StorageAdapter {
 
     private static final String BS_AMOUNT = "stored_amount";
     private static final String LAZY_DESCRIPTION = "lazy-runtime-discovery";
+    private static final PositionAccessorCache POSITION_ACCESSORS = new PositionAccessorCache();
 
     private final Plugin ie2Plugin;
     private final ClassLoader pluginClassLoader;
@@ -420,11 +421,7 @@ public final class InfinityExpansion2Integration implements StorageAdapter {
     }
 
     private static @Nullable Object invokeQuietly(@NotNull Object target, @NotNull String methodName) {
-        try {
-            return target.getClass().getMethod(methodName).invoke(target);
-        } catch (ReflectiveOperationException | SecurityException | IllegalArgumentException | LinkageError ignored) {
-            return null;
-        }
+        return POSITION_ACCESSORS.invoke(target, methodName);
     }
 
     private static boolean sameBlock(@NotNull Location first, @NotNull Location second) {
@@ -581,13 +578,7 @@ public final class InfinityExpansion2Integration implements StorageAdapter {
     }
 
     private static int @NotNull [] sanitizeSlots(int @Nullable [] slots) {
-        if (slots == null || slots.length == 0) {
-            return new int[0];
-        }
-        return java.util.Arrays.stream(slots)
-            .filter(slot -> slot >= 0 && slot < 54)
-            .distinct()
-            .toArray();
+        return StorageSlotLayout.sanitize(slots);
     }
 
     private static int @Nullable [] invokeIntArray(@NotNull Method method, @NotNull Object target)
