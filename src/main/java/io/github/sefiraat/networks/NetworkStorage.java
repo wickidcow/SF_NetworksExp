@@ -149,6 +149,19 @@ public class NetworkStorage {
     }
 
     /**
+     * Fast registry lookup for synchronous topology discovery.
+     *
+     * <p>Networks registers nodes only from loaded chunks and synchronously removes the chunk's
+     * registry entries from {@code ChunkUnloadEvent}. Controller graph discovery therefore does not
+     * need to repeat {@link World#isChunkLoaded(int, int)} for every one of six neighbour probes per
+     * visited node. Normal callers continue using {@link #getNode(Location)} and retain its defensive
+     * loaded-chunk validation.</p>
+     */
+    public static @Nullable NodeDefinition getTopologyNode(@NotNull Location location) {
+        return ALL_NETWORK_OBJECTS.get(lookupKey(location));
+    }
+
+    /**
      * Explicit physical-node validation for diagnostics and repair paths that need to verify Slimefun storage.
      * Normal graph traversal deliberately uses {@link #getNode(Location)} to avoid a storage lookup per edge.
      */
