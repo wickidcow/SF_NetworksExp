@@ -113,6 +113,7 @@ localization_service = read("src/main/java/com/ytdd9527/networksexpansion/core/s
 network_object = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkObject.java")
 network_directional = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkDirectional.java")
 advanced_directional = read("src/main/java/com/ytdd9527/networksexpansion/core/items/machines/AdvancedDirectional.java")
+feedback_sendable = read("src/main/java/com/balugaq/netex/api/interfaces/FeedbackSendable.java")
 universal_verifier = read("scripts/verify_universal_jar.py")
 transfer_utils = read("src/main/java/io/github/sefiraat/networks/utils/NetworkTransferUtils.java")
 transfer_audit = read("src/main/java/io/github/sefiraat/networks/utils/TransferAudit.java")
@@ -322,6 +323,13 @@ for forbidden in [
 ]:
     require(forbidden not in java_sources, f"unsafe Bukkit asynchronous scheduling remains: {forbidden}")
 require("useSynchronizedMachineTickers()" in java_sources, "machine ticker synchronization bridge is missing")
+require("class FeedbackSubscriptionIndex" in feedback_sendable
+        and "SUBSCRIBERS_BY_LOCATION" in feedback_sendable
+        and "FeedbackSubscriptionIndex.getSubscribers(location)" in feedback_sendable
+        and "SUBSCRIBED_LOCATIONS.computeIfPresent" in feedback_sendable
+        and "return locations.isEmpty() ? null : locations;" in feedback_sendable
+        and "for (UUID uuid : SUBSCRIBED_LOCATIONS.keySet())" not in feedback_sendable,
+        "machine feedback must use the reverse location subscriber index instead of scanning every watcher")
 legacy_getsfitem_files = [
     str(path.relative_to(ROOT))
     for path in (ROOT / "src/main/java").rglob("*.java")
