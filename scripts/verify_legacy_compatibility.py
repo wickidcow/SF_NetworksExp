@@ -89,6 +89,7 @@ vanilla_pusher = read("src/main/java/io/github/sefiraat/networks/slimefun/networ
 vanilla_grabber = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkVanillaGrabber.java")
 network_remote = read("src/main/java/io/github/sefiraat/networks/slimefun/tools/NetworkRemote.java")
 network_root = read("src/main/java/io/github/sefiraat/networks/network/NetworkRoot.java")
+network_node = read("src/main/java/io/github/sefiraat/networks/network/NetworkNode.java")
 quantum_network_storage = read("src/main/java/io/github/sefiraat/networks/network/barrel/NetworkStorage.java")
 network_pusher = read("src/main/java/io/github/sefiraat/networks/slimefun/network/pusher/AbstractNetworkPusher.java")
 readme = read("README.md")
@@ -691,6 +692,13 @@ require("candidate = cachedRoot;" in network_controller
         and "root.invalidateRootItems()" in network_controller
         and "root.setRootPower(livePower)" in network_controller,
         "stable Network Controller ticks must reuse topology while refreshing dynamic root state")
+require("final Location probeLocation = baseLocation.clone();" in network_node
+        and "probeLocation.setX(baseX + face.getModX())" in network_node
+        and "probeLocation.setY(baseY + face.getModY())" in network_node
+        and "probeLocation.setZ(baseZ + face.getModZ())" in network_node
+        and "final Location testLocation = probeLocation.clone();" in network_node
+        and "currentNode.nodePosition.clone().add(face.getDirection())" not in network_node,
+        "full topology discovery must reuse one neighbour probe Location per visited node")
 require("public void invalidateRootItems()" in network_root
         and "invalidateRootItems();" in network_root
         and "this.rootPower = Math.max(0L, this.rootPower - toRemove)" in network_root,

@@ -101,15 +101,30 @@ public class NetworkNode {
         while (!nodeStack.isEmpty()) {
             NetworkNode currentNode = nodeStack.pop();
 
+            /*
+             * Full controller rebuilds can visit thousands of nodes. Reuse one mutable Location for the six
+             * neighbour lookups instead of cloning a Location for every graph edge. NetworkStorage#getNode is
+             * read-only with respect to caller keys, and a real neighbour gets its own owned clone below.
+             */
+            final Location baseLocation = currentNode.nodePosition;
+            final Location probeLocation = baseLocation.clone();
+            final double baseX = baseLocation.getX();
+            final double baseY = baseLocation.getY();
+            final double baseZ = baseLocation.getZ();
+
             // Loop through all possible locations
             for (BlockFace face : VALID_FACES) {
-                final Location testLocation = currentNode.nodePosition.clone().add(face.getDirection());
-                final NodeDefinition testDefinition = NetworkStorage.getNode(testLocation);
+                probeLocation.setX(baseX + face.getModX());
+                probeLocation.setY(baseY + face.getModY());
+                probeLocation.setZ(baseZ + face.getModZ());
+
+                final NodeDefinition testDefinition = NetworkStorage.getNode(probeLocation);
 
                 if (testDefinition == null) {
                     continue;
                 }
 
+                final Location testLocation = probeLocation.clone();
                 final NodeType testType = testDefinition.getType();
 
                 // Kill additional controllers if it isn't the root
