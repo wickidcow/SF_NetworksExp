@@ -235,13 +235,13 @@ require("extends RecipeChoice.ExactChoice" not in simple_recipe_choice,
         "SimpleRecipeChoice still extends final RecipeChoice.ExactChoice")
 require("implements RecipeChoice" in simple_recipe_choice, "SimpleRecipeChoice no longer implements RecipeChoice")
 # Public release metadata must move as one unit so JAR/plugin/workflow versions cannot drift.
-require('version = "1.0.45"' in build, "Gradle public version must remain 1.0.45")
-require('VERSION: "1.0.45"' in build_workflow
-        and 'OUTPUT_NAME: "SF_Networks1.0.45.jar"' in build_workflow,
-        "release workflow public version/JAR name must remain 1.0.45")
-require('VERSION: "1.0.45"' in compatibility_workflow
-        and 'OUTPUT_NAME: "SF_Networks1.0.45.jar"' in compatibility_workflow,
-        "compatibility workflow public version/JAR name must remain 1.0.45")
+require('version = "1.0.46"' in build, "Gradle public version must remain 1.0.46")
+require('VERSION: "1.0.46"' in build_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.46.jar"' in build_workflow,
+        "release workflow public version/JAR name must remain 1.0.46")
+require('VERSION: "1.0.46"' in compatibility_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.46.jar"' in compatibility_workflow,
+        "compatibility workflow public version/JAR name must remain 1.0.46")
 require("actions/upload-artifact@v7" in compatibility_workflow
         and "name: slimefun-legacy-core" in compatibility_workflow
         and "Slimefun-Legacy-Core.jar" in compatibility_workflow,
@@ -323,13 +323,13 @@ for forbidden in [
 ]:
     require(forbidden not in java_sources, f"unsafe Bukkit asynchronous scheduling remains: {forbidden}")
 require("useSynchronizedMachineTickers()" in java_sources, "machine ticker synchronization bridge is missing")
-require("class FeedbackSubscriptionIndex" in feedback_sendable
-        and "SUBSCRIBERS_BY_LOCATION" in feedback_sendable
-        and "FeedbackSubscriptionIndex.getSubscribers(location)" in feedback_sendable
+require(feedback_sendable.count("SUBSCRIBED_LOCATIONS.isEmpty()") == 2
+        and feedback_sendable.count("SUBSCRIBED_LOCATIONS.entrySet()") == 2
+        and "SUBSCRIBERS_BY_LOCATION" not in feedback_sendable
         and "SUBSCRIBED_LOCATIONS.computeIfPresent" in feedback_sendable
         and "return locations.isEmpty() ? null : locations;" in feedback_sendable
         and "for (UUID uuid : SUBSCRIBED_LOCATIONS.keySet())" not in feedback_sendable,
-        "machine feedback must use the reverse location subscriber index instead of scanning every watcher")
+        "machine feedback must honor public-map mutations, skip empty subscriptions, and release unused entries")
 legacy_getsfitem_files = [
     str(path.relative_to(ROOT))
     for path in (ROOT / "src/main/java").rglob("*.java")
@@ -524,9 +524,11 @@ require("private @NotNull List<PushRequest> collectPushRequests" in network_push
         and "new LinkedHashMap" not in network_pusher
         and "new ArrayList<>(pushRequests.entrySet())" not in network_pusher,
         "Network Pusher request planning must avoid per-tick map/entry-copy churn")
-require("final ItemStack[] templates = new ItemStack[slots.length]" in abstract_transfer
-        and "final int[] activeIndexes = new int[slots.length]" in abstract_transfer
-        and "private ItemStack @Nullable [] collectTemplates" in abstract_transfer
+require("ItemStack[] templates = null" in abstract_transfer
+        and "int[] activeIndexes = null" in abstract_transfer
+        and "ItemStack @Nullable [] collectTemplates" in abstract_transfer
+        and "if (templates == null)" in abstract_transfer
+        and "if (mayRotate)" in abstract_transfer
         and "return templates;" in abstract_transfer
         and "return scheduled;" in abstract_transfer
         and "Arrays.asList(" not in abstract_transfer

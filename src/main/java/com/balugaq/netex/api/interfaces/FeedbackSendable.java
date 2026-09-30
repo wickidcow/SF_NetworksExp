@@ -7,7 +7,6 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
 import java.util.Set;
@@ -16,19 +15,20 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public interface FeedbackSendable {
     /**
-     * Preserved public subscription map for source/binary compatibility.
-     *
-     * <p>Use {@link #subscribe(Player, Location)} and {@link #unsubscribe(Player, Location)} so the
-     * reverse hot-path index stays synchronized.</p>
+     * The authoritative public subscription map. Existing integrations can mutate this map and
+     * its location sets directly, so feedback must not depend on a separate unsynchronized index.
      */
     Map<UUID, Set<Location>> SUBSCRIBED_LOCATIONS = new ConcurrentHashMap<>();
 
     static void subscribe(@NotNull Player player, @NotNull Location location) {
         final UUID key = player.getUniqueId();
-        SUBSCRIBED_LOCATIONS
-            .computeIfAbsent(key, ignored -> ConcurrentHashMap.newKeySet())
-            .add(location);
-        FeedbackSubscriptionIndex.subscribe(key, location);
+        SUBSCRIBED_LOCATIONS.compute(key, (ignored, locations) -> {
+            if (locations == null) {
+                locations = ConcurrentHashMap.newKeySet();
+            }
+            locations.add(location);
+            return locations;
+        });
     }
 
     static void unsubscribe(@NotNull Player player, @NotNull Location location) {
@@ -37,7 +37,6 @@ public interface FeedbackSendable {
             locations.remove(location);
             return locations.isEmpty() ? null : locations;
         });
-        FeedbackSubscriptionIndex.unsubscribe(key, location);
     }
 
     static boolean hasSubscribed(@NotNull Player player, @NotNull Location location) {
@@ -46,13 +45,15 @@ public interface FeedbackSendable {
     }
 
     static void sendFeedback0(@NotNull Location location, @NotNull FeedbackType type) {
-        final Set<UUID> subscribers = FeedbackSubscriptionIndex.getSubscribers(location);
-        if (subscribers == null || subscribers.isEmpty()) {
+        if (SUBSCRIBED_LOCATIONS.isEmpty()) {
             return;
         }
 
-        for (UUID uuid : subscribers) {
-            Player player = Bukkit.getServer().getPlayer(uuid);
+        for (Map.Entry<UUID, Set<Location>> entry : SUBSCRIBED_LOCATIONS.entrySet()) {
+            if (!entry.getValue().contains(location)) {
+                continue;
+            }
+            Player player = Bukkit.getServer().getPlayer(entry.getKey());
             if (player != null) {
                 sendFeedback0(player, location, type.getMessage());
             }
@@ -65,13 +66,15 @@ public interface FeedbackSendable {
     }
 
     default void sendFeedback(@NotNull Location location, @NotNull FeedbackType type) {
-        final Set<UUID> subscribers = FeedbackSubscriptionIndex.getSubscribers(location);
-        if (subscribers == null || subscribers.isEmpty()) {
+        if (SUBSCRIBED_LOCATIONS.isEmpty()) {
             return;
         }
 
-        for (UUID uuid : subscribers) {
-            Player player = Bukkit.getServer().getPlayer(uuid);
+        for (Map.Entry<UUID, Set<Location>> entry : SUBSCRIBED_LOCATIONS.entrySet()) {
+            if (!entry.getValue().contains(location)) {
+                continue;
+            }
+            Player player = Bukkit.getServer().getPlayer(entry.getKey());
             if (player != null) {
                 sendFeedback(player, location, type.getMessage());
             }
@@ -81,36 +84,5 @@ public interface FeedbackSendable {
     default void sendFeedback(@NotNull Player player, @NotNull Location location, String message) {
         player.sendMessage(String.format(
             Lang.getString("messages.debug.status_view"), LocationUtil.humanizeBlock(location), message));
-    }
-}
-
-/**
- * Reverse feedback index used by machine ticker hot paths.
- *
- * <p>The historical public UUID -> locations map remains available above. This companion index turns
- * ordinary machine feedback into one location lookup, so watching one debug location does not make
- * every loaded Networks machine scan every subscribed player on every ticker pass.</p>
- */
-final class FeedbackSubscriptionIndex {
-    private static final Map<Location, Set<UUID>> SUBSCRIBERS_BY_LOCATION = new ConcurrentHashMap<>();
-
-    private FeedbackSubscriptionIndex() {
-    }
-
-    static void subscribe(@NotNull UUID playerId, @NotNull Location location) {
-        SUBSCRIBERS_BY_LOCATION
-            .computeIfAbsent(location.clone(), ignored -> ConcurrentHashMap.newKeySet())
-            .add(playerId);
-    }
-
-    static void unsubscribe(@NotNull UUID playerId, @NotNull Location location) {
-        SUBSCRIBERS_BY_LOCATION.computeIfPresent(location, (ignored, subscribers) -> {
-            subscribers.remove(playerId);
-            return subscribers.isEmpty() ? null : subscribers;
-        });
-    }
-
-    static @Nullable Set<UUID> getSubscribers(@NotNull Location location) {
-        return SUBSCRIBERS_BY_LOCATION.get(location);
     }
 }

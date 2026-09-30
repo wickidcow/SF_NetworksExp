@@ -353,6 +353,14 @@ public class LineOperationUtil {
         @NotNull BlockMenu blockMenu,
         @NotNull TransportMode transportMode,
         int limitQuantity) {
+        // These modes have never withdrawn from target menus. Avoid item-aware slot discovery,
+        // which can perform recipe scans in other addons even when the grab phase does nothing.
+        if (transportMode == TransportMode.NULL_ONLY
+            || transportMode == TransportMode.P2P
+            || transportMode == TransportMode.P2P_SPECIFIED_QUANTITY) {
+            return;
+        }
+
         /*
          * NetworkRoot already rejects every deposit from a miss-limited accessor. Check that state
          * before discovering transport slots so long line grabbers do not repeatedly scan target
@@ -375,6 +383,9 @@ public class LineOperationUtil {
                     limit -= moved;
                     if (limit <= 0) {
                         break;
+                    }
+                    if (moved == 0 && !root.allowAccessInput(accessor)) {
+                        return;
                     }
                 }
             }
@@ -411,6 +422,9 @@ public class LineOperationUtil {
                             limit -= moved;
                             if (limit <= 0) {
                                 break;
+                            }
+                            if (moved == 0 && !root.allowAccessInput(accessor)) {
+                                return;
                             }
                         }
                     }
@@ -474,6 +488,9 @@ public class LineOperationUtil {
                         final int moved = NetworkTransferUtils.moveMenuSlotIntoNetwork(
                             root, accessor, blockMenu, slot, Math.min(item.getAmount(), toRemove));
                         toRemove -= moved;
+                        if (moved == 0 && !root.allowAccessInput(accessor)) {
+                            return;
+                        }
                     }
                 }
             }
@@ -906,12 +923,21 @@ public class LineOperationUtil {
         }
     }
 
-    private static @Nullable ItemStack requestNetworkItem(
+    static @Nullable ItemStack requestNetworkItem(
         @NotNull NetworkRoot root,
         @NotNull Location accessor,
         @NotNull ItemRequest itemRequest,
         int itemIndex,
         @Nullable PushAvailabilityMemo availabilityMemo) {
+        // A single target can make several requests (NULL_ONLY/NONNULL_ONLY). A limiter denial
+        // or zero-quantity request is not evidence that the whole network lacks this template.
+        // Only a real, permitted withdrawal below may poison the pass-local source memo.
+        if (itemRequest.getAmount() <= 0 || !root.allowAccessOutput(accessor)) {
+            return null;
+        }
+        if (availabilityMemo != null && availabilityMemo.shouldSkip(itemIndex)) {
+            return null;
+        }
         final ItemStack retrieved = root.getItemStack0(accessor, itemRequest);
         if ((retrieved == null || retrieved.getType() == Material.AIR || retrieved.getAmount() <= 0)
             && availabilityMemo != null) {

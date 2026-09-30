@@ -422,10 +422,11 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
         return new LineOperationUtil.PushAvailabilityMemo(templateCount);
     }
 
-    private ItemStack @Nullable [] collectTemplates(@NotNull BlockMenu blockMenu) {
+    ItemStack @Nullable [] collectTemplates(@NotNull BlockMenu blockMenu) {
         final int[] slots = getItemSlots();
-        final ItemStack[] templates = new ItemStack[slots.length];
-        final int[] activeIndexes = new int[slots.length];
+        ItemStack[] templates = null;
+        int[] activeIndexes = null;
+        final boolean mayRotate = this instanceof PushTickOnly && slots.length > MAX_PUSH_TEMPLATES_PER_TICK;
         int activeCount = 0;
 
         /*
@@ -434,9 +435,19 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
          */
         for (int index = 0; index < slots.length; index++) {
             final ItemStack template = blockMenu.getItemInSlot(slots[index]);
-            templates[index] = template;
             if (template != null && template.getType() != Material.AIR) {
-                activeIndexes[activeCount++] = index;
+                // Empty machines allocate neither array; ordinary machines never need cursor indexes.
+                if (templates == null) {
+                    templates = new ItemStack[slots.length];
+                }
+                templates[index] = template;
+                if (mayRotate) {
+                    if (activeIndexes == null) {
+                        activeIndexes = new int[slots.length];
+                    }
+                    activeIndexes[activeCount] = index;
+                }
+                activeCount++;
             }
         }
 
@@ -450,7 +461,7 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
          * every target in a 32/64-block line multiplies expensive item-aware slot checks. Rotate four slot
          * positions per transfer tick instead. Null placeholders retain the original indexes for P2P mode.
          */
-        if (!(this instanceof PushTickOnly) || activeCount <= MAX_PUSH_TEMPLATES_PER_TICK) {
+        if (!mayRotate || activeCount <= MAX_PUSH_TEMPLATES_PER_TICK) {
             return templates;
         }
 
