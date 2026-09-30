@@ -518,12 +518,15 @@ require("private @NotNull List<PushRequest> collectPushRequests" in network_push
         "Network Pusher request planning must avoid per-tick map/entry-copy churn")
 require("final ItemStack[] templates = new ItemStack[slots.length]" in abstract_transfer
         and "final int[] activeIndexes = new int[slots.length]" in abstract_transfer
-        and "return Arrays.asList(templates)" in abstract_transfer
+        and "private ItemStack @Nullable [] collectTemplates" in abstract_transfer
+        and "return templates;" in abstract_transfer
+        and "return scheduled;" in abstract_transfer
+        and "Arrays.asList(" not in abstract_transfer
         and "putCursorValue(PUSH_TEMPLATE_CURSOR_MAP, location" in abstract_transfer
         and "putCursorValue(cursorMap, location, nextOffset)" in abstract_transfer
         and "new ArrayList<>(Collections.nCopies" not in abstract_transfer
         and "List<Integer> activeIndexes" not in abstract_transfer,
-        "Expansion line-transfer template/cursor hot path must stay allocation-light")
+        "Expansion line-transfer template/cursor hot path must stay array-backed and allocation-light")
 require("record LinePassCache" in abstract_transfer
         and "LinePassCache sharedLinePass = null" in abstract_transfer
         and "capturePushLinePass" in abstract_transfer
@@ -717,8 +720,10 @@ require("class PushAvailabilityMemo" in line_operation_util
         and "PUSH_SOURCE_MISSES.increment()" in line_operation_util
         and "PUSH_SOURCE_MISS_SKIPS.increment()" in line_operation_util
         and "PUSH_REQUEST_REUSES.increment()" in line_operation_util
-        and "new LineOperationUtil.PushAvailabilityMemo(templates.size())" in abstract_transfer,
-        "line-transfer push passes must memo source misses and reuse per-template ItemRequests")
+        and "new LineOperationUtil.PushAvailabilityMemo(templates.length)" in abstract_transfer,
+        and "ItemStack @NotNull [] templates" in line_operation_util
+        and "for (int i = 0; i < templates.length; i++)" in line_operation_util,
+        "line-transfer push passes must memo source misses, reuse requests and keep array-backed templates")
 require("Line transfer push memo: source misses=" in doctor
         and "getPushSourceMissCount()" in doctor
         and "getPushSourceMissSkipCount()" in doctor

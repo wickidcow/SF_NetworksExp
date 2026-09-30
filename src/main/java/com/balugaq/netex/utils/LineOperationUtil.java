@@ -539,6 +539,36 @@ public class LineOperationUtil {
         }
     }
 
+    /**
+     * Array-backed hot-path overload used by Expansion transfer machines.
+     * Public List overloads remain intact for addon/source compatibility.
+     */
+    public static void pushItem(
+        @NotNull Location accessor,
+        @NotNull NetworkRoot root,
+        @NotNull BlockMenu blockMenu,
+        ItemStack @NotNull [] templates,
+        @NotNull TransportMode transportMode,
+        int limitQuantity,
+        @Nullable PushAvailabilityMemo availabilityMemo) {
+        if (!root.allowAccessOutput(accessor)) {
+            return;
+        }
+
+        for (int i = 0; i < templates.length; i++) {
+            final ItemStack template = templates[i];
+            if (template == null || template.getType() == Material.AIR) {
+                continue;
+            }
+
+            pushItem(accessor, root, blockMenu, template, i, transportMode, limitQuantity, availabilityMemo);
+
+            if (!root.allowAccessOutput(accessor)) {
+                break;
+            }
+        }
+    }
+
     @Deprecated
     public static void pushItem(
         @NotNull NetworkRoot root,
