@@ -118,7 +118,7 @@ public class NetworkNode {
                 probeLocation.setY(baseY + face.getModY());
                 probeLocation.setZ(baseZ + face.getModZ());
 
-                final NodeDefinition testDefinition = NetworkStorage.getNode(probeLocation);
+                final NodeDefinition testDefinition = NetworkStorage.getTopologyNode(probeLocation);
 
                 if (testDefinition == null) {
                     continue;
