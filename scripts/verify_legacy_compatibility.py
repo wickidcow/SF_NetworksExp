@@ -705,6 +705,11 @@ require("final Location probeLocation = baseLocation.clone();" in network_node
 require("testDefinition.setNode(networkNode);" in network_node
         and "NetworkStorage.registerNode(testLocation, testDefinition);" not in network_node,
         "full topology discovery must not re-register definitions already returned by NetworkStorage")
+require("public static @Nullable NodeDefinition getTopologyNode" in network_storage
+        and "ALL_NETWORK_OBJECTS.get(lookupKey(location))" in network_storage
+        and "NetworkStorage.getTopologyNode(probeLocation)" in network_node
+        and "NetworkStorage.getNode(probeLocation)" not in network_node,
+        "full topology discovery must use the registry-only neighbour lookup")
 require("public void invalidateRootItems()" in network_root
         and "invalidateRootItems();" in network_root
         and "this.rootPower = Math.max(0L, this.rootPower - toRemove)" in network_root,
