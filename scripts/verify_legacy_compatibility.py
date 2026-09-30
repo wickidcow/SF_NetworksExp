@@ -723,7 +723,7 @@ require("class PushAvailabilityMemo" in line_operation_util
         and "PUSH_SOURCE_MISSES.increment()" in line_operation_util
         and "PUSH_SOURCE_MISS_SKIPS.increment()" in line_operation_util
         and "PUSH_REQUEST_REUSES.increment()" in line_operation_util
-        and "new LineOperationUtil.PushAvailabilityMemo(templates.length)" in abstract_transfer,
+        and "new LineOperationUtil.PushAvailabilityMemo(templates.length)" in abstract_transfer
         and "ItemStack @NotNull [] templates" in line_operation_util
         and "for (int i = 0; i < templates.length; i++)" in line_operation_util,
         "line-transfer push passes must memo source misses, reuse requests and keep array-backed templates")
