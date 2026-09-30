@@ -305,7 +305,7 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
         }
 
         final LineOperationUtil.PushAvailabilityMemo availabilityMemo =
-            new LineOperationUtil.PushAvailabilityMemo(templates.length);
+            createPushAvailabilityMemo(templates.length, true);
         final LinePassCache linePass = runLineOperation(
             blockMenu,
             direction,
@@ -367,7 +367,7 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
         }
 
         final LineOperationUtil.PushAvailabilityMemo availabilityMemo =
-            new LineOperationUtil.PushAvailabilityMemo(templates.length);
+            createPushAvailabilityMemo(templates.length, false);
         LineOperationUtil.doVanillaOperation(
             blockMenu.getLocation(),
             direction,
@@ -408,6 +408,18 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
                 limitQuantity));
 
         root.removeRootPower(config.defaultRequiredPower);
+    }
+
+    private @Nullable LineOperationUtil.PushAvailabilityMemo createPushAvailabilityMemo(
+        int templateCount,
+        boolean budgetedLine) {
+        if (config.maxDistance <= 1) {
+            return null;
+        }
+        if (budgetedLine && config.maxTargetsPerTick == 1) {
+            return null;
+        }
+        return new LineOperationUtil.PushAvailabilityMemo(templateCount);
     }
 
     private ItemStack @Nullable [] collectTemplates(@NotNull BlockMenu blockMenu) {
