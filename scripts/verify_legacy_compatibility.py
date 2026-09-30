@@ -695,6 +695,19 @@ require("candidate = cachedRoot;" in network_controller
         and "root.invalidateRootItems()" in network_controller
         and "root.setRootPower(livePower)" in network_controller,
         "stable Network Controller ticks must reuse topology while refreshing dynamic root state")
+require("FULL_TOPOLOGY_REBUILD_NANOS" in network_controller
+        and "MAX_FULL_TOPOLOGY_REBUILD_NANOS" in network_controller
+        and "MAX_FULL_TOPOLOGY_REBUILD_NODES" in network_controller
+        and "rebuildStartedNanos = System.nanoTime()" in network_controller
+        and "getFullTopologyRebuildAverageNanos()" in network_controller
+        and "getFullTopologyRebuildMaxNanos()" in network_controller
+        and "getFullTopologyRebuildMaxNodes()" in network_controller,
+        "controller full-rebuild timing telemetry is missing")
+require("stable reuses=" in doctor
+        and "avg rebuild=" in doctor
+        and "max rebuild=" in doctor
+        and "max rebuilt nodes=" in doctor,
+        "Networks Doctor controller rebuild timing telemetry is missing")
 require("final Location probeLocation = baseLocation.clone();" in network_node
         and "probeLocation.setX(baseX + face.getModX())" in network_node
         and "probeLocation.setY(baseY + face.getModY())" in network_node

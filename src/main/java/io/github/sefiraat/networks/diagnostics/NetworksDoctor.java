@@ -403,6 +403,10 @@ public final class NetworksDoctor {
 
     private static void addPerformanceDetails(@NotNull List<String> details) {
         details.add("Topology performance: full rebuilds=" + NetworkController.getFullTopologyRebuildCount()
+            + ", stable reuses=" + NetworkController.getStableRootReuseCount()
+            + ", avg rebuild=" + (NetworkController.getFullTopologyRebuildAverageNanos() / 1_000L) + "us"
+            + ", max rebuild=" + (NetworkController.getFullTopologyRebuildMaxNanos() / 1_000L) + "us"
+            + ", max rebuilt nodes=" + NetworkController.getFullTopologyRebuildMaxNodes()
             + ", cached copies=" + NetworkController.getCachedTopologyCopyCount()
             + ", cache fallbacks=" + NetworkController.getCachedTopologyFallbackCount()
             + ", dirty controllers=" + NetworkController.getDirtyControllerCount());
