@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.46
+
+### Machine ticking and transport performance
+
+- Reuses confirmed missing-source results and item requests within one multi-target push pass; limiter denials and zero-quantity requests never become network-wide missing-item results.
+- Stops ordinary and specified-quantity grab scans when the existing input limiter activates, avoiding remaining inventory reads and stack clones. VOID mode retains its intentional discard behavior.
+- Skips grab-slot discovery for the three push-only transport modes, without changing line traversal, cursor rotation, power charges, or configured tick intervals.
+- Keeps line templates array-backed, allocates no template arrays for empty transfer machines, avoids cursor-index arrays for ordinary transfers, and avoids push-memo overhead for single-target transfers.
+- Reduces controller discovery allocations, repeated chunk checks, and redundant registry updates; Doctor reports topology rebuild timing and push-memo counters.
+- Keeps the public debug-subscription map authoritative, removes empty watcher entries, and skips feedback work when nobody is subscribed. This avoids stale subscriptions from a separate reverse index.
+- Adds behavioral regression coverage for transfer limits, limiter recovery, partial progress, VOID mode, and pass-local source misses. Item IDs, recipes, storage formats, routing order, and machine throughput remain unchanged.
+
 ## 1.0.45
 
 ### Cross-core API hardening and deprecation cleanup

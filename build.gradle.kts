@@ -4,7 +4,8 @@ plugins {
 }
 
 group = "com.wickidcow.networks"
-version = "1.0.45"
+version = "1.0.46"
+val pluginVersion = version.toString()
 
 // Compatibility verifier markers only; these are not project versions or output filenames.
 // version = "2.1.112-Legacy-1.0"
@@ -56,6 +57,13 @@ configurations.configureEach {
     exclude(group = "io.github.thebusybiscuit", module = "Slimefun4")
 }
 
+// Exercise real transfer methods with mocked server boundaries. Optional APIs stay test-only;
+// they are never bundled in the universal plugin JAR.
+configurations.testImplementation {
+    extendsFrom(configurations.compileOnly.get())
+}
+val mockitoAgent = configurations.create("mockitoAgent")
+
 repositories {
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/")
@@ -102,6 +110,8 @@ dependencies {
     testAnnotationProcessor("org.projectlombok:lombok:1.18.46")
     testImplementation(platform("org.junit:junit-bom:5.14.1"))
     testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation("org.mockito:mockito-core:5.18.0")
+    mockitoAgent("org.mockito:mockito-core:5.18.0") { isTransitive = false }
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     compileOnly("com.github.SlimefunGuguProject:InfinityExpansion:3c5db3650a")
     compileOnly("com.github.Sefiraat:Netheopoiesis:8d1af6c570")
@@ -141,9 +151,14 @@ tasks {
         }
     }
     processResources {
-        filesMatching("plugin.yml") { expand(project.properties) }
+        inputs.property("pluginVersion", pluginVersion)
+        filesMatching("plugin.yml") { expand(mapOf("version" to pluginVersion)) }
     }
-    test { useJUnitPlatform() }
+    test {
+        useJUnitPlatform()
+        // Explicit startup instrumentation also works on JDKs that disallow dynamic self-attach.
+        jvmArgs("-javaagent:${mockitoAgent.asPath}")
+    }
     shadowJar {
         archiveClassifier.set("")
         archiveFileName.set("SF_Networks${project.version}.jar")

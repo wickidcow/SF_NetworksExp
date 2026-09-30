@@ -34,7 +34,6 @@ import org.jetbrains.annotations.Nullable;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -298,13 +297,15 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
             return null;
         }
 
-        final List<ItemStack> templates = collectTemplates(blockMenu);
+        final ItemStack[] templates = collectTemplates(blockMenu);
         if (templates == null) {
             PUSH_LINE_CURSOR_MAP.remove(blockMenu.getLocation());
             finishPushAttempt(blockMenu, root);
             return null;
         }
 
+        final LineOperationUtil.PushAvailabilityMemo availabilityMemo =
+            createPushAvailabilityMemo(templates.length, true);
         final LinePassCache linePass = runLineOperation(
             blockMenu,
             direction,
@@ -312,7 +313,13 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
             null,
             captureLinePass,
             (targetMenu) -> LineOperationUtil.pushItem(
-                targetMenu.getLocation(), root, targetMenu, templates, mode, limitQuantity));
+                targetMenu.getLocation(),
+                root,
+                targetMenu,
+                templates,
+                mode,
+                limitQuantity,
+                availabilityMemo));
 
         finishPushAttempt(blockMenu, root);
         return linePass;
@@ -353,12 +360,14 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
             return;
         }
 
-        final List<ItemStack> templates = collectTemplates(blockMenu);
+        final ItemStack[] templates = collectTemplates(blockMenu);
         if (templates == null) {
             finishPushAttempt(blockMenu, root);
             return;
         }
 
+        final LineOperationUtil.PushAvailabilityMemo availabilityMemo =
+            createPushAvailabilityMemo(templates.length, false);
         LineOperationUtil.doVanillaOperation(
             blockMenu.getLocation(),
             direction,
@@ -371,7 +380,8 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
                 menu,
                 templates,
                 mode,
-                limitQuantity));
+                limitQuantity,
+                availabilityMemo));
 
         finishPushAttempt(blockMenu, root);
     }
@@ -400,10 +410,23 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
         root.removeRootPower(config.defaultRequiredPower);
     }
 
-    private @Nullable List<ItemStack> collectTemplates(@NotNull BlockMenu blockMenu) {
+    private @Nullable LineOperationUtil.PushAvailabilityMemo createPushAvailabilityMemo(
+        int templateCount,
+        boolean budgetedLine) {
+        if (config.maxDistance <= 1) {
+            return null;
+        }
+        if (budgetedLine && config.maxTargetsPerTick == 1) {
+            return null;
+        }
+        return new LineOperationUtil.PushAvailabilityMemo(templateCount);
+    }
+
+    ItemStack @Nullable [] collectTemplates(@NotNull BlockMenu blockMenu) {
         final int[] slots = getItemSlots();
-        final ItemStack[] templates = new ItemStack[slots.length];
-        final int[] activeIndexes = new int[slots.length];
+        ItemStack[] templates = null;
+        int[] activeIndexes = null;
+        final boolean mayRotate = this instanceof PushTickOnly && slots.length > MAX_PUSH_TEMPLATES_PER_TICK;
         int activeCount = 0;
 
         /*
@@ -412,9 +435,19 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
          */
         for (int index = 0; index < slots.length; index++) {
             final ItemStack template = blockMenu.getItemInSlot(slots[index]);
-            templates[index] = template;
             if (template != null && template.getType() != Material.AIR) {
-                activeIndexes[activeCount++] = index;
+                // Empty machines allocate neither array; ordinary machines never need cursor indexes.
+                if (templates == null) {
+                    templates = new ItemStack[slots.length];
+                }
+                templates[index] = template;
+                if (mayRotate) {
+                    if (activeIndexes == null) {
+                        activeIndexes = new int[slots.length];
+                    }
+                    activeIndexes[activeCount] = index;
+                }
+                activeCount++;
             }
         }
 
@@ -428,8 +461,8 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
          * every target in a 32/64-block line multiplies expensive item-aware slot checks. Rotate four slot
          * positions per transfer tick instead. Null placeholders retain the original indexes for P2P mode.
          */
-        if (!(this instanceof PushTickOnly) || activeCount <= MAX_PUSH_TEMPLATES_PER_TICK) {
-            return Arrays.asList(templates);
+        if (!mayRotate || activeCount <= MAX_PUSH_TEMPLATES_PER_TICK) {
+            return templates;
         }
 
         final Location location = blockMenu.getLocation();
@@ -443,7 +476,7 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
         }
 
         putCursorValue(PUSH_TEMPLATE_CURSOR_MAP, location, (start + budget) % activeCount);
-        return Arrays.asList(scheduled);
+        return scheduled;
     }
 
     private void finishPushAttempt(@NotNull BlockMenu blockMenu, @NotNull NetworkRoot root) {

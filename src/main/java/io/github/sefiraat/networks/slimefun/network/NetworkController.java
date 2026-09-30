@@ -41,6 +41,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.logging.Level;
 
@@ -62,6 +63,9 @@ public class NetworkController extends NetworkObject {
     private static final Map<Location, Boolean> INITIALIZED_CONTROLLERS = new ConcurrentHashMap<>();
     private static final Set<Location> DIRTY_CONTROLLERS = ConcurrentHashMap.newKeySet();
     private static final LongAdder FULL_TOPOLOGY_REBUILDS = new LongAdder();
+    private static final LongAdder FULL_TOPOLOGY_REBUILD_NANOS = new LongAdder();
+    private static final AtomicLong MAX_FULL_TOPOLOGY_REBUILD_NANOS = new AtomicLong();
+    private static final AtomicLong MAX_FULL_TOPOLOGY_REBUILD_NODES = new AtomicLong();
     private static final LongAdder CACHED_TOPOLOGY_COPIES = new LongAdder();
     private static final LongAdder CACHED_TOPOLOGY_FALLBACKS = new LongAdder();
     private static final LongAdder STABLE_ROOT_REUSES = new LongAdder();
@@ -135,6 +139,7 @@ public class NetworkController extends NetworkObject {
                         refreshStableRoot(candidate, location);
                         STABLE_ROOT_REUSES.increment();
                     } else {
+                        final long rebuildStartedNanos = System.nanoTime();
                         candidate = new NetworkRoot(
                             location,
                             NodeType.CONTROLLER,
@@ -142,7 +147,11 @@ public class NetworkController extends NetworkObject {
                             recordFlow.getOrDefault(location, false),
                             records.get(location));
                         candidate.addAllChildren();
+                        final long rebuildNanos = Math.max(0L, System.nanoTime() - rebuildStartedNanos);
                         FULL_TOPOLOGY_REBUILDS.increment();
+                        FULL_TOPOLOGY_REBUILD_NANOS.add(rebuildNanos);
+                        MAX_FULL_TOPOLOGY_REBUILD_NANOS.accumulateAndGet(rebuildNanos, Math::max);
+                        MAX_FULL_TOPOLOGY_REBUILD_NODES.accumulateAndGet(candidate.getNodeCount(), Math::max);
                         candidate.setDisplayParticles(CRAYONS.contains(location));
 
                         NetworkRoot previous = NETWORKS.put(location, candidate);
@@ -259,6 +268,9 @@ public class NetworkController extends NetworkObject {
         INITIALIZED_CONTROLLERS.clear();
         DIRTY_CONTROLLERS.clear();
         FULL_TOPOLOGY_REBUILDS.reset();
+        FULL_TOPOLOGY_REBUILD_NANOS.reset();
+        MAX_FULL_TOPOLOGY_REBUILD_NANOS.set(0L);
+        MAX_FULL_TOPOLOGY_REBUILD_NODES.set(0L);
         CACHED_TOPOLOGY_COPIES.reset();
         CACHED_TOPOLOGY_FALLBACKS.reset();
         STABLE_ROOT_REUSES.reset();
@@ -287,6 +299,23 @@ public class NetworkController extends NetworkObject {
 
     public static long getFullTopologyRebuildCount() {
         return FULL_TOPOLOGY_REBUILDS.sum();
+    }
+
+    public static long getFullTopologyRebuildTotalNanos() {
+        return FULL_TOPOLOGY_REBUILD_NANOS.sum();
+    }
+
+    public static long getFullTopologyRebuildAverageNanos() {
+        final long rebuilds = FULL_TOPOLOGY_REBUILDS.sum();
+        return rebuilds <= 0L ? 0L : FULL_TOPOLOGY_REBUILD_NANOS.sum() / rebuilds;
+    }
+
+    public static long getFullTopologyRebuildMaxNanos() {
+        return MAX_FULL_TOPOLOGY_REBUILD_NANOS.get();
+    }
+
+    public static long getFullTopologyRebuildMaxNodes() {
+        return MAX_FULL_TOPOLOGY_REBUILD_NODES.get();
     }
 
     public static long getCachedTopologyCopyCount() {

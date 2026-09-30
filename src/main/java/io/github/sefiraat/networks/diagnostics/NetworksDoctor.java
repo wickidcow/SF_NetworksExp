@@ -1,5 +1,7 @@
 package io.github.sefiraat.networks.diagnostics;
 
+import com.balugaq.netex.utils.LineOperationUtil;
+
 import com.balugaq.netex.api.data.StorageUnitData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
@@ -401,6 +403,10 @@ public final class NetworksDoctor {
 
     private static void addPerformanceDetails(@NotNull List<String> details) {
         details.add("Topology performance: full rebuilds=" + NetworkController.getFullTopologyRebuildCount()
+            + ", stable reuses=" + NetworkController.getStableRootReuseCount()
+            + ", avg rebuild=" + (NetworkController.getFullTopologyRebuildAverageNanos() / 1_000L) + "us"
+            + ", max rebuild=" + (NetworkController.getFullTopologyRebuildMaxNanos() / 1_000L) + "us"
+            + ", max rebuilt nodes=" + NetworkController.getFullTopologyRebuildMaxNodes()
             + ", cached copies=" + NetworkController.getCachedTopologyCopyCount()
             + ", cache fallbacks=" + NetworkController.getCachedTopologyFallbackCount()
             + ", dirty controllers=" + NetworkController.getDirtyControllerCount());
@@ -415,6 +421,9 @@ public final class NetworksDoctor {
             + ", coalesced=" + TopologyDirtyQueue.getCoalescedCount()
             + ", flushed=" + TopologyDirtyQueue.getFlushedCount()
             + ", window=" + TopologyDirtyQueue.getDebounceSfTicks() + " SF tick(s)");
+        details.add("Line transfer push memo: source misses=" + LineOperationUtil.getPushSourceMissCount()
+            + ", template-target checks skipped=" + LineOperationUtil.getPushSourceMissSkipCount()
+            + ", ItemRequest reuses=" + LineOperationUtil.getPushRequestReuseCount());
     }
 
     private static boolean isLoaded(@NotNull Location location) {
