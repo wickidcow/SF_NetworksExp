@@ -5,6 +5,7 @@ import com.balugaq.netex.api.helpers.Icon;
 import com.balugaq.netex.api.interfaces.SoftCellBannable;
 import com.balugaq.netex.utils.BlockMenuUtil;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
+import io.github.bakedlibs.dough.items.CustomItemStack;
 import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
@@ -13,7 +14,9 @@ import io.github.sefiraat.networks.slimefun.network.NetworkDirectional;
 import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.sefiraat.networks.utils.StackUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
+import io.github.thebusybiscuit.slimefun4.api.items.ItemSetting;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
+import io.github.thebusybiscuit.slimefun4.api.items.settings.IntRangeSetting;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import java.util.ArrayList;
 import java.util.List;
@@ -54,6 +57,9 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
     private static final Map<PushRequestKey, FailureBackoff> FAILED_REQUEST_BACKOFF = new ConcurrentHashMap<>();
     private static final AtomicInteger BACKOFF_PRUNE_COUNTER = new AtomicInteger();
 
+    private static final String RECIPE_AWARE_KEY = "recipe-aware";
+    private static final int DEFAULT_RECIPE_BUFFER_BATCHES = 8;
+
     private static final int NORTH_SLOT = 11;
     private static final int SOUTH_SLOT = 29;
     private static final int EAST_SLOT = 21;
@@ -61,12 +67,17 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
     private static final int UP_SLOT = 14;
     private static final int DOWN_SLOT = 32;
 
+    private final @NotNull ItemSetting<Integer> recipeBufferBatches;
+
     public AbstractNetworkPusher(
         @NotNull ItemGroup itemGroup,
         @NotNull SlimefunItemStack item,
         @NotNull RecipeType recipeType,
         ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe, NodeType.PUSHER);
+        this.recipeBufferBatches =
+            new IntRangeSetting(this, "recipe_buffer_batches", DEFAULT_RECIPE_BUFFER_BATCHES, 1, 64);
+        addItemSetting(this.recipeBufferBatches);
         for (int slot : getItemSlots()) {
             this.getSlotsToDrop().add(slot);
         }
@@ -76,8 +87,54 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
     protected void onTick(@Nullable BlockMenu blockMenu, @NotNull Block block) {
         super.onTick(blockMenu, block);
         if (blockMenu != null) {
+            updateRecipeAwareControl(blockMenu);
             tryPushItem(blockMenu);
         }
+    }
+
+    private void updateRecipeAwareControl(@NotNull BlockMenu blockMenu) {
+        if (!blockMenu.hasViewer()) {
+            return;
+        }
+
+        final int modeSlot = getRecipeAwareModeSlot();
+        if (modeSlot < 0) {
+            return;
+        }
+
+        final boolean enabled = isRecipeAware(blockMenu);
+        blockMenu.replaceExistingItem(modeSlot, createRecipeAwareModeStack(enabled));
+        blockMenu.addMenuClickHandler(modeSlot, (player, slot, itemStack, clickAction) -> {
+            final boolean next = !isRecipeAware(blockMenu);
+            StorageCacheUtils.setData(blockMenu.getLocation(), RECIPE_AWARE_KEY, Boolean.toString(next));
+            clearBackoffForSource(blockMenu.getLocation());
+            blockMenu.replaceExistingItem(modeSlot, createRecipeAwareModeStack(next));
+            return false;
+        });
+    }
+
+    private int getRecipeAwareModeSlot() {
+        final int[] slots = getOtherBackgroundSlots();
+        return slots == null || slots.length == 0 ? -1 : slots[0];
+    }
+
+    private @NotNull ItemStack createRecipeAwareModeStack(boolean enabled) {
+        final int bufferedBatches = recipeBufferBatches.getValue();
+        return new CustomItemStack(
+            enabled ? Material.CRAFTING_TABLE : Material.HOPPER,
+            enabled ? "&aRecipe-Aware Mode: ON" : "&7Recipe-Aware Mode: OFF",
+            "",
+            "&fOFF: template items use normal pusher behavior.",
+            "&fON: duplicate template slots and template stack amounts",
+            "&fdefine the ingredient quantities for one recipe.",
+            "&fThe pusher keeps up to &b" + bufferedBatches + " &frecipe batches",
+            "&fbuffered in the target's valid input slots.",
+            "",
+            "&eClick to toggle.");
+    }
+
+    private static boolean isRecipeAware(@NotNull BlockMenu blockMenu) {
+        return Boolean.parseBoolean(StorageCacheUtils.getData(blockMenu.getLocation(), RECIPE_AWARE_KEY));
     }
 
     private void tryPushItem(@NotNull BlockMenu blockMenu) {
@@ -108,7 +165,8 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
             return;
         }
 
-        final List<PushRequest> requests = collectPushRequests(blockMenu);
+        final boolean recipeAware = isRecipeAware(blockMenu);
+        final List<PushRequest> requests = collectPushRequests(blockMenu, recipeAware);
         if (requests.isEmpty()) {
             return;
         }
@@ -153,12 +211,31 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
                 continue;
             }
 
+            final int transferAmount;
+            if (recipeAware) {
+                final int existing = countMatchingItems(targetMenu, template, slots);
+                final int insertCapacity =
+                    NetworkTransferUtils.getMenuInsertCapacity(targetMenu, template, slots);
+                transferAmount = RecipeAwarePusherPlanner.calculateTransferAmount(
+                    request.amount,
+                    recipeBufferBatches.getValue(),
+                    existing,
+                    insertCapacity);
+
+                if (transferAmount <= 0) {
+                    FAILED_REQUEST_BACKOFF.remove(requestKey);
+                    continue;
+                }
+            } else {
+                transferAmount = request.amount;
+            }
+
             final int moved = NetworkTransferUtils.moveNetworkItemIntoMenu(
                 root,
                 blockMenu.getLocation(),
                 targetMenu,
                 template,
-                request.amount,
+                transferAmount,
                 slots);
 
             if (moved > 0) {
@@ -187,7 +264,9 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
      * Builds one request per unique template item. Repeated template slots keep their original aggregate
      * transfer allowance while avoiding duplicate destination-routing and network-withdrawal calls.
      */
-    private @NotNull List<PushRequest> collectPushRequests(@NotNull BlockMenu blockMenu) {
+    private @NotNull List<PushRequest> collectPushRequests(
+        @NotNull BlockMenu blockMenu,
+        boolean recipeAware) {
         final int[] itemSlots = getItemSlots();
         final List<PushRequest> requests = new ArrayList<>(itemSlots.length);
 
@@ -202,25 +281,64 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
                 continue;
             }
 
+            final int configuredAmount = recipeAware
+                ? Math.max(1, testItem.getAmount())
+                : Math.max(1, testItem.getMaxStackSize());
             final ItemStack template = testItem.clone();
             template.setAmount(1);
-            final int perSlotLimit = Math.max(1, template.getMaxStackSize());
 
             boolean merged = false;
             for (PushRequest existing : requests) {
                 if (StackUtils.itemsMatch(existing.template, template)) {
-                    existing.amount = saturatingAdd(existing.amount, perSlotLimit);
+                    existing.amount = saturatingAdd(existing.amount, configuredAmount);
                     merged = true;
                     break;
                 }
             }
 
             if (!merged) {
-                requests.add(new PushRequest(template, perSlotLimit));
+                requests.add(new PushRequest(template, configuredAmount));
             }
         }
 
         return requests;
+    }
+
+    private static int countMatchingItems(
+        @NotNull BlockMenu targetMenu,
+        @NotNull ItemStack template,
+        int @NotNull [] slots) {
+        long count = 0L;
+        for (int slot : slots) {
+            if (slot < 0 || slot >= targetMenu.getSize()) {
+                continue;
+            }
+
+            final ItemStack existing = targetMenu.getItemInSlot(slot);
+            if (existing == null || existing.getType() == Material.AIR) {
+                continue;
+            }
+
+            if (StackUtils.itemsMatch(template, existing)) {
+                count += existing.getAmount();
+                if (count >= Integer.MAX_VALUE) {
+                    return Integer.MAX_VALUE;
+                }
+            }
+        }
+        return (int) count;
+    }
+
+    private static void clearBackoffForSource(@NotNull org.bukkit.Location location) {
+        final UUID worldId = location.getWorld().getUID();
+        final int x = location.getBlockX();
+        final int y = location.getBlockY();
+        final int z = location.getBlockZ();
+        FAILED_REQUEST_BACKOFF.keySet().removeIf(key ->
+            key.worldId().equals(worldId)
+                && key.sourceX() == x
+                && key.sourceY() == y
+                && key.sourceZ() == z);
     }
 
     private static @NotNull PushRequestKey createRequestKey(
