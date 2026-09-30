@@ -261,8 +261,9 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
     }
 
     /**
-     * Builds one request per unique template item. Repeated template slots keep their original aggregate
-     * transfer allowance while avoiding duplicate destination-routing and network-withdrawal calls.
+     * Builds one request per unique template item. Normal mode preserves the historic per-template
+     * stack transfer allowance. Recipe-aware mode instead treats duplicate template slots and each
+     * template stack amount as the ingredient quantity for one recipe batch.
      */
     private @NotNull List<PushRequest> collectPushRequests(
         @NotNull BlockMenu blockMenu,
