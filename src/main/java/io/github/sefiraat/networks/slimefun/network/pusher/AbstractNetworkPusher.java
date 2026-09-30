@@ -282,7 +282,7 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
                 continue;
             }
 
-            final int configuredAmount = recipeAware
+            final int perSlotLimit = recipeAware
                 ? Math.max(1, testItem.getAmount())
                 : Math.max(1, testItem.getMaxStackSize());
             final ItemStack template = testItem.clone();
@@ -291,14 +291,14 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
             boolean merged = false;
             for (PushRequest existing : requests) {
                 if (StackUtils.itemsMatch(existing.template, template)) {
-                    existing.amount = saturatingAdd(existing.amount, configuredAmount);
+                    existing.amount = saturatingAdd(existing.amount, perSlotLimit);
                     merged = true;
                     break;
                 }
             }
 
             if (!merged) {
-                requests.add(new PushRequest(template, configuredAmount));
+                requests.add(new PushRequest(template, perSlotLimit));
             }
         }
 
