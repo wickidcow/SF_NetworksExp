@@ -14,38 +14,48 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public interface FeedbackSendable {
+    /**
+     * The authoritative public subscription map. Existing integrations can mutate this map and
+     * its location sets directly, so feedback must not depend on a separate unsynchronized index.
+     */
     Map<UUID, Set<Location>> SUBSCRIBED_LOCATIONS = new ConcurrentHashMap<>();
 
-    static void subscribe(@NotNull Player player, Location location) {
-        UUID key = player.getUniqueId();
-        if (!SUBSCRIBED_LOCATIONS.containsKey(key)) {
-            SUBSCRIBED_LOCATIONS.put(key, ConcurrentHashMap.newKeySet());
-        }
-        SUBSCRIBED_LOCATIONS.get(key).add(location);
+    static void subscribe(@NotNull Player player, @NotNull Location location) {
+        final UUID key = player.getUniqueId();
+        SUBSCRIBED_LOCATIONS.compute(key, (ignored, locations) -> {
+            if (locations == null) {
+                locations = ConcurrentHashMap.newKeySet();
+            }
+            locations.add(location);
+            return locations;
+        });
     }
 
-    static void unsubscribe(@NotNull Player player, Location location) {
-        UUID key = player.getUniqueId();
-        if (SUBSCRIBED_LOCATIONS.containsKey(key)) {
-            SUBSCRIBED_LOCATIONS.get(key).remove(location);
-        }
+    static void unsubscribe(@NotNull Player player, @NotNull Location location) {
+        final UUID key = player.getUniqueId();
+        SUBSCRIBED_LOCATIONS.computeIfPresent(key, (ignored, locations) -> {
+            locations.remove(location);
+            return locations.isEmpty() ? null : locations;
+        });
     }
 
-    static boolean hasSubscribed(@NotNull Player player, Location location) {
-        UUID key = player.getUniqueId();
-        if (SUBSCRIBED_LOCATIONS.containsKey(key)) {
-            return SUBSCRIBED_LOCATIONS.get(key).contains(location);
-        }
-        return false;
+    static boolean hasSubscribed(@NotNull Player player, @NotNull Location location) {
+        final Set<Location> locations = SUBSCRIBED_LOCATIONS.get(player.getUniqueId());
+        return locations != null && locations.contains(location);
     }
 
     static void sendFeedback0(@NotNull Location location, @NotNull FeedbackType type) {
-        for (UUID uuid : SUBSCRIBED_LOCATIONS.keySet()) {
-            if (SUBSCRIBED_LOCATIONS.get(uuid).contains(location)) {
-                Player player = Bukkit.getServer().getPlayer(uuid);
-                if (player != null) {
-                    sendFeedback0(player, location, type.getMessage());
-                }
+        if (SUBSCRIBED_LOCATIONS.isEmpty()) {
+            return;
+        }
+
+        for (Map.Entry<UUID, Set<Location>> entry : SUBSCRIBED_LOCATIONS.entrySet()) {
+            if (!entry.getValue().contains(location)) {
+                continue;
+            }
+            Player player = Bukkit.getServer().getPlayer(entry.getKey());
+            if (player != null) {
+                sendFeedback0(player, location, type.getMessage());
             }
         }
     }
@@ -56,12 +66,17 @@ public interface FeedbackSendable {
     }
 
     default void sendFeedback(@NotNull Location location, @NotNull FeedbackType type) {
-        for (UUID uuid : SUBSCRIBED_LOCATIONS.keySet()) {
-            if (SUBSCRIBED_LOCATIONS.get(uuid).contains(location)) {
-                Player player = Bukkit.getServer().getPlayer(uuid);
-                if (player != null) {
-                    sendFeedback(player, location, type.getMessage());
-                }
+        if (SUBSCRIBED_LOCATIONS.isEmpty()) {
+            return;
+        }
+
+        for (Map.Entry<UUID, Set<Location>> entry : SUBSCRIBED_LOCATIONS.entrySet()) {
+            if (!entry.getValue().contains(location)) {
+                continue;
+            }
+            Player player = Bukkit.getServer().getPlayer(entry.getKey());
+            if (player != null) {
+                sendFeedback(player, location, type.getMessage());
             }
         }
     }

@@ -89,6 +89,7 @@ vanilla_pusher = read("src/main/java/io/github/sefiraat/networks/slimefun/networ
 vanilla_grabber = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkVanillaGrabber.java")
 network_remote = read("src/main/java/io/github/sefiraat/networks/slimefun/tools/NetworkRemote.java")
 network_root = read("src/main/java/io/github/sefiraat/networks/network/NetworkRoot.java")
+network_node = read("src/main/java/io/github/sefiraat/networks/network/NetworkNode.java")
 quantum_network_storage = read("src/main/java/io/github/sefiraat/networks/network/barrel/NetworkStorage.java")
 network_pusher = read("src/main/java/io/github/sefiraat/networks/slimefun/network/pusher/AbstractNetworkPusher.java")
 readme = read("README.md")
@@ -112,6 +113,7 @@ localization_service = read("src/main/java/com/ytdd9527/networksexpansion/core/s
 network_object = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkObject.java")
 network_directional = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkDirectional.java")
 advanced_directional = read("src/main/java/com/ytdd9527/networksexpansion/core/items/machines/AdvancedDirectional.java")
+feedback_sendable = read("src/main/java/com/balugaq/netex/api/interfaces/FeedbackSendable.java")
 universal_verifier = read("scripts/verify_universal_jar.py")
 transfer_utils = read("src/main/java/io/github/sefiraat/networks/utils/NetworkTransferUtils.java")
 transfer_audit = read("src/main/java/io/github/sefiraat/networks/utils/TransferAudit.java")
@@ -233,13 +235,13 @@ require("extends RecipeChoice.ExactChoice" not in simple_recipe_choice,
         "SimpleRecipeChoice still extends final RecipeChoice.ExactChoice")
 require("implements RecipeChoice" in simple_recipe_choice, "SimpleRecipeChoice no longer implements RecipeChoice")
 # Public release metadata must move as one unit so JAR/plugin/workflow versions cannot drift.
-require('version = "1.0.45"' in build, "Gradle public version must remain 1.0.45")
-require('VERSION: "1.0.45"' in build_workflow
-        and 'OUTPUT_NAME: "SF_Networks1.0.45.jar"' in build_workflow,
-        "release workflow public version/JAR name must remain 1.0.45")
-require('VERSION: "1.0.45"' in compatibility_workflow
-        and 'OUTPUT_NAME: "SF_Networks1.0.45.jar"' in compatibility_workflow,
-        "compatibility workflow public version/JAR name must remain 1.0.45")
+require('version = "1.0.46"' in build, "Gradle public version must remain 1.0.46")
+require('VERSION: "1.0.46"' in build_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.46.jar"' in build_workflow,
+        "release workflow public version/JAR name must remain 1.0.46")
+require('VERSION: "1.0.46"' in compatibility_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.46.jar"' in compatibility_workflow,
+        "compatibility workflow public version/JAR name must remain 1.0.46")
 require("actions/upload-artifact@v7" in compatibility_workflow
         and "name: slimefun-legacy-core" in compatibility_workflow
         and "Slimefun-Legacy-Core.jar" in compatibility_workflow,
@@ -321,6 +323,13 @@ for forbidden in [
 ]:
     require(forbidden not in java_sources, f"unsafe Bukkit asynchronous scheduling remains: {forbidden}")
 require("useSynchronizedMachineTickers()" in java_sources, "machine ticker synchronization bridge is missing")
+require(feedback_sendable.count("SUBSCRIBED_LOCATIONS.isEmpty()") == 2
+        and feedback_sendable.count("SUBSCRIBED_LOCATIONS.entrySet()") == 2
+        and "SUBSCRIBERS_BY_LOCATION" not in feedback_sendable
+        and "SUBSCRIBED_LOCATIONS.computeIfPresent" in feedback_sendable
+        and "return locations.isEmpty() ? null : locations;" in feedback_sendable
+        and "for (UUID uuid : SUBSCRIBED_LOCATIONS.keySet())" not in feedback_sendable,
+        "machine feedback must honor public-map mutations, skip empty subscriptions, and release unused entries")
 legacy_getsfitem_files = [
     str(path.relative_to(ROOT))
     for path in (ROOT / "src/main/java").rglob("*.java")
@@ -505,6 +514,8 @@ require("collectMonitorStorageTargets" in network_root
         "Network Monitor automatic adjacent-storage discovery or directional input/output monitor routing is missing")
 require("NetworkTransferUtils.moveNetworkItemIntoMenu" in network_pusher,
         "Network Pusher no longer actively withdraws from the network into an adjacent Slimefun menu")
+require('new IntRangeSetting(this, "recipe_buffer_batches", 1, DEFAULT_RECIPE_BUFFER_BATCHES, 64);' in network_pusher,
+        "Network Pusher recipe_buffer_batches must use IntRangeSetting(min, defaultValue, max) ordering")
 require("targetBlock.getZ(),\n            template);" in network_pusher
         and "targetBlock.getZ(),\n            template.clone());" not in network_pusher,
         "Network Pusher backoff keys must reuse the already-cloned template snapshot")
@@ -515,14 +526,19 @@ require("private @NotNull List<PushRequest> collectPushRequests" in network_push
         and "new LinkedHashMap" not in network_pusher
         and "new ArrayList<>(pushRequests.entrySet())" not in network_pusher,
         "Network Pusher request planning must avoid per-tick map/entry-copy churn")
-require("final ItemStack[] templates = new ItemStack[slots.length]" in abstract_transfer
-        and "final int[] activeIndexes = new int[slots.length]" in abstract_transfer
-        and "return Arrays.asList(templates)" in abstract_transfer
+require("ItemStack[] templates = null" in abstract_transfer
+        and "int[] activeIndexes = null" in abstract_transfer
+        and "ItemStack @Nullable [] collectTemplates" in abstract_transfer
+        and "if (templates == null)" in abstract_transfer
+        and "if (mayRotate)" in abstract_transfer
+        and "return templates;" in abstract_transfer
+        and "return scheduled;" in abstract_transfer
+        and "Arrays.asList(" not in abstract_transfer
         and "putCursorValue(PUSH_TEMPLATE_CURSOR_MAP, location" in abstract_transfer
         and "putCursorValue(cursorMap, location, nextOffset)" in abstract_transfer
         and "new ArrayList<>(Collections.nCopies" not in abstract_transfer
         and "List<Integer> activeIndexes" not in abstract_transfer,
-        "Expansion line-transfer template/cursor hot path must stay allocation-light")
+        "Expansion line-transfer template/cursor hot path must stay array-backed and allocation-light")
 require("record LinePassCache" in abstract_transfer
         and "LinePassCache sharedLinePass = null" in abstract_transfer
         and "capturePushLinePass" in abstract_transfer
@@ -691,6 +707,34 @@ require("candidate = cachedRoot;" in network_controller
         and "root.invalidateRootItems()" in network_controller
         and "root.setRootPower(livePower)" in network_controller,
         "stable Network Controller ticks must reuse topology while refreshing dynamic root state")
+require("FULL_TOPOLOGY_REBUILD_NANOS" in network_controller
+        and "MAX_FULL_TOPOLOGY_REBUILD_NANOS" in network_controller
+        and "MAX_FULL_TOPOLOGY_REBUILD_NODES" in network_controller
+        and "rebuildStartedNanos = System.nanoTime()" in network_controller
+        and "getFullTopologyRebuildAverageNanos()" in network_controller
+        and "getFullTopologyRebuildMaxNanos()" in network_controller
+        and "getFullTopologyRebuildMaxNodes()" in network_controller,
+        "controller full-rebuild timing telemetry is missing")
+require("stable reuses=" in doctor
+        and "avg rebuild=" in doctor
+        and "max rebuild=" in doctor
+        and "max rebuilt nodes=" in doctor,
+        "Networks Doctor controller rebuild timing telemetry is missing")
+require("final Location probeLocation = baseLocation.clone();" in network_node
+        and "probeLocation.setX(baseX + face.getModX())" in network_node
+        and "probeLocation.setY(baseY + face.getModY())" in network_node
+        and "probeLocation.setZ(baseZ + face.getModZ())" in network_node
+        and "final Location testLocation = probeLocation.clone();" in network_node
+        and "currentNode.nodePosition.clone().add(face.getDirection())" not in network_node,
+        "full topology discovery must reuse one neighbour probe Location per visited node")
+require("testDefinition.setNode(networkNode);" in network_node
+        and "NetworkStorage.registerNode(testLocation, testDefinition);" not in network_node,
+        "full topology discovery must not re-register definitions already returned by NetworkStorage")
+require("public static @Nullable NodeDefinition getTopologyNode" in network_storage
+        and "ALL_NETWORK_OBJECTS.get(lookupKey(location))" in network_storage
+        and "NetworkStorage.getTopologyNode(probeLocation)" in network_node
+        and "NetworkStorage.getNode(probeLocation)" not in network_node,
+        "full topology discovery must use the registry-only neighbour lookup")
 require("public void invalidateRootItems()" in network_root
         and "invalidateRootItems();" in network_root
         and "this.rootPower = Math.max(0L, this.rootPower - toRemove)" in network_root,
@@ -700,6 +744,27 @@ require("if (!root.allowAccessInput(accessor))" in line_operation_util
         and "BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW)" in line_operation_util
         and "BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.INSERT, template)" in line_operation_util,
         "line-transfer limiter fast paths are missing")
+require("class PushAvailabilityMemo" in line_operation_util
+        and "sourceUnavailable" in line_operation_util
+        and "ItemRequest[] requests" in line_operation_util
+        and "requestFor(int itemIndex" in line_operation_util
+        and "request.setAmount(template.getMaxStackSize())" in line_operation_util
+        and "requestNetworkItem(root, accessor, itemRequest, itemIndex, availabilityMemo)" in line_operation_util
+        and "PUSH_SOURCE_MISSES.increment()" in line_operation_util
+        and "PUSH_SOURCE_MISS_SKIPS.increment()" in line_operation_util
+        and "PUSH_REQUEST_REUSES.increment()" in line_operation_util
+        and "createPushAvailabilityMemo(templates.length, true)" in abstract_transfer
+        and "createPushAvailabilityMemo(templates.length, false)" in abstract_transfer
+        and "if (config.maxDistance <= 1)" in abstract_transfer
+        and "config.maxTargetsPerTick == 1" in abstract_transfer
+        and "ItemStack @NotNull [] templates" in line_operation_util
+        and "for (int i = 0; i < templates.length; i++)" in line_operation_util,
+        "line-transfer push passes must memo source misses, reuse requests and keep array-backed templates")
+require("Line transfer push memo: source misses=" in doctor
+        and "getPushSourceMissCount()" in doctor
+        and "getPushSourceMissSkipCount()" in doctor
+        and "getPushRequestReuseCount()" in doctor,
+        "Networks Doctor line-transfer push-memo telemetry is missing")
 require("historyLookupKey(accessor)" in network_root
         and "location.getX() == location.getBlockX()" in network_root
         and "return normalizeHistoryLocation(location)" in network_root,
