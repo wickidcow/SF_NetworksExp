@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.wickidcow.networks"
-version = "1.0.46"
+version = "1.0.47"
 val pluginVersion = version.toString()
 
 // Compatibility verifier markers only; these are not project versions or output filenames.
