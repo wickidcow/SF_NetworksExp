@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.47
+
+### Grid selection correctness
+- Includes the last supported sort mode when cycling forward: addon, reverse quantity, and quantity sorting are no longer skipped for their respective mode limits.
+- Refreshes the derived grid view immediately when its filter or sorting choice changes, while retaining cached results for identical choices and ordinary paging.
+- Avoids allocating an enum array on backward sorting wraps without changing backward results.
+- Adds 17 permanent regression tests; preserves item IDs, stored quantities, recipes, machine rates, transfer priorities and quantum-storage category order.
+- Retains test reports alongside the raw installable JAR build.
+
 ## 1.0.46
 
 ### Machine ticking and transport performance

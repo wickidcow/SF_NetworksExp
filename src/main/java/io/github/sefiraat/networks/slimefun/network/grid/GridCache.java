@@ -1,6 +1,7 @@
 package io.github.sefiraat.networks.slimefun.network.grid;
 
 import com.balugaq.netex.utils.Lang;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.inventory.ItemStack;
@@ -11,6 +12,7 @@ import org.jetbrains.annotations.Range;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Getter
 @Setter
@@ -31,9 +33,11 @@ public class GridCache {
     private DisplayMode displayMode;
 
     @NotNull
+    @Setter(AccessLevel.NONE)
     private SortOrder sortOrder;
 
     @Nullable
+    @Setter(AccessLevel.NONE)
     private String filter;
 
     @Nullable
@@ -44,6 +48,21 @@ public class GridCache {
         this.maxPages = maxPages;
         this.sortOrder = sortOrder;
         this.displayMode = DisplayMode.DISPLAY;
+    }
+
+    public void setSortOrder(@NotNull SortOrder sortOrder) {
+        Objects.requireNonNull(sortOrder, "sortOrder is marked non-null but is null");
+        if (this.sortOrder != sortOrder) {
+            this.sortOrder = sortOrder;
+            this.entriesCache = null;
+        }
+    }
+
+    public void setFilter(@Nullable String filter) {
+        if (!Objects.equals(this.filter, filter)) {
+            this.filter = filter;
+            this.entriesCache = null;
+        }
     }
 
     public void addPullItemHistory(@Nullable ItemStack itemStack) {
@@ -68,12 +87,11 @@ public class GridCache {
         NUMBER_REVERSE,
         ADDON;
 
-        public @NotNull SortOrder next(@Range(from = 1, to = 4) int limit) {
-            if (this.next().ordinal() + 1 >= limit) {
-                return ALPHABETICAL;
-            }
+        private static final SortOrder[] ORDERS = values();
 
-            return this.next();
+        public @NotNull SortOrder next(@Range(from = 1, to = 4) int limit) {
+            SortOrder candidate = this.next();
+            return candidate.ordinal() >= limit ? ALPHABETICAL : candidate;
         }
 
         public @NotNull SortOrder next() {
@@ -86,11 +104,8 @@ public class GridCache {
         }
 
         public @NotNull SortOrder previous(@Range(from = 1, to = 4) int limit) {
-            if (this.previous().ordinal() + 1 >= limit) {
-                return values()[limit - 1];
-            }
-
-            return this.previous();
+            SortOrder candidate = this.previous();
+            return candidate.ordinal() >= limit ? ORDERS[limit - 1] : candidate;
         }
 
         public @NotNull SortOrder previous() {
