@@ -1,0 +1,77 @@
+name: Verify Networks 1.0.47 Publication
+on:
+  push:
+    branches: ['audit/grid-release-validation-20261001']
+    paths: ['.github/workflows/grid-release-publication-check.yml']
+permissions:
+  contents: write
+  actions: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ba79e6e36bd4798d37f7b8988efb414e7f041927
+          persist-credentials: false
+      - name: Verify actual published bytes and retain the previous release unchanged
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p evidence published
+          python3 - <<'PY'
+          import hashlib,json,re,subprocess,zipfile
+          from pathlib import Path
+          repo='wickidcow/SF_NetworksExp';prefix='repos/'+repo
+          def api(path):return json.loads(subprocess.check_output(['gh','api',path],timeout=90))
+          run=api(prefix+'/actions/runs/36939179625')
+          assert run['head_sha']=='ba79e6e36bd4798d37f7b8988efb414e7f041927' and run['conclusion']=='success'
+          release=api(prefix+'/releases/tags/v1.0.47')
+          assert not release['draft'] and not release['prerelease']
+          assert release['target_commitish']=='ba79e6e36bd4798d37f7b8988efb414e7f041927'
+          assets=[a for a in release['assets'] if a['name']=='SF_Networks1.0.47.jar'];assert len(assets)==1
+          asset=assets[0]
+          expected='b9d63570c30f4d0195393b567bddcf48973e1c103302526ecebbb3f67106e9ed'
+          assert asset['digest']=='sha256:'+expected
+          url=asset['browser_download_url']
+          assert url=='https://github.com/'+repo+'/releases/download/v1.0.47/SF_Networks1.0.47.jar'
+          target=Path('published/SF_Networks1.0.47.jar')
+          subprocess.run(['curl','--fail','--location','--silent','--show-error','--retry','3','--max-time','120',url,'--output',str(target)],check=True)
+          assert hashlib.sha256(target.read_bytes()).hexdigest()==expected
+          with zipfile.ZipFile(target) as jar:
+              assert jar.testzip() is None
+              descriptor=jar.read('plugin.yml').decode()
+              assert re.search(r'''(?m)^version:\s*['"]?1\.0\.47['"]?\s*$''',descriptor)
+              classes=0
+              for name in jar.namelist():
+                  assert not name.startswith(('org/junit/','org/mockbukkit/')),name
+                  if name.endswith('.class') and not name.startswith('META-INF/versions/'):
+                      data=jar.read(name);assert data[:4]==b'\xca\xfe\xba\xbe'
+                      assert int.from_bytes(data[6:8],'big')<=65 and int.from_bytes(data[4:6],'big')!=65535,name
+                      classes+=1
+          prior=api(prefix+'/releases/tags/v1.0.46')
+          older=next(a for a in prior['assets'] if a['name']=='SF_Networks1.0.46.jar')
+          assert older['digest']=='sha256:44b6d8e6689fe755e5bf70626499247c9332060e8d78850274efc888c96db310'
+          record=dict(release_tag='v1.0.47',source=release['target_commitish'],publisher_run=run['id'],asset_id=asset['id'],sha256=expected,base_classes=classes,previous_asset_id=older['id'],previous_digest_unchanged=older['digest'],actual_published_download_verified=True)
+          Path('evidence/published-verification.json').write_text(json.dumps(record,indent=2)+'\n')
+          changelog=Path('CHANGELOG.md').read_text()
+          section=changelog.split('## 1.0.47\n',1)[1].split('\n## ',1)[0].strip()
+          notes='# Networks 1.0.47\n\n'+section+'\n\n## Validation and preservation\n\nThe full project suite passed 98 tests, including 17 new grid regressions, with no failures, errors or skips. The original code failed the expected assertions before the fix. Existing Legacy/Gugu/United build compatibility checks passed; these are not a promise that every saved world can switch forks in both directions.\n\nItem IDs, saved storage data, transfer priorities, recipes, machine rates and quantum-storage category order are unchanged. This is a display-cache and sorting correction, not a measured server TPS improvement.\n\nInstall the raw `SF_Networks1.0.47.jar`; replace the old Networks JAR after a clean server stop and backup, rather than leaving duplicate plugin files.\n\n## Artifact verification\n\nPublished from `'+release['target_commitish']+'` after the normal release workflow passed. The actual public JAR was downloaded and verified for archive integrity, Java 21 bytecode, plugin version and checksum. The previous 1.0.46 asset was left unchanged.\n\nSHA-256: `'+expected+'`\n'
+          Path('evidence/release-notes.md').write_text(notes)
+          print(json.dumps(record,indent=2))
+          PY
+          gh release edit v1.0.47 --repo wickidcow/SF_NetworksExp --notes-file evidence/release-notes.md
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: networks-1.0.47-publication-evidence
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: SF_Networks1.0.47-verified-publication.jar
+          path: published/SF_Networks1.0.47.jar
+          archive: false
+          if-no-files-found: error
