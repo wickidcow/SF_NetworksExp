@@ -111,6 +111,7 @@ dependencies {
     testImplementation(platform("org.junit:junit-bom:5.14.1"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.mockito:mockito-core:5.18.0")
+    testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v1.21:4.110.0")
     mockitoAgent("org.mockito:mockito-core:5.18.0") { isTransitive = false }
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     compileOnly("com.github.SlimefunGuguProject:InfinityExpansion:3c5db3650a")

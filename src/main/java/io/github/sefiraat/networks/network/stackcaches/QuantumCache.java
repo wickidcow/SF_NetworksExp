@@ -1,6 +1,8 @@
 package io.github.sefiraat.networks.network.stackcaches;
 
 import com.balugaq.netex.utils.Lang;
+import com.ytdd9527.networksexpansion.utils.TextUtil;
+import net.kyori.adventure.text.Component;
 import io.github.sefiraat.networks.utils.DisplayNameUtils;
 import lombok.Getter;
 import lombok.Setter;
@@ -13,7 +15,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** Thread-safe amount and stored-item state for Network Quantum Storage. */
-@SuppressWarnings("deprecation")
 public class QuantumCache extends ItemStackCache {
 
     @Nullable
@@ -162,34 +163,33 @@ public class QuantumCache extends ItemStackCache {
     }
 
     public void addMetaLore(@NotNull ItemMeta itemMeta) {
-        List<String> old = itemMeta.getLore();
-        final List<String> lore = old != null ? new ArrayList<>(old) : new ArrayList<>();
-        lore.add("");
-        lore.add(storedItemLine());
-        lore.add(storedAmountLine());
+        List<Component> old = itemMeta.lore();
+        final List<Component> lore = old != null ? new ArrayList<>(old) : new ArrayList<>();
+        lore.add(Component.empty());
+        lore.add(TextUtil.component(storedItemLine()));
+        lore.add(TextUtil.component(storedAmountLine()));
         if (this.supportsCustomMaxAmount) {
-            lore.add(customLimitLine());
+            lore.add(TextUtil.component(customLimitLine()));
         }
-        itemMeta.setLore(lore);
+        itemMeta.lore(lore);
     }
 
     /** Updates historical cache lore defensively, even when an older item has missing lines. */
     public void updateMetaLore(@NotNull ItemMeta itemMeta) {
-        final List<String> existing = itemMeta.hasLore() && itemMeta.getLore() != null
-            ? new ArrayList<>(itemMeta.getLore())
-            : new ArrayList<>();
+        final List<Component> previous = itemMeta.lore();
+        final List<Component> existing = previous == null ? new ArrayList<>() : new ArrayList<>(previous);
         final int requiredTail = this.supportsCustomMaxAmount ? 3 : 2;
         while (existing.size() < requiredTail) {
-            existing.add("");
+            existing.add(Component.empty());
         }
 
         final int base = existing.size() - requiredTail;
-        existing.set(base, storedItemLine());
-        existing.set(base + 1, storedAmountLine());
+        existing.set(base, TextUtil.component(storedItemLine()));
+        existing.set(base + 1, TextUtil.component(storedAmountLine()));
         if (this.supportsCustomMaxAmount) {
-            existing.set(base + 2, customLimitLine());
+            existing.set(base + 2, TextUtil.component(customLimitLine()));
         }
-        itemMeta.setLore(existing);
+        itemMeta.lore(existing);
     }
 
     private @NotNull String storedItemLine() {
