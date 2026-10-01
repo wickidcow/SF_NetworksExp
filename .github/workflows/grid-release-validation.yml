@@ -1,0 +1,112 @@
+name: Networks Grid Release Validation
+on:
+  push:
+    branches: ['audit/grid-release-validation-20261001']
+    paths: ['.github/workflows/grid-release-validation.yml']
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: cf25f72dea946439fc3b9656c00a4e38ed4d0e3c
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Stage only versioned build identities and permanent report retention
+        run: |
+          mkdir -p evidence inputs
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          originals={}
+          for name in ['build.gradle.kts','.github/workflows/build.yml','.github/workflows/compatibility.yml']:
+              path=Path(name);text=path.read_text();originals[name]=hashlib.sha256(path.read_bytes()).hexdigest()
+              expected=1 if name=='build.gradle.kts' else 2
+              assert text.count('1.0.46')==expected,(name,text.count('1.0.46'))
+              path.write_text(text.replace('1.0.46','1.0.47'))
+          path=Path('.github/workflows/build.yml');text=path.read_text()
+          needle='      - name: Locate canonical Networks JAR\n'
+          assert text.count(needle)==1
+          addition='''      - name: Retain regression test reports
+                  if: always()
+                  uses: actions/upload-artifact@v7
+                  with:
+                    name: networks-project-test-reports
+                    path: build/test-results/test/TEST-*.xml
+                    retention-days: 14
+                    if-no-files-found: warn
+          '''
+          lines=addition.splitlines(True)
+          addition=lines[0]+''.join(line[10:] if line.startswith('          ') else line for line in lines[1:])
+          path.write_text(text.replace(needle,addition+needle))
+          Path('evidence/original-file-sha256.json').write_text(json.dumps(originals,indent=2)+'\n')
+          PY
+          git diff --check
+      - name: Download verified stable core and maintained guide API
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 --max-time 180 https://github.com/wickidcow/Slimefun-Legacy/releases/download/v4.1.63/Slimefun-Legacy4.1.63.jar -o inputs/core.jar
+          printf '%s  inputs/core.jar\n' 993b257c54efe19b58cc8f4946d4d39387f7787fe263c9f27123343159344c42 | sha256sum --check
+          bash scripts/download_jeg.sh
+          echo "SLIMEFUN_CORE_JAR=$PWD/inputs/core.jar" >> "$GITHUB_ENV"
+          echo "JEG_JAR=$PWD/.ci/jeg/SF_JustEnoughGuide2.1.67.jar" >> "$GITHUB_ENV"
+      - name: Full final-version build and test suite
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          python3 scripts/verify_legacy_compatibility.py > evidence/source-invariants.log 2>&1
+          ./gradlew clean build --no-daemon -PslimefunCoreJar="$SLIMEFUN_CORE_JAR" -PjegJar="$JEG_JAR" -PstrictDeprecation=true 2>&1 | tee evidence/build.log
+          python3 scripts/verify_java21_bytecode.py build/libs/SF_Networks1.0.47.jar
+          python3 scripts/verify_universal_jar.py build/libs/SF_Networks1.0.47.jar 1.0.47
+          mkdir -p evidence/tests
+          cp build/test-results/test/TEST-*.xml evidence/tests/
+          python3 - <<'PY'
+          import hashlib,json,xml.etree.ElementTree as ET,zipfile
+          from pathlib import Path
+          roots=[ET.parse(p).getroot() for p in Path('evidence/tests').glob('TEST-*.xml')]
+          totals={k:sum(int(r.attrib[k]) for r in roots) for k in ['tests','failures','errors','skipped']}
+          assert totals['tests']>=17 and totals['errors']==totals['failures']==0
+          grid=next(r for r in roots if r.attrib['name'].endswith('.GridCacheTest'))
+          assert all(int(grid.attrib[k])==v for k,v in {'tests':17,'failures':0,'errors':0,'skipped':0}.items())
+          jar=Path('build/libs/SF_Networks1.0.47.jar')
+          with zipfile.ZipFile(jar) as z:
+              assert z.testzip() is None
+              assert not any(n.startswith(('org/junit/','org/mockbukkit/')) for n in z.namelist())
+          Path('evidence/results.json').write_text(json.dumps({'production_source':'cf25f72dea946439fc3b9656c00a4e38ed4d0e3c','version':'1.0.47','totals':totals,'jar_sha256':hashlib.sha256(jar.read_bytes()).hexdigest(),'published':False},indent=2)+'\n')
+          PY
+      - name: Stage tested build-file objects without moving any reference
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,json,subprocess
+          records={}
+          for name in ['build.gradle.kts','.github/workflows/build.yml','.github/workflows/compatibility.yml']:
+              data=Path(name).read_bytes();sha=hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()
+              result=subprocess.run(['gh','api','--method','POST','repos/wickidcow/SF_NetworksExp/git/blobs','--input','-'],input=json.dumps({'content':data.decode(),'encoding':'utf-8'}),text=True,capture_output=True,check=True)
+              assert json.loads(result.stdout)['sha']==sha
+              records[name]=sha
+              target=Path('evidence/reviewed-source')/name;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(data)
+          Path('evidence/reviewed-blobs.json').write_text(json.dumps(records,indent=2)+'\n')
+          PY
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: networks-1.0.47-validation
+          path: evidence/
+          include-hidden-files: true
+          retention-days: 14
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: SF_Networks1.0.47-candidate.jar
+          path: build/libs/SF_Networks1.0.47.jar
+          archive: false
+          if-no-files-found: error
