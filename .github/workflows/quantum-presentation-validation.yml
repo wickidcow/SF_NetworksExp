@@ -1,0 +1,147 @@
+name: Quantum Presentation Preservation Validation
+
+on:
+  push:
+    branches: ['work/quantum-component-preservation-validation']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quantum-presentation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+      - name: Apply exact reviewed source and tests
+        run: |
+          set -euo pipefail
+          mkdir -p audit-evidence
+          python3 - <<'PY'
+          import gzip, hashlib, re, subprocess
+          from pathlib import Path
+          patch = gzip.decompress(Path('.audit/quantum-presentation.patch.gz').read_bytes())
+          assert hashlib.sha256(patch).hexdigest() == '3ceebcfaead0714dabfa691cbc6263ce703f3e256e08bebf0caa9bfca4b3d6ab'
+          for part in patch.decode().split('diff --git ')[1:]:
+              name = part.splitlines()[0].split(' b/', 1)[1]
+              old, new = re.search(r'^index ([0-9a-f]{40})\.\.([0-9a-f]{40})', part, re.M).groups()
+              path = Path(name)
+              assert not path.is_absolute() and '..' not in path.parts
+              if old == '0' * 40:
+                  assert not path.exists()
+              else:
+                  data = path.read_bytes()
+                  assert hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest() == old, name
+          subprocess.run(['git', 'apply', '--check', '-'], input=patch, check=True)
+          subprocess.run(['git', 'apply', '-'], input=patch, check=True)
+          PY
+          git diff --check
+      - name: Build the exact coordinated Legacy core
+        run: |
+          set -euo pipefail
+          CORE="$RUNNER_TEMP/verified-core"
+          git init "$CORE"
+          git -C "$CORE" remote add origin https://github.com/wickidcow/Slimefun-Legacy.git
+          git -C "$CORE" fetch --depth=1 origin 9e8de71adf70e9a361a74c21afe5e7006c85faf6
+          git -C "$CORE" checkout --detach FETCH_HEAD
+          test "$(git -C "$CORE" rev-parse HEAD)" = 9e8de71adf70e9a361a74c21afe5e7006c85faf6
+          (cd "$CORE" && chmod +x gradlew && ./gradlew shadowJar -x test --console=plain --no-daemon)
+          JAR="$(find "$CORE/build/libs" -name 'Slimefun-*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' -print -quit)"
+          test -s "$JAR"
+          echo "SLIMEFUN_CORE_JAR=$JAR" >> "$GITHUB_ENV"
+          echo 'Core source: 9e8de71adf70e9a361a74c21afe5e7006c85faf6' > audit-evidence/core.txt
+          sha256sum "$JAR" >> audit-evidence/core.txt
+          bash scripts/download_jeg.sh "$RUNNER_TEMP/verified-jeg.jar"
+          echo "JEG_JAR=$RUNNER_TEMP/verified-jeg.jar" >> "$GITHUB_ENV"
+      - name: Reproduce original rich-lore loss
+        id: control
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          SOURCE=src/main/java/io/github/sefiraat/networks/network/stackcaches/QuantumCache.java
+          cp "$SOURCE" "$RUNNER_TEMP/corrected-quantum.java"
+          trap 'cp "$RUNNER_TEMP/corrected-quantum.java" "$SOURCE"' EXIT
+          git show "HEAD:$SOURCE" > "$SOURCE"
+          set +e
+          ./gradlew test --tests '*QuantumCachePresentationTest.appendPreservesRichExistingLoreExactly' --console=plain --no-daemon > audit-evidence/original.log 2>&1
+          RESULT=$?
+          set -e
+          test "$RESULT" -ne 0
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          p = Path('build/test-results/test/TEST-io.github.sefiraat.networks.network.stackcaches.QuantumCachePresentationTest.xml')
+          suite = ET.parse(p).getroot()
+          assert suite.get('tests') == '1' and suite.get('failures') == '1' and suite.get('skipped') == '0', suite.attrib
+          failure = suite.find('testcase/failure')
+          assert failure.get('type') == 'org.opentest4j.AssertionFailedError', failure.attrib
+          assert 'TranslatableComponent' in failure.get('message', ''), failure.attrib
+          Path('audit-evidence/original.xml').write_bytes(p.read_bytes())
+          PY
+      - name: Full corrected build and source gates
+        id: build
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          python3 scripts/verify_legacy_compatibility.py 2>&1 | tee audit-evidence/source-gates.log
+          ./gradlew clean build -PstrictDeprecation=true --console=plain --no-daemon --no-build-cache 2>&1 | tee audit-evidence/build.log
+          python3 scripts/verify_java21_bytecode.py build/libs/SF_Networks1.0.46.jar
+          python3 scripts/verify_universal_jar.py build/libs/SF_Networks1.0.46.jar 1.0.46
+          git diff --check
+      - name: Check actual regression results and store validated blobs
+        if: ${{ success() && steps.control.outcome == 'success' && steps.build.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, json, os, subprocess
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          totals = dict.fromkeys(('tests','failures','errors','skipped'), 0)
+          for p in Path('build/test-results/test').glob('TEST-*.xml'):
+              suite = ET.parse(p).getroot()
+              for key in totals: totals[key] += int(suite.get(key, '0'))
+              if p.name.endswith('.QuantumCachePresentationTest.xml'):
+                  assert int(suite.get('tests')) == 10, suite.attrib
+                  assert all(int(suite.get(k, '0')) == 0 for k in ('failures','errors','skipped')), suite.attrib
+          assert totals['failures'] == totals['errors'] == totals['skipped'] == 0, totals
+          Path('audit-evidence/results.json').write_text(json.dumps(totals, indent=2))
+          manifest = {}
+          for name in ('build.gradle.kts', 'src/main/java/io/github/sefiraat/networks/network/stackcaches/QuantumCache.java', 'src/test/java/io/github/sefiraat/networks/network/stackcaches/QuantumCachePresentationTest.java'):
+              data = Path(name).read_bytes()
+              expected = hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()
+              payload = json.dumps({'content':base64.b64encode(data).decode(), 'encoding':'base64'})
+              result = subprocess.run(['gh','api','--method','POST',f"repos/{os.environ['GITHUB_REPOSITORY']}/git/blobs",'--input','-','--jq','.sha'],input=payload,text=True,capture_output=True,check=True)
+              assert result.stdout.strip() == expected
+              manifest[name] = expected
+          Path('audit-evidence/validated-blobs.json').write_text(json.dumps(manifest,indent=2))
+          print(totals)
+          print(manifest)
+          PY
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: quantum-presentation-evidence
+          path: |
+            audit-evidence/
+            build/test-results/test/TEST-*.xml
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v7
+        if: success()
+        with:
+          path: build/libs/SF_Networks1.0.46.jar
+          archive: false
+          if-no-files-found: error
