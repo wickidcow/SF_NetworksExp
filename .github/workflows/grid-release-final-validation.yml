@@ -1,0 +1,135 @@
+name: Networks 1.0.47 Final Validation
+on:
+  push:
+    branches: ['audit/grid-release-validation-20261001']
+    paths: ['.github/workflows/grid-release-final-validation.yml']
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: cf25f72dea946439fc3b9656c00a4e38ed4d0e3c
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Synchronize the complete existing release contract
+        run: |
+          mkdir -p evidence inputs
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,json,yaml
+          blob=lambda b:hashlib.sha1(b'blob '+str(len(b)).encode()+b'\0'+b).hexdigest()
+          files=['build.gradle.kts','.github/workflows/build.yml','.github/workflows/compatibility.yml','scripts/verify_legacy_compatibility.py','CHANGELOG.md']
+          original={name:blob(Path(name).read_bytes()) for name in files}
+          assert original['scripts/verify_legacy_compatibility.py']=='14c3c516dd079b713fa74243987b100258cf813a'
+          assert original['CHANGELOG.md']=='9e436a791426a34019e877760d9bf753bfda9447'
+          for name in files[:-1]:
+              path=Path(name);text=path.read_text()
+              assert '1.0.46' in text
+              path.write_text(text.replace('1.0.46','1.0.47'))
+          path=Path('CHANGELOG.md');text=path.read_text()
+          assert text.startswith('# Changelog\n\n## 1.0.46')
+          section='\n'.join([
+              '## 1.0.47','',
+              '### Grid selection correctness',
+              '- Includes the last supported sort mode when cycling forward: addon, reverse quantity, and quantity sorting are no longer skipped for their respective mode limits.',
+              '- Refreshes the derived grid view immediately when its filter or sorting choice changes, while retaining cached results for identical choices and ordinary paging.',
+              '- Avoids allocating an enum array on backward sorting wraps without changing backward results.',
+              '- Adds 17 permanent regression tests; preserves item IDs, stored quantities, recipes, machine rates, transfer priorities and quantum-storage category order.',
+              '- Retains test reports alongside the raw installable JAR build.','',
+          ])+'\n'
+          path.write_text(text.replace('# Changelog\n\n','# Changelog\n\n'+section,1))
+          path=Path('.github/workflows/build.yml');text=path.read_text()
+          needle='      - name: Locate canonical Networks JAR\n'
+          assert text.count(needle)==1
+          addition='\n'.join([
+              '      - name: Retain regression test reports',
+              '        if: always()',
+              '        uses: actions/upload-artifact@v7',
+              '        with:',
+              '          name: networks-project-test-reports',
+              '          path: build/test-results/test/TEST-*.xml',
+              '          retention-days: 14',
+              '          if-no-files-found: warn',''])
+          path.write_text(text.replace(needle,addition+needle))
+          parsed=yaml.safe_load(path.read_text())
+          step=next(s for s in parsed['jobs']['build']['steps'] if s.get('name')=='Retain regression test reports')
+          assert step['with']['path']=='build/test-results/test/TEST-*.xml'
+          for name in ['.github/workflows/build.yml','.github/workflows/compatibility.yml']:
+              workflow=yaml.safe_load(Path(name).read_text())
+              assert workflow['env']['VERSION']=='1.0.47' and workflow['env']['OUTPUT_NAME']=='SF_Networks1.0.47.jar'
+          Path('evidence/original-blobs.json').write_text(json.dumps(original,indent=2)+'\n')
+          Path('evidence/changed-files.json').write_text(json.dumps(files,indent=2)+'\n')
+          PY
+          git diff --check
+          python3 scripts/verify_legacy_compatibility.py | tee evidence/source-invariants.log
+      - name: Supply checksum-verified stable Legacy and guide APIs
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 --max-time 180 https://github.com/wickidcow/Slimefun-Legacy/releases/download/v4.1.63/Slimefun-Legacy4.1.63.jar -o inputs/core.jar
+          printf '%s  inputs/core.jar\n' 993b257c54efe19b58cc8f4946d4d39387f7787fe263c9f27123343159344c42 | sha256sum --check
+          bash scripts/download_jeg.sh
+          echo "SLIMEFUN_CORE_JAR=$PWD/inputs/core.jar" >> "$GITHUB_ENV"
+          echo "JEG_JAR=$PWD/.ci/jeg/SF_JustEnoughGuide2.1.67.jar" >> "$GITHUB_ENV"
+          sha256sum inputs/core.jar .ci/jeg/SF_JustEnoughGuide2.1.67.jar > evidence/dependencies.txt
+      - name: Full versioned build and permanent regression suite
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew clean build --no-daemon -PslimefunCoreJar="$SLIMEFUN_CORE_JAR" -PjegJar="$JEG_JAR" -PstrictDeprecation=true 2>&1 | tee evidence/build.log
+          python3 scripts/verify_java21_bytecode.py build/libs/SF_Networks1.0.47.jar
+          python3 scripts/verify_universal_jar.py build/libs/SF_Networks1.0.47.jar 1.0.47
+          mkdir -p evidence/tests
+          cp build/test-results/test/TEST-*.xml evidence/tests/
+          python3 - <<'PY'
+          import hashlib,json,xml.etree.ElementTree as ET,zipfile
+          from pathlib import Path
+          roots=[ET.parse(p).getroot() for p in Path('evidence/tests').glob('TEST-*.xml')]
+          totals={k:sum(int(r.attrib[k]) for r in roots) for k in ['tests','failures','errors','skipped']}
+          assert totals=={'tests':98,'failures':0,'errors':0,'skipped':0},totals
+          grid=next(r for r in roots if r.attrib['name'].endswith('.GridCacheTest'))
+          assert int(grid.attrib['tests'])==17
+          jar=Path('build/libs/SF_Networks1.0.47.jar')
+          with zipfile.ZipFile(jar) as z:
+              assert z.testzip() is None
+              assert not any(n.startswith(('org/junit/','org/mockbukkit/')) for n in z.namelist())
+          Path('evidence/results.json').write_text(json.dumps({'production_source':'cf25f72dea946439fc3b9656c00a4e38ed4d0e3c','version':'1.0.47','totals':totals,'jar_sha256':hashlib.sha256(jar.read_bytes()).hexdigest(),'published':False},indent=2)+'\n')
+          PY
+      - name: Stage exact tested build and release-note files without moving refs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,json,subprocess
+          records={}
+          for name in json.loads(Path('evidence/changed-files.json').read_text()):
+              data=Path(name).read_bytes();sha=hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()
+              result=subprocess.run(['gh','api','--method','POST','repos/wickidcow/SF_NetworksExp/git/blobs','--input','-'],input=json.dumps({'content':data.decode(),'encoding':'utf-8'}),text=True,capture_output=True,check=True)
+              assert json.loads(result.stdout)['sha']==sha
+              records[name]=sha
+              target=Path('evidence/reviewed-source')/name;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(data)
+          Path('evidence/reviewed-blobs.json').write_text(json.dumps(records,indent=2)+'\n')
+          subprocess.run(['git','diff','--check'],check=True)
+          Path('evidence/release-metadata.patch').write_bytes(subprocess.check_output(['git','diff','--',*records]))
+          PY
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: networks-1.0.47-verified
+          path: evidence/
+          include-hidden-files: true
+          retention-days: 14
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: SF_Networks1.0.47-candidate.jar
+          path: build/libs/SF_Networks1.0.47.jar
+          archive: false
+          if-no-files-found: error
