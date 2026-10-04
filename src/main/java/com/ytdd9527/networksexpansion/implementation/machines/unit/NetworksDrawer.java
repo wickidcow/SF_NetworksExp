@@ -531,13 +531,22 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
 
     private static @NotNull ItemStack getDisplayItem(@Nullable ItemStack item, int amount, int max) {
         if (item == null) {
-            return Icon.ERROR_BORDER;
+            return ItemStackUtil.getCleanItem(Icon.ERROR_BORDER);
         }
+
+        /*
+         * Paper/Purpur 1.21.11 no longer accepts a SlimefunItemStack (or a wrapper whose
+         * craft delegate still points at one) in CraftInventory#setItem. Drawer samples may
+         * legitimately be SlimefunItemStacks, so detach the preview from the stored sample
+         * before decorating it and detach the decorated result once more before it reaches
+         * the live BlockMenu. The stored item itself is never rewritten.
+         */
+        final ItemStack cleanSample = ItemStackUtil.getCleanItem(item);
         try {
-            return new CustomItemStack(
-                item, (String) null, "", String.format(Lang.getString("icons.drawer.stored_item"), amount, max));
+            return ItemStackUtil.getCleanItem(new CustomItemStack(
+                cleanSample, (String) null, "", String.format(Lang.getString("icons.drawer.stored_item"), amount, max)));
         } catch (NullPointerException e) {
-            return item.clone();
+            return cleanSample;
         }
     }
 
@@ -736,7 +745,8 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
                                 quantumCache.updateMetaLore(meta);
                                 itemStack.setItemMeta(meta);
                             } else {
-                                blockMenu.replaceExistingItem(QUANTUM_SLOT, slimefunItem.getItem());
+                                blockMenu.replaceExistingItem(
+                                    QUANTUM_SLOT, ItemStackUtil.getCleanItem(slimefunItem.getItem()));
                             }
                             final ItemStack clone = quantumCache.getItemStack().clone();
                             clone.setAmount(canAdd);
