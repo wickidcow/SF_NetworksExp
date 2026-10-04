@@ -1,6 +1,8 @@
 package com.balugaq.netex.api.atrributes;
 
 import com.balugaq.netex.utils.BlockMenuUtil;
+import com.balugaq.netex.utils.LineOperationUtil;
+import com.ytdd9527.networksexpansion.implementation.machines.unit.NetworksDrawer;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.sefiraat.networks.utils.StackUtils;
@@ -49,6 +51,26 @@ public interface WhitelistedGrabber {
         @NotNull BlockMenu targetMenu,
         @NotNull NetworkRoot root,
         @NotNull List<ItemStack> templates) {
+
+        if (LineOperationUtil.isNetworksDrawerMenu(targetMenu)) {
+            final var storageLocation = targetMenu.getLocation();
+            for (ItemStack template : templates) {
+                final int available = NetworksDrawer.getCargoStoredAmount(storageLocation, template);
+                if (available <= 0) {
+                    continue;
+                }
+                final int requested = Math.min(available, template.getMaxStackSize());
+                if (LineOperationUtil.moveDrawerItemIntoNetwork(
+                    root,
+                    blockMenu.getLocation(),
+                    storageLocation,
+                    template,
+                    requested) > 0) {
+                    break;
+                }
+            }
+            return;
+        }
 
         final int[] slots = BlockMenuUtil.getSafeTransportSlots(targetMenu, ItemTransportFlow.WITHDRAW);
 
