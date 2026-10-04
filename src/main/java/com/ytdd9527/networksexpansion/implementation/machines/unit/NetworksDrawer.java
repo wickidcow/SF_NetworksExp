@@ -42,6 +42,7 @@ import net.kyori.adventure.text.Component;
 import me.ddggdd135.guguslimefunlib.GuguSlimefunLib;
 import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
+import me.mrCookieSlime.Slimefun.api.inventory.DirtyChestMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
 import io.github.sefiraat.networks.utils.DisplayNameUtils;
@@ -69,6 +70,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 @SuppressWarnings("DuplicatedCode")
 public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveItem, ModellableItem {
@@ -188,6 +190,37 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
             public int[] getSlotsAccessedByItemTransport(ItemTransportFlow flow) {
                 return new int[0];
             }
+
+            public boolean supportsVirtualItemTransport(@NotNull DirtyChestMenu menu) {
+                return menu instanceof BlockMenu blockMenu && getStorageData(blockMenu.getLocation()) != null;
+            }
+
+            @Nullable
+            public ItemStack insertByItemTransport(@NotNull DirtyChestMenu menu, @NotNull ItemStack item) {
+                if (!(menu instanceof BlockMenu blockMenu)) {
+                    return item;
+                }
+                return insertCargoItem(blockMenu.getLocation(), item);
+            }
+
+            @Nullable
+            public ItemStack withdrawByItemTransport(
+                @NotNull DirtyChestMenu menu,
+                @Nullable ItemStack template,
+                @NotNull Predicate<ItemStack> filter) {
+                if (!(menu instanceof BlockMenu blockMenu)) {
+                    return null;
+                }
+                return withdrawCargoItem(blockMenu.getLocation(), template, filter);
+            }
+
+            @Nullable
+            public ItemStack restoreByItemTransport(@NotNull DirtyChestMenu menu, @NotNull ItemStack item) {
+                if (!(menu instanceof BlockMenu blockMenu)) {
+                    return item;
+                }
+                return restoreCargoItem(blockMenu.getLocation(), item);
+            }
         };
 
         if (item.getItemId().endsWith("MODEL")) {
@@ -198,6 +231,114 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
     @Nullable
     public static StorageUnitData getStorageData(Location l) {
         return storages.get(l);
+    }
+
+    /**
+     * Inserts a stack through Cargo-compatible virtual storage semantics.
+     * Content Lock and Void Excess are enforced by the drawer itself.
+     */
+    @Nullable
+    public static ItemStack insertCargoItem(@NotNull Location location, @NotNull ItemStack item) {
+        return insertCargoItem0(location, item, false);
+    }
+
+    /** Restores a previously withdrawn Cargo stack without allowing Content Lock to block rollback. */
+    @Nullable
+    public static ItemStack restoreCargoItem(@NotNull Location location, @NotNull ItemStack item) {
+        return insertCargoItem0(location, item, true);
+    }
+
+    @Nullable
+    private static ItemStack insertCargoItem0(
+        @NotNull Location location, @NotNull ItemStack item, boolean rollback) {
+        if (item.getType().isAir() || item.getAmount() <= 0) {
+            return null;
+        }
+
+        final StorageUnitData data = storages.get(location);
+        if (data == null) {
+            requestData(location, getContainerId(location));
+            return item.clone();
+        }
+
+        final ItemStack working = item.clone();
+        if (rollback) {
+            final int before = working.getAmount();
+            final int restored = data.addStoredItem0(location, working, before, false, true);
+            working.setAmount(Math.max(0, before - restored));
+        } else {
+            data.depositItemStack0(location, working, false);
+        }
+
+        update(location, false);
+        return working.getAmount() <= 0 ? null : working;
+    }
+
+    /**
+     * Withdraws one Cargo-sized stack from the first stored type accepted by the supplied filter.
+     * An unlocked drawer forgets an emptied type; a locked drawer keeps that type reserved.
+     */
+    @Nullable
+    public static ItemStack withdrawCargoItem(
+        @NotNull Location location,
+        @Nullable ItemStack template,
+        @NotNull Predicate<ItemStack> filter) {
+        final StorageUnitData data = storages.get(location);
+        if (data == null) {
+            requestData(location, getContainerId(location));
+            return null;
+        }
+
+        for (ItemContainer container : data.copyStoredItems()) {
+            final ItemStack sample = container.getSampleDirectly();
+            if (sample == null || sample.getType().isAir() || container.getAmount() <= 0) {
+                continue;
+            }
+            if (template != null && !StackUtils.itemsMatch(template, sample)) {
+                continue;
+            }
+
+            final ItemStack candidate = sample.clone();
+            candidate.setAmount(1);
+            if (!filter.test(candidate)) {
+                continue;
+            }
+
+            final int requested = template == null
+                ? Math.min(container.getAmount(), sample.getMaxStackSize())
+                : Math.min(container.getAmount(), Math.min(template.getAmount(), sample.getMaxStackSize()));
+            if (requested <= 0) {
+                return null;
+            }
+
+            final ItemStack withdrawn = data.requestItem0(
+                location,
+                new ItemRequest(candidate, requested),
+                isLocked(location));
+            if (withdrawn != null) {
+                update(location, false);
+            }
+            return withdrawn;
+        }
+        return null;
+    }
+
+    public static int getCargoStoredAmount(@NotNull Location location, @NotNull ItemStack item) {
+        final StorageUnitData data = storages.get(location);
+        if (data == null) {
+            return 0;
+        }
+        for (ItemContainer container : data.getStoredItemsDirectly()) {
+            if (StackUtils.itemsMatch(container.getSampleDirectly(), item)) {
+                return Math.max(0, container.getAmount());
+            }
+        }
+        return 0;
+    }
+
+    public static boolean containsCargoType(@NotNull Location location, @NotNull ItemStack item) {
+        return getCargoStoredAmount(location, item) > 0
+            || (isLocked(location) && contains(location, item));
     }
 
     @NotNull
