@@ -892,7 +892,9 @@ require("insertCargoItem0(location, item, false)" in networks_drawer
         and "data.depositItemStack0(location, working, false)" in networks_drawer
         and "data.addStoredItem0(location, working, before, false, true)" in networks_drawer,
         "Network Cargo Storage insert/rollback paths do not preserve lock-aware transactional semantics")
-require(line_operation_util.count("instanceof NetworksDrawer") >= 2
+require("isNetworksDrawerMenu(blockMenu)" in line_operation_util
+        and line_operation_util.count("isNetworksDrawerMenu(blockMenu)") >= 2
+        and "preset.getSlimefunItem() instanceof NetworksDrawer" in line_operation_util
         and "pushDrawerItem(" in line_operation_util
         and "grabDrawerItem(" in line_operation_util
         and "NetworksDrawer.insertCargoItem" in line_operation_util
