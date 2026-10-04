@@ -895,7 +895,7 @@ public class LineOperationUtil {
         }
     }
 
-    private static boolean isNetworksDrawerMenu(@NotNull BlockMenu blockMenu) {
+    public static boolean isNetworksDrawerMenu(@NotNull BlockMenu blockMenu) {
         try {
             final var preset = blockMenu.getPreset();
             return preset != null && preset.getSlimefunItem() instanceof NetworksDrawer;
@@ -1044,7 +1044,7 @@ public class LineOperationUtil {
         }
     }
 
-    private static int moveDrawerItemIntoNetwork(
+    public static int moveDrawerItemIntoNetwork(
         @NotNull NetworkRoot root,
         @NotNull Location accessor,
         @NotNull Location storageLocation,
