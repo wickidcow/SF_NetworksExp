@@ -6,6 +6,7 @@ import com.balugaq.netex.api.enums.TransportMode;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import com.ytdd9527.networksexpansion.implementation.machines.unit.NetworksDrawer;
+import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
@@ -1051,29 +1052,23 @@ public class LineOperationUtil {
             return 0;
         }
 
-        final int before = withdrawn.getAmount();
-        try {
-            root.uncontrolAccessInput(accessor);
-            root.addItemStack0(accessor, withdrawn);
-        } catch (RuntimeException | LinkageError exception) {
-            final ItemStack rollback = NetworksDrawer.restoreCargoItem(storageLocation, template);
-            if (rollback != null && rollback.getAmount() > 0) {
-                Networks.getInstance().getLogger().log(
-                    java.util.logging.Level.SEVERE,
-                    "Failed to restore a Network Cargo Storage Unit after a transfer exception at " + storageLocation,
-                    exception);
-            }
-            return 0;
-        }
-
-        final int remaining = withdrawn.getType() == Material.AIR ? 0 : Math.max(0, withdrawn.getAmount());
-        final int moved = Math.max(0, before - remaining);
-        if (remaining > 0) {
-            final ItemStack rollback = NetworksDrawer.restoreCargoItem(storageLocation, withdrawn);
-            if (rollback != null && rollback.getAmount() > 0) {
-                Networks.getInstance().getLogger().severe(
-                    "Could not fully restore a Network Cargo Storage Unit remainder at " + storageLocation
-                        + "; " + rollback.getAmount() + " item(s) remain uncommitted.");
+        final int moved = NetworkTransferUtils.moveStackReferenceIntoNetwork(root, accessor, withdrawn);
+        if (withdrawn.getAmount() > 0) {
+            final ItemStack unrestored = NetworksDrawer.restoreCargoItem(storageLocation, withdrawn);
+            if (unrestored != null && unrestored.getAmount() > 0) {
+                final Location dropLocation = storageLocation.clone().add(0.5, 0.5, 0.5);
+                if (dropLocation.getWorld() != null) {
+                    dropLocation.getWorld().dropItemNaturally(dropLocation, unrestored.clone());
+                    Networks.getInstance().getLogger().severe(
+                        "A Network Cargo Storage Unit rollback could not restore "
+                            + unrestored.getAmount() + " item(s) at " + storageLocation
+                            + "; the remainder was dropped in-world to prevent silent loss.");
+                } else {
+                    Networks.getInstance().getLogger().severe(
+                        "A Network Cargo Storage Unit rollback could not restore "
+                            + unrestored.getAmount() + " item(s) at " + storageLocation
+                            + " and no world was available for a safety drop.");
+                }
             }
         }
         return moved;
