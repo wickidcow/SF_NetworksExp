@@ -372,7 +372,7 @@ public class LineOperationUtil {
             return;
         }
 
-        if (StorageCacheUtils.getSlimefunItem(blockMenu.getLocation()) instanceof NetworksDrawer) {
+        if (isNetworksDrawerMenu(blockMenu)) {
             grabDrawerItem(accessor, root, blockMenu, transportMode, limitQuantity);
             return;
         }
@@ -635,7 +635,7 @@ public class LineOperationUtil {
             ? new ItemRequest(template, template.getMaxStackSize())
             : availabilityMemo.requestFor(itemIndex, template);
 
-        if (StorageCacheUtils.getSlimefunItem(blockMenu.getLocation()) instanceof NetworksDrawer) {
+        if (isNetworksDrawerMenu(blockMenu)) {
             pushDrawerItem(
                 accessor,
                 root,
@@ -892,6 +892,15 @@ public class LineOperationUtil {
                     NetworkTransferUtils.commitNetworkWithdrawal(root, accessor, blockMenu, retrieved, slot);
                 }
             }
+        }
+    }
+
+    private static boolean isNetworksDrawerMenu(@NotNull BlockMenu blockMenu) {
+        try {
+            final var preset = blockMenu.getPreset();
+            return preset != null && preset.getSlimefunItem() instanceof NetworksDrawer;
+        } catch (RuntimeException | LinkageError ignored) {
+            return false;
         }
     }
 
