@@ -337,8 +337,16 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
     }
 
     public static boolean containsCargoType(@NotNull Location location, @NotNull ItemStack item) {
-        return getCargoStoredAmount(location, item) > 0
-            || (isLocked(location) && contains(location, item));
+        final StorageUnitData data = storages.get(location);
+        if (data == null) {
+            return false;
+        }
+        for (ItemContainer container : data.getStoredItemsDirectly()) {
+            if (StackUtils.itemsMatch(container.getSampleDirectly(), item)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @NotNull
