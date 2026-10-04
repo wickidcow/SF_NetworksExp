@@ -85,6 +85,7 @@ storage_unit = read("src/main/java/com/balugaq/netex/api/data/StorageUnitData.ja
 inventory_util = read("src/main/java/com/balugaq/netex/utils/InventoryUtil.java")
 block_menu_util = read("src/main/java/com/balugaq/netex/utils/BlockMenuUtil.java")
 line_operation_util = read("src/main/java/com/balugaq/netex/utils/LineOperationUtil.java")
+whitelisted_grabber = read("src/main/java/com/balugaq/netex/api/atrributes/WhitelistedGrabber.java")
 vanilla_pusher = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkVanillaPusher.java")
 vanilla_grabber = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkVanillaGrabber.java")
 network_remote = read("src/main/java/io/github/sefiraat/networks/slimefun/tools/NetworkRemote.java")
@@ -901,6 +902,10 @@ require("isNetworksDrawerMenu(blockMenu)" in line_operation_util
         and "NetworksDrawer.withdrawCargoItem" in line_operation_util
         and "NetworkTransferUtils.moveStackReferenceIntoNetwork" in line_operation_util,
         "Expansion Cargo transfer machines are not bridged to virtual Network Cargo Storage")
+require("LineOperationUtil.isNetworksDrawerMenu(targetMenu)" in whitelisted_grabber
+        and "NetworksDrawer.getCargoStoredAmount" in whitelisted_grabber
+        and "LineOperationUtil.moveDrawerItemIntoNetwork" in whitelisted_grabber,
+        "whitelisted Cargo grabbers are not bridged to virtual Network Cargo Storage")
 require("depositItemStack0(accessor, incoming, true)" in network_root,
         "monitor-attached storage must retain intentional no-auto-assign behavior")
 require("clearAccessHistory" in network_root
