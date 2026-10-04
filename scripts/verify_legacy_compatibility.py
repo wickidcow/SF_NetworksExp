@@ -882,6 +882,25 @@ require("new ConcurrentHashMap<>()" in linker_grid
 require("new ConcurrentHashMap<>()" in networks_drawer
         and "ConcurrentHashMap.newKeySet()" in networks_drawer,
         "Networks Drawer runtime caches are not concurrency-safe")
+require("supportsVirtualItemTransport" in networks_drawer
+        and "insertByItemTransport" in networks_drawer
+        and "withdrawByItemTransport" in networks_drawer
+        and "restoreByItemTransport" in networks_drawer,
+        "Network Cargo Storage Units do not expose the virtual Cargo transport bridge")
+require("insertCargoItem0(location, item, false)" in networks_drawer
+        and "insertCargoItem0(location, item, true)" in networks_drawer
+        and "data.depositItemStack0(location, working, false)" in networks_drawer
+        and "data.addStoredItem0(location, working, before, false, true)" in networks_drawer,
+        "Network Cargo Storage insert/rollback paths do not preserve lock-aware transactional semantics")
+require(line_operation_util.count("instanceof NetworksDrawer") >= 2
+        and "pushDrawerItem(" in line_operation_util
+        and "grabDrawerItem(" in line_operation_util
+        and "NetworksDrawer.insertCargoItem" in line_operation_util
+        and "NetworksDrawer.withdrawCargoItem" in line_operation_util
+        and "NetworkTransferUtils.moveStackReferenceIntoNetwork" in line_operation_util,
+        "Expansion Cargo transfer machines are not bridged to virtual Network Cargo Storage")
+require("depositItemStack0(accessor, incoming, true)" in network_root,
+        "monitor-attached storage must retain intentional no-auto-assign behavior")
 require("clearAccessHistory" in network_root
         and "accesses.remove(key)" in network_root
         and "clearAllAccessHistory" in network_root,
