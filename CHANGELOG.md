@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.48
+
+### Network Cargo Storage compatibility and Purpur menu safety
+- Adds transactional virtual Cargo transport for Network Cargo Storage Units without exposing their GUI display slots as real inventory storage.
+- Supports direct Slimefun Cargo insert/withdraw through Slimefun Legacy 4.1.69's virtual-storage transport hook, with filter, rollback, Content Lock, Void Excess, and per-type capacity behavior preserved.
+- Bridges Networks Expansion Transfer/Line Transfer and whitelisted grabbers directly to drawer storage while keeping monitor-attached no-auto-assign behavior unchanged.
+- Fixes Purpur/Paper 1.21.11 `SlimefunItemStack -> CraftItemStack` ClassCastException when a drawer renders stored Slimefun items or refreshes its Quantum Storage slot.
+- Sanitizes only live menu preview stacks; stored item payloads, IDs, database contents, recipes, storage identities, quantities, routing priorities, and existing world data are unchanged.
+- Revalidates the universal Java 21 JAR against finalized Slimefun Legacy 4.1.69 source plus current Slimefun United and Gugu compatibility targets.
+
 ## 1.0.47
 
 ### Grid selection correctness

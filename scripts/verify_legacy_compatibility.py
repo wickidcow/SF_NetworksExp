@@ -85,6 +85,7 @@ storage_unit = read("src/main/java/com/balugaq/netex/api/data/StorageUnitData.ja
 inventory_util = read("src/main/java/com/balugaq/netex/utils/InventoryUtil.java")
 block_menu_util = read("src/main/java/com/balugaq/netex/utils/BlockMenuUtil.java")
 line_operation_util = read("src/main/java/com/balugaq/netex/utils/LineOperationUtil.java")
+whitelisted_grabber = read("src/main/java/com/balugaq/netex/api/atrributes/WhitelistedGrabber.java")
 vanilla_pusher = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkVanillaPusher.java")
 vanilla_grabber = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkVanillaGrabber.java")
 network_remote = read("src/main/java/io/github/sefiraat/networks/slimefun/tools/NetworkRemote.java")
@@ -235,13 +236,13 @@ require("extends RecipeChoice.ExactChoice" not in simple_recipe_choice,
         "SimpleRecipeChoice still extends final RecipeChoice.ExactChoice")
 require("implements RecipeChoice" in simple_recipe_choice, "SimpleRecipeChoice no longer implements RecipeChoice")
 # Public release metadata must move as one unit so JAR/plugin/workflow versions cannot drift.
-require('version = "1.0.47"' in build, "Gradle public version must remain 1.0.47")
-require('VERSION: "1.0.47"' in build_workflow
-        and 'OUTPUT_NAME: "SF_Networks1.0.47.jar"' in build_workflow,
-        "release workflow public version/JAR name must remain 1.0.47")
-require('VERSION: "1.0.47"' in compatibility_workflow
-        and 'OUTPUT_NAME: "SF_Networks1.0.47.jar"' in compatibility_workflow,
-        "compatibility workflow public version/JAR name must remain 1.0.47")
+require('version = "1.0.48"' in build, "Gradle public version must remain 1.0.48")
+require('VERSION: "1.0.48"' in build_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.48.jar"' in build_workflow,
+        "release workflow public version/JAR name must remain 1.0.48")
+require('VERSION: "1.0.48"' in compatibility_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.48.jar"' in compatibility_workflow,
+        "compatibility workflow public version/JAR name must remain 1.0.48")
 require("actions/upload-artifact@v7" in compatibility_workflow
         and "name: slimefun-legacy-core" in compatibility_workflow
         and "Slimefun-Legacy-Core.jar" in compatibility_workflow,
@@ -882,6 +883,35 @@ require("new ConcurrentHashMap<>()" in linker_grid
 require("new ConcurrentHashMap<>()" in networks_drawer
         and "ConcurrentHashMap.newKeySet()" in networks_drawer,
         "Networks Drawer runtime caches are not concurrency-safe")
+require("final ItemStack cleanSample = ItemStackUtil.getCleanItem(item);" in networks_drawer
+        and "ItemStackUtil.getCleanItem(new CustomItemStack(" in networks_drawer
+        and "QUANTUM_SLOT, ItemStackUtil.getCleanItem(slimefunItem.getItem())" in networks_drawer,
+        "Networks Drawer can expose SlimefunItemStack-backed menu items to CraftInventory")
+require("supportsVirtualItemTransport" in networks_drawer
+        and "insertByItemTransport" in networks_drawer
+        and "withdrawByItemTransport" in networks_drawer
+        and "restoreByItemTransport" in networks_drawer,
+        "Network Cargo Storage Units do not expose the virtual Cargo transport bridge")
+require("insertCargoItem0(location, item, false)" in networks_drawer
+        and "insertCargoItem0(location, item, true)" in networks_drawer
+        and "data.depositItemStack0(location, working, false)" in networks_drawer
+        and "data.addStoredItem0(location, working, before, false, true)" in networks_drawer,
+        "Network Cargo Storage insert/rollback paths do not preserve lock-aware transactional semantics")
+require("isNetworksDrawerMenu(blockMenu)" in line_operation_util
+        and line_operation_util.count("isNetworksDrawerMenu(blockMenu)") >= 2
+        and "preset.getSlimefunItem() instanceof NetworksDrawer" in line_operation_util
+        and "pushDrawerItem(" in line_operation_util
+        and "grabDrawerItem(" in line_operation_util
+        and "NetworksDrawer.insertCargoItem" in line_operation_util
+        and "NetworksDrawer.withdrawCargoItem" in line_operation_util
+        and "NetworkTransferUtils.moveStackReferenceIntoNetwork" in line_operation_util,
+        "Expansion Cargo transfer machines are not bridged to virtual Network Cargo Storage")
+require("LineOperationUtil.isNetworksDrawerMenu(targetMenu)" in whitelisted_grabber
+        and "NetworksDrawer.getCargoStoredAmount" in whitelisted_grabber
+        and "LineOperationUtil.moveDrawerItemIntoNetwork" in whitelisted_grabber,
+        "whitelisted Cargo grabbers are not bridged to virtual Network Cargo Storage")
+require("depositItemStack0(accessor, incoming, true)" in network_root,
+        "monitor-attached storage must retain intentional no-auto-assign behavior")
 require("clearAccessHistory" in network_root
         and "accesses.remove(key)" in network_root
         and "clearAllAccessHistory" in network_root,

@@ -5,6 +5,8 @@ import com.balugaq.netex.api.data.VanillaInventoryWrapper;
 import com.balugaq.netex.api.enums.TransportMode;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
+import com.ytdd9527.networksexpansion.implementation.machines.unit.NetworksDrawer;
+import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
@@ -370,6 +372,11 @@ public class LineOperationUtil {
             return;
         }
 
+        if (isNetworksDrawerMenu(blockMenu)) {
+            grabDrawerItem(accessor, root, blockMenu, transportMode, limitQuantity);
+            return;
+        }
+
         final int[] slots =
             BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
 
@@ -628,6 +635,20 @@ public class LineOperationUtil {
             ? new ItemRequest(template, template.getMaxStackSize())
             : availabilityMemo.requestFor(itemIndex, template);
 
+        if (isNetworksDrawerMenu(blockMenu)) {
+            pushDrawerItem(
+                accessor,
+                root,
+                blockMenu,
+                template,
+                itemRequest,
+                itemIndex,
+                transportMode,
+                limitQuantity,
+                availabilityMemo);
+            return;
+        }
+
         final int[] slots =
             BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.INSERT, template);
         switch (transportMode) {
@@ -872,6 +893,194 @@ public class LineOperationUtil {
                 }
             }
         }
+    }
+
+    public static boolean isNetworksDrawerMenu(@NotNull BlockMenu blockMenu) {
+        try {
+            final var preset = blockMenu.getPreset();
+            return preset != null && preset.getSlimefunItem() instanceof NetworksDrawer;
+        } catch (RuntimeException | LinkageError ignored) {
+            return false;
+        }
+    }
+
+    private static void pushDrawerItem(
+        @NotNull Location accessor,
+        @NotNull NetworkRoot root,
+        @NotNull BlockMenu blockMenu,
+        @NotNull ItemStack template,
+        @NotNull ItemRequest itemRequest,
+        int itemIndex,
+        @NotNull TransportMode transportMode,
+        int limitQuantity,
+        @Nullable PushAvailabilityMemo availabilityMemo) {
+        final Location storageLocation = blockMenu.getLocation();
+        final int existing = NetworksDrawer.getCargoStoredAmount(storageLocation, template);
+        final boolean contains = NetworksDrawer.containsCargoType(storageLocation, template);
+        final int requestAmount;
+
+        switch (transportMode) {
+            case NULL_ONLY -> {
+                if (contains) {
+                    return;
+                }
+                requestAmount = Math.min(template.getMaxStackSize(), limitQuantity);
+            }
+            case NONNULL_ONLY -> {
+                if (!contains) {
+                    return;
+                }
+                requestAmount = Math.min(template.getMaxStackSize(), limitQuantity);
+            }
+            case LAZY -> {
+                final var data = NetworksDrawer.getStorageData(storageLocation);
+                if (data != null && data.getStoredTypeCount() > 0) {
+                    return;
+                }
+                requestAmount = Math.min(template.getMaxStackSize(), limitQuantity);
+            }
+            case SPECIFIED_QUANTITY -> {
+                if (existing >= limitQuantity) {
+                    return;
+                }
+                requestAmount = Math.min(limitQuantity - existing, template.getMaxStackSize());
+            }
+            case P2P_SPECIFIED_QUANTITY -> {
+                final int target = template.getAmount();
+                if (existing >= target) {
+                    return;
+                }
+                requestAmount = Math.min(Math.min(target - existing, limitQuantity), template.getMaxStackSize());
+            }
+            case VOID -> requestAmount = limitQuantity;
+            default -> requestAmount = Math.min(template.getMaxStackSize(), limitQuantity);
+        }
+
+        if (requestAmount <= 0) {
+            return;
+        }
+        itemRequest.setAmount(requestAmount);
+        final ItemStack retrieved = requestNetworkItem(root, accessor, itemRequest, itemIndex, availabilityMemo);
+        if (retrieved == null || retrieved.getType() == Material.AIR || retrieved.getAmount() <= 0) {
+            return;
+        }
+
+        final ItemStack remainder = NetworksDrawer.insertCargoItem(storageLocation, retrieved);
+        if (transportMode != TransportMode.VOID && remainder != null && remainder.getAmount() > 0) {
+            NetworkTransferUtils.rollbackNetworkWithdrawal(
+                root, accessor, remainder, storageLocation, "drawer Cargo transfer");
+        }
+    }
+
+    private static void grabDrawerItem(
+        @NotNull Location accessor,
+        @NotNull NetworkRoot root,
+        @NotNull BlockMenu blockMenu,
+        @NotNull TransportMode transportMode,
+        int limitQuantity) {
+        if (transportMode == TransportMode.NULL_ONLY
+            || transportMode == TransportMode.P2P
+            || transportMode == TransportMode.P2P_SPECIFIED_QUANTITY) {
+            return;
+        }
+
+        final Location storageLocation = blockMenu.getLocation();
+        final var data = NetworksDrawer.getStorageData(storageLocation);
+        if (data == null) {
+            return;
+        }
+
+        final List<com.balugaq.netex.api.data.ItemContainer> stored = data.copyStoredItems();
+        if (stored.isEmpty()) {
+            return;
+        }
+
+        int remainingLimit = Math.max(0, limitQuantity);
+        if (remainingLimit <= 0) {
+            return;
+        }
+
+        if (transportMode == TransportMode.LAST_ONLY) {
+            java.util.Collections.reverse(stored);
+        }
+
+        for (com.balugaq.netex.api.data.ItemContainer container : stored) {
+            final ItemStack sample = container.getSampleDirectly();
+            if (sample == null || sample.getType() == Material.AIR || container.getAmount() <= 0) {
+                continue;
+            }
+
+            int requested = Math.min(Math.min(container.getAmount(), sample.getMaxStackSize()), remainingLimit);
+            if (transportMode == TransportMode.SPECIFIED_QUANTITY) {
+                final int excess = container.getAmount() - limitQuantity;
+                if (excess <= 0) {
+                    continue;
+                }
+                requested = Math.min(requested, excess);
+            }
+
+            final int moved = moveDrawerItemIntoNetwork(root, accessor, storageLocation, sample, requested);
+            remainingLimit -= moved;
+
+            if (transportMode == TransportMode.VOID) {
+                final int virtualSlotAmount = Math.min(container.getAmount(), sample.getMaxStackSize());
+                final int toDiscard = Math.max(0, virtualSlotAmount - moved);
+                if (toDiscard > 0) {
+                    final ItemStack discardTemplate = sample.clone();
+                    discardTemplate.setAmount(toDiscard);
+                    NetworksDrawer.withdrawCargoItem(storageLocation, discardTemplate, ignored -> true);
+                }
+            }
+
+            if (transportMode == TransportMode.FIRST_ONLY
+                || transportMode == TransportMode.FIRST_STOP
+                || transportMode == TransportMode.LAST_ONLY
+                || remainingLimit <= 0) {
+                return;
+            }
+            if (moved == 0 && !root.allowAccessInput(accessor)) {
+                return;
+            }
+        }
+    }
+
+    public static int moveDrawerItemIntoNetwork(
+        @NotNull NetworkRoot root,
+        @NotNull Location accessor,
+        @NotNull Location storageLocation,
+        @NotNull ItemStack sample,
+        int requested) {
+        if (requested <= 0) {
+            return 0;
+        }
+
+        final ItemStack template = sample.clone();
+        template.setAmount(requested);
+        final ItemStack withdrawn = NetworksDrawer.withdrawCargoItem(storageLocation, template, ignored -> true);
+        if (withdrawn == null || withdrawn.getType() == Material.AIR || withdrawn.getAmount() <= 0) {
+            return 0;
+        }
+
+        final int moved = NetworkTransferUtils.moveStackReferenceIntoNetwork(root, accessor, withdrawn);
+        if (withdrawn.getAmount() > 0) {
+            final ItemStack unrestored = NetworksDrawer.restoreCargoItem(storageLocation, withdrawn);
+            if (unrestored != null && unrestored.getAmount() > 0) {
+                final Location dropLocation = storageLocation.clone().add(0.5, 0.5, 0.5);
+                if (dropLocation.getWorld() != null) {
+                    dropLocation.getWorld().dropItemNaturally(dropLocation, unrestored.clone());
+                    Networks.getInstance().getLogger().severe(
+                        "A Network Cargo Storage Unit rollback could not restore "
+                            + unrestored.getAmount() + " item(s) at " + storageLocation
+                            + "; the remainder was dropped in-world to prevent silent loss.");
+                } else {
+                    Networks.getInstance().getLogger().severe(
+                        "A Network Cargo Storage Unit rollback could not restore "
+                            + unrestored.getAmount() + " item(s) at " + storageLocation
+                            + " and no world was available for a safety drop.");
+                }
+            }
+        }
+        return moved;
     }
 
     public static void pushSlot(
