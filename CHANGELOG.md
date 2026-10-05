@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.49
+
+### Database queue reliability and diagnostic performance
+- Keeps accepted database work pending throughout worker handoff, execution, and callback completion so drain checks cannot report completion early.
+- Makes pending-task checks constant-time, removing repeated scans of large database backlogs for the internal shutdown marker.
+- Counts only work actually removed during cancellation while preserving the count owned by an executing worker.
+- Adds controlled concurrency regressions for handoff, callback completion, cancellation, concurrent submissions, and rejected work.
+- Preserves database ordering, stored contents, item IDs, recipes, machine throughput, and public queue APIs.
+
 ## 1.0.48
 
 ### Network Cargo Storage compatibility and Purpur menu safety

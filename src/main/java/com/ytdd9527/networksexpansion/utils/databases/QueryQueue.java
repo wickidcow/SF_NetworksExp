@@ -4,6 +4,7 @@ import com.balugaq.netex.utils.Debug;
 import com.balugaq.netex.utils.Lang;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -26,6 +27,8 @@ public final class QueryQueue {
     private final @NotNull AtomicBoolean started = new AtomicBoolean();
     private final @NotNull AtomicBoolean accepting = new AtomicBoolean(true);
     private final @NotNull AtomicInteger inFlight = new AtomicInteger();
+    // Includes the hand-off between BlockingQueue.take() and execution, not just queued/running tasks.
+    private final @NotNull AtomicInteger outstanding = new AtomicInteger();
     private final @NotNull LongAdder scheduled = new LongAdder();
     private final @NotNull LongAdder executed = new LongAdder();
     private final @NotNull LongAdder failed = new LongAdder();
@@ -50,10 +53,18 @@ public final class QueryQueue {
                 rejected.increment();
                 throw new IllegalStateException("Networks database queue is shutting down");
             }
-            if (!tasks.offer(task)) {
-                rejected.increment();
-                throw new IllegalStateException(
-                    Lang.getString("messages.unsupported-operation.comprehensive.invalid_queue"));
+            Objects.requireNonNull(task, "task");
+            // Count before publishing: the worker can take and finish a task as soon as offer returns.
+            outstanding.incrementAndGet();
+            try {
+                if (!tasks.offer(task)) {
+                    rejected.increment();
+                    throw new IllegalStateException(
+                        Lang.getString("messages.unsupported-operation.comprehensive.invalid_queue"));
+                }
+            } catch (RuntimeException | Error failure) {
+                outstanding.decrementAndGet();
+                throw failure;
             }
             scheduled.increment();
         }
@@ -99,6 +110,7 @@ public final class QueryQueue {
                     Debug.trace(throwable);
                 } finally {
                     inFlight.decrementAndGet();
+                    outstanding.decrementAndGet();
                     signalStateChanged();
                 }
             }
@@ -113,11 +125,7 @@ public final class QueryQueue {
     }
 
     public int getTaskAmount() {
-        int queued = tasks.size();
-        if (tasks.contains(STOP_TASK)) {
-            queued--;
-        }
-        return Math.max(0, queued) + inFlight.get();
+        return outstanding.get();
     }
 
     public int getQueuedTaskAmount() {
@@ -222,10 +230,18 @@ public final class QueryQueue {
     }
 
     private void cancelQueuedTasks() {
-        int before = getQueuedTaskAmount();
-        tasks.clear();
-        if (before > 0) {
-            cancelled.add(before);
+        // Count the tasks actually removed. A worker can take a task during cancellation;
+        // that task still owns its outstanding count until its execution finishes.
+        int removed = 0;
+        QueuedTask task;
+        while ((task = tasks.poll()) != null) {
+            if (task != STOP_TASK) {
+                removed++;
+            }
+        }
+        if (removed > 0) {
+            outstanding.addAndGet(-removed);
+            cancelled.add(removed);
         }
         signalStateChanged();
     }
