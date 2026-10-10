@@ -57,7 +57,7 @@ class NetworkRootDrawerDiscoveryTest {
 
     @BeforeAll
     static void initializePluginConstants() throws ClassNotFoundException {
-        // NetworkRoot reads config constants and drawer keys use the plugin name during class initialization.
+        // NetworkRoot reads config constants; Paper drawer keys call Plugin.namespace(), not getName().
         try (MockedStatic<Networks> networks = mockStatic(Networks.class);
              MockedStatic<SupportedPluginManager> integrations = mockStatic(SupportedPluginManager.class)) {
             ConfigManager config = mock(ConfigManager.class);
@@ -68,6 +68,7 @@ class NetworkRootDrawerDiscoveryTest {
             networks.when(Networks::getSupportedPluginManager).thenReturn(supported);
             integrations.when(SupportedPluginManager::getInstance).thenReturn(supported);
             when(plugin.getName()).thenReturn("Networks");
+            when(plugin.namespace()).thenReturn("networks");
             when(plugin.getMCVersion()).thenReturn(MinecraftVersion.UNKNOWN);
             Class.forName(NetworkRoot.class.getName());
             Class.forName(NetworkDirectional.class.getName());
