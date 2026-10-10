@@ -236,13 +236,13 @@ require("extends RecipeChoice.ExactChoice" not in simple_recipe_choice,
         "SimpleRecipeChoice still extends final RecipeChoice.ExactChoice")
 require("implements RecipeChoice" in simple_recipe_choice, "SimpleRecipeChoice no longer implements RecipeChoice")
 # Public release metadata must move as one unit so JAR/plugin/workflow versions cannot drift.
-require('version = "1.0.49"' in build, "Gradle public version must remain 1.0.49")
-require('VERSION: "1.0.49"' in build_workflow
-        and 'OUTPUT_NAME: "SF_Networks1.0.49.jar"' in build_workflow,
-        "release workflow public version/JAR name must remain 1.0.49")
-require('VERSION: "1.0.49"' in compatibility_workflow
-        and 'OUTPUT_NAME: "SF_Networks1.0.49.jar"' in compatibility_workflow,
-        "compatibility workflow public version/JAR name must remain 1.0.49")
+require('version = "1.0.50"' in build, "Gradle public version must remain 1.0.50")
+require('VERSION: "1.0.50"' in build_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.50.jar"' in build_workflow,
+        "release workflow public version/JAR name must remain 1.0.50")
+require('VERSION: "1.0.50"' in compatibility_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.50.jar"' in compatibility_workflow,
+        "compatibility workflow public version/JAR name must remain 1.0.50")
 require("actions/upload-artifact@v7" in compatibility_workflow
         and "name: slimefun-legacy-core" in compatibility_workflow
         and "Slimefun-Legacy-Core.jar" in compatibility_workflow,

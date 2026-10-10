@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.50
+
+### Stored-item visibility and drawer discovery
+- Includes FluffyMachines barrel output stacks in network item totals, keeping output-only contents visible after the internal reserve reaches zero.
+- Resolves a valid item from real outputs when older Fluffy builds clear their registration display at zero reserve, without treating display icons or input buffers as stored output.
+- Uses long totals for Fluffy reserve plus output contents and preserves the existing output-slot withdrawal path and refill timing.
+- Makes Drawer Manager discovery use all six adjacent faces of standard Network Monitors, while retaining the selected face for input-only and output-only variants and deduplicating shared storage targets.
+- Adds regression coverage for buffered item visibility, quantity conservation, metadata preservation, and monitor-backed drawer discovery.
+- Preserves saved storage data, item IDs, recipes, automatic item-assignment rules, and transport priorities.
+
 ## 1.0.49
 
 ### Database queue reliability and diagnostic performance
