@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.52
+
+- Extend the 1.0.51 Crafter Manager display fix to Quantum Manager, Drawer Manager, both Item Flow Viewer screens, and the optional Linker Grid display. Normalize finished icons before the native inventory write so nested Slimefun/Dough wrappers cannot crash those screens.
+- Preserve storage identities, stored counts, source metadata, custom icons/names, pinned flags, and click handlers. No storage, crafting, transfer, recipe, or item-ID changes.
+- Extend the native Purpur regression to all three managers and related viewer/preview paths, including unchanged Quantum and drawer previews and the optional Quantum world display. The Linker test covers rendering without installing the third-party LogiTech integration.
+
 ## 1.0.51
 
 - Fix the Crafter Manager display tick on Paper/Purpur when an output or custom icon wraps a SlimefunItemStack inside Dough's CustomItemStack. Normalize the completed display icon before writing it to the menu.

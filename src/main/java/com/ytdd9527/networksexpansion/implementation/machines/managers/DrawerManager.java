@@ -12,6 +12,7 @@ import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import com.ytdd9527.networksexpansion.implementation.ExpansionItems;
 import com.ytdd9527.networksexpansion.utils.ParticleUtil;
 import com.ytdd9527.networksexpansion.utils.TextUtil;
+import com.ytdd9527.networksexpansion.utils.itemstacks.ItemStackUtil;
 import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
@@ -388,7 +389,8 @@ public class DrawerManager extends NetworkObject {
 
                 itemMeta.lore(TextUtil.components(lore));
                 displayStack.setItemMeta(itemMeta);
-                blockMenu.replaceExistingItem(getDisplaySlots()[i], displayStack);
+                // Keep Dough wrappers with nested Slimefun delegates out of CraftInventory.
+                blockMenu.replaceExistingItem(getDisplaySlots()[i], ItemStackUtil.getCleanItem(displayStack));
                 blockMenu.addMenuClickHandler(getDisplaySlots()[i], (player, slot, item, action) -> {
                     handleClick(root, blockMenu, dataLocation, player, slot, item, action);
                     return false;

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the Crafter Manager regression on a fresh, disposable Purpur 1.21.11 server."""
+"""Run all manager and related viewer display regressions on a fresh, disposable Purpur 1.21.11 server."""
 from pathlib import Path
 import hashlib
 import json
