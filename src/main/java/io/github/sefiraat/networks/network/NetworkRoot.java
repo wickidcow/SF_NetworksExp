@@ -39,7 +39,6 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Warning;
-import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
@@ -350,35 +349,7 @@ public class NetworkRoot extends NetworkNode {
     @Nullable
     public static FluffyBarrel getFluffyBarrel(
         @NotNull BlockMenu blockMenu, @NotNull Barrel barrel, boolean includeEmpty) {
-        Block block = blockMenu.getBlock();
-        ItemStack itemStack;
-        try {
-            itemStack = barrel.getStoredItem(block);
-        } catch (NullPointerException ignored) {
-            return null;
-        }
-
-        if (!includeEmpty && (itemStack == null || itemStack.getType() == Material.AIR)) {
-            return null;
-        }
-
-        final ItemStack clone;
-        if (itemStack == null) {
-            clone = null;
-        } else {
-            clone = itemStack.clone();
-            clone.setAmount(1);
-        }
-
-        int stored = barrel.getStored(block);
-
-        if (stored <= 0) {
-            return null;
-        }
-        int limit = barrel.getCapacity(block);
-        boolean voidExcess = Boolean.parseBoolean(StorageCacheUtils.getData(blockMenu.getLocation(), "trash"));
-
-        return new FluffyBarrel(blockMenu.getLocation(), clone, stored, limit, voidExcess);
+        return FluffyBarrel.fromMenu(blockMenu, barrel, includeEmpty);
     }
 
     @Nullable
@@ -1439,28 +1410,12 @@ public class NetworkRoot extends NetworkNode {
     @NotNull
     public Map<StorageUnitData, Location> getCargoStorageUnitDatas(
         NetworkRootLocateStorageEvent.Strategy strategy, boolean includeEmpty) {
-        final Set<Location> addedLocations = ConcurrentHashMap.newKeySet();
         final Map<StorageUnitData, Location> dataSet = new HashMap<>();
 
-        final Set<Location> monitor = new HashSet<>();
-        monitor.addAll(this.inputOnlyMonitors);
-        monitor.addAll(this.outputOnlyMonitors);
-        monitor.addAll(this.monitors);
-        for (Location cellLocation : monitor) {
-            final BlockFace face = NetworkDirectional.getSelectedFace(cellLocation);
-
-            if (face == null) {
-                continue;
-            }
-
-            final Location testLocation = cellLocation.clone().add(face.getDirection());
-
-            if (addedLocations.contains(testLocation)) {
-                continue;
-            } else {
-                addedLocations.add(testLocation);
-            }
-
+        final Set<Location> directionalMonitors = new HashSet<>();
+        directionalMonitors.addAll(this.inputOnlyMonitors);
+        directionalMonitors.addAll(this.outputOnlyMonitors);
+        for (Location testLocation : collectMonitorStorageTargets(directionalMonitors, true)) {
             final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(testLocation);
 
             if (slimefunItem instanceof NetworksDrawer) {
