@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.51
+
+- Fix the Crafter Manager display tick on Paper/Purpur when an output or custom icon wraps a SlimefunItemStack inside Dough's CustomItemStack. Normalize the completed display icon before writing it to the menu.
+- Preserve output counts, item metadata, click handlers and source items. Add a real Purpur 1.21.11 build 2568 regression using the actual manager and CraftInventory.
+
 ## 1.0.50
 
 ### Stored-item visibility and drawer discovery
