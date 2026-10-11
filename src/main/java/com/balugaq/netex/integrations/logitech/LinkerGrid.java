@@ -12,6 +12,7 @@ import com.ytdd9527.networksexpansion.core.items.machines.AbstractGridNewStyle;
 import com.ytdd9527.networksexpansion.implementation.ExpansionItems;
 import com.ytdd9527.networksexpansion.utils.ReflectionUtil;
 import com.ytdd9527.networksexpansion.utils.TextUtil;
+import com.ytdd9527.networksexpansion.utils.itemstacks.ItemStackUtil;
 import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
@@ -318,7 +319,8 @@ public class LinkerGrid extends NetworkObject {
 
                 itemMeta.lore(TextUtil.components(lore));
                 displayStack.setItemMeta(itemMeta);
-                blockMenu.replaceExistingItem(getDisplaySlots()[i], displayStack);
+                // Keep Dough wrappers with nested Slimefun delegates out of CraftInventory.
+                blockMenu.replaceExistingItem(getDisplaySlots()[i], ItemStackUtil.getCleanItem(displayStack));
                 blockMenu.addMenuClickHandler(getDisplaySlots()[i], (player, slot, item, action) -> {
                     if (!initialized) {
                         player.sendMessage(Lang.getString("messages.unsupported-operation.viewer.not-initialized"));

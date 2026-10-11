@@ -2,6 +2,20 @@ package networksprobe;
 
 import com.ytdd9527.networksexpansion.core.items.machines.AutoCrafter;
 import com.ytdd9527.networksexpansion.implementation.machines.managers.CrafterManager;
+import com.ytdd9527.networksexpansion.implementation.machines.managers.QuantumManager;
+import com.ytdd9527.networksexpansion.implementation.machines.managers.DrawerManager;
+import com.ytdd9527.networksexpansion.implementation.machines.viewer.ItemFlowViewer;
+import com.balugaq.netex.api.data.ItemContainer;
+import com.balugaq.netex.api.data.StorageUnitData;
+import com.balugaq.netex.api.data.ItemFlowRecord;
+import com.balugaq.netex.api.enums.StorageUnitType;
+import com.balugaq.netex.api.events.NetworkRootLocateStorageEvent;
+import io.github.sefiraat.networks.network.stackcaches.BarrelIdentity;
+import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
 import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
@@ -28,7 +42,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
-/** Disposable-server regression: uses the real manager, menu and CraftInventory. Never install on a live server. */
+/** Disposable-server regression: uses real managers, viewers, menus and native display writes. Never install on a live server. */
 public final class CrafterManagerDisplayProbe extends JavaPlugin {
     @Override
     public void onEnable() {
@@ -36,7 +50,7 @@ public final class CrafterManagerDisplayProbe extends JavaPlugin {
             String result;
             try {
                 verify();
-                result = "PASS: real CrafterManager display writes, metadata, counts and source isolation";
+                result = "PASS: real Networks manager/viewer display writes, metadata, counts and source isolation";
             } catch (Throwable failure) {
                 result = "FAIL: " + failure;
                 failure.printStackTrace();
@@ -52,7 +66,35 @@ public final class CrafterManagerDisplayProbe extends JavaPlugin {
         });
     }
 
-    private void verify() {
+    private void verify() throws Exception {
+        var failures = new ArrayList<String>();
+        probe("Crafter Manager", this::verifyCrafter, failures);
+        probe("Quantum Manager", () -> verifyStorageManager(false), failures);
+        probe("Drawer Manager", () -> verifyStorageManager(true), failures);
+        probe("Item Flow Viewer main menu", () -> verifyFlow(false), failures);
+        probe("Item Flow Viewer submenu", () -> verifyFlow(true), failures);
+        probe("Drawer stored-item preview", this::verifyDrawerPreview, failures);
+        probe("Linker Grid display", this::verifyLinker, failures);
+        probe("Quantum Storage wrapped preview", this::verifyQuantumPreview, failures);
+        probe("Quantum world display", this::verifyQuantumWorldDisplay, failures);
+        if (!failures.isEmpty()) throw new AssertionError(String.join("; ", failures));
+    }
+
+    private void probe(String name, CheckedProbe action, List<String> failures) {
+        try {
+            action.run();
+            getLogger().info("CASE PASS: " + name);
+        } catch (Throwable failure) {
+            failures.add(name + ": " + failure);
+            getLogger().severe("CASE FAIL: " + name + ": " + failure);
+            failure.printStackTrace();
+        }
+    }
+
+    @FunctionalInterface
+    private interface CheckedProbe { void run() throws Exception; }
+
+    private void verifyCrafter() {
         var manager = (CrafterManager) SlimefunItem.getById("NTW_EXPANSION_CRAFTER_MANAGER");
         require(manager != null, "Crafter Manager must be registered");
         var world = Bukkit.getWorlds().getFirst();
@@ -116,6 +158,230 @@ public final class CrafterManagerDisplayProbe extends JavaPlugin {
             AutoCrafter.INSTANCE_MAP.remove(crafterLocation);
             manager.getCacheMap().remove(location);
             NetworkStorage.removeNode(location);
+        }
+    }
+
+
+    private BlockMenu menu(Location location, String id) {
+        location.getWorld().getChunkAt(location).load();
+        var preset = new BlockMenuPreset(id, "Display probe") {
+            @Override public void init() { setSize(54); }
+            @Override public boolean canOpen(Block block, Player player) { return false; }
+            @Override public int[] getSlotsAccessedByItemTransport(ItemTransportFlow flow) { return new int[0]; }
+        };
+        return new BlockMenu(preset, location) {
+            @Override public boolean hasViewer() { return true; }
+        };
+    }
+
+    private ItemStack source() {
+        var source = new SlimefunItemStack("NETWORKS_DISPLAY_PROBE_ITEM", Material.DIAMOND,
+            "&aStored output", "&7Original lore");
+        source.setAmount(7);
+        source.editMeta(meta -> {
+            meta.getPersistentDataContainer().set(new NamespacedKey("oldaddon", "opaque_payload"),
+                PersistentDataType.BYTE_ARRAY, new byte[]{1, 7, 42});
+            var model = meta.getCustomModelDataComponent();
+            model.setFloats(List.of(1234.5F));
+            model.setStrings(List.of("preserved-model"));
+            meta.setCustomModelDataComponent(model);
+        });
+        return source;
+    }
+
+    private void checkDisplay(BlockMenu menu, int slot, ItemStack source, int amount) {
+        ItemStack stored = menu.getItemInSlot(slot);
+        require(stored != null && stored.getType() == source.getType(), "display material");
+        require(stored.getAmount() == amount, "display amount");
+        ItemMeta expected = source.getItemMeta();
+        expected.displayName(stored.getItemMeta().displayName());
+        expected.lore(stored.getItemMeta().lore());
+        require(expected.equals(stored.getItemMeta()), "metadata outside display decoration");
+        require(menu.getMenuClickHandler(slot) != null, "display click handler");
+        require(menu.isDirty(), "display dirty tracking");
+    }
+
+    private void verifyStorageManager(boolean drawer) {
+        var quantum = (QuantumManager) SlimefunItem.getById("NTW_EXPANSION_QUANTUM_MANAGER");
+        var drawers = (DrawerManager) SlimefunItem.getById("NTW_EXPANSION_DRAWER_MANAGER");
+        require(quantum != null && drawers != null, "storage managers registered");
+        var world = Bukkit.getWorlds().getFirst();
+        var location = new Location(world, drawer ? 8 : 4, 100, 0);
+        var storedLocation = location.clone().add(1, 0, 0);
+        var menu = menu(location, drawer ? "DRAWER_DISPLAY_PROBE" : "QUANTUM_DISPLAY_PROBE");
+        var source = source();
+        ItemMeta before = source.getItemMeta();
+        var barrel = new io.github.sefiraat.networks.network.barrel.NetworkStorage(storedLocation, source, 123, 1000);
+        var container = new ItemContainer(7, source, 123);
+        var contents = new ConcurrentHashMap<Integer, ItemContainer>();
+        contents.put(7, container);
+        var data = new StorageUnitData(1, (org.bukkit.OfflinePlayer) null,
+            StorageUnitType.TINY, true, storedLocation, contents);
+        var root = new NetworkRoot(location, NodeType.CONTROLLER, 16) {
+            @Override public List<BarrelIdentity> getBarrels(Predicate<BarrelIdentity> filter,
+                NetworkRootLocateStorageEvent.Strategy strategy, boolean includeEmpty) {
+                return List.of(barrel);
+            }
+            @Override public Map<StorageUnitData, Location> getCargoStorageUnitDatas(
+                NetworkRootLocateStorageEvent.Strategy strategy, boolean includeEmpty) {
+                return Map.of(data, storedLocation);
+            }
+        };
+        var definition = new NodeDefinition(NodeType.CONTROLLER);
+        definition.setNode(root);
+        NetworkStorage.registerNode(location, definition);
+        var caches = drawer ? drawers.getCacheMap() : quantum.getCacheMap();
+        caches.put(location, new GridCache(0, 0, GridCache.SortOrder.ALPHABETICAL));
+        java.util.function.Consumer<BlockMenu> update = drawer ? drawers::updateDisplay : quantum::updateDisplay;
+        int slot = (drawer ? drawers.getDisplaySlots() : quantum.getDisplaySlots())[0];
+        try {
+            update.accept(null);
+            for (int attempt = 0; attempt < 20; attempt++) {
+                update.accept(menu);
+                checkDisplay(menu, slot, source, drawer ? 1 : 7);
+            }
+            require(before.equals(source.getItemMeta()) && source.getAmount() == 7, "storage sample unchanged");
+            require(container.getAmount() == 123 && data.getStoredItemsMap().get(7) == container,
+                "drawer contents and identity unchanged");
+            require(barrel.getAmount() == 123, "quantum stored count unchanged");
+            menu.getItemInSlot(slot).editMeta(m -> m.displayName(Component.text("Changed")));
+            require(before.equals(source.getItemMeta()), "display does not alias storage metadata");
+            barrel.setItemStack(new ItemStack(Material.STONE, 13));
+            contents.put(7, new ItemContainer(7, new ItemStack(Material.STONE), 123));
+            update.accept(menu);
+            checkDisplay(menu, slot, new ItemStack(Material.STONE), drawer ? 1 : 13);
+
+            var stored = Slimefun.getDatabaseManager().getBlockDataController()
+                .createBlock(storedLocation, "NTW_EXPANSION_CRAFTER_MANAGER");
+            stored.setData("netex-icon", "sf:NTW_EXPANSION_CRAFTER_MANAGER");
+            stored.setData("netex-name", "&bCustom stored item");
+            stored.setData("netex-top", "1");
+            ItemStack custom = SlimefunItem.getById("NTW_EXPANSION_CRAFTER_MANAGER").getItem();
+            ItemMeta templateBefore = custom.getItemMeta();
+            update.accept(menu);
+            checkDisplay(menu, slot, custom, custom.getAmount());
+            require(templateBefore.equals(custom.getItemMeta()), "registered icon template unchanged");
+            stored.removeData("netex-icon");
+            stored.removeData("netex-name");
+            barrel.setItemStack(null);
+            contents.clear();
+            update.accept(menu);
+            require(menu.getItemInSlot(slot) != null, "empty storage fallback");
+            require(contents.isEmpty() && barrel.getItemStack() == null, "empty storage remains empty");
+        } finally {
+            caches.remove(location);
+            NetworkStorage.removeNode(location);
+        }
+    }
+
+    private void verifyFlow(boolean submenu) {
+        var viewer = (ItemFlowViewer) SlimefunItem.getById("NTW_EXPANSION_ITEM_FLOW_VIEWER");
+        require(viewer != null, "Item Flow Viewer registered");
+        var location = new Location(Bukkit.getWorlds().getFirst(), submenu ? 16 : 12, 100, 0);
+        var accessor = location.clone().add(1, 0, 0);
+        var menu = menu(location, submenu ? "FLOW_SUB_PROBE" : "FLOW_MAIN_PROBE");
+        var item = submenu ? SlimefunItem.getById("NTW_EXPANSION_CRAFTER_MANAGER").getItem() : source();
+        item = item.clone();
+        item.setAmount(1);
+        var originalMeta = item.getItemMeta();
+        var record = new ItemFlowRecord();
+        record.getActions().put(item, List.of(new ItemFlowRecord.TransportAction(accessor, 7, 1L)));
+        var root = new NetworkRoot(location, NodeType.CONTROLLER, 16) {
+            @Override public boolean isRecordFlow() { return true; }
+            @Override public ItemFlowRecord getItemFlowRecord() { return record; }
+        };
+        Slimefun.getDatabaseManager().getBlockDataController()
+            .createBlock(accessor, "NTW_EXPANSION_CRAFTER_MANAGER");
+        var cache = new GridCache(0, 0, GridCache.SortOrder.ALPHABETICAL);
+        if (submenu) viewer.subMenu(root, menu, cache, "sf:NTW_EXPANSION_CRAFTER_MANAGER");
+        else viewer.mainMenu(root, menu, cache);
+        ItemStack display = menu.getItemInSlot(viewer.getDisplaySlots()[0]);
+        require(display != null && display.getType() == item.getType(), "flow display material");
+        require(originalMeta.equals(item.getItemMeta()) && item.getAmount() == 1, "flow source unchanged");
+        require(record.getActions().size() == 1 && record.getActions().get(item).getFirst().amount() == 7,
+            "flow records unchanged");
+    }
+
+    private void verifyDrawerPreview() throws Exception {
+        var source = new io.github.bakedlibs.dough.items.CustomItemStack(source(), "Wrapped stored item");
+        var before = source.getItemMeta();
+        var method = com.ytdd9527.networksexpansion.implementation.machines.unit.NetworksDrawer.class
+            .getDeclaredMethod("getDisplayItem", ItemStack.class, int.class, int.class);
+        method.setAccessible(true);
+        var display = (ItemStack) method.invoke(null, source, 123, 1000);
+        var menu = menu(new Location(Bukkit.getWorlds().getFirst(), 32, 100, 0), "DRAWER_PREVIEW_PROBE");
+        menu.replaceExistingItem(0, display);
+        var actual = menu.getItemInSlot(0);
+        var expected = source.getItemMeta();
+        expected.lore(actual.getItemMeta().lore());
+        require(expected.equals(actual.getItemMeta()) && actual.getAmount() == 7, "drawer preview preserves metadata/count");
+        require(before.equals(source.getItemMeta()) && source.getAmount() == 7, "drawer sample unchanged");
+    }
+
+    private void verifyLinker() {
+        var crafter = SlimefunItem.getById("NTW_EXPANSION_CRAFTER_MANAGER");
+        var linker = new com.balugaq.netex.integrations.logitech.LinkerGrid(crafter.getItemGroup(),
+            new SlimefunItemStack("NETWORKS_LINKER_DISPLAY_PROBE", Material.CHEST, "Linker probe"),
+            io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType.ENHANCED_CRAFTING_TABLE, new ItemStack[9]);
+        var location = new Location(Bukkit.getWorlds().getFirst(), 28, 100, 0);
+        var menu = menu(location, "LINKER_DISPLAY_PROBE");
+        var source = source();
+        var before = source.getItemMeta();
+        var root = new NetworkRoot(location, NodeType.CONTROLLER, 16) {
+            @Override public Map<ItemStack, Long> getAllNetworkItemsLongTypeView() { return Map.of(source, 123L); }
+        };
+        var cache = new GridCache(0, 0, GridCache.SortOrder.ALPHABETICAL);
+        linker.mainMenu(root, menu, cache);
+        checkDisplay(menu, linker.getDisplaySlots()[0], source, 7);
+        require(before.equals(source.getItemMeta()) && source.getAmount() == 7, "linker source unchanged");
+    }
+
+    private void verifyQuantumPreview() {
+        var menu = menu(new Location(Bukkit.getWorlds().getFirst(), 20, 100, 0), "QUANTUM_PREVIEW_PROBE");
+        var source = new io.github.bakedlibs.dough.items.CustomItemStack(source(), "Wrapped stored item");
+        var before = source.getItemMeta();
+        var cache = new io.github.sefiraat.networks.network.stackcaches.QuantumCache(source, 123L, 1000L, false, true);
+        io.github.sefiraat.networks.slimefun.network.NetworkQuantumStorage.updateDisplayItem(menu, cache);
+        var shown = menu.getItemInSlot(io.github.sefiraat.networks.slimefun.network.NetworkQuantumStorage.ITEM_SLOT);
+        require(shown != null && shown.getType() == source.getType() && shown.getAmount() == 1,
+            "quantum storage preview");
+        var expected = source.getItemMeta();
+        expected.lore(shown.getItemMeta().lore());
+        expected.setHideTooltip(false);
+        // Paper removes explicit default tooltip components when materializing an inventory item.
+        var canonicalExpected = new ItemStack(source.getType());
+        canonicalExpected.setItemMeta(expected);
+        require(canonicalExpected.getItemMeta().equals(shown.getItemMeta()), "quantum preview preserves other metadata");
+        require(before.equals(source.getItemMeta()) && source.getAmount() == 7 && cache.getAmountLong() == 123,
+            "quantum preview preserves stored item and count");
+    }
+
+    private void verifyQuantumWorldDisplay() throws Exception {
+        var location = new Location(Bukkit.getWorlds().getFirst(), 24, 100, 0);
+        location.getWorld().getChunkAt(location).load();
+        location.getBlock().setType(Material.BARREL);
+        var source = source();
+        var before = source.getItemMeta();
+        var keyClass = Class.forName("io.github.sefiraat.networks.utils.QuantumStorageDisplayManager$BlockKey");
+        var from = keyClass.getDeclaredMethod("from", Location.class);
+        from.setAccessible(true);
+        Object key = from.invoke(null, location);
+        var update = io.github.sefiraat.networks.utils.QuantumStorageDisplayManager.class
+            .getDeclaredMethod("updateDisplay", Block.class, keyClass, ItemStack.class);
+        update.setAccessible(true);
+        try {
+            update.invoke(null, location.getBlock(), key, source);
+            var displays = location.getWorld().getNearbyEntities(location, 2, 2, 2).stream()
+                .filter(org.bukkit.entity.ItemDisplay.class::isInstance)
+                .map(org.bukkit.entity.ItemDisplay.class::cast).toList();
+            require(displays.size() == 1, "one quantum world display");
+            ItemStack shown = displays.getFirst().getItemStack();
+            require(shown.getAmount() == 1 && before.equals(shown.getItemMeta()), "world display preserves metadata");
+            require(before.equals(source.getItemMeta()) && source.getAmount() == 7, "world display source unchanged");
+        } finally {
+            for (var entity : location.getWorld().getNearbyEntities(location, 2, 2, 2)) {
+                if (entity instanceof org.bukkit.entity.ItemDisplay) entity.remove();
+            }
         }
     }
 

@@ -19,8 +19,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  VERSION: "1.0.51"
-  OUTPUT_NAME: "SF_Networks1.0.51.jar"
+  VERSION: "1.0.52"
+  OUTPUT_NAME: "SF_Networks1.0.52.jar"
 
 jobs:
   compatibility:
@@ -119,12 +119,12 @@ jobs:
           PLUGIN_VERSION=$(unzip -p "$NETWORKS_JAR" plugin.yml | awk -F': *' '/^version:/ {gsub(/["'"'"']/,"",$2); print $2; exit}')
           test "$PLUGIN_VERSION" = "$VERSION"
           if printf '%s\n' "$PLUGIN_VERSION" | grep -Eiq '(legacy|english|snapshot)'; then exit 1; fi
-      - name: Set up Java 25 for the native Crafter Manager regression
+      - name: Set up Java 25 for the native manager display regression
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "25"
-      - name: Verify real Crafter Manager display writes on Purpur 1.21.11
+      - name: Verify real manager and viewer display writes on Purpur 1.21.11
         timeout-minutes: 8
         shell: bash
         run: |
@@ -135,7 +135,7 @@ jobs:
           python3 scripts/crafter_manager_runtime_probe.py \
             "$SLIMEFUN_CORE_JAR" "$NETWORKS_JAR" .ci/purpur-1.21.11-2568.jar \
             build/crafter-manager-runtime
-      - name: Retain native Crafter Manager regression evidence
+      - name: Retain native manager display regression evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
