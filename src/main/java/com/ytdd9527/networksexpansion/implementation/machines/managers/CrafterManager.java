@@ -454,7 +454,9 @@ public class CrafterManager extends NetworkObject {
 
                 itemMeta.lore(TextUtil.components(lore));
                 displayStack.setItemMeta(itemMeta);
-                managerMenu.replaceExistingItem(getDisplaySlots()[i], displayStack);
+                // Dough can wrap a SlimefunItemStack as Paper's internal delegate. Normalize
+                // the finished display icon before the menu writes it to CraftInventory.
+                managerMenu.replaceExistingItem(getDisplaySlots()[i], ItemStackUtil.getCleanItem(displayStack));
                 managerMenu.addMenuClickHandler(getDisplaySlots()[i], new ChestMenu.AdvancedMenuClickHandler() {
                     @Override
                     public boolean onClick(InventoryClickEvent event, Player player, int slot, ItemStack item, ClickAction action) {
