@@ -838,44 +838,51 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
     protected void onBreak(@NotNull BlockBreakEvent event) {
         final Location location = event.getBlock().getLocation();
         final Object breakToken;
+        final BlockMenu blockMenu;
+
+        // The striped lock protects only the absent-cache initialization race.
+        // Release it *before* awaiting the active cache monitor or dropping items:
+        // ordinary ticks may enter storage-specific hooks that must not deadlock.
         synchronized (QuantumCacheLifecycle.initializationLock(location)) {
             breakToken = QuantumCacheLifecycle.markRecentlyBroken(location);
-            final BlockMenu blockMenu = StorageCacheUtils.getMenu(location);
-            if (blockMenu != null) {
-                if (CACHES.get(blockMenu.getLocation()) == null) {
-                    // Recover the persisted count when breaking before the first tick.
-                    initializeCache(blockMenu);
-                }
-                final boolean retired = QuantumCacheLifecycle.retireCurrent(
-                    CACHES, blockMenu.getLocation(), cache -> {
-                        if (cache.getAmountLong() > 0 && cache.getItemStack() != null) {
-                            final ItemStack itemToDrop = this.getItem().clone();
-                            final ItemMeta itemMeta = itemToDrop.getItemMeta();
-                            DataTypeMethods.setCustom(
-                                itemMeta, Keys.QUANTUM_STORAGE_INSTANCE, PersistentQuantumStorageType.TYPE, cache);
-                            cache.addMetaLore(itemMeta);
-                            itemToDrop.setItemMeta(itemMeta);
-                            location.getWorld().dropItem(location.clone().add(0.5, 0.5, 0.5), itemToDrop);
-                            event.setDropItems(false);
-                        }
-                        for (int slot : this.slotsToDrop) {
-                            blockMenu.dropItems(location, slot);
-                        }
-                    });
-                if (!retired) {
+            blockMenu = StorageCacheUtils.getMenu(location);
+            if (blockMenu != null && CACHES.get(blockMenu.getLocation()) == null) {
+                // Recover the persisted count when breaking before the first tick.
+                initializeCache(blockMenu);
+            }
+        }
+
+        if (blockMenu != null) {
+            final boolean retired = QuantumCacheLifecycle.retireCurrent(
+                CACHES, blockMenu.getLocation(), cache -> {
+                    if (cache.getAmountLong() > 0 && cache.getItemStack() != null) {
+                        final ItemStack itemToDrop = this.getItem().clone();
+                        final ItemMeta itemMeta = itemToDrop.getItemMeta();
+                        DataTypeMethods.setCustom(
+                            itemMeta, Keys.QUANTUM_STORAGE_INSTANCE, PersistentQuantumStorageType.TYPE, cache);
+                        cache.addMetaLore(itemMeta);
+                        itemToDrop.setItemMeta(itemMeta);
+                        location.getWorld().dropItem(location.clone().add(0.5, 0.5, 0.5), itemToDrop);
+                        event.setDropItems(false);
+                    }
                     for (int slot : this.slotsToDrop) {
                         blockMenu.dropItems(location, slot);
                     }
+                });
+            if (!retired) {
+                for (int slot : this.slotsToDrop) {
+                    blockMenu.dropItems(location, slot);
                 }
-            } else {
-                final QuantumCache stale = CACHES.get(location);
-                if (stale != null) {
-                    synchronized (stale) {
-                        CACHES.remove(location, stale);
-                    }
+            }
+        } else {
+            final QuantumCache stale = CACHES.get(location);
+            if (stale != null) {
+                synchronized (stale) {
+                    CACHES.remove(location, stale);
                 }
             }
         }
+
         // Queued async ticks must see the break marker; expire it after two seconds
         // to avoid retaining a registry entry for every broken storage indefinitely.
         try {
