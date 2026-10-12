@@ -409,55 +409,59 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
             blockMenu.markDirty();
         }
 
-        // Output items
-        final ItemStack output = blockMenu.getItemInSlot(OUTPUT_SLOT);
-        ItemStack fetched = null;
-        if (output == null || output.getType() == Material.AIR) {
-            // No item in output, try output
-            fetched = cache.withdrawItem();
-        } else if (output.getAmount() < output.getMaxStackSize() && StackUtils.itemsMatch(cache, output)) {
-            // There is an item, but it's not filled so lets top it up if we can
-            final int requestAmount = output.getMaxStackSize() - output.getAmount();
-            fetched = cache.withdrawItem(requestAmount);
-        }
-
-        if (fetched != null && fetched.getType() != Material.AIR && fetched.getAmount() > 0) {
-            final int withdrawn = fetched.getAmount();
-            final ItemStack remainder = BlockMenuUtil.pushItem(blockMenu, fetched, OUTPUT_SLOT);
-            final int remaining = remainder == null || remainder.getType() == Material.AIR
-                ? 0
-                : Math.max(0, remainder.getAmount());
-            final int committed = Math.max(0, withdrawn - remaining);
-            if (remainder != null && remaining > 0) {
-                final long configuredLimit = cache.getLimitLong();
-                int notRestored = cache.restoreAmount(remaining);
-                if (notRestored > 0) {
-                    // These items were already counted in this cache before the withdrawal. A concurrent custom-limit
-                    // change must not turn a rollback into item loss, so temporarily restore the required capacity.
-                    final long requiredLimit = cache.getAmountLong() > Long.MAX_VALUE - notRestored
-                        ? Long.MAX_VALUE
-                        : cache.getAmountLong() + notRestored;
-                    cache.setLimit(requiredLimit);
-                    notRestored = cache.restoreAmount(notRestored);
-                    cache.setLimit(configuredLimit);
-                }
-
-                if (notRestored > 0) {
-                    // This is reachable only if the cache was already at Long.MAX_VALUE. Keep the live remainder
-                    // intact and log loudly rather than clearing it or pretending it was restored.
-                    remainder.setAmount(notRestored);
-                    Networks.getInstance().getLogger().severe(
-                        "Quantum Storage could not restore " + notRestored
-                            + " output item(s) after a changed menu transaction at " + blockMenu.getLocation()
-                            + "; the live remainder was deliberately left untouched to prevent silent loss.");
-                } else {
-                    remainder.setAmount(0);
-                }
+        // Output items. Reassignment may observe a transient zero count between
+        // withdrawItem and insertion/rollback; protect the entire output transaction
+        // under the same *per-Quantum-cache* monitor used by item assignment.
+        synchronized (cache) {
+            final ItemStack output = blockMenu.getItemInSlot(OUTPUT_SLOT);
+            ItemStack fetched = null;
+            if (output == null || output.getType() == Material.AIR) {
+                // No item in output, try output
+                fetched = cache.withdrawItem();
+            } else if (output.getAmount() < output.getMaxStackSize() && StackUtils.itemsMatch(cache, output)) {
+                // There is an item, but it's not filled so lets top it up if we can
+                final int requestAmount = output.getMaxStackSize() - output.getAmount();
+                fetched = cache.withdrawItem(requestAmount);
             }
-            if (committed > 0) {
-                blockMenu.markDirty();
+
+            if (fetched != null && fetched.getType() != Material.AIR && fetched.getAmount() > 0) {
+                final int withdrawn = fetched.getAmount();
+                final ItemStack remainder = BlockMenuUtil.pushItem(blockMenu, fetched, OUTPUT_SLOT);
+                final int remaining = remainder == null || remainder.getType() == Material.AIR
+                    ? 0
+                    : Math.max(0, remainder.getAmount());
+                final int committed = Math.max(0, withdrawn - remaining);
+                if (remainder != null && remaining > 0) {
+                    final long configuredLimit = cache.getLimitLong();
+                    int notRestored = cache.restoreAmount(remaining);
+                    if (notRestored > 0) {
+                        // These items were already counted in this cache before the withdrawal. A concurrent custom-limit
+                        // change must not turn a rollback into item loss, so temporarily restore the required capacity.
+                        final long requiredLimit = cache.getAmountLong() > Long.MAX_VALUE - notRestored
+                            ? Long.MAX_VALUE
+                            : cache.getAmountLong() + notRestored;
+                        cache.setLimit(requiredLimit);
+                        notRestored = cache.restoreAmount(notRestored);
+                        cache.setLimit(configuredLimit);
+                    }
+
+                    if (notRestored > 0) {
+                        // This is reachable only if the cache was already at Long.MAX_VALUE. Keep the live remainder
+                        // intact and log loudly rather than clearing it or pretending it was restored.
+                        remainder.setAmount(notRestored);
+                        Networks.getInstance().getLogger().severe(
+                            "Quantum Storage could not restore " + notRestored
+                                + " output item(s) after a changed menu transaction at " + blockMenu.getLocation()
+                                + "; the live remainder was deliberately left untouched to prevent silent loss.");
+                    } else {
+                        remainder.setAmount(0);
+                    }
+                }
+                if (committed > 0) {
+                    blockMenu.markDirty();
+                }
+                syncBlock(blockMenu.getLocation(), cache);
             }
-            syncBlock(blockMenu.getLocation(), cache);
         }
 
         CACHES.put(blockMenu.getLocation().clone(), cache);
