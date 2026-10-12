@@ -542,9 +542,10 @@ public final class NetworkTransferUtils {
             TransferAudit.recordFailure();
             Networks.getInstance().getLogger().log(
                 java.util.logging.Level.WARNING,
-                "A Networks deposit failed before the source stack was committed.",
+                "A Networks deposit failed; reconciling the source stack with any items already accepted.",
                 exception);
-            return TransferResult.NONE;
+            // A destination can accept items before a later destination (or bookkeeping) fails.
+            // The mutated offer is the remaining amount, so reconcile accepted items on failure too.
         }
 
         final int offeredRemaining = Math.max(0, Math.min(offeredAmount, offered.getAmount()));
