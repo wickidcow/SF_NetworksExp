@@ -129,6 +129,17 @@ class QuantumCacheLifecycleTest {
     }
 
     @Test
+    void breakSnapshotKeepsCacheMappedUntilSerializationIsComplete() {
+        active.put(location, cache);
+        assertTrue(QuantumCacheLifecycle.retireCurrent(active, location, current -> {
+            assertSame(cache, active.get(location),
+                "Do not expose a cache-empty window while the break serializes contents");
+            assertSame(cache, current);
+        }));
+        assertFalse(active.containsKey(location));
+    }
+
+    @Test
     void noCacheIsNotRetiredOrInventedByBreak() {
         assertFalse(QuantumCacheLifecycle.retireCurrent(active, location, c -> fail("No cache")));
         assertTrue(active.isEmpty());

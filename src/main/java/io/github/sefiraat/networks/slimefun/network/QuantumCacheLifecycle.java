@@ -69,10 +69,16 @@ public final class QuantumCacheLifecycle {
                 if (caches.get(location) != candidate) {
                     continue;
                 }
-                if (!caches.remove(location, candidate)) {
-                    continue;
+                // Keep the old cache mapped during the break snapshot. A second
+                // asynchronous tick should find this cache and block on its monitor,
+                // rather than seeing a temporary empty entry and reinitializing it.
+                try {
+                    onRetire.accept(candidate);
+                } finally {
+                    // Detach only after the serialized drop/slot operations finish.
+                    // A queued tick that held the old reference now fails ownership.
+                    caches.remove(location, candidate);
                 }
-                onRetire.accept(candidate);
                 return true;
             }
         }
