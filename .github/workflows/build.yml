@@ -51,6 +51,9 @@ jobs:
         run: bash scripts/download_jeg.sh
       - name: Compile Networks sources against Java 25 Paper 26.3 API
         shell: bash
+        # Paper 26.3 marks additional metadata APIs deprecated. Keep compiler
+        # warnings visible, but gate API compatibility on actual compile errors.
+        # The release's 1.21.11 build remains strict with -Werror.
         run: |
           set -euo pipefail
           chmod +x gradlew
@@ -61,7 +64,7 @@ jobs:
             -PjegJar="$PWD/.ci/jeg/SF_JustEnoughGuide2.1.67.jar" \
             -PpaperApiVersion=26.3.build.176-stable \
             -Ppaper26_3Compile=true \
-            -PstrictDeprecation=true
+            -PstrictDeprecation=false
 
   build:
     name: Build Networks JAR
