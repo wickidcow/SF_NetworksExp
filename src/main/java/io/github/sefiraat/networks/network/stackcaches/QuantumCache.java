@@ -4,6 +4,7 @@ import com.balugaq.netex.utils.Lang;
 import com.ytdd9527.networksexpansion.utils.TextUtil;
 import net.kyori.adventure.text.Component;
 import io.github.sefiraat.networks.utils.DisplayNameUtils;
+import io.github.sefiraat.networks.utils.StackUtils;
 import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.inventory.ItemStack;
@@ -95,6 +96,24 @@ public class QuantumCache extends ItemStackCache {
         final int accepted = (int) Math.min((long) incoming, capacity);
         this.amount += accepted;
         return this.voidExcess ? 0 : incoming - accepted;
+    }
+
+    /**
+     * Atomically validates the live assigned template and accepts a matching source stack.
+     * The caller commits the returned remainder to its source inventory. Keeping matching
+     * and quantity mutation under one cache lock prevents conversion of an incoming item
+     * into a different item assigned between those two operations.
+     *
+     * @return unaccepted source quantity; zero also represents deliberate void-excess disposal
+     */
+    public synchronized int increaseMatchingAmount(@NotNull ItemStack incoming) {
+        if (incoming.getAmount() <= 0) {
+            return 0;
+        }
+        if (!StackUtils.itemsMatch(this, incoming)) {
+            return incoming.getAmount();
+        }
+        return increaseAmount(incoming.getAmount());
     }
 
     /**
