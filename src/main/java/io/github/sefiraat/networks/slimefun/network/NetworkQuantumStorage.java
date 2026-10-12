@@ -12,7 +12,6 @@ import com.ytdd9527.networksexpansion.utils.itemstacks.ItemStackUtil;
 import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.network.NodeDefinition;
-import io.github.sefiraat.networks.network.stackcaches.ItemStackCache;
 import io.github.sefiraat.networks.network.stackcaches.QuantumCache;
 import io.github.sefiraat.networks.utils.Keys;
 import io.github.sefiraat.networks.utils.NetworkUtils;
@@ -638,96 +637,104 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
         };
     }
 
+    /**
+     * Quick Insert uses the real accepted amount, not the previously observed
+     * capacity, and keeps the player's source and cache update in one monitor.
+     * The explicit capacity limit preserves historical Quick Insert behavior
+     * when Void Excess is enabled (it must not destroy an entire full inventory).
+     */
     public synchronized void insertAll(@NotNull Player p, @NotNull BlockMenu menu, @NotNull Block b) {
-        PlayerInventory inv = p.getInventory();
-        QuantumCache cache = CACHES.get(menu.getLocation());
-        if (cache == null) return;
+        final QuantumCache cache = CACHES.get(menu.getLocation());
+        if (cache == null) {
+            return;
+        }
+        QuantumCacheLifecycle.withCurrent(CACHES, menu.getLocation(), cache, current -> {
+            final ItemStack storedItem = current.getItemStack();
+            if (storedItem == null || isNestedQuantumStorage(storedItem)) {
+                return;
+            }
+            final PlayerInventory inventory = p.getInventory();
+            final ItemStack[] contents = inventory.getContents();
+            for (int slot = 0; slot < contents.length; slot++) {
+                final ItemStack source = contents[slot];
+                if (source == null || source.getType() == Material.AIR
+                    || isNestedQuantumStorage(source) || !StackUtils.itemsMatch(current, source)) {
+                    continue;
+                }
 
-        ItemStack storedItem = cache.getItemStack();
-        if (storedItem == null || isNestedQuantumStorage(storedItem)) return;
-
-//        if (dupeDetect(b, p)) {
-//            return;
-//        }
-
-        long capacity = cache.getLimitLong();
-
-        ItemStack[] contents = inv.getContents();
-
-        for (int i = 0; i < contents.length; i++) {
-            ItemStack item = contents[i];
-            if (item == null || item.getType() == Material.AIR || isNestedQuantumStorage(item)) continue;
-
-            ItemStackCache storedItemCache = new ItemStackCache(storedItem);
-
-            if (StackUtils.itemsMatch(storedItemCache, item)) {
-                int toAdd = Math.toIntExact(Math.min(item.getAmount(), capacity - cache.getAmountLong()));
-                if (toAdd > 0) {
-                    NetworkUtils.clearNearbyNetworks(menu.getLocation());
-                    item.setAmount(item.getAmount() - toAdd);
-                    cache.increaseAmount(toAdd);
-
-                    if (item.getAmount() == 0) {
-                        inv.setItem(i, null);
+                // Reserve only the real available capacity. The offer clone allows
+                // the live cache's accepted amount to be reconciled before changing
+                // the player's actual source stack.
+                final long available = Math.max(0L, current.getLimitLong() - current.getAmountLong());
+                final int offered = (int) Math.min((long) source.getAmount(), available);
+                if (offered <= 0) {
+                    continue;
+                }
+                final ItemStack offer = source.clone();
+                offer.setAmount(offered);
+                NetworkUtils.clearNearbyNetworks(menu.getLocation());
+                final int remainder = current.increaseMatchingAmount(offer);
+                final int moved = offered - remainder;
+                if (moved > 0) {
+                    source.setAmount(source.getAmount() - moved);
+                    if (source.getAmount() == 0) {
+                        inventory.setItem(slot, null);
                     }
                 }
             }
-        }
-
-        syncBlock(b.getLocation(), cache);
-        updateDisplayItem(menu, cache);
+            syncBlock(b.getLocation(), current);
+            updateDisplayItem(menu, current);
+        });
     }
 
-    public synchronized void extract(@NotNull Player p, @NotNull BlockMenu menu, @NotNull Block b, @NotNull ClickAction action) {
-        QuantumCache cache = CACHES.get(menu.getLocation());
-        if (cache == null) return;
-
-        ItemStack storedItem = cache.getItemStack();
-        if (storedItem == null || isNestedQuantumStorage(storedItem)) {
+    /**
+     * Quick Extract and Extract All return exactly the items the live cache has
+     * actually withdrawn. Never construct outputs from a stale stored-count snapshot
+     * or use clamping reduceAmount() after already giving the player items.
+     */
+    public synchronized void extract(
+        @NotNull Player p, @NotNull BlockMenu menu, @NotNull Block b, @NotNull ClickAction action) {
+        final QuantumCache cache = CACHES.get(menu.getLocation());
+        if (cache == null) {
             return;
         }
-
-//        if (dupeDetect(b, p)) {
-//            return;
-//        }
-
-        long stored = cache.getAmountLong();
-        if (action.isShiftClicked() && action.isRightClicked()) {
-            ItemStack extractedItem = cache.withdrawItem(64);
-            if (extractedItem != null) {
-                ItemStackUtil.giveOrDropItem(p, extractedItem);
+        QuantumCacheLifecycle.withCurrent(CACHES, menu.getLocation(), cache, current -> {
+            final ItemStack storedItem = current.getItemStack();
+            if (storedItem == null || isNestedQuantumStorage(storedItem)) {
+                return;
             }
-        } else if (action.isRightClicked()) {
-            ItemStack extractedItem = cache.withdrawItem(1);
-            if (extractedItem != null) {
-                ItemStackUtil.giveOrDropItem(p, extractedItem);
-            }
-        } else {
-            PlayerInventory inv = p.getInventory();
-            ItemStack[] contents = inv.getStorageContents();
-
-            for (int i = 0; i < contents.length; i++) {
-                if (contents[i] == null || contents[i].getType() == Material.AIR) {
-                    if (stored == 0) break;
-
-                    long amountToExtractr = Math.min(stored, storedItem.getMaxStackSize());
-                    int amountToExtract = amountToExtractr > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) amountToExtractr;
-                    ItemStack itemToInsert = storedItem.clone();
-                    itemToInsert.setAmount(amountToExtract);
-                    contents[i] = itemToInsert;
-
-                    NetworkUtils.clearNearbyNetworks(menu.getLocation());
-                    cache.reduceAmount(amountToExtract);
-                    stored -= amountToExtract;
-
-                    if (stored == 0) break;
+            if (action.isShiftClicked() && action.isRightClicked()) {
+                final ItemStack withdrawn = current.withdrawItem(64);
+                if (withdrawn != null) {
+                    ItemStackUtil.giveOrDropItem(p, withdrawn);
                 }
+            } else if (action.isRightClicked()) {
+                final ItemStack withdrawn = current.withdrawItem(1);
+                if (withdrawn != null) {
+                    ItemStackUtil.giveOrDropItem(p, withdrawn);
+                }
+            } else {
+                final PlayerInventory inventory = p.getInventory();
+                final ItemStack[] contents = inventory.getStorageContents();
+                for (int slot = 0; slot < contents.length; slot++) {
+                    if (contents[slot] != null && contents[slot].getType() != Material.AIR) {
+                        continue;
+                    }
+                    if (current.getAmountLong() <= 0) {
+                        break;
+                    }
+                    NetworkUtils.clearNearbyNetworks(menu.getLocation());
+                    final ItemStack withdrawn = current.withdrawItem(storedItem.getMaxStackSize());
+                    if (withdrawn == null || withdrawn.getAmount() <= 0) {
+                        break;
+                    }
+                    contents[slot] = withdrawn;
+                }
+                inventory.setStorageContents(contents);
+                updateDisplayItem(menu, current);
             }
-
-            p.getInventory().setStorageContents(contents);
-            updateDisplayItem(menu, cache);
-        }
-        syncBlock(b.getLocation(), cache);
+            syncBlock(b.getLocation(), current);
+        });
     }
 
     private @Nullable QuantumCache addCache(@NotNull BlockMenu blockMenu) {

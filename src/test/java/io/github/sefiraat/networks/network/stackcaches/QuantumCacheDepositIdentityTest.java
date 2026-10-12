@@ -110,6 +110,39 @@ class QuantumCacheDepositIdentityTest {
         assertEquals(0L, cache.getAmountLong());
     }
 
+    @Test
+    void manualExtractionNeverReturnsMoreThanTheLiveStoredQuantity() {
+        cache.setAmount(5L);
+        // Simulate a previous transport withdrawal before the player extraction.
+        ItemStack networkWithdrawal = cache.withdrawItem(4);
+        assertNotNull(networkWithdrawal);
+        assertEquals(4, networkWithdrawal.getAmount());
+
+        // The manual handler now uses this actual remaining cache transaction.
+        ItemStack playerWithdrawal = cache.withdrawItem(64);
+        assertNotNull(playerWithdrawal);
+        assertEquals(1, playerWithdrawal.getAmount());
+        assertEquals(0L, cache.getAmountLong());
+        assertNull(cache.withdrawItem(64));
+        assertEquals(5, networkWithdrawal.getAmount() + playerWithdrawal.getAmount());
+    }
+
+    @Test
+    void manualInsertCannotOverfillOrConsumeBeyondRemainingCapacity() {
+        cache.setAmount(60L);
+        ItemStack source = namedDiamond(10, "same");
+        int available = (int) Math.min(source.getAmount(), cache.getLimitLong() - cache.getAmountLong());
+        ItemStack offer = source.clone();
+        offer.setAmount(available);
+        int accepted = available - cache.increaseMatchingAmount(offer);
+        source.setAmount(source.getAmount() - accepted);
+
+        assertEquals(4, accepted);
+        assertEquals(6, source.getAmount());
+        assertEquals(64L, cache.getAmountLong());
+        assertEquals(70L, source.getAmount() + cache.getAmountLong());
+    }
+
     private static ItemStack namedDiamond(int amount, String owner) {
         ItemStack stack = new ItemStack(Material.DIAMOND, amount);
         var meta = stack.getItemMeta();
