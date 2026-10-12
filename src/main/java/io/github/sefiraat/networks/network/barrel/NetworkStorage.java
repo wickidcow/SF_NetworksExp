@@ -5,6 +5,7 @@ import io.github.sefiraat.networks.network.stackcaches.BarrelIdentity;
 import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
 import io.github.sefiraat.networks.network.stackcaches.QuantumCache;
 import io.github.sefiraat.networks.slimefun.network.NetworkQuantumStorage;
+import io.github.sefiraat.networks.slimefun.network.QuantumCacheLifecycle;
 import io.github.sefiraat.networks.utils.StackUtils;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Location;
@@ -51,8 +52,12 @@ public class NetworkStorage extends BarrelIdentity {
             return null;
         }
 
-        return withdrawIfMatching(cache, itemRequest,
-            () -> NetworkQuantumStorage.getItemStack(cache, blockMenu, itemRequest.getAmount()));
+        // Hold the cache lock and verify it is still attached to this block.
+        // A break can remove the map entry after this method fetched the reference.
+        return QuantumCacheLifecycle.readCurrent(
+            NetworkQuantumStorage.getCaches(), blockMenu.getLocation(), cache,
+            () -> withdrawIfMatching(cache, itemRequest,
+                () -> NetworkQuantumStorage.getItemStack(cache, blockMenu, itemRequest.getAmount())));
     }
 
     /**

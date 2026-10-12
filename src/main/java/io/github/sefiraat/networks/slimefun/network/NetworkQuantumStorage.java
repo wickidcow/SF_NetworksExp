@@ -152,7 +152,7 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
         // Match the same monitor used by NetworkStorage.requestItem: reassignment
         // must not occur between its live-identity validation and item withdrawal.
         synchronized (cache) {
-            if (cache.getAmountLong() > 0) {
+            if (CACHES.get(blockMenu.getLocation()) != cache || cache.getAmountLong() > 0) {
                 return;
             }
             final ItemStack storedTemplate = itemStack.clone();
@@ -161,33 +161,32 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
             cache.setAmount(amount);
             updateDisplayItem(blockMenu, cache);
             syncBlock(blockMenu.getLocation(), cache);
-            CACHES.put(blockMenu.getLocation(), cache);
         }
     }
 
     @ParametersAreNonnullByDefault
     public static void tryInputItem(Location location, ItemStack[] input, QuantumCache cache) {
-        if (cache.getItemStack() == null || isNestedQuantumStorage(cache.getItemStack())) {
-            return;
-        }
+        QuantumCacheLifecycle.withCurrent(CACHES, location, cache, current -> {
+            if (current.getItemStack() == null || isNestedQuantumStorage(current.getItemStack())) {
+                return;
+            }
 
-        for (ItemStack itemStack : input) {
-            if (itemStack == null
-                || itemStack.getType() == Material.AIR
-                || StackUtils.isBlacklisted(itemStack)
-                || isNestedQuantumStorage(itemStack)) {
-                continue;
+            for (ItemStack itemStack : input) {
+                if (itemStack == null
+                    || itemStack.getType() == Material.AIR
+                    || StackUtils.isBlacklisted(itemStack)
+                    || isNestedQuantumStorage(itemStack)) {
+                    continue;
+                }
+                // The live match and quantity reservation are atomic on this cache.
+                final int offered = itemStack.getAmount();
+                final int leftover = current.increaseMatchingAmount(itemStack);
+                if (leftover != offered) {
+                    itemStack.setAmount(leftover);
+                }
             }
-            // Compare against the *live* assigned item and reserve capacity in one
-            // QuantumCache monitor. Separate itemsMatch/increaseAmount calls could
-            // otherwise race with a same-tick empty-storage reassignment.
-            final int offered = itemStack.getAmount();
-            final int leftover = cache.increaseMatchingAmount(itemStack);
-            if (leftover != offered) {
-                itemStack.setAmount(leftover);
-            }
-        }
-        syncBlock(location, cache);
+            syncBlock(location, current);
+        });
     }
 
     @ParametersAreNonnullByDefault
@@ -204,10 +203,16 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
     @ParametersAreNonnullByDefault
     @Nullable
     public static ItemStack getItemStack(@NotNull QuantumCache cache, @NotNull BlockMenu blockMenu, int amount) {
-        if (cache.getItemStack() == null || isNestedQuantumStorage(cache.getItemStack())) {
+        if (amount <= 0) {
             return null;
         }
         synchronized (cache) {
+            // Callers can have a cached reference from before a block break.
+            if (CACHES.get(blockMenu.getLocation()) != cache
+                || cache.getItemStack() == null
+                || isNestedQuantumStorage(cache.getItemStack())) {
+                return null;
+            }
             if (cache.getAmountLong() < amount) {
                 // Storage has no content or not enough, mix and match!
                 ItemStack output = blockMenu.getItemInSlot(OUTPUT_SLOT);
@@ -337,7 +342,7 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
             return;
         }
         synchronized (cache) {
-            if (cache.getAmountLong() > 0) {
+            if (CACHES.get(blockMenu.getLocation()) != cache || cache.getAmountLong() > 0) {
                 player.sendMessage(
                     Lang.getString("messages.unsupported-operation.quantum_storage.quantum_storage_not_empty"));
                 return;
@@ -346,7 +351,6 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
             cache.setItemStack(itemStack);
             updateDisplayItem(blockMenu, cache);
             syncBlock(blockMenu.getLocation(), cache);
-            CACHES.put(blockMenu.getLocation(), cache);
         }
     }
 
@@ -380,19 +384,32 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
     }
 
     private void onTick(@NotNull Block block) {
-        final BlockMenu blockMenu = StorageCacheUtils.getMenu(block.getLocation());
-
+        final Location location = block.getLocation();
+        final BlockMenu blockMenu = StorageCacheUtils.getMenu(location);
         if (blockMenu == null) {
-            CACHES.remove(block.getLocation());
+            // A tick queued before unload/break must not leave a stale cached instance.
+            final QuantumCache missingMenuCache = CACHES.get(location);
+            if (missingMenuCache != null) {
+                synchronized (missingMenuCache) {
+                    CACHES.remove(location, missingMenuCache);
+                }
+            }
             return;
         }
 
         QuantumCache cache = CACHES.get(blockMenu.getLocation());
-
         if (cache == null) {
             cache = addCache(blockMenu);
         }
 
+        // Hold this storage's monitor from first inventory read through final persisted
+        // write. A concurrent block break waits, then serializes the exact final state.
+        // If break already detached this cache, the queued tick is a no-op.
+        QuantumCacheLifecycle.withCurrent(CACHES, blockMenu.getLocation(), cache,
+            current -> processActiveTick(blockMenu, current));
+    }
+
+    private void processActiveTick(@NotNull BlockMenu blockMenu, @NotNull QuantumCache cache) {
         if (isNestedQuantumStorage(cache.getItemStack())) {
             sendFeedback(blockMenu.getLocation(), FeedbackType.ERROR_OCCURRED);
             return;
@@ -463,8 +480,6 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
                 syncBlock(blockMenu.getLocation(), cache);
             }
         }
-
-        CACHES.put(blockMenu.getLocation().clone(), cache);
         sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
     }
 
@@ -473,10 +488,11 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
         if (cache == null) {
             return;
         }
-        cache.setVoidExcess(!cache.isVoidExcess());
-        updateDisplayItem(blockMenu, cache);
-        syncBlock(blockMenu.getLocation(), cache);
-        CACHES.put(blockMenu.getLocation(), cache);
+        QuantumCacheLifecycle.withCurrent(CACHES, blockMenu.getLocation(), cache, current -> {
+            current.setVoidExcess(!current.isVoidExcess());
+            updateDisplayItem(blockMenu, current);
+            syncBlock(blockMenu.getLocation(), current);
+        });
     }
 
     private void setCustomMaxAmount(@NotNull BlockMenu blockMenu, @NotNull Player player, long newMaxAmount) {
@@ -487,16 +503,17 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
                 Lang.getString("messages.unsupported-operation.quantum_storage.custom_max_amount_not_supported_new"));
             return;
         }
-        cache.setLimit(newMaxAmount);
-        final long appliedMaxAmount = cache.getLimitLong();
-        updateDisplayItem(blockMenu, cache);
-        syncBlock(blockMenu.getLocation(), cache);
-        CACHES.put(blockMenu.getLocation(), cache);
-
-        player.sendMessage(
-            String.format(
-                Lang.getString("messages.completed-operation.quantum_storage.changed_custom_max_amount"),
-                appliedMaxAmount));
+        final boolean changed = QuantumCacheLifecycle.withCurrent(CACHES, blockMenu.getLocation(), cache, current -> {
+            current.setLimit(newMaxAmount);
+            updateDisplayItem(blockMenu, current);
+            syncBlock(blockMenu.getLocation(), current);
+        });
+        if (changed) {
+            player.sendMessage(
+                String.format(
+                    Lang.getString("messages.completed-operation.quantum_storage.changed_custom_max_amount"),
+                    cache.getLimitLong()));
+        }
     }
 
     @Override
@@ -721,8 +738,8 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
 
         QuantumCache cache = createCache(itemStack, blockMenu, amount, maxAmount, voidExcess, supportsCustomMaxAmount);
 
-        CACHES.put(location, cache);
-        return cache;
+        final QuantumCache existing = CACHES.putIfAbsent(location.clone(), cache);
+        return existing == null ? cache : existing;
     }
 
     private @NotNull QuantumCache createCache(
@@ -788,22 +805,30 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
         final BlockMenu blockMenu = StorageCacheUtils.getMenu(event.getBlock().getLocation());
 
         if (blockMenu != null) {
-            final QuantumCache cache = CACHES.remove(blockMenu.getLocation());
+            final boolean retired = QuantumCacheLifecycle.retireCurrent(
+                CACHES, blockMenu.getLocation(), cache -> {
+                    if (cache.getAmountLong() > 0 && cache.getItemStack() != null) {
+                        final ItemStack itemToDrop = this.getItem().clone();
+                        final ItemMeta itemMeta = itemToDrop.getItemMeta();
 
-            if (cache != null && cache.getAmountLong() > 0 && cache.getItemStack() != null) {
-                final ItemStack itemToDrop = this.getItem().clone();
-                final ItemMeta itemMeta = itemToDrop.getItemMeta();
+                        DataTypeMethods.setCustom(
+                            itemMeta, Keys.QUANTUM_STORAGE_INSTANCE, PersistentQuantumStorageType.TYPE, cache);
+                        cache.addMetaLore(itemMeta);
+                        itemToDrop.setItemMeta(itemMeta);
+                        location.getWorld().dropItem(location.clone().add(0.5, 0.5, 0.5), itemToDrop);
+                        event.setDropItems(false);
+                    }
 
-                DataTypeMethods.setCustom(
-                    itemMeta, Keys.QUANTUM_STORAGE_INSTANCE, PersistentQuantumStorageType.TYPE, cache);
-                cache.addMetaLore(itemMeta);
-                itemToDrop.setItemMeta(itemMeta);
-                location.getWorld().dropItem(location.clone().add(0.5, 0.5, 0.5), itemToDrop);
-                event.setDropItems(false);
-            }
-
-            for (int i : this.slotsToDrop) {
-                blockMenu.dropItems(location, i);
+                    for (int i : this.slotsToDrop) {
+                        blockMenu.dropItems(location, i);
+                    }
+                });
+            if (!retired) {
+                // Preserve the existing slot-drop path for a block broken before its
+                // cache was first initialized. No live QuantumCache was detached.
+                for (int i : this.slotsToDrop) {
+                    blockMenu.dropItems(location, i);
+                }
             }
         }
     }
