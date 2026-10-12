@@ -140,6 +140,37 @@ class QuantumCacheLifecycleTest {
     }
 
     @Test
+    void recentBreakClosesInitializationUntilCleanupOrPlacement() {
+        Object marker;
+        synchronized (QuantumCacheLifecycle.initializationLock(location)) {
+            marker = QuantumCacheLifecycle.markRecentlyBroken(location);
+            assertTrue(QuantumCacheLifecycle.isRecentlyBroken(location));
+        }
+        try {
+            QuantumCacheLifecycle.clearBreakMarker(location, new Object());
+            assertTrue(QuantumCacheLifecycle.isRecentlyBroken(location));
+            QuantumCacheLifecycle.clearBreakMarker(location, marker);
+            assertFalse(QuantumCacheLifecycle.isRecentlyBroken(location));
+        } finally {
+            QuantumCacheLifecycle.clearBreakMarker(location);
+        }
+    }
+
+    @Test
+    void earlierDelayedCleanupCannotClearNewerBreakMarker() {
+        Object first = QuantumCacheLifecycle.markRecentlyBroken(location);
+        Object second = QuantumCacheLifecycle.markRecentlyBroken(location);
+        try {
+            QuantumCacheLifecycle.clearBreakMarker(location, first);
+            assertTrue(QuantumCacheLifecycle.isRecentlyBroken(location));
+            QuantumCacheLifecycle.clearBreakMarker(location, second);
+            assertFalse(QuantumCacheLifecycle.isRecentlyBroken(location));
+        } finally {
+            QuantumCacheLifecycle.clearBreakMarker(location);
+        }
+    }
+
+    @Test
     void noCacheIsNotRetiredOrInventedByBreak() {
         assertFalse(QuantumCacheLifecycle.retireCurrent(active, location, c -> fail("No cache")));
         assertTrue(active.isEmpty());

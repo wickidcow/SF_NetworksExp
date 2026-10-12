@@ -41,6 +41,7 @@ import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -385,6 +386,9 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
 
     private void onTick(@NotNull Block block) {
         final Location location = block.getLocation();
+        if (QuantumCacheLifecycle.isRecentlyBroken(location)) {
+            return;
+        }
         final BlockMenu blockMenu = StorageCacheUtils.getMenu(location);
         if (blockMenu == null) {
             // A tick queued before unload/break must not leave a stale cached instance.
@@ -400,13 +404,19 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
         QuantumCache cache = CACHES.get(blockMenu.getLocation());
         if (cache == null) {
             cache = addCache(blockMenu);
+            if (cache == null) {
+                return;
+            }
         }
 
         // Hold this storage's monitor from first inventory read through final persisted
         // write. A concurrent block break waits, then serializes the exact final state.
         // If break already detached this cache, the queued tick is a no-op.
-        QuantumCacheLifecycle.withCurrent(CACHES, blockMenu.getLocation(), cache,
-            current -> processActiveTick(blockMenu, current));
+        QuantumCacheLifecycle.withCurrent(CACHES, blockMenu.getLocation(), cache, current -> {
+            if (!QuantumCacheLifecycle.isRecentlyBroken(location)) {
+                processActiveTick(blockMenu, current);
+            }
+        });
     }
 
     private void processActiveTick(@NotNull BlockMenu blockMenu, @NotNull QuantumCache cache) {
@@ -621,7 +631,9 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
                 if (cache == null) {
                     cache = addCache(menu);
                 }
-                updateDisplayItem(menu, cache);
+                if (cache != null) {
+                    updateDisplayItem(menu, cache);
+                }
             }
         };
     }
@@ -718,8 +730,24 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
         syncBlock(b.getLocation(), cache);
     }
 
-    private @NotNull QuantumCache addCache(@NotNull BlockMenu blockMenu) {
+    private @Nullable QuantumCache addCache(@NotNull BlockMenu blockMenu) {
         final Location location = blockMenu.getLocation();
+        synchronized (QuantumCacheLifecycle.initializationLock(location)) {
+            if (QuantumCacheLifecycle.isRecentlyBroken(location)) {
+                return null;
+            }
+            return initializeCache(blockMenu);
+        }
+    }
+
+    // Under the location initialization lock; break also uses this to recover a
+    // filled storage before its first post-restart tick.
+    private @NotNull QuantumCache initializeCache(@NotNull BlockMenu blockMenu) {
+        final Location location = blockMenu.getLocation();
+        final QuantumCache existing = CACHES.get(location);
+        if (existing != null) {
+            return existing;
+        }
         SlimefunBlockData blockData = StorageCacheUtils.getBlock(location);
         if (blockData == null) {
             return new QuantumCache(null, 0, this.maxAmount, false, this.supportsCustomMaxAmount);
@@ -802,58 +830,77 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
 
     protected void onBreak(@NotNull BlockBreakEvent event) {
         final Location location = event.getBlock().getLocation();
-        final BlockMenu blockMenu = StorageCacheUtils.getMenu(event.getBlock().getLocation());
-
-        if (blockMenu != null) {
-            final boolean retired = QuantumCacheLifecycle.retireCurrent(
-                CACHES, blockMenu.getLocation(), cache -> {
-                    if (cache.getAmountLong() > 0 && cache.getItemStack() != null) {
-                        final ItemStack itemToDrop = this.getItem().clone();
-                        final ItemMeta itemMeta = itemToDrop.getItemMeta();
-
-                        DataTypeMethods.setCustom(
-                            itemMeta, Keys.QUANTUM_STORAGE_INSTANCE, PersistentQuantumStorageType.TYPE, cache);
-                        cache.addMetaLore(itemMeta);
-                        itemToDrop.setItemMeta(itemMeta);
-                        location.getWorld().dropItem(location.clone().add(0.5, 0.5, 0.5), itemToDrop);
-                        event.setDropItems(false);
+        final Object breakToken;
+        synchronized (QuantumCacheLifecycle.initializationLock(location)) {
+            breakToken = QuantumCacheLifecycle.markRecentlyBroken(location);
+            final BlockMenu blockMenu = StorageCacheUtils.getMenu(location);
+            if (blockMenu != null) {
+                if (CACHES.get(blockMenu.getLocation()) == null) {
+                    // Recover the persisted count when breaking before the first tick.
+                    initializeCache(blockMenu);
+                }
+                final boolean retired = QuantumCacheLifecycle.retireCurrent(
+                    CACHES, blockMenu.getLocation(), cache -> {
+                        if (cache.getAmountLong() > 0 && cache.getItemStack() != null) {
+                            final ItemStack itemToDrop = this.getItem().clone();
+                            final ItemMeta itemMeta = itemToDrop.getItemMeta();
+                            DataTypeMethods.setCustom(
+                                itemMeta, Keys.QUANTUM_STORAGE_INSTANCE, PersistentQuantumStorageType.TYPE, cache);
+                            cache.addMetaLore(itemMeta);
+                            itemToDrop.setItemMeta(itemMeta);
+                            location.getWorld().dropItem(location.clone().add(0.5, 0.5, 0.5), itemToDrop);
+                            event.setDropItems(false);
+                        }
+                        for (int slot : this.slotsToDrop) {
+                            blockMenu.dropItems(location, slot);
+                        }
+                    });
+                if (!retired) {
+                    for (int slot : this.slotsToDrop) {
+                        blockMenu.dropItems(location, slot);
                     }
-
-                    for (int i : this.slotsToDrop) {
-                        blockMenu.dropItems(location, i);
+                }
+            } else {
+                final QuantumCache stale = CACHES.get(location);
+                if (stale != null) {
+                    synchronized (stale) {
+                        CACHES.remove(location, stale);
                     }
-                });
-            if (!retired) {
-                // Preserve the existing slot-drop path for a block broken before its
-                // cache was first initialized. No live QuantumCache was detached.
-                for (int i : this.slotsToDrop) {
-                    blockMenu.dropItems(location, i);
                 }
             }
+        }
+        // Queued async ticks must see the break marker; expire it after two seconds
+        // to avoid retaining a registry entry for every broken storage indefinitely.
+        try {
+            Bukkit.getScheduler().runTaskLater(Networks.getInstance(),
+                () -> QuantumCacheLifecycle.clearBreakMarker(location, breakToken), 40L);
+        } catch (RuntimeException | LinkageError exception) {
+            Networks.getInstance().getLogger().fine(
+                "Quantum Storage break-marker cleanup could not be scheduled: " + exception.getMessage());
         }
     }
 
     protected void onPlace(@NotNull BlockPlaceEvent event) {
-        final ItemStack itemStack = event.getItemInHand();
-        final ItemMeta itemMeta = itemStack.getItemMeta();
-        QuantumCache cache = Keys.getQuantumCache(itemMeta);
-
-        if (cache == null) {
+        if (event.isCancelled()) {
             return;
         }
-
-        if (cache.getItemStack() != null && isNestedQuantumStorage(cache.getItemStack())) {
-            event.getPlayer().sendMessage(NESTED_STORAGE_MESSAGE);
-            event.setCancelled(true);
-            return;
+        final Location location = event.getBlock().getLocation();
+        synchronized (QuantumCacheLifecycle.initializationLock(location)) {
+            final ItemStack itemStack = event.getItemInHand();
+            final ItemMeta itemMeta = itemStack.getItemMeta();
+            final QuantumCache cache = Keys.getQuantumCache(itemMeta);
+            if (cache != null && cache.getItemStack() != null && isNestedQuantumStorage(cache.getItemStack())) {
+                event.getPlayer().sendMessage(NESTED_STORAGE_MESSAGE);
+                event.setCancelled(true);
+                return;
+            }
+            QuantumCacheLifecycle.clearBreakMarker(location);
+            if (cache == null || (cache.getItemStack() != null && StackUtils.isBlacklisted(cache.getItemStack()))) {
+                return;
+            }
+            syncBlock(location, cache);
+            CACHES.put(location.clone(), cache);
         }
-
-        if (cache.getItemStack() != null && StackUtils.isBlacklisted(cache.getItemStack())) {
-            return;
-        }
-
-        syncBlock(event.getBlock().getLocation(), cache);
-        CACHES.put(event.getBlock().getLocation(), cache);
     }
 
     private static long parseStoredLong(

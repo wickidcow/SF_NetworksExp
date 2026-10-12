@@ -6,6 +6,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -17,7 +18,40 @@ import java.util.function.Supplier;
  * stale reference cannot mutate already-serialized storage contents.
  */
 public final class QuantumCacheLifecycle {
+    // Used on cache startup, break and placement only; normal ticks use the cache monitor.
+    private static final Object[] INITIALIZATION_LOCKS = new Object[256];
+    private static final Map<Location, Object> RECENTLY_BROKEN = new ConcurrentHashMap<>();
+
+    static {
+        for (int i = 0; i < INITIALIZATION_LOCKS.length; i++) {
+            INITIALIZATION_LOCKS[i] = new Object();
+        }
+    }
+
     private QuantumCacheLifecycle() {
+    }
+
+    public static @NotNull Object initializationLock(@NotNull Location location) {
+        return INITIALIZATION_LOCKS[location.hashCode() & (INITIALIZATION_LOCKS.length - 1)];
+    }
+
+    public static @NotNull Object markRecentlyBroken(@NotNull Location location) {
+        final Object token = new Object();
+        RECENTLY_BROKEN.put(location.clone(), token);
+        return token;
+    }
+
+    public static boolean isRecentlyBroken(@NotNull Location location) {
+        return RECENTLY_BROKEN.containsKey(location);
+    }
+
+    public static void clearBreakMarker(@NotNull Location location) {
+        RECENTLY_BROKEN.remove(location);
+    }
+
+    // Old scheduled cleanup cannot clear a later break marker at the same position.
+    public static void clearBreakMarker(@NotNull Location location, @NotNull Object token) {
+        RECENTLY_BROKEN.remove(location, token);
     }
 
     public static boolean withCurrent(
