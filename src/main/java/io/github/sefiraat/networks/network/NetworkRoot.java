@@ -913,6 +913,13 @@ public class NetworkRoot extends NetworkNode {
                 continue;
             }
 
+            // A barrel's cached display template may no longer describe the live item.
+            // The storage adapter must validate before consuming; this is the final
+            // boundary check before combining an item with the requested result.
+            if (!StackUtils.itemsMatch(request, fetched)) {
+                continue;
+            }
+
             // Stack is null, so we can fill it here
             if (stackToReturn == null) {
                 stackToReturn = fetched.clone();
@@ -1849,6 +1856,11 @@ public class NetworkRoot extends NetworkNode {
                         continue;
                     }
 
+                    // Cached access history must not bypass the live item identity check.
+                    if (!StackUtils.itemsMatch(request, fetched)) {
+                        continue;
+                    }
+
                     // Stack is null, so we can fill it here
                     if (stackToReturn == null) {
                         stackToReturn = fetched.clone();
@@ -1945,6 +1957,13 @@ public class NetworkRoot extends NetworkNode {
             boolean infinity = barrelIdentity instanceof InfinityBarrel;
             final ItemStack fetched = barrelIdentity.requestItem(request);
             if (fetched == null || fetched.getType() == Material.AIR || (infinity && fetched.getAmount() == 1)) {
+                continue;
+            }
+
+            // A barrel's cached display template may no longer describe the live item.
+            // The storage adapter must validate before consuming; this is the final
+            // boundary check before combining an item with the requested result.
+            if (!StackUtils.itemsMatch(request, fetched)) {
                 continue;
             }
 

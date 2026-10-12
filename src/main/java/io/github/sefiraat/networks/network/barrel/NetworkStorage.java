@@ -47,11 +47,21 @@ public class NetworkStorage extends BarrelIdentity {
 
         final QuantumCache cache = NetworkQuantumStorage.getCaches().get(blockMenu.getLocation());
 
-        if (cache == null) {
+        if (cache == null || itemRequest.getAmount() <= 0) {
             return null;
         }
 
-        return NetworkQuantumStorage.getItemStack(cache, blockMenu, itemRequest.getAmount());
+        // The BarrelIdentity was built from a storage snapshot. A previously empty Quantum
+        // Storage can be emptied and assigned a different item while the root is still active.
+        // Validate the *live* template under the same cache monitor used by Quantum withdrawal
+        // and template assignment, before removing any items.
+        synchronized (cache) {
+            final ItemStack liveTemplate = cache.getItemStack();
+            if (liveTemplate == null || !StackUtils.itemsMatch(itemRequest, liveTemplate)) {
+                return null;
+            }
+            return NetworkQuantumStorage.getItemStack(cache, blockMenu, itemRequest.getAmount());
+        }
     }
 
     @Override

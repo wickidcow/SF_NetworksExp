@@ -146,16 +146,23 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
         }
 
         final QuantumCache cache = CACHES.get(blockMenu.getLocation());
-        if (cache == null || cache.getAmountLong() > 0) {
+        if (cache == null) {
             return;
         }
-        final ItemStack storedTemplate = itemStack.clone();
-        storedTemplate.setAmount(1);
-        cache.setItemStack(storedTemplate);
-        cache.setAmount(amount);
-        updateDisplayItem(blockMenu, cache);
-        syncBlock(blockMenu.getLocation(), cache);
-        CACHES.put(blockMenu.getLocation(), cache);
+        // Match the same monitor used by NetworkStorage.requestItem: reassignment
+        // must not occur between its live-identity validation and item withdrawal.
+        synchronized (cache) {
+            if (cache.getAmountLong() > 0) {
+                return;
+            }
+            final ItemStack storedTemplate = itemStack.clone();
+            storedTemplate.setAmount(1);
+            cache.setItemStack(storedTemplate);
+            cache.setAmount(amount);
+            updateDisplayItem(blockMenu, cache);
+            syncBlock(blockMenu.getLocation(), cache);
+            CACHES.put(blockMenu.getLocation(), cache);
+        }
     }
 
     @ParametersAreNonnullByDefault
@@ -320,16 +327,23 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
         }
 
         final QuantumCache cache = CACHES.get(blockMenu.getLocation());
-        if (cache == null || cache.getAmountLong() > 0) {
+        if (cache == null) {
             player.sendMessage(
                 Lang.getString("messages.unsupported-operation.quantum_storage.quantum_storage_not_empty"));
             return;
         }
-        itemStack.setAmount(1);
-        cache.setItemStack(itemStack);
-        updateDisplayItem(blockMenu, cache);
-        syncBlock(blockMenu.getLocation(), cache);
-        CACHES.put(blockMenu.getLocation(), cache);
+        synchronized (cache) {
+            if (cache.getAmountLong() > 0) {
+                player.sendMessage(
+                    Lang.getString("messages.unsupported-operation.quantum_storage.quantum_storage_not_empty"));
+                return;
+            }
+            itemStack.setAmount(1);
+            cache.setItemStack(itemStack);
+            updateDisplayItem(blockMenu, cache);
+            syncBlock(blockMenu.getLocation(), cache);
+            CACHES.put(blockMenu.getLocation(), cache);
+        }
     }
 
     @Override
