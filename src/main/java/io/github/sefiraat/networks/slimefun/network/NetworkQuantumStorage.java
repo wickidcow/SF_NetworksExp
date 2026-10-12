@@ -744,9 +744,9 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
     // filled storage before its first post-restart tick.
     private @NotNull QuantumCache initializeCache(@NotNull BlockMenu blockMenu) {
         final Location location = blockMenu.getLocation();
-        final QuantumCache existing = CACHES.get(location);
-        if (existing != null) {
-            return existing;
+        final QuantumCache registered = CACHES.get(location);
+        if (registered != null) {
+            return registered;
         }
         SlimefunBlockData blockData = StorageCacheUtils.getBlock(location);
         if (blockData == null) {
