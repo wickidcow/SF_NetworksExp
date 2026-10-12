@@ -12,6 +12,12 @@ val pluginVersion = version.toString()
 // The normal build remains pinned to the Minecraft 1.21.11 minimum.
 val paperApiVersion = providers.gradleProperty("paperApiVersion")
     .orElse("1.21.11-R0.1-SNAPSHOT")
+// New Minecraft 26.3 Paper API is built for Java 25. Its API smoke test
+// must not pretend to resolve that dependency as Java 21 bytecode.
+// Opt-in compilation only: no artifact from this profile is distributed.
+val paper26_3Compile = providers.gradleProperty("paper26_3Compile")
+    .map(String::toBoolean)
+    .orElse(false)
 
 // Compatibility verifier markers only; these are not project versions or output filenames.
 // version = "2.1.112-Legacy-1.0"
@@ -54,6 +60,10 @@ java {
     toolchain { languageVersion.set(JavaLanguageVersion.of(25)) }
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21
+    if (paper26_3Compile.get()) {
+        sourceCompatibility = JavaVersion.VERSION_25
+        targetCompatibility = JavaVersion.VERSION_25
+    }
     withSourcesJar()
 }
 
@@ -151,6 +161,11 @@ tasks.withType<JavaExec>().configureEach {
 tasks {
     compileJava {
         options.release.set(21)
+        // Only the separate 26.3 source-compatibility probe uses Java 25.
+        // The standard 1.21.11 universal JAR still targets Java 21.
+        if (paper26_3Compile.get()) {
+            options.release.set(25)
+        }
         options.encoding = "UTF-8"
         options.compilerArgs.addAll(listOf("-Xlint:deprecation", "-Xlint:removal"))
         if (strictDeprecationWarnings.get()) {

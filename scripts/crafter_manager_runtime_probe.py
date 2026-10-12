@@ -32,7 +32,12 @@ def main():
         raise SystemExit("Unexpected Paperclip download context")
     cache = work / "cache"
     cache.mkdir()
-    subprocess.run(["curl", "--fail", "--location", "--silent", "--show-error", "--max-time", "120",
+    # Mojang's pinned server JAR is ~56 MB. On busy CI runners a 120-second
+    # transfer can time out after most bytes arrive; retries resume the partial
+    # transfer, and the SHA-256 check below still verifies every downloaded byte.
+    subprocess.run(["curl", "--fail", "--location", "--silent", "--show-error",
+                    "--retry", "2", "--retry-all-errors", "--retry-delay", "1",
+                    "--continue-at", "-", "--max-time", "240",
                     url, "--output", str(cache / name)], check=True)
     if digest(cache / name) != expected:
         raise SystemExit("Mojang server checksum mismatch")

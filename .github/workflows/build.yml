@@ -49,7 +49,7 @@ jobs:
       - name: Download maintained JEG compile-only API
         shell: bash
         run: bash scripts/download_jeg.sh
-      - name: Compile Java 21-targeted plugin sources against Paper 26.3
+      - name: Compile Networks sources against Java 25 Paper 26.3 API
         shell: bash
         run: |
           set -euo pipefail
@@ -60,6 +60,7 @@ jobs:
             -PslimefunCoreJar="$PWD/.ci/release-core/Slimefun-Legacy-Core.jar" \
             -PjegJar="$PWD/.ci/jeg/SF_JustEnoughGuide2.1.67.jar" \
             -PpaperApiVersion=26.3.build.176-stable \
+            -Ppaper26_3Compile=true \
             -PstrictDeprecation=true
 
   build:
@@ -160,7 +161,7 @@ jobs:
           distribution: temurin
           java-version: "25"
       - name: Verify real manager and viewer display writes on Purpur 1.21.11
-        timeout-minutes: 8
+        timeout-minutes: 12
         shell: bash
         run: |
           set -euo pipefail
