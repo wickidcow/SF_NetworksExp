@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.0.53
+
+### Network transfer and storage integrity
+- Reconcile partially accepted network deposits after storage failures, including exceptions during transfers. Preserve the remaining source items and existing source-commit compensation behavior.
+- Validate the live item identity before Quantum Storage withdrawals and ensure network barrel results match their requests, including cached access history.
+- Serialize Quantum Storage reassignment, input, output and rollback operations under each storage's own cache monitor. Avoid a network-wide lock so independent storages can continue operating.
+- Prevent a removed Quantum Storage cache from being republished by an already-queued ticker; recover persisted contents when breaking a storage before its first post-restart tick.
+- Make Quick Insert and Extract use the live accepted or withdrawn quantity instead of stale count snapshots, preserving custom item metadata and intentional Void Excess behavior.
+
+### Regression and compatibility coverage
+- Combine the independent deposit, identity and concurrency regressions for networks, drawers and Quantum Storages, including controlled tick/break order tests.
+- Preserve all 289 item IDs, existing menus, recipes, persistent storage formats, and other installed addon compatibility contracts.
+- Retain Java 21 output and the Minecraft 1.21.11 baseline while checking source compilation separately against the Java 25-based Paper 26.3 API. New Paper API deprecations are reported without blocking this supplemental source smoke test.
+- Harden the pinned Purpur 1.21.11 native test against slow Mojang downloads, without relaxing artifact checksum verification.
+
+This release hardens known code paths but does not claim that every third-party storage integration or crash/restart scenario is duplication-proof. Validate on a staging server and take a storage backup before production deployment.
+
 ## 1.0.52
 
 - Extend the 1.0.51 Crafter Manager display fix to Quantum Manager, Drawer Manager, both Item Flow Viewer screens, and the optional Linker Grid display. Normalize finished icons before the native inventory write so nested Slimefun/Dough wrappers cannot crash those screens.
