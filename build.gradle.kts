@@ -7,6 +7,12 @@ group = "com.wickidcow.networks"
 version = "1.0.52"
 val pluginVersion = version.toString()
 
+// The release baseline is paper-api:1.21.11-R0.1-SNAPSHOT. An opt-in
+// compile-only probe may target 26.3 without changing the universal JAR.
+// The normal build remains pinned to the Minecraft 1.21.11 minimum.
+val paperApiVersion = providers.gradleProperty("paperApiVersion")
+    .orElse("1.21.11-R0.1-SNAPSHOT")
+
 // Compatibility verifier markers only; these are not project versions or output filenames.
 // version = "2.1.112-Legacy-1.0"
 // archiveVersion.set("2.1.112-1.0")
@@ -95,7 +101,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
+    compileOnly("io.papermc.paper:paper-api:${paperApiVersion.get()}")
     compileOnly(files(slimefunCoreJar))
     implementation("org.bstats:bstats-bukkit:3.2.1")
     implementation("com.jeff-media:MorePersistentDataTypes:2.4.0")

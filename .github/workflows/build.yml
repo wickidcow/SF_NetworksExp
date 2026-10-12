@@ -27,6 +27,41 @@ jobs:
     name: Gate universal release on all supported cores
     uses: ./.github/workflows/compatibility.yml
 
+  paper26_3_compile:
+    name: Compile against Paper 26.3 API (source smoke)
+    if: github.event_name == 'pull_request'
+    needs: compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Networks
+        uses: actions/checkout@v6
+      - name: Download tested Slimefun Legacy core
+        uses: actions/download-artifact@v8
+        with:
+          name: slimefun-legacy-core
+          path: .ci/release-core
+      - name: Set up Java 25 for Paper 26.3 API
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: gradle
+      - name: Download maintained JEG compile-only API
+        shell: bash
+        run: bash scripts/download_jeg.sh
+      - name: Compile Java 21-targeted plugin sources against Paper 26.3
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          test -s .ci/release-core/Slimefun-Legacy-Core.jar
+          test -s .ci/jeg/SF_JustEnoughGuide2.1.67.jar
+          ./gradlew clean compileJava --no-daemon \
+            -PslimefunCoreJar="$PWD/.ci/release-core/Slimefun-Legacy-Core.jar" \
+            -PjegJar="$PWD/.ci/jeg/SF_JustEnoughGuide2.1.67.jar" \
+            -PpaperApiVersion=26.3.build.176-stable \
+            -PstrictDeprecation=true
+
   build:
     name: Build Networks JAR
     needs: compatibility
