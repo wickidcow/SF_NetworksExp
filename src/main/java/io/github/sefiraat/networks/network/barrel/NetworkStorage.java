@@ -51,16 +51,30 @@ public class NetworkStorage extends BarrelIdentity {
             return null;
         }
 
-        // The BarrelIdentity was built from a storage snapshot. A previously empty Quantum
-        // Storage can be emptied and assigned a different item while the root is still active.
-        // Validate the *live* template under the same cache monitor used by Quantum withdrawal
-        // and template assignment, before removing any items.
+        return withdrawIfMatching(cache, itemRequest,
+            () -> NetworkQuantumStorage.getItemStack(cache, blockMenu, itemRequest.getAmount()));
+    }
+
+    /**
+     * The BarrelIdentity was built from a storage snapshot that may be outdated. Verify the
+     * live QuantumCache template while holding the monitor shared with Quantum withdrawal
+     * and template reassignment. This package-private boundary is tested without initializing
+     * a whole Slimefun plugin or mocking the QuantumStorage static registry.
+     */
+    @Nullable
+    static ItemStack withdrawIfMatching(
+        @NotNull QuantumCache cache,
+        @NotNull ItemRequest request,
+        @NotNull java.util.function.Supplier<ItemStack> withdrawal) {
+        if (request.getAmount() <= 0) {
+            return null;
+        }
         synchronized (cache) {
             final ItemStack liveTemplate = cache.getItemStack();
-            if (liveTemplate == null || !StackUtils.itemsMatch(itemRequest, liveTemplate)) {
+            if (liveTemplate == null || !StackUtils.itemsMatch(request, liveTemplate)) {
                 return null;
             }
-            return NetworkQuantumStorage.getItemStack(cache, blockMenu, itemRequest.getAmount());
+            return withdrawal.get();
         }
     }
 
