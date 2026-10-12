@@ -104,7 +104,9 @@ class QuantumCacheDepositIdentityTest {
         cache.setItemStack(null);
         assertEquals(4, cache.increaseMatchingAmount(namedDiamond(4, "same")));
         assertEquals(0L, cache.getAmountLong());
-        assertEquals(0, cache.increaseMatchingAmount(namedDiamond(0, "same")));
+        ItemStack zeroQuantity = namedDiamond(1, "same");
+        zeroQuantity.setAmount(0);
+        assertEquals(0, cache.increaseMatchingAmount(zeroQuantity));
         assertEquals(0L, cache.getAmountLong());
     }
 
