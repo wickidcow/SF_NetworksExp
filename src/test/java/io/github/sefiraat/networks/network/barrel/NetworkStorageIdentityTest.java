@@ -144,6 +144,7 @@ class NetworkStorageIdentityTest {
     void networkRootRejectsMismatchedResultInLegacyAndAccessorPaths() {
         NetworkRoot root = spy(new NetworkRoot(location, NodeType.CONTROLLER, 100));
         BarrelIdentity barrel = mock(BarrelIdentity.class);
+        when(barrel.getLocation()).thenReturn(location.clone().add(1, 0, 0));
         when(barrel.getItemStack()).thenReturn(new ItemStack(Material.DIAMOND));
         when(barrel.requestItem(any(ItemRequest.class))).thenReturn(new ItemStack(Material.EMERALD, 3));
         doReturn(Set.of(barrel)).when(root).getOutputAbleBarrels();
