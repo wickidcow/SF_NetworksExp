@@ -178,8 +178,12 @@ public class NetworkQuantumStorage extends SpecialSlimefunItem implements Distin
                 || isNestedQuantumStorage(itemStack)) {
                 continue;
             }
-            if (StackUtils.itemsMatch(cache, itemStack)) {
-                int leftover = cache.increaseAmount(itemStack.getAmount());
+            // Compare against the *live* assigned item and reserve capacity in one
+            // QuantumCache monitor. Separate itemsMatch/increaseAmount calls could
+            // otherwise race with a same-tick empty-storage reassignment.
+            final int offered = itemStack.getAmount();
+            final int leftover = cache.increaseMatchingAmount(itemStack);
+            if (leftover != offered) {
                 itemStack.setAmount(leftover);
             }
         }
