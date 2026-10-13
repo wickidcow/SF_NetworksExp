@@ -163,8 +163,9 @@ def main() -> None:
     )
 
     seed_pid = start_server(java, server, work, "seed")
-    if not (work / "fixture/region").is_dir():
-        raise SystemExit("Seed phase did not persist any world region directory")
+    # Do not guess Paper's world-directory layout. The real persistence check
+    # is loading the Slimefun record, inventory and physical block in the
+    # second independent process, using this unchanged working directory.
     verify_pid = start_server(java, server, work, "verify")
     if seed_pid == verify_pid:
         raise SystemExit("Expected independent Java server processes")
