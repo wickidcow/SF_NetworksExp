@@ -218,3 +218,73 @@ jobs:
           else
             gh release create "$TAG" "$JAR" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "SF_Networks ${VERSION}" --notes "Networks ${VERSION}: canonical ${OUTPUT_NAME} release."
           fi
+
+  paper26_3_runtime:
+    name: Native Paper 26.3 build 176 Quantum/storage staging smoke
+    if: github.event_name == 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - name: Check out Networks
+        uses: actions/checkout@v6
+      - name: Download exact tested Slimefun Legacy core
+        uses: actions/download-artifact@v8
+        with:
+          name: slimefun-legacy-core
+          path: .ci/release-core
+      - name: Download versioned Networks universal JAR
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.OUTPUT_NAME }}
+          path: .ci/networks-candidate
+      - name: Use Java 25 for real Paper 26.3 runtime
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+      - name: Pin Paper 26.3 build 176 with official SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s .ci/release-core/Slimefun-Legacy-Core.jar
+          test -s ".ci/networks-candidate/$OUTPUT_NAME"
+          curl --fail --location --silent --show-error --retry 3 \
+            --retry-all-errors --retry-delay 2 --max-time 120 \
+            -H "User-Agent: SF_NetworksExp-CI/1.0 (https://github.com/wickidcow/SF_NetworksExp)" \
+            "https://fill.papermc.io/v3/projects/paper/versions/26.3/builds" \
+            --output .ci/paper-26.3-builds.json
+          python3 scripts/prepare_paper_26_3_runtime.py \
+            .ci/paper-26.3-builds.json .ci/paper-26.3-176.json \
+            .ci/paper-26.3-176.url .ci/paper-26.3-176.sha256
+          curl --fail --location --silent --show-error --retry 3 \
+            --retry-all-errors --retry-delay 2 --max-time 360 \
+            -H "User-Agent: SF_NetworksExp-CI/1.0 (https://github.com/wickidcow/SF_NetworksExp)" \
+            "$(cat .ci/paper-26.3-176.url)" --output .ci/paper-26.3-176.jar
+          printf '%s  %s\n' "$(cat .ci/paper-26.3-176.sha256)" \
+            ".ci/paper-26.3-176.jar" | sha256sum --check
+      - name: Run Paper 26.3 native managers and Quantum conservation probe
+        timeout-minutes: 11
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/crafter_manager_runtime_probe.py \
+            .ci/release-core/Slimefun-Legacy-Core.jar \
+            ".ci/networks-candidate/$OUTPUT_NAME" \
+            .ci/paper-26.3-176.jar \
+            build/paper-26.3-runtime \
+            .ci/paper-26.3-176.json
+      - name: Retain native Paper 26.3 regression evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: networks-paper-26-3-native-runtime
+          path: |
+            .ci/paper-26.3-176.json
+            build/paper-26.3-runtime/inputs.json
+            build/paper-26.3-runtime/console.log
+            build/paper-26.3-runtime/patch.log
+            build/paper-26.3-runtime/plugins/crafter-display-result.txt
+          retention-days: 14
+          if-no-files-found: warn
+

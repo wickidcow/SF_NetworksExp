@@ -21,6 +21,8 @@ import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
 import io.github.sefiraat.networks.network.stackcaches.BlueprintInstance;
+import io.github.sefiraat.networks.network.stackcaches.QuantumCache;
+import io.github.sefiraat.networks.slimefun.network.QuantumCacheLifecycle;
 import io.github.sefiraat.networks.slimefun.network.grid.GridCache;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
@@ -77,6 +79,7 @@ public final class CrafterManagerDisplayProbe extends JavaPlugin {
         probe("Linker Grid display", this::verifyLinker, failures);
         probe("Quantum Storage wrapped preview", this::verifyQuantumPreview, failures);
         probe("Quantum world display", this::verifyQuantumWorldDisplay, failures);
+        probe("Quantum live item conservation", this::verifyQuantumConservation, failures);
         if (!failures.isEmpty()) throw new AssertionError(String.join("; ", failures));
     }
 
@@ -383,6 +386,57 @@ public final class CrafterManagerDisplayProbe extends JavaPlugin {
                 if (entity instanceof org.bukkit.entity.ItemDisplay) entity.remove();
             }
         }
+    }
+
+
+    /**
+     * Native Bukkit ItemStack and metadata conservation checks on a disposable
+     * Minecraft server. A full physical block-break/restart test remains separate.
+     */
+    private void verifyQuantumConservation() {
+        final var location = new Location(Bukkit.getWorlds().getFirst(), 48, 100, 0);
+        final var ownerKey = new NamespacedKey("networkstest", "owner");
+        final ItemStack template = new ItemStack(Material.DIAMOND, 1);
+        template.editMeta(meta -> meta.getPersistentDataContainer().set(
+            ownerKey, PersistentDataType.STRING, "verified-owner"));
+        final var originalMeta = template.getItemMeta();
+
+        final QuantumCache cache = new QuantumCache(template.clone(), 60L, 64L, false, false);
+        final ItemStack incoming = template.clone();
+        incoming.setAmount(10);
+        final int remainder = cache.increaseMatchingAmount(incoming);
+        require(remainder == 6 && cache.getAmountLong() == 64L,
+            "Quantum must accept only four items when capacity is nearly full");
+
+        final ItemStack withdrawn = cache.withdrawItem(11);
+        require(withdrawn != null && withdrawn.getAmount() == 11
+            && originalMeta.equals(withdrawn.getItemMeta()) && cache.getAmountLong() == 53L,
+            "Quantum withdrawal must preserve counts and custom metadata");
+
+        final ItemStack wrongOwner = template.clone();
+        wrongOwner.setAmount(9);
+        wrongOwner.editMeta(meta -> meta.getPersistentDataContainer().set(
+            ownerKey, PersistentDataType.STRING, "different-owner"));
+        require(cache.increaseMatchingAmount(wrongOwner) == 9 && cache.getAmountLong() == 53L,
+            "Same-material custom items cannot cross PDC identity boundaries");
+
+        final Map<Location, QuantumCache> active = new ConcurrentHashMap<>();
+        active.put(location, cache);
+        final long[] serialized = {-1L};
+        require(QuantumCacheLifecycle.retireCurrent(active, location, live -> {
+            serialized[0] = live.getAmountLong();
+            require(originalMeta.equals(live.getItemStack().getItemMeta()),
+                "Retired cache must preserve assigned item identity");
+        }), "Quantum lifecycle must retire the live cache");
+        require(!active.containsKey(location), "Retired Quantum cache must not remain mapped");
+        require(!QuantumCacheLifecycle.withCurrent(active, location, cache, live -> {
+            throw new AssertionError("A stale tick must never mutate retired storage");
+        }), "Detached cache reference must reject queued activity");
+
+        require(serialized[0] + withdrawn.getAmount() + remainder == 70L,
+            "Quantity must be conserved across stored, output and returned items");
+        require(originalMeta.equals(template.getItemMeta()) && template.getAmount() == 1,
+            "Quantum must never mutate its source item template");
     }
 
     private static void require(boolean condition, String message) {
