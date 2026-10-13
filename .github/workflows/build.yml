@@ -186,6 +186,28 @@ jobs:
             build/crafter-manager-runtime/plugins/crafter-display-result.txt
           if-no-files-found: warn
           retention-days: 14
+      - name: Verify Quantum Storage persistence across two Purpur 1.21.11 JVM processes
+        timeout-minutes: 12
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/quantum_restart_runtime_probe.py \
+            "$SLIMEFUN_CORE_JAR" "$NETWORKS_JAR" \
+            .ci/purpur-1.21.11-2568.jar \
+            build/purpur-1.21.11-restart
+      - name: Retain Purpur 1.21.11 restart evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: networks-purpur-1-21-11-quantum-restart
+          path: |
+            build/purpur-1.21.11-restart/inputs.json
+            build/purpur-1.21.11-restart/seed-console.log
+            build/purpur-1.21.11-restart/verify-console.log
+            build/purpur-1.21.11-restart/seed-result.txt
+            build/purpur-1.21.11-restart/verify-result.txt
+          retention-days: 14
+          if-no-files-found: warn
       - name: Stage public versioned JAR
         shell: bash
         run: |
