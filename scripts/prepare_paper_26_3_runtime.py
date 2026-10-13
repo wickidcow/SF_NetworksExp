@@ -12,6 +12,11 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 
+# PaperMC's official stable build 176, verified by the successful native 26.3
+# staging run. A silent artifact replacement must not change our tested server.
+PINNED_PAPER_26_3_SHA256 = "c17450c3335aabd95e3e65524a4f945e979d7d79ee65a80b002d1a559c6d7bb3"
+
+
 def prepare(builds_file: Path, metadata_file: Path, url_file: Path, sha_file: Path) -> None:
     raw = json.loads(builds_file.read_text(encoding="utf-8"))
     builds = raw if isinstance(raw, list) else raw.get("builds", [])
@@ -39,6 +44,10 @@ def prepare(builds_file: Path, metadata_file: Path, url_file: Path, sha_file: Pa
         raise SystemExit("Untrusted Paper server download domain")
     if not isinstance(checksum, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", checksum):
         raise SystemExit("Missing official Paper 26.3 SHA-256")
+    if record.get("channel") != "STABLE":
+        raise SystemExit("Paper 26.3 build 176 is not marked STABLE")
+    if checksum.lower() != PINNED_PAPER_26_3_SHA256:
+        raise SystemExit("Paper 26.3 build 176 checksum changed; refuse unreviewed artifact")
 
     normalized = {
         "id": 176,
