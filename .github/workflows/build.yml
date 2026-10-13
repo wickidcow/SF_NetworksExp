@@ -224,7 +224,7 @@ jobs:
     if: github.event_name == 'pull_request'
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 16
+    timeout-minutes: 27
     steps:
       - name: Check out Networks
         uses: actions/checkout@v6
@@ -274,6 +274,31 @@ jobs:
             .ci/paper-26.3-176.jar \
             build/paper-26.3-runtime \
             .ci/paper-26.3-176.json
+      - name: Verify persisted Quantum Storage across two independent Paper 26.3 JVM processes
+        timeout-minutes: 12
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/quantum_restart_runtime_probe.py \
+            .ci/release-core/Slimefun-Legacy-Core.jar \
+            ".ci/networks-candidate/$OUTPUT_NAME" \
+            .ci/paper-26.3-176.jar \
+            build/paper-26.3-restart \
+            .ci/paper-26.3-176.json
+      - name: Retain persisted Quantum restart evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: networks-paper-26-3-quantum-restart
+          path: |
+            build/paper-26.3-restart/inputs.json
+            build/paper-26.3-restart/patch.log
+            build/paper-26.3-restart/seed-console.log
+            build/paper-26.3-restart/verify-console.log
+            build/paper-26.3-restart/seed-result.txt
+            build/paper-26.3-restart/verify-result.txt
+          retention-days: 14
+          if-no-files-found: warn
       - name: Retain native Paper 26.3 regression evidence
         if: always()
         uses: actions/upload-artifact@v7
