@@ -186,6 +186,28 @@ jobs:
             build/crafter-manager-runtime/plugins/crafter-display-result.txt
           if-no-files-found: warn
           retention-days: 14
+      - name: Verify Quantum Storage persistence across two Purpur 1.21.11 JVM processes
+        timeout-minutes: 12
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/quantum_restart_runtime_probe.py \
+            "$SLIMEFUN_CORE_JAR" "$NETWORKS_JAR" \
+            .ci/purpur-1.21.11-2568.jar \
+            build/purpur-1.21.11-restart
+      - name: Retain Purpur 1.21.11 restart evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: networks-purpur-1-21-11-quantum-restart
+          path: |
+            build/purpur-1.21.11-restart/inputs.json
+            build/purpur-1.21.11-restart/seed-console.log
+            build/purpur-1.21.11-restart/verify-console.log
+            build/purpur-1.21.11-restart/seed-result.txt
+            build/purpur-1.21.11-restart/verify-result.txt
+          retention-days: 14
+          if-no-files-found: warn
       - name: Stage public versioned JAR
         shell: bash
         run: |
@@ -224,7 +246,7 @@ jobs:
     if: github.event_name == 'pull_request'
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 16
+    timeout-minutes: 27
     steps:
       - name: Check out Networks
         uses: actions/checkout@v6
@@ -274,6 +296,31 @@ jobs:
             .ci/paper-26.3-176.jar \
             build/paper-26.3-runtime \
             .ci/paper-26.3-176.json
+      - name: Verify persisted Quantum Storage across two independent Paper 26.3 JVM processes
+        timeout-minutes: 12
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/quantum_restart_runtime_probe.py \
+            .ci/release-core/Slimefun-Legacy-Core.jar \
+            ".ci/networks-candidate/$OUTPUT_NAME" \
+            .ci/paper-26.3-176.jar \
+            build/paper-26.3-restart \
+            .ci/paper-26.3-176.json
+      - name: Retain persisted Quantum restart evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: networks-paper-26-3-quantum-restart
+          path: |
+            build/paper-26.3-restart/inputs.json
+            build/paper-26.3-restart/patch.log
+            build/paper-26.3-restart/seed-console.log
+            build/paper-26.3-restart/verify-console.log
+            build/paper-26.3-restart/seed-result.txt
+            build/paper-26.3-restart/verify-result.txt
+          retention-days: 14
+          if-no-files-found: warn
       - name: Retain native Paper 26.3 regression evidence
         if: always()
         uses: actions/upload-artifact@v7
