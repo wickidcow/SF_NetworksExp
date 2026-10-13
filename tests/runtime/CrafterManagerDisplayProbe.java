@@ -21,6 +21,12 @@ import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
 import io.github.sefiraat.networks.network.stackcaches.BlueprintInstance;
+import io.github.sefiraat.networks.network.stackcaches.QuantumCache;
+import io.github.sefiraat.networks.slimefun.network.QuantumCacheLifecycle;
+import io.github.sefiraat.networks.slimefun.network.NetworkQuantumStorage;
+import io.github.sefiraat.networks.slimefun.NetworkSlimefunItems;
+import io.github.sefiraat.networks.utils.Keys;
+import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import io.github.sefiraat.networks.slimefun.network.grid.GridCache;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
@@ -37,6 +43,7 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
@@ -77,6 +84,8 @@ public final class CrafterManagerDisplayProbe extends JavaPlugin {
         probe("Linker Grid display", this::verifyLinker, failures);
         probe("Quantum Storage wrapped preview", this::verifyQuantumPreview, failures);
         probe("Quantum world display", this::verifyQuantumWorldDisplay, failures);
+        probe("Quantum live item conservation", this::verifyQuantumConservation, failures);
+        probe("Real Quantum block and break handler", this::verifyRealQuantumBlockBreak, failures);
         if (!failures.isEmpty()) throw new AssertionError(String.join("; ", failures));
     }
 
@@ -381,6 +390,167 @@ public final class CrafterManagerDisplayProbe extends JavaPlugin {
         } finally {
             for (var entity : location.getWorld().getNearbyEntities(location, 2, 2, 2)) {
                 if (entity instanceof org.bukkit.entity.ItemDisplay) entity.remove();
+            }
+        }
+    }
+
+
+    /**
+     * Native Bukkit ItemStack and metadata conservation checks on a disposable
+     * Minecraft server. A full physical block-break/restart test remains separate.
+     */
+    private void verifyQuantumConservation() {
+        final var location = new Location(Bukkit.getWorlds().getFirst(), 48, 100, 0);
+        final var ownerKey = new NamespacedKey("networkstest", "owner");
+        final ItemStack template = new ItemStack(Material.DIAMOND, 1);
+        template.editMeta(meta -> meta.getPersistentDataContainer().set(
+            ownerKey, PersistentDataType.STRING, "verified-owner"));
+        final var originalMeta = template.getItemMeta();
+
+        final QuantumCache cache = new QuantumCache(template.clone(), 60L, 64L, false, false);
+        final ItemStack incoming = template.clone();
+        incoming.setAmount(10);
+        final int remainder = cache.increaseMatchingAmount(incoming);
+        require(remainder == 6 && cache.getAmountLong() == 64L,
+            "Quantum must accept only four items when capacity is nearly full");
+
+        final ItemStack withdrawn = cache.withdrawItem(11);
+        require(withdrawn != null && withdrawn.getAmount() == 11
+            && originalMeta.equals(withdrawn.getItemMeta()) && cache.getAmountLong() == 53L,
+            "Quantum withdrawal must preserve counts and custom metadata");
+
+        final ItemStack wrongOwner = template.clone();
+        wrongOwner.setAmount(9);
+        wrongOwner.editMeta(meta -> meta.getPersistentDataContainer().set(
+            ownerKey, PersistentDataType.STRING, "different-owner"));
+        require(cache.increaseMatchingAmount(wrongOwner) == 9 && cache.getAmountLong() == 53L,
+            "Same-material custom items cannot cross PDC identity boundaries");
+
+        final Map<Location, QuantumCache> active = new ConcurrentHashMap<>();
+        active.put(location, cache);
+        final long[] serialized = {-1L};
+        require(QuantumCacheLifecycle.retireCurrent(active, location, live -> {
+            serialized[0] = live.getAmountLong();
+            require(originalMeta.equals(live.getItemStack().getItemMeta()),
+                "Retired cache must preserve assigned item identity");
+        }), "Quantum lifecycle must retire the live cache");
+        require(!active.containsKey(location), "Retired Quantum cache must not remain mapped");
+        require(!QuantumCacheLifecycle.withCurrent(active, location, cache, live -> {
+            throw new AssertionError("A stale tick must never mutate retired storage");
+        }), "Detached cache reference must reject queued activity");
+
+        require(serialized[0] + withdrawn.getAmount() + remainder == 70L,
+            "Quantity must be conserved across stored, output and returned items");
+        require(originalMeta.equals(template.getItemMeta()) && template.getAmount() == 1,
+            "Quantum must never mutate its source item template");
+    }
+
+
+    /**
+     * Real disposable-world block and Slimefun BlockMenu fixture.
+     *
+     * Calls the actual registered Quantum Storage block-break handler against a
+     * physical Paper block and verifies that dropped storage PDC serializes the
+     * exact 22-item custom payload. Tests active storage and a cold cache that
+     * must be reconstructed from persisted in-memory Slimefun block data.
+     *
+     * It intentionally does not pretend that a synthetic BlockBreakEvent is a
+     * player-originated event or a process restart: those remain separate gates.
+     */
+    @SuppressWarnings("deprecation")
+    private void verifyRealQuantumBlockBreak() throws Exception {
+        final var storage = NetworkSlimefunItems.NETWORK_QUANTUM_STORAGE_0;
+        require(storage != null && SlimefunItem.getById(storage.getId()) == storage,
+            "Actual Network Quantum Storage item must be registered");
+        final var material = storage.getItem().getType();
+        require(material.isBlock(), "Quantum Storage must be a physically placeable block");
+        final var world = Bukkit.getWorlds().getFirst();
+        final var controller = Slimefun.getDatabaseManager().getBlockDataController();
+        final var ownerKey = new NamespacedKey("networkstest", "physical_owner");
+        final var breakHandler = NetworkQuantumStorage.class.getDeclaredMethod(
+            "onBreak", BlockBreakEvent.class);
+        breakHandler.setAccessible(true);
+        final var ticker = NetworkQuantumStorage.class.getDeclaredMethod(
+            "onTick", Block.class);
+        ticker.setAccessible(true);
+
+        for (boolean coldCache : new boolean[]{false, true}) {
+            final Location location = new Location(world, coldCache ? 72 : 68, 100, 0);
+            world.getChunkAt(location).load();
+            final Block block = location.getBlock();
+            block.setType(material);
+            final var existingItems = world.getNearbyEntities(location, 2, 2, 2).stream()
+                .filter(org.bukkit.entity.Item.class::isInstance)
+                .map(org.bukkit.entity.Item.class::cast).toList();
+            require(existingItems.isEmpty(), "Physical probe location must start without dropped items");
+
+            final var data = controller.createBlock(location, storage.getId());
+            final java.util.List<org.bukkit.entity.Item> spawned = new ArrayList<>();
+            try {
+                controller.loadBlockData(data);
+                final BlockMenu menu = StorageCacheUtils.getMenu(location);
+                require(menu != null, "Actual Slimefun Quantum Storage menu must load");
+
+                final ItemStack stored = new ItemStack(Material.DIAMOND);
+                stored.editMeta(meta -> meta.getPersistentDataContainer().set(
+                    ownerKey, PersistentDataType.STRING, "physical-staging-owner"));
+                final ItemMeta original = stored.getItemMeta();
+                final QuantumCache cache = new QuantumCache(stored, 22L, 64L, false, false);
+                NetworkQuantumStorage.getCaches().put(location, cache);
+                NetworkQuantumStorage.updateDisplayItem(menu, cache);
+                NetworkQuantumStorage.syncBlock(location, cache);
+                menu.replaceExistingItem(NetworkQuantumStorage.OUTPUT_SLOT,
+                    new ItemStack(Material.EMERALD, 64));
+                require("22".equals(data.getData(NetworkQuantumStorage.BS_AMOUNT)),
+                    "Filled Quantum must persist 22 items to its Slimefun block data");
+
+                if (coldCache) {
+                    // Model a block reloaded with Slimefun state but without any
+                    // live Quantum cache. The break handler must initialize first.
+                    NetworkQuantumStorage.getCaches().remove(location, cache);
+                } else {
+                    // An active tick must keep the original count because the
+                    // output slot is blocked by the wrong item type.
+                    ticker.invoke(storage, block);
+                    require(cache.getAmountLong() == 22L,
+                        "Blocked output must not consume stored Quantum items");
+                }
+
+                final BlockBreakEvent breakEvent = new BlockBreakEvent(block, (Player) null);
+                breakHandler.invoke(storage, breakEvent);
+                require(!NetworkQuantumStorage.getCaches().containsKey(location),
+                    "Breaking a Quantum Storage must detach its cache");
+                require(!breakEvent.isDropItems(),
+                    "A full Quantum Storage must suppress default duplicate block drops");
+
+                spawned.addAll(world.getNearbyEntities(location, 2, 2, 2).stream()
+                    .filter(org.bukkit.entity.Item.class::isInstance)
+                    .map(org.bukkit.entity.Item.class::cast).toList());
+                int carryingStorage = 0;
+                int emeraldOutput = 0;
+                for (var entity : spawned) {
+                    final ItemStack stack = entity.getItemStack();
+                    final QuantumCache saved = Keys.getQuantumCache(stack.getItemMeta());
+                    if (saved != null) {
+                        carryingStorage++;
+                        require(saved.getAmountLong() == 22L,
+                            "Broken Quantum item must preserve exactly 22 stored items");
+                        require(original.equals(saved.getItemStack().getItemMeta()),
+                            "Stored custom item owner metadata must survive drop serialization");
+                    } else if (stack.getType() == Material.EMERALD) {
+                        emeraldOutput += stack.getAmount();
+                    }
+                }
+                require(carryingStorage == 1,
+                    "Exactly one item must carry the stored Quantum contents");
+                require(emeraldOutput == 64,
+                    "The physical output inventory must drop 64 emeralds exactly once");
+            } finally {
+                for (var entity : spawned) entity.remove();
+                NetworkQuantumStorage.getCaches().remove(location);
+                controller.removeBlock(location);
+                block.setType(Material.AIR);
+                QuantumCacheLifecycle.clearBreakMarker(location);
             }
         }
     }

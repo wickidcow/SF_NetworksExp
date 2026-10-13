@@ -19,13 +19,52 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  VERSION: "1.0.52"
-  OUTPUT_NAME: "SF_Networks1.0.52.jar"
+  VERSION: "1.0.53"
+  OUTPUT_NAME: "SF_Networks1.0.53.jar"
 
 jobs:
   compatibility:
     name: Gate universal release on all supported cores
     uses: ./.github/workflows/compatibility.yml
+
+  paper26_3_compile:
+    name: Compile against Paper 26.3 API (source smoke)
+    if: github.event_name == 'pull_request'
+    needs: compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Networks
+        uses: actions/checkout@v6
+      - name: Download tested Slimefun Legacy core
+        uses: actions/download-artifact@v8
+        with:
+          name: slimefun-legacy-core
+          path: .ci/release-core
+      - name: Set up Java 25 for Paper 26.3 API
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: gradle
+      - name: Download maintained JEG compile-only API
+        shell: bash
+        run: bash scripts/download_jeg.sh
+      - name: Compile Networks sources against Java 25 Paper 26.3 API
+        shell: bash
+        # Paper 26.3 marks additional metadata APIs deprecated. Keep compiler
+        # warnings visible, but gate API compatibility on actual compile errors.
+        # The release's 1.21.11 build remains strict with -Werror.
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          test -s .ci/release-core/Slimefun-Legacy-Core.jar
+          test -s .ci/jeg/SF_JustEnoughGuide2.1.67.jar
+          ./gradlew clean compileJava --no-daemon \
+            -PslimefunCoreJar="$PWD/.ci/release-core/Slimefun-Legacy-Core.jar" \
+            -PjegJar="$PWD/.ci/jeg/SF_JustEnoughGuide2.1.67.jar" \
+            -PpaperApiVersion=26.3.build.176-stable \
+            -Ppaper26_3Compile=true \
+            -PstrictDeprecation=false
 
   build:
     name: Build Networks JAR
@@ -125,7 +164,7 @@ jobs:
           distribution: temurin
           java-version: "25"
       - name: Verify real manager and viewer display writes on Purpur 1.21.11
-        timeout-minutes: 8
+        timeout-minutes: 12
         shell: bash
         run: |
           set -euo pipefail
@@ -147,6 +186,28 @@ jobs:
             build/crafter-manager-runtime/plugins/crafter-display-result.txt
           if-no-files-found: warn
           retention-days: 14
+      - name: Verify Quantum Storage persistence across two Purpur 1.21.11 JVM processes
+        timeout-minutes: 12
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/quantum_restart_runtime_probe.py \
+            "$SLIMEFUN_CORE_JAR" "$NETWORKS_JAR" \
+            .ci/purpur-1.21.11-2568.jar \
+            build/purpur-1.21.11-restart
+      - name: Retain Purpur 1.21.11 restart evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: networks-purpur-1-21-11-quantum-restart
+          path: |
+            build/purpur-1.21.11-restart/inputs.json
+            build/purpur-1.21.11-restart/seed-console.log
+            build/purpur-1.21.11-restart/verify-console.log
+            build/purpur-1.21.11-restart/seed-result.txt
+            build/purpur-1.21.11-restart/verify-result.txt
+          retention-days: 14
+          if-no-files-found: warn
       - name: Stage public versioned JAR
         shell: bash
         run: |
@@ -179,3 +240,98 @@ jobs:
           else
             gh release create "$TAG" "$JAR" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "SF_Networks ${VERSION}" --notes "Networks ${VERSION}: canonical ${OUTPUT_NAME} release."
           fi
+
+  paper26_3_runtime:
+    name: Native Paper 26.3 build 176 Quantum/storage staging smoke
+    if: github.event_name == 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 27
+    steps:
+      - name: Check out Networks
+        uses: actions/checkout@v6
+      - name: Download exact tested Slimefun Legacy core
+        uses: actions/download-artifact@v8
+        with:
+          name: slimefun-legacy-core
+          path: .ci/release-core
+      - name: Download versioned Networks universal JAR
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.OUTPUT_NAME }}
+          path: .ci/networks-candidate
+      - name: Use Java 25 for real Paper 26.3 runtime
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+      - name: Pin Paper 26.3 build 176 with official SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s .ci/release-core/Slimefun-Legacy-Core.jar
+          test -s ".ci/networks-candidate/$OUTPUT_NAME"
+          curl --fail --location --silent --show-error --retry 3 \
+            --retry-all-errors --retry-delay 2 --max-time 120 \
+            -H "User-Agent: SF_NetworksExp-CI/1.0 (https://github.com/wickidcow/SF_NetworksExp)" \
+            "https://fill.papermc.io/v3/projects/paper/versions/26.3/builds" \
+            --output .ci/paper-26.3-builds.json
+          python3 scripts/prepare_paper_26_3_runtime.py \
+            .ci/paper-26.3-builds.json .ci/paper-26.3-176.json \
+            .ci/paper-26.3-176.url .ci/paper-26.3-176.sha256
+          curl --fail --location --silent --show-error --retry 3 \
+            --retry-all-errors --retry-delay 2 --max-time 360 \
+            -H "User-Agent: SF_NetworksExp-CI/1.0 (https://github.com/wickidcow/SF_NetworksExp)" \
+            "$(cat .ci/paper-26.3-176.url)" --output .ci/paper-26.3-176.jar
+          printf '%s  %s\n' "$(cat .ci/paper-26.3-176.sha256)" \
+            ".ci/paper-26.3-176.jar" | sha256sum --check
+      - name: Run Paper 26.3 native managers and Quantum conservation probe
+        timeout-minutes: 11
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/crafter_manager_runtime_probe.py \
+            .ci/release-core/Slimefun-Legacy-Core.jar \
+            ".ci/networks-candidate/$OUTPUT_NAME" \
+            .ci/paper-26.3-176.jar \
+            build/paper-26.3-runtime \
+            .ci/paper-26.3-176.json
+      - name: Verify persisted Quantum Storage across two independent Paper 26.3 JVM processes
+        timeout-minutes: 12
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/quantum_restart_runtime_probe.py \
+            .ci/release-core/Slimefun-Legacy-Core.jar \
+            ".ci/networks-candidate/$OUTPUT_NAME" \
+            .ci/paper-26.3-176.jar \
+            build/paper-26.3-restart \
+            .ci/paper-26.3-176.json
+      - name: Retain persisted Quantum restart evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: networks-paper-26-3-quantum-restart
+          path: |
+            build/paper-26.3-restart/inputs.json
+            build/paper-26.3-restart/patch.log
+            build/paper-26.3-restart/seed-console.log
+            build/paper-26.3-restart/verify-console.log
+            build/paper-26.3-restart/seed-result.txt
+            build/paper-26.3-restart/verify-result.txt
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Retain native Paper 26.3 regression evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: networks-paper-26-3-native-runtime
+          path: |
+            .ci/paper-26.3-176.json
+            build/paper-26.3-runtime/inputs.json
+            build/paper-26.3-runtime/console.log
+            build/paper-26.3-runtime/patch.log
+            build/paper-26.3-runtime/plugins/crafter-display-result.txt
+          retention-days: 14
+          if-no-files-found: warn
+

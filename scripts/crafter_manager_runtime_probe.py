@@ -18,11 +18,20 @@ def digest(path):
 
 
 def main():
-    if len(sys.argv) != 5:
-        raise SystemExit("Usage: crafter_manager_runtime_probe.py <core.jar> <networks.jar> <purpur-2568.jar> <new-work-dir>")
-    core, networks, server, work = [Path(arg).resolve() for arg in sys.argv[1:]]
-    if digest(server) != SERVER_SHA256:
-        raise SystemExit("Expected the pinned Purpur 1.21.11 build 2568 JAR")
+    if len(sys.argv) not in (5, 6):
+        raise SystemExit("Usage: crafter_manager_runtime_probe.py <core.jar> <networks.jar> "
+                         "<server.jar> <new-work-dir> [paper-26.3-build-metadata.json]")
+    core, networks, server, work = [Path(arg).resolve() for arg in sys.argv[1:5]]
+    version = "1.21.11"
+    expected_digest = SERVER_SHA256
+    if len(sys.argv) == 6:
+        metadata = json.loads(Path(sys.argv[5]).read_text(encoding="utf-8"))
+        if metadata.get("minecraft_version") != "26.3" or metadata.get("id") != 176:
+            raise SystemExit("Expected the exact Paper 26.3 build 176 metadata")
+        expected_digest = metadata["downloads"]["server:default"]["checksums"]["sha256"]
+        version = "26.3"
+    if digest(server) != expected_digest:
+        raise SystemExit(f"Server JAR checksum mismatch for {version}")
     work.mkdir(parents=True, exist_ok=False)
     java_home = Path(os.environ["JAVA_HOME"]) / "bin"
     java, javac = str(java_home / "java"), str(java_home / "javac")
@@ -32,7 +41,12 @@ def main():
         raise SystemExit("Unexpected Paperclip download context")
     cache = work / "cache"
     cache.mkdir()
-    subprocess.run(["curl", "--fail", "--location", "--silent", "--show-error", "--max-time", "120",
+    # Mojang's pinned server JAR is ~56 MB. On busy CI runners a 120-second
+    # transfer can time out after most bytes arrive; retries resume the partial
+    # transfer, and the SHA-256 check below still verifies every downloaded byte.
+    subprocess.run(["curl", "--fail", "--location", "--silent", "--show-error",
+                    "--retry", "2", "--retry-all-errors", "--retry-delay", "1",
+                    "--continue-at", "-", "--max-time", "240",
                     url, "--output", str(cache / name)], check=True)
     if digest(cache / name) != expected:
         raise SystemExit("Mojang server checksum mismatch")
@@ -46,7 +60,8 @@ def main():
     shutil.copyfile(networks, plugins / "Networks.jar")
     classes = work / "probe-classes"
     classpath = os.pathsep.join(map(str, [core, networks, *sorted((work / "libraries").rglob("*.jar"))]))
-    subprocess.run([javac, "--release", "21", "-cp", classpath, "-d", str(classes),
+    subprocess.run([javac, "--release", "25" if version == "26.3" else "21",
+                    "-cp", classpath, "-d", str(classes),
                     str(ROOT / "tests/runtime/CrafterManagerDisplayProbe.java")], check=True)
     with zipfile.ZipFile(plugins / "NetworksDisplayProbe.jar", "w") as archive:
         for path in sorted(classes.rglob("*.class")):
@@ -58,8 +73,13 @@ def main():
     (work / "server.properties").write_text("online-mode=false\nserver-ip=127.0.0.1\nserver-port=0\n"
                                            "level-name=fixture\nlevel-type=minecraft:flat\n"
                                            "generate-structures=false\nview-distance=2\nsimulation-distance=2\n")
-    (work / "inputs.json").write_text(json.dumps({"core": digest(core), "networks": digest(networks),
-                                                "purpur": digest(server)}, indent=2) + "\n")
+    (work / "inputs.json").write_text(json.dumps({
+        "minecraft_version": version,
+        "core": digest(core),
+        "networks": digest(networks),
+        "server": digest(server),
+        "expected_server_sha256": expected_digest,
+    }, indent=2) + "\n")
     with (work / "console.log").open("w") as log:
         process = subprocess.Popen([java, "-Dterminal.jline=false", "-Dterminal.ansi=false", "-Xms256M",
                                     "-Xmx1500M", "-jar", str(server), "--nogui"], cwd=work,

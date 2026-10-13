@@ -5,6 +5,7 @@ import io.github.sefiraat.networks.network.stackcaches.BarrelIdentity;
 import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
 import io.github.sefiraat.networks.network.stackcaches.QuantumCache;
 import io.github.sefiraat.networks.slimefun.network.NetworkQuantumStorage;
+import io.github.sefiraat.networks.slimefun.network.QuantumCacheLifecycle;
 import io.github.sefiraat.networks.utils.StackUtils;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Location;
@@ -47,11 +48,39 @@ public class NetworkStorage extends BarrelIdentity {
 
         final QuantumCache cache = NetworkQuantumStorage.getCaches().get(blockMenu.getLocation());
 
-        if (cache == null) {
+        if (cache == null || itemRequest.getAmount() <= 0) {
             return null;
         }
 
-        return NetworkQuantumStorage.getItemStack(cache, blockMenu, itemRequest.getAmount());
+        // Hold the cache lock and verify it is still attached to this block.
+        // A break can remove the map entry after this method fetched the reference.
+        return QuantumCacheLifecycle.readCurrent(
+            NetworkQuantumStorage.getCaches(), blockMenu.getLocation(), cache,
+            () -> withdrawIfMatching(cache, itemRequest,
+                () -> NetworkQuantumStorage.getItemStack(cache, blockMenu, itemRequest.getAmount())));
+    }
+
+    /**
+     * The BarrelIdentity was built from a storage snapshot that may be outdated. Verify the
+     * live QuantumCache template while holding the monitor shared with Quantum withdrawal
+     * and template reassignment. This package-private boundary is tested without initializing
+     * a whole Slimefun plugin or mocking the QuantumStorage static registry.
+     */
+    @Nullable
+    static ItemStack withdrawIfMatching(
+        @NotNull QuantumCache cache,
+        @NotNull ItemRequest request,
+        @NotNull java.util.function.Supplier<ItemStack> withdrawal) {
+        if (request.getAmount() <= 0) {
+            return null;
+        }
+        synchronized (cache) {
+            final ItemStack liveTemplate = cache.getItemStack();
+            if (liveTemplate == null || !StackUtils.itemsMatch(request, liveTemplate)) {
+                return null;
+            }
+            return withdrawal.get();
+        }
     }
 
     @Override
