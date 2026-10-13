@@ -177,7 +177,6 @@ public final class QuantumRestartProbe extends JavaPlugin {
 
     @SuppressWarnings("deprecation")
     private void verifyPhysicalStoredBlock(Location location, BlockMenu menu) throws Exception {
-        final var controller = Slimefun.getDatabaseManager().getBlockDataController();
         final var data = StorageCacheUtils.getBlock(location);
         final NetworkQuantumStorage storage = NetworkSlimefunItems.NETWORK_QUANTUM_STORAGE_0;
         require(data != null, "Slimefun block record vanished across process restart");
@@ -197,20 +196,31 @@ public final class QuantumRestartProbe extends JavaPlugin {
         require(output != null && output.getType() == Material.EMERALD && output.getAmount() == OUTPUT,
             "Persisted output inventory must still contain exactly 64 emeralds");
 
-        // Ensure the break rehydrates from the independently persisted Slimefun
-        // block KV and inventory, not an in-memory cache from startup.
+        // Force rehydration of the saved Slimefun KV/inventory in the actual
+        // break handler. A new JVM has no persisted live QuantumCache objects.
         NetworkQuantumStorage.getCaches().remove(location);
         final Method onBreak = NetworkQuantumStorage.class.getDeclaredMethod(
             "onBreak", BlockBreakEvent.class);
         onBreak.setAccessible(true);
         final BlockBreakEvent event = new BlockBreakEvent(location.getBlock(), null);
-        final List<Item> drops = new ArrayList<>();
-        try {
-            onBreak.invoke(storage, event);
-            require(!event.isDropItems(), "One filled storage must suppress normal duplicate block drops");
-            require(!NetworkQuantumStorage.getCaches().containsKey(location),
-                "Break must detach the rehydrated Quantum cache");
+        onBreak.invoke(storage, event);
+        require(!event.isDropItems(), "One filled storage must suppress duplicate block drops");
+        require(!NetworkQuantumStorage.getCaches().containsKey(location),
+            "Break must detach the independently restored Quantum cache");
+        require(menu.getItemInSlot(NetworkQuantumStorage.OUTPUT_SLOT) == null,
+            "Break must remove output items from the original inventory");
 
+        // Paper may register entities spawned by dropItemNaturally on the next
+        // world tick, while dropItem has already made the storage entity visible.
+        // Assert both item types AFTER the entity-registration boundary.
+        Bukkit.getScheduler().runTaskLater(this,
+            () -> verifyDropsAfterWorldTick(location, menu), 2L);
+    }
+
+    private void verifyDropsAfterWorldTick(Location location, BlockMenu menu) {
+        final List<Item> drops = new ArrayList<>();
+        Throwable problem = null;
+        try {
             for (var entity : location.getWorld().getNearbyEntities(location, 3, 3, 3)) {
                 if (entity instanceof Item drop) drops.add(drop);
             }
@@ -231,28 +241,34 @@ public final class QuantumRestartProbe extends JavaPlugin {
                     emeralds += item.getAmount();
                 }
             }
-            final ItemStack slotAfterBreak = menu.getItemInSlot(NetworkQuantumStorage.OUTPUT_SLOT);
-            final List<String> dropDetails = drops.stream()
+            final ItemStack slot = menu.getItemInSlot(NetworkQuantumStorage.OUTPUT_SLOT);
+            final List<String> details = drops.stream()
                 .map(entity -> entity.getItemStack().getType() + " x"
                     + entity.getItemStack().getAmount() + " at " + entity.getLocation())
                 .toList();
-            getLogger().info("RESTART OUTPUT DIAGNOSTIC before=EMERALD x" + OUTPUT
-                + " droppedEmeralds=" + emeralds
-                + " entities=" + dropDetails
-                + " outputSlotAfterBreak=" + (slotAfterBreak == null ? "null"
-                    : slotAfterBreak.getType() + " x" + slotAfterBreak.getAmount()));
-            require(carrying == 1, "Expected exactly one storage item carrying saved contents");
-            require(emeralds == OUTPUT, "Expected exactly " + OUTPUT
-                + " emeralds; observed " + emeralds + " entities=" + dropDetails
-                + " outputSlotAfterBreak=" + slotAfterBreak);
+            getLogger().info("RESTART OUTPUT POST-TICK expected=64 observed=" + emeralds
+                + " entities=" + details + " outputSlot=" + slot);
+            require(carrying == 1, "Expected exactly one stored-contents carrying item");
+            require(emeralds == OUTPUT, "Expected 64 emeralds, found " + emeralds
+                + " after two server ticks; entities=" + details);
+        } catch (Throwable failure) {
+            problem = failure;
         } finally {
-            // Finish all main-thread block/DB operations *before* shutdown begins.
-            // Calling Bukkit.shutdown first would close Slimefun's storage controller.
-            for (Item drop : drops) drop.remove();
-            NetworkQuantumStorage.getCaches().remove(location);
-            QuantumCacheLifecycle.clearBreakMarker(location);
-            controller.removeBlock(location);
-            location.getBlock().setType(Material.AIR);
+            // Complete all block/database cleanup before triggering server stop.
+            try {
+                for (Item drop : drops) drop.remove();
+                NetworkQuantumStorage.getCaches().remove(location);
+                QuantumCacheLifecycle.clearBreakMarker(location);
+                Slimefun.getDatabaseManager().getBlockDataController().removeBlock(location);
+                location.getBlock().setType(Material.AIR);
+            } catch (Throwable failure) {
+                if (problem == null) problem = failure;
+                else problem.addSuppressed(failure);
+            }
+        }
+        if (problem != null) {
+            fail("checking post-tick Quantum output drops", problem);
+            return;
         }
         finish("PASS: verify stored=" + COUNT + " emeralds=" + OUTPUT
             + " new-process=true cold-cache=true");
