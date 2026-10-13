@@ -231,8 +231,20 @@ public final class QuantumRestartProbe extends JavaPlugin {
                     emeralds += item.getAmount();
                 }
             }
+            final ItemStack slotAfterBreak = menu.getItemInSlot(NetworkQuantumStorage.OUTPUT_SLOT);
+            final List<String> dropDetails = drops.stream()
+                .map(entity -> entity.getItemStack().getType() + " x"
+                    + entity.getItemStack().getAmount() + " at " + entity.getLocation())
+                .toList();
+            getLogger().info("RESTART OUTPUT DIAGNOSTIC before=EMERALD x" + OUTPUT
+                + " droppedEmeralds=" + emeralds
+                + " entities=" + dropDetails
+                + " outputSlotAfterBreak=" + (slotAfterBreak == null ? "null"
+                    : slotAfterBreak.getType() + " x" + slotAfterBreak.getAmount()));
             require(carrying == 1, "Expected exactly one storage item carrying saved contents");
-            require(emeralds == OUTPUT, "Expected exactly 64 emeralds from the saved output slot");
+            require(emeralds == OUTPUT, "Expected exactly " + OUTPUT
+                + " emeralds; observed " + emeralds + " entities=" + dropDetails
+                + " outputSlotAfterBreak=" + slotAfterBreak);
         } finally {
             // Finish all main-thread block/DB operations *before* shutdown begins.
             // Calling Bukkit.shutdown first would close Slimefun's storage controller.
