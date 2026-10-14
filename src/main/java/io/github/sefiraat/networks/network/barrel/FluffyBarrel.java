@@ -131,7 +131,7 @@ public class FluffyBarrel extends BarrelIdentity {
         int received = 0;
         ItemStack targetItem = itemRequest.getItemStack();
         for (int slot : getOutputSlot()) {
-            int remaining = itemRequest.getAmount() - received;
+            long remaining = (long) itemRequest.getAmount() - received;
             if (remaining <= 0) {
                 break;
             }
@@ -142,7 +142,7 @@ public class FluffyBarrel extends BarrelIdentity {
             }
 
             if (StackUtils.itemsMatch(item, targetItem)) {
-                int max = Math.min(item.getAmount(), remaining);
+                int max = (int) Math.min((long) item.getAmount(), remaining);
                 if (max > 0) {
                     BlockMenuUtil.consumeItem(menu, slot, max);
                     received += max;
