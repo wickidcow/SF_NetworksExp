@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.55 — source self-routing safeguard (candidate, not published)
+
+- Stop directional line grabbers from depositing a detached input stack back into that input's own storage block when the same block is also a network cell, greedy block, barrel, drawer, or cargo storage destination.
+- Exclude only the matching physical block (world and block X/Y/Z) and continue normal transfer routing to all other eligible destinations; yaw and pitch do not affect identity.
+- Keep 1.0.54's strict precommit comparison of item identity, metadata, and count and retain compensation for genuine third-party source changes. The original warning remains for conflicts unrelated to self-routing.
+- Add focused barrel/cell transfer regressions and source-contract documentation. No network IDs, persistent storage formats, item metadata, recipes, priorities, or existing 1.21.11+ compatibility floor change.
+
+A production fix is not proven until the affected network root at x=-5278, z=-5513 is inspected, item amounts and PDC metadata are conserved on a copied server, and restart persistence is checked. The versioned candidate must complete its **own** CI; do not substitute an older 1.0.54 artifact.
+
+
 ## 1.0.54 — release candidate (not published)
 
 ### Item source commit integrity
