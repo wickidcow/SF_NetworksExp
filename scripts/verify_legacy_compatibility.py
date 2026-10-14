@@ -682,6 +682,11 @@ require("BlockMenuUtil.getSafeTransportSlots" in network_root
         and "BlockMenuUtil.getSafeTransportSlots" in fluffy_barrel
         and "BlockMenuUtil.getSafeTransportSlots" in linker_grid,
         "safe transport-slot enumeration is not applied across storage/cargo integrations")
+require("if (itemRequest.getAmount() <= 0)" in fluffy_barrel
+        and "long remaining = (long) itemRequest.getAmount() - received" in fluffy_barrel
+        and "if (remaining <= 0)" in fluffy_barrel
+        and "if (max > 0)" in fluffy_barrel,
+        "Fluffy Barrel must reject nonpositive or overflowed network withdrawal amounts")
 require("blockMenu.markDirty()" in vanilla_pusher and "handleFurnace" in vanilla_pusher
         and "handleBrewingStand" in vanilla_pusher,
         "vanilla cargo pusher persistence verification is missing")
