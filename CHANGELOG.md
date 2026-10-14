@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.54 — release candidate (not published)
+
+### Item source commit integrity
+- Check the source inventory stack's complete identity (including its persistent metadata) and quantity immediately before committing an already accepted network deposit.
+- If a menu, inventory, player cursor, selected hotbar slot or direct stack reference changed while the detached network offer was processed, do not overwrite it. Compensate accepted items using the existing transfer audit and source-network recovery path.
+- After an input setter fails, restore only if the source still matches the original or the expected partial remainder. Avoid restoring an unrelated replacement from another plugin or event.
+- Add regression coverage for source changes, custom PDC identity, an in-place amount mutation, and setter failures that replace the source.
+- Reject nonpositive/malformed Fluffy Barrel withdrawal requests before the live menu consumption helper can run; use overflow-safe remaining-amount arithmetic. Preserve normal positive withdrawals and metadata.
+- Keep network storage IDs, persistence formats, recipes, transfer priorities and the supported 1.21.11+ floor unchanged.
+
+This candidate requires a staging-server item-conservation check, old-world restart tests, and a separately verified 1.0.54 JAR before release. It does not claim to prevent every concurrency or crash-induced duplication scenario.
+
 ## 1.0.53
 
 ### Network transfer and storage integrity

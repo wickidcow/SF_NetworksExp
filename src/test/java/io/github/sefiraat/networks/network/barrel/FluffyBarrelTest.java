@@ -293,6 +293,32 @@ class FluffyBarrelTest {
     }
 
     @Test
+    void nonPositiveRequestsCannotModifyPhysicalFluffyOutputSlots() {
+        slots[24] = customDiamond(40, "original");
+        slots[25] = customDiamond(24, "original");
+        FluffyBarrel found = FluffyBarrel.fromMenu(menu, barrel, false);
+        assertNotNull(found);
+        ItemStack beforeFirst = slots[24].clone();
+        ItemStack beforeSecond = slots[25].clone();
+
+        for (int invalid : new int[] {0, -1, -64, Integer.MIN_VALUE}) {
+            assertNull(found.requestItem(new ItemRequest(found.getItemStack(), invalid)));
+            assertEquals(beforeFirst, slots[24]);
+            assertEquals(beforeSecond, slots[25]);
+        }
+
+        verify(menu, never()).markDirty();
+        verify(barrel, never()).setStored(any(Block.class), anyInt());
+
+        ItemStack valid = found.requestItem(new ItemRequest(found.getItemStack(), 12));
+        assertNotNull(valid);
+        assertEquals(12, valid.getAmount());
+        assertEquals(28, slots[24].getAmount());
+        assertEquals(24, slots[25].getAmount());
+        assertEquals(beforeFirst.getItemMeta(), valid.getItemMeta());
+    }
+
+    @Test
     void largerDisplayedTotalDoesNotAllowWithdrawalFromTheReserveBeforeFluffyRefills() {
         when(barrel.getStored(block)).thenReturn(64);
         when(barrel.getStoredItem(block)).thenReturn(new ItemStack(Material.DIAMOND));

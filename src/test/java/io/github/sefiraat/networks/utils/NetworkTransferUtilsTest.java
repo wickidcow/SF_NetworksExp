@@ -161,6 +161,89 @@ class NetworkTransferUtilsTest {
         assertEquals(11, TransferAudit.snapshot().depositCommitted());
     }
 
+    static Stream<Arguments> externallyModifiedSources() {
+        return Arrays.stream(SourceKind.values())
+            .filter(kind -> kind != SourceKind.REFERENCE)
+            .flatMap(kind -> Stream.of(false, true)
+                .map(metadataOnly -> Arguments.of(kind, metadataOnly)));
+    }
+
+    @ParameterizedTest(name = "{0}: metadataOnly={1}")
+    @MethodSource("externallyModifiedSources")
+    void sourceChangedWhileDepositWasAcceptedIsNeverOverwritten(SourceKind kind, boolean metadataOnly) {
+        final ItemStack external = metadataOnly ? customDiamond(32) : new ItemStack(Material.EMERALD, 16);
+        if (metadataOnly) {
+            var meta = external.getItemMeta();
+            meta.getPersistentDataContainer().set(NamespacedKey.fromString("oldaddon:owner"),
+                PersistentDataType.STRING, "another-owner");
+            external.setItemMeta(meta);
+        }
+
+        doAnswer(call -> {
+            accept(call.getArgument(1), 7);
+            source.set(external);
+            return null;
+        }).when(root).addItemStack0(eq(accessor), any(ItemStack.class));
+        when(root.getItemStack0(eq(accessor), any(ItemRequest.class))).thenAnswer(call -> {
+            ItemRequest request = call.getArgument(1);
+            assertEquals(7, request.getAmount());
+            accepted -= 7;
+            return customDiamond(7);
+        });
+
+        assertEquals(0, transfer(kind, Integer.MAX_VALUE));
+        assertSame(external, source.get());
+        assertEquals(0, accepted);
+        verify(root).uncontrolAccessOutput(accessor);
+        verify(menu, never()).replaceExistingItem(anyInt(), any());
+        verify(inventory, never()).setItem(anyInt(), any());
+        verify(player, never()).setItemOnCursor(any());
+        assertEquals(7, TransferAudit.snapshot().depositCompensationRequested());
+        assertEquals(7, TransferAudit.snapshot().depositCompensationRetrieved());
+    }
+
+    @Test
+    void anInPlaceMutationOfALiveStackReferenceIsAlsoRejected() {
+        doAnswer(call -> {
+            accept(call.getArgument(1), 7);
+            original.setAmount(19); // e.g. a third-party operation used the live source stack
+            return null;
+        }).when(root).addItemStack0(eq(accessor), any(ItemStack.class));
+        when(root.getItemStack0(eq(accessor), any(ItemRequest.class))).thenAnswer(call -> {
+            accepted -= 7;
+            return customDiamond(7);
+        });
+
+        assertEquals(0, transfer(SourceKind.REFERENCE, Integer.MAX_VALUE));
+        assertSame(original, source.get());
+        assertEquals(19, original.getAmount());
+        assertEquals(0, accepted);
+        assertEquals(7, TransferAudit.snapshot().depositCompensationRetrieved());
+    }
+
+    @Test
+    void failedSourceWriterMustNotRestoreOverAThirdPartyStack() {
+        doAnswer(call -> {
+            source.set(new ItemStack(Material.EMERALD, 21));
+            throw new IllegalStateException("External inventory replacement during the source write");
+        }).when(inventory).setItem(eq(SOURCE_SLOT), nullable(ItemStack.class));
+        doAnswer(call -> {
+            accept(call.getArgument(1), 7);
+            return null;
+        }).when(root).addItemStack0(eq(accessor), any(ItemStack.class));
+        when(root.getItemStack0(eq(accessor), any(ItemRequest.class))).thenAnswer(call -> {
+            accepted -= 7;
+            return customDiamond(7);
+        });
+
+        assertEquals(0, transfer(SourceKind.INVENTORY, Integer.MAX_VALUE));
+        assertEquals(Material.EMERALD, source.get().getType());
+        assertEquals(21, source.get().getAmount());
+        assertEquals(0, accepted);
+        verify(inventory, times(1)).setItem(eq(SOURCE_SLOT), nullable(ItemStack.class));
+        assertEquals(7, TransferAudit.snapshot().depositCompensationRetrieved());
+    }
+
     @Test
     void repeatedPartialFailuresCannotMintItems() {
         acceptThenFail(7, false);

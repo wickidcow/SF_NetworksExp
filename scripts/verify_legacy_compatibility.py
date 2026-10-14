@@ -236,13 +236,13 @@ require("extends RecipeChoice.ExactChoice" not in simple_recipe_choice,
         "SimpleRecipeChoice still extends final RecipeChoice.ExactChoice")
 require("implements RecipeChoice" in simple_recipe_choice, "SimpleRecipeChoice no longer implements RecipeChoice")
 # Public release metadata must move as one unit so JAR/plugin/workflow versions cannot drift.
-require('version = "1.0.53"' in build, "Gradle public version must remain 1.0.53")
-require('VERSION: "1.0.53"' in build_workflow
-        and 'OUTPUT_NAME: "SF_Networks1.0.53.jar"' in build_workflow,
-        "release workflow public version/JAR name must remain 1.0.53")
-require('VERSION: "1.0.53"' in compatibility_workflow
-        and 'OUTPUT_NAME: "SF_Networks1.0.53.jar"' in compatibility_workflow,
-        "compatibility workflow public version/JAR name must remain 1.0.53")
+require('version = "1.0.54"' in build, "Gradle public version must remain 1.0.54")
+require('VERSION: "1.0.54"' in build_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.54.jar"' in build_workflow,
+        "release workflow public version/JAR name must remain 1.0.54")
+require('VERSION: "1.0.54"' in compatibility_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.54.jar"' in compatibility_workflow,
+        "compatibility workflow public version/JAR name must remain 1.0.54")
 require("actions/upload-artifact@v7" in compatibility_workflow
         and "name: slimefun-legacy-core" in compatibility_workflow
         and "Slimefun-Legacy-Core.jar" in compatibility_workflow,
@@ -682,6 +682,11 @@ require("BlockMenuUtil.getSafeTransportSlots" in network_root
         and "BlockMenuUtil.getSafeTransportSlots" in fluffy_barrel
         and "BlockMenuUtil.getSafeTransportSlots" in linker_grid,
         "safe transport-slot enumeration is not applied across storage/cargo integrations")
+require("if (itemRequest.getAmount() <= 0)" in fluffy_barrel
+        and "long remaining = (long) itemRequest.getAmount() - received" in fluffy_barrel
+        and "if (remaining <= 0)" in fluffy_barrel
+        and "if (max > 0)" in fluffy_barrel,
+        "Fluffy Barrel must reject nonpositive or overflowed network withdrawal amounts")
 require("blockMenu.markDirty()" in vanilla_pusher and "handleFurnace" in vanilla_pusher
         and "handleBrewingStand" in vanilla_pusher,
         "vanilla cargo pusher persistence verification is missing")

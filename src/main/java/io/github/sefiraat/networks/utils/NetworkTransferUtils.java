@@ -349,13 +349,27 @@ public final class NetworkTransferUtils {
         }
 
         try {
+            // The detached network offer can trigger callbacks before we commit this source slot.
+            // Never overwrite a stack that another operation changed in the meantime.
+            if (!sourceStillMatches(originalSource, sourceMenu.getItemInSlot(slot))) {
+                compensateCommittedDeposit(root, accessor, originalSource, result.moved(),
+                    sourceMenu.getLocation(), "changed menu source",
+                    new IllegalStateException("The menu input changed during the network deposit"));
+                return 0;
+            }
             sourceMenu.replaceExistingItem(slot, result.remainingStack());
             sourceMenu.markDirty();
             return result.moved();
         } catch (RuntimeException | LinkageError exception) {
             try {
-                sourceMenu.replaceExistingItem(slot, originalSource);
-                sourceMenu.markDirty();
+                ItemStack current = sourceMenu.getItemInSlot(slot);
+                // A failed write may have already installed the remaining amount. Restore only
+                // if the slot still contains our original or our partially committed stack.
+                if (sourceStillMatches(originalSource, current)
+                    || sourceStillMatches(result.remainingStack(), current)) {
+                    sourceMenu.replaceExistingItem(slot, originalSource);
+                    sourceMenu.markDirty();
+                }
             } catch (RuntimeException | LinkageError restorationFailure) {
                 exception.addSuppressed(restorationFailure);
             }
@@ -394,11 +408,21 @@ public final class NetworkTransferUtils {
         }
 
         try {
+            if (!sourceStillMatches(originalSource, sourceInventory.getItem(slot))) {
+                compensateCommittedDeposit(root, accessor, originalSource, result.moved(), accessor,
+                    "changed inventory source",
+                    new IllegalStateException("The inventory input changed during the network deposit"));
+                return 0;
+            }
             sourceInventory.setItem(slot, result.remainingStack());
             return result.moved();
         } catch (RuntimeException | LinkageError exception) {
             try {
-                sourceInventory.setItem(slot, originalSource);
+                ItemStack current = sourceInventory.getItem(slot);
+                if (sourceStillMatches(originalSource, current)
+                    || sourceStillMatches(result.remainingStack(), current)) {
+                    sourceInventory.setItem(slot, originalSource);
+                }
             } catch (RuntimeException | LinkageError restorationFailure) {
                 exception.addSuppressed(restorationFailure);
             }
@@ -431,11 +455,21 @@ public final class NetworkTransferUtils {
         }
 
         try {
+            if (!sourceStillMatches(originalSource, player.getItemOnCursor())) {
+                compensateCommittedDeposit(root, accessor, originalSource, result.moved(), player.getLocation(),
+                    "changed cursor source",
+                    new IllegalStateException("The player cursor changed during the network deposit"));
+                return 0;
+            }
             player.setItemOnCursor(orAir(result.remainingStack()));
             return result.moved();
         } catch (RuntimeException | LinkageError exception) {
             try {
-                player.setItemOnCursor(orAir(originalSource));
+                ItemStack current = player.getItemOnCursor();
+                if (sourceStillMatches(originalSource, current)
+                    || sourceStillMatches(result.remainingStack(), current)) {
+                    player.setItemOnCursor(orAir(originalSource));
+                }
             } catch (RuntimeException | LinkageError restorationFailure) {
                 exception.addSuppressed(restorationFailure);
             }
@@ -480,6 +514,12 @@ public final class NetworkTransferUtils {
 
         final ItemStack remaining = result.remainingStack();
         try {
+            if (!sourceStillMatches(originalSource, source)) {
+                compensateCommittedDeposit(root, accessor, originalSource, result.moved(), accessor,
+                    "changed stack-reference source",
+                    new IllegalStateException("The source stack changed during the network deposit"));
+                return 0;
+            }
             source.setAmount(remaining == null ? 0 : remaining.getAmount());
             return result.moved();
         } catch (RuntimeException | LinkageError exception) {
@@ -605,6 +645,21 @@ public final class NetworkTransferUtils {
                 + recovered + " item(s) were removed from the network as compensation at " + fallbackLocation + '.',
             commitFailure);
         return recovered;
+    }
+
+    /**
+     * Compares source identity and quantity at the network commit boundary. This check is
+     * intentionally stricter than recipe/item-routing equivalence: the source may have been
+     * replaced with another player's item or updated by an addon while the offer was running.
+     * It also treats null, AIR and zero-count stacks as the same empty state for failed-write recovery.
+     */
+    private static boolean sourceStillMatches(ItemStack expected, ItemStack current) {
+        if (expected == null || expected.getType().isAir() || expected.getAmount() <= 0) {
+            return current == null || current.getType().isAir() || current.getAmount() <= 0;
+        }
+        return current != null
+            && current.getAmount() == expected.getAmount()
+            && expected.isSimilar(current);
     }
 
     private static int validAmount(ItemStack stack) {
