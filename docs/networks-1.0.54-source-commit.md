@@ -14,6 +14,10 @@ When a menu/inventory/cursor setter itself fails, restore the previous source on
 
 This is defense in depth, not a claim of global atomicity across third-party addons, server crashes, inventories and networks. If an addon makes a conflicting mutation *after* the re-read, another thread can still race the setter; correct region-thread scheduling and native interleaving tests remain requirements. A failed compensation attempt also still requires operator investigation.
 
+## Additional Fluffy Barrel request validation
+
+The Fluffy Barrel adapter now refuses requests of zero or negative amounts, including `Integer.MIN_VALUE`, before calling a slot-consumption helper. Remaining-request arithmetic uses `long` to avoid overflowing if an invalid mutable request is observed. Regression tests verify unchanged physical output slots and that an ordinary subsequent positive withdrawal still preserves item metadata and quantities.
+
 ## Automated checks
 
 - Unit tests cover ordinary partial deposits and source-write failures already in 1.0.53, plus menu/inventory/cursor/main-hand source swaps, PDC metadata replacements, mutable-stack quantity changes and a setter that replaces the source before throwing.
