@@ -117,6 +117,12 @@ public class FluffyBarrel extends BarrelIdentity {
     @Nullable
     @Override
     public ItemStack requestItem(@NotNull ItemRequest itemRequest) {
+        // Never pass zero/negative amounts into the live Slimefun menu consume helper.
+        // A malformed request must not increase an output stack through negative consumption.
+        if (itemRequest.getAmount() <= 0) {
+            return null;
+        }
+
         BlockMenu menu = StorageCacheUtils.getMenu(getLocation());
         if (menu == null) {
             return null;
@@ -125,15 +131,22 @@ public class FluffyBarrel extends BarrelIdentity {
         int received = 0;
         ItemStack targetItem = itemRequest.getItemStack();
         for (int slot : getOutputSlot()) {
+            int remaining = itemRequest.getAmount() - received;
+            if (remaining <= 0) {
+                break;
+            }
+
             ItemStack item = menu.getItemInSlot(slot);
-            if (item == null || item.getType() == Material.AIR) {
+            if (item == null || item.getType() == Material.AIR || item.getAmount() <= 0) {
                 continue;
             }
 
             if (StackUtils.itemsMatch(item, targetItem)) {
-                int max = Math.min(item.getAmount(), itemRequest.getAmount() - received);
-                BlockMenuUtil.consumeItem(menu, slot, max);
-                received += max;
+                int max = Math.min(item.getAmount(), remaining);
+                if (max > 0) {
+                    BlockMenuUtil.consumeItem(menu, slot, max);
+                    received += max;
+                }
             }
         }
 
