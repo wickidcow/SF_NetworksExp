@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.wickidcow.networks"
-version = "1.0.54"
+version = "1.0.55"
 val pluginVersion = version.toString()
 
 // The release baseline is paper-api:1.21.11-R0.1-SNAPSHOT. An opt-in

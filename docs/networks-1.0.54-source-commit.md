@@ -14,6 +14,14 @@ When a menu/inventory/cursor setter itself fails, restore the previous source on
 
 This is defense in depth, not a claim of global atomicity across third-party addons, server crashes, inventories and networks. If an addon makes a conflicting mutation *after* the re-read, another thread can still race the setter; correct region-thread scheduling and native interleaving tests remain requirements. A failed compensation attempt also still requires operator investigation.
 
+## Follow-up: line source self-routing safeguard (2026-10-14)
+
+A Networks Expansion directional line grabber uses each target menu's location as its deposit accessor. If that target is also a cell, greedy block, barrel, drawer, or cargo-storage destination on the *same* root, the network may route its detached offer back into the very slot the grabber is trying to debit. The 1.0.54 source-integrity check correctly refuses to overwrite the changed slot and attempts to compensate, but can repeatedly warn about that configuration.
+
+Deposits now skip only a storage target occupying the accessor's **same physical block** (world and block X/Y/Z; yaw/pitch are ignored) across persistent routing hints, advanced/regular greedy blocks, barrels, cargo/drawer storage and cells. Other destinations remain eligible in the existing order. The change does not weaken source-identity validation, alter compensation on an unrelated source mutation, or change stored item IDs and data formats.
+
+Regression tests exercise a source barrel that must not receive its own offer while a different barrel still accepts two items, and a source network cell that must not be visited as a deposit destination. The reported setup still needs manual identification of the affected blocks and a staging-server conservation test before a production upgrade.
+
 ## Additional Fluffy Barrel request validation
 
 The Fluffy Barrel adapter now refuses requests of zero or negative amounts, including `Integer.MIN_VALUE`, before calling a slot-consumption helper. Remaining-request arithmetic uses `long` to avoid overflowing if an invalid mutable request is observed. Regression tests verify unchanged physical output slots and that an ordinary subsequent positive withdrawal still preserves item metadata and quantities.
