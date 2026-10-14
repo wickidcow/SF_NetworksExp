@@ -335,7 +335,8 @@ class NetworkTransferUtilsTest {
 
         // Yaw and pitch are intentionally different: routing compares block coordinates.
         when(origin.getLocation()).thenReturn(new Location(null, 417, 64, 429, 45, 30));
-        when(destination.getLocation()).thenReturn(new Location(null, 418, 64, 429));
+        // A different Y block in the same vertical column is a legitimate destination.
+        when(destination.getLocation()).thenReturn(new Location(null, 417, 65, 429));
         when(destination.canAccept(any(ItemStack.class))).thenReturn(true);
         doAnswer(call -> {
             accept(call.getArgument(0), 2);
