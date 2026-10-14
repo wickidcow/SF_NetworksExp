@@ -2046,6 +2046,20 @@ public class NetworkRoot extends NetworkNode {
         }
     }
 
+    /**
+     * A line grabber can read an inventory which is also registered as storage on its own network.
+     * Depositing its detached offer into the same block mutates the live source slot before the
+     * caller can commit the removal. Exclude only that physical source block; other network
+     * destinations remain eligible, and source-side commit validation is still required.
+     */
+    private static boolean isSameSourceBlock(@NotNull Location accessor, @Nullable Location destination) {
+        return destination != null
+            && accessor.getWorld() == destination.getWorld()
+            && accessor.getBlockX() == destination.getBlockX()
+            && accessor.getBlockY() == destination.getBlockY()
+            && accessor.getBlockZ() == destination.getBlockZ();
+    }
+
     public void addItemStack0(@NotNull Location accessor, @NotNull ItemStack incoming) {
         if (!allowAccessInput(accessor)) {
             FeedbackSendable.sendFeedback0(accessor, FeedbackType.ROOT_LIMITING_ACCESS_INPUT);
@@ -2073,6 +2087,9 @@ public class NetworkRoot extends NetworkNode {
             List<Location> misses = null;
             // Netex - Cache end
             for (Map.Entry<Location, Integer> entry : m.entrySet()) {
+                if (isSameSourceBlock(accessor, entry.getKey())) {
+                    continue;
+                }
                 BarrelIdentity barrelIdentity = accessInputAbleBarrel(entry.getKey());
                 if (barrelIdentity != null) {
                     // <editor-fold desc="do barrel">
@@ -2146,6 +2163,9 @@ public class NetworkRoot extends NetworkNode {
         }
 
         for (Location greedyLocation : advancedGreedyBlocks) {
+            if (isSameSourceBlock(accessor, greedyLocation)) {
+                continue;
+            }
             BlockMenu blockMenu = StorageCacheUtils.getMenu(greedyLocation);
             if (blockMenu == null) {
                 continue;
@@ -2170,6 +2190,9 @@ public class NetworkRoot extends NetworkNode {
 
         // Run for matching greedy blocks
         for (Location greedyLocation : greedyBlocks) {
+            if (isSameSourceBlock(accessor, greedyLocation)) {
+                continue;
+            }
             BlockMenu blockMenu = StorageCacheUtils.getMenu(greedyLocation);
             if (blockMenu == null) {
                 continue;
@@ -2194,6 +2217,9 @@ public class NetworkRoot extends NetworkNode {
 
         // Run for matching barrels
         for (BarrelIdentity barrelIdentity : getInputAbleBarrels()) {
+            if (isSameSourceBlock(accessor, barrelIdentity.getLocation())) {
+                continue;
+            }
             // <editor-fold desc="do barrel">
             if (barrelIdentity.canAccept(incoming)) {
                 // Netex - Cache start
@@ -2216,7 +2242,11 @@ public class NetworkRoot extends NetworkNode {
             // </editor-fold>
         }
 
-        for (StorageUnitData cache : getInputAbleCargoStorageUnitDatas().keySet()) {
+        for (Map.Entry<StorageUnitData, Location> storageEntry : getInputAbleCargoStorageUnitDatas().entrySet()) {
+            if (isSameSourceBlock(accessor, storageEntry.getValue())) {
+                continue;
+            }
+            final StorageUnitData cache = storageEntry.getKey();
             // Netex - Cache start
             int before2 = incoming.getAmount();
             // Netex - Cache end
@@ -2244,6 +2274,9 @@ public class NetworkRoot extends NetworkNode {
         }
 
         for (Location cellLocation : cells) {
+            if (isSameSourceBlock(accessor, cellLocation)) {
+                continue;
+            }
             BlockMenu blockMenu = StorageCacheUtils.getMenu(cellLocation);
             if (blockMenu == null || !isRealCell(blockMenu)) continue;
             blockMenu.markDirty();
