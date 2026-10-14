@@ -2,6 +2,7 @@ package io.github.sefiraat.networks.utils;
 
 import com.balugaq.netex.api.enums.MinecraftVersion;
 import com.balugaq.netex.utils.BlockMenuUtil;
+import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import com.ytdd9527.networksexpansion.core.managers.ConfigManager;
 import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.network.NetworkRoot;
@@ -322,6 +323,52 @@ class NetworkTransferUtilsTest {
         verify(broken).canAccept(any(ItemStack.class));
         assertEquals(7, TransferAudit.snapshot().depositCommitted());
         assertEquals(1, TransferAudit.snapshot().failures());
+    }
+
+    @Test
+    void lineGrabberNeverRedepositsIntoItsOwnSourceBarrel() {
+        NetworkRoot routedRoot = spy(new NetworkRoot(accessor, NodeType.CONTROLLER, 100));
+        BarrelIdentity origin = mock(BarrelIdentity.class);
+        BarrelIdentity destination = mock(BarrelIdentity.class);
+        doReturn(new LinkedHashSet<>(List.of(origin, destination)))
+            .when(routedRoot).getInputAbleBarrels();
+
+        // Yaw and pitch are intentionally different: routing compares block coordinates.
+        when(origin.getLocation()).thenReturn(new Location(null, 417, 64, 429, 45, 30));
+        when(destination.getLocation()).thenReturn(new Location(null, 418, 64, 429));
+        when(destination.canAccept(any(ItemStack.class))).thenReturn(true);
+        doAnswer(call -> {
+            accept(call.getArgument(0), 2);
+            return null;
+        }).when(destination).depositItemStack(any(ItemStack.class));
+
+        assertEquals(2, NetworkTransferUtils.moveMenuSlotIntoNetwork(
+            routedRoot, accessor, menu, SOURCE_SLOT, 2));
+        assertConserved(32);
+        assertEquals(30, remaining());
+        verify(origin, never()).canAccept(any(ItemStack.class));
+        verify(origin, never()).depositItemStack(any(ItemStack.class));
+        verify(destination).depositItemStack(any(ItemStack.class));
+        assertEquals(0, TransferAudit.snapshot().failures());
+        assertEquals(0, TransferAudit.snapshot().depositCompensationRequested());
+    }
+
+    @Test
+    void aNetworkCellCannotReceiveTheOfferFromItsOwnLiveSourceMenu() {
+        NetworkRoot routedRoot = spy(new NetworkRoot(accessor, NodeType.CONTROLLER, 100));
+        Location sameBlock = new Location(null, 417, 64, 429, 90, 0);
+        routedRoot.getCells().add(sameBlock);
+        try (MockedStatic<StorageCacheUtils> storage = mockStatic(StorageCacheUtils.class)) {
+            storage.when(() -> StorageCacheUtils.getMenu(sameBlock)).thenReturn(menu);
+
+            assertEquals(0, NetworkTransferUtils.moveMenuSlotIntoNetwork(
+                routedRoot, accessor, menu, SOURCE_SLOT, 2));
+            storage.verify(() -> StorageCacheUtils.getMenu(sameBlock), never());
+        }
+
+        assertSame(original, source.get());
+        assertEquals(32, remaining());
+        assertEquals(0, TransferAudit.snapshot().failures());
     }
 
     @Test
