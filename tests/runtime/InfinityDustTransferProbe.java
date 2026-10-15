@@ -1,6 +1,7 @@
 package networksprobe;
 
 import com.balugaq.netex.api.enums.TransportMode;
+import com.balugaq.netex.utils.BlockMenuUtil;
 import com.balugaq.netex.utils.LineOperationUtil;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.NodeType;
@@ -67,8 +68,11 @@ public final class InfinityDustTransferProbe extends JavaPlugin {
             var preset = BlockMenuPreset.getPreset(machine.getId());
             require(preset != null, "Real extractor menu preset missing: " + machine.getId());
             var menu = new BlockMenu(preset, location);
-            int[] inputs = preset.getSlotsAccessedByItemTransport(ItemTransportFlow.INSERT);
-            int[] outputs = preset.getSlotsAccessedByItemTransport(ItemTransportFlow.WITHDRAW);
+            int[] inputs = BlockMenuUtil.getSafeTransportSlots(menu, ItemTransportFlow.INSERT,
+                ItemStack.of(Material.COBBLESTONE, 64));
+            int[] outputs = BlockMenuUtil.getSafeTransportSlots(menu, ItemTransportFlow.WITHDRAW);
+            getLogger().info("LAYOUT " + machine.getId() + " input=" + Arrays.toString(inputs)
+                + " output=" + Arrays.toString(outputs));
             require(inputs.length > 0 && outputs.length > 1, "Expected extractor transport layout");
             Method process = findProcess(machine.getClass());
             var fixture = new Fixture(machine, menu, inputs, outputs, process);
@@ -139,7 +143,7 @@ public final class InfinityDustTransferProbe extends JavaPlugin {
         }
         ItemStack actual = fixture.menu().getItemInSlot(slot);
         getLogger().info("PRODUCED " + fixture.machine().getId() + " " + identified.getId() + " x" + actual.getAmount()
-            + " class=" + actual.getClass().getName().toString() + " decorated=" + decorate
+            + " class=" + actual.getClass().getName() + " decorated=" + decorate
             + " cloneEqual=" + actual.equals(actual.clone()));
         return new Produced(slot, exact(actual), inputLeft);
     }
