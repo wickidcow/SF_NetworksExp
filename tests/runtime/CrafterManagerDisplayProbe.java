@@ -86,6 +86,7 @@ public final class CrafterManagerDisplayProbe extends JavaPlugin {
         probe("Quantum world display", this::verifyQuantumWorldDisplay, failures);
         probe("Quantum live item conservation", this::verifyQuantumConservation, failures);
         probe("Real Quantum block and break handler", this::verifyRealQuantumBlockBreak, failures);
+        probe("Native menu source snapshots and strict guards", this::verifyNativeMenuSnapshots, failures);
         if (!failures.isEmpty()) throw new AssertionError(String.join("; ", failures));
     }
 
@@ -552,6 +553,106 @@ public final class CrafterManagerDisplayProbe extends JavaPlugin {
                 block.setType(Material.AIR);
                 QuantumCacheLifecycle.clearBreakMarker(location);
             }
+        }
+    }
+
+    /** Native component fidelity, separate from MockBukkit's limited metadata implementation. */
+    private void verifyNativeMenuSnapshots() throws Exception {
+        var transfers = io.github.sefiraat.networks.utils.NetworkTransferUtils.class;
+        var snapshotMethod = transfers.getDeclaredMethod("snapshotMenuSource", ItemStack.class);
+        var guardMethod = transfers.getDeclaredMethod("sourceStillMatches", ItemStack.class, ItemStack.class);
+        snapshotMethod.setAccessible(true);
+        guardMethod.setAccessible(true);
+        var owner = new NamespacedKey("networkstest", "snapshot_owner");
+        var payload = new NamespacedKey("networkstest", "snapshot_payload");
+        var counter = new NamespacedKey("networkstest", "snapshot_counter");
+        ItemStack template = ItemStack.of(Material.GUNPOWDER, 16);
+        template.editMeta(meta -> {
+            meta.displayName(Component.text("Native extractor dust fixture"));
+            meta.lore(List.of(Component.text("Preserve this item's existing data")));
+            meta.getPersistentDataContainer().set(owner, PersistentDataType.STRING, "original-owner");
+            meta.getPersistentDataContainer().set(payload, PersistentDataType.BYTE_ARRAY, new byte[]{3, 1, 4});
+            meta.getPersistentDataContainer().set(counter, PersistentDataType.LONG, 9876543210L);
+            var models = meta.getCustomModelDataComponent();
+            models.setFloats(List.of(7001.0F, 55.0F));
+            models.setStrings(List.of("original-model"));
+            models.setFlags(List.of(true, false));
+            models.setColors(List.of(org.bukkit.Color.fromRGB(12, 34, 56)));
+            meta.setCustomModelDataComponent(models);
+        });
+        for (String kind : List.of("native", "rebuilding", "aliasing", "slimefun")) {
+            ItemStack live = switch (kind) {
+                case "rebuilding" -> new ModelRebuildingStack(template, false);
+                case "aliasing" -> new ModelRebuildingStack(template, true);
+                case "slimefun" -> new SlimefunItemStack("NETWORKS_SNAPSHOT_PROBE_ITEM", template);
+                default -> template.clone();
+            };
+            ItemMeta before = live.getItemMeta();
+            if (kind.equals("rebuilding")) {
+                ItemStack rebuilt = live.clone();
+                require(!rebuilt.isSimilar(live), "Native comparison must detect a model-only clone change");
+                require(rebuilt.getItemMeta().getCustomModelDataComponent().getFloats()
+                    .equals(List.of(7002.0F, 55.0F)), "Rebuilding fixture must change its first model float");
+                require(before.equals(live.getItemMeta()), "Rebuilding clone cannot mutate its source");
+            }
+            ItemStack snapshot = (ItemStack) snapshotMethod.invoke(null, live);
+            require(snapshot != live && snapshot.getAmount() == 16 && snapshot.isSimilar(live),
+                "Detached native snapshot must preserve full component identity and amount: " + kind);
+            require(before.equals(snapshot.getItemMeta()), "Snapshot metadata must be exact: " + kind);
+            var actual = snapshot.getItemMeta();
+            var models = actual.getCustomModelDataComponent();
+            require(models.getFloats().equals(List.of(7001.0F, 55.0F)), "All model floats must survive");
+            require(models.getStrings().equals(List.of("original-model")), "Model strings must survive");
+            require(models.getFlags().equals(List.of(true, false)), "Model flags must survive");
+            require(models.getColors().equals(List.of(org.bukkit.Color.fromRGB(12, 34, 56))),
+                "Model colors must survive");
+            require("original-owner".equals(actual.getPersistentDataContainer().get(owner, PersistentDataType.STRING)),
+                "Owner identity must survive");
+            require(Long.valueOf(9876543210L).equals(actual.getPersistentDataContainer().get(counter, PersistentDataType.LONG)),
+                "Long PDC data must survive without narrowing");
+            require(java.util.Arrays.equals(new byte[]{3, 1, 4},
+                actual.getPersistentDataContainer().get(payload, PersistentDataType.BYTE_ARRAY)),
+                "Opaque PDC payload must survive");
+            require((boolean) guardMethod.invoke(null, snapshot, live), "Unchanged native source must match");
+            for (String mutation : List.of("amount", "owner", "model")) {
+                ItemStack changed = snapshot.clone();
+                if (mutation.equals("amount")) changed.setAmount(15);
+                else changed.editMeta(meta -> {
+                    if (mutation.equals("owner")) {
+                        meta.getPersistentDataContainer().set(owner, PersistentDataType.STRING, "different-owner");
+                    } else {
+                        var changedModels = meta.getCustomModelDataComponent();
+                        changedModels.setFloats(List.of(7003.0F, 55.0F));
+                        meta.setCustomModelDataComponent(changedModels);
+                    }
+                });
+                require(!(boolean) guardMethod.invoke(null, snapshot, changed),
+                    "Strict native source guard must reject a real " + mutation + " change");
+            }
+            snapshot.setAmount(1);
+            snapshot.editMeta(meta -> meta.displayName(Component.text("Detached edit")));
+            require(live.getAmount() == 16 && before.equals(live.getItemMeta()),
+                "Snapshot quantity and metadata edits cannot alias the live source");
+        }
+    }
+
+    /** Models a model-only rebuilding or aliasing addon clone, not a loaded Infinity extractor. */
+    private static final class ModelRebuildingStack extends ItemStack {
+        private final boolean alias;
+        private ModelRebuildingStack(ItemStack template, boolean alias) {
+            super(template.getType(), template.getAmount());
+            this.alias = alias;
+            setItemMeta(template.getItemMeta());
+        }
+        @Override public ItemStack clone() {
+            if (alias) return this;
+            ItemStack result = ItemStack.of(getType(), getAmount());
+            var meta = getItemMeta();
+            var models = meta.getCustomModelDataComponent();
+            models.setFloats(List.of(7002.0F, 55.0F));
+            meta.setCustomModelDataComponent(models);
+            result.setItemMeta(meta);
+            return result;
         }
     }
 

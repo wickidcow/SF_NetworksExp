@@ -16,11 +16,15 @@ Inspected primary source: `wickidcow/Slimefun-Legacy`, tag `v4.1.74`, `api/items
 - Derive the menu offer and remainder from the verified snapshot rather than repeatedly cloning the live addon object.
 - Retain the strict post-offer type, amount and metadata check, compensation, guarded source restoration and the existing VOID failure result. No ID-only comparison, ignored model data, disabled safeguards, recipe change or persistent-data migration.
 
-## Regression coverage
+## Regression coverage and test-model limitation
 
-`NetworkMenuSourceSnapshotTest` adds 14 cases: a rebuilding-clone fixture, ordinary and VOID zero/partial/full acceptance, aliasing clone, real metadata replacement, partial destination failure, source dirty failure, and runtime/linkage snapshot failures. The fixture carries model floats/strings/flags, lore and STRING/LONG/BYTE_ARRAY persistent data. It exercises the production menu entry points; it does not load an actual dust extractor or certify every native component/integration.
+`NetworkMenuSourceSnapshotTest` adds 14 cases: a rebuilding-clone fixture, ordinary and VOID zero/partial/full acceptance, aliasing clone, real metadata replacement, partial destination failure, source dirty failure, and runtime/linkage snapshot failures. Its supported scalar model-data field, lore and STRING/LONG/BYTE_ARRAY persistent data are asserted explicitly at the offer and remainder boundaries. It exercises production menu entry points with mocked storage boundaries.
 
-Tests are authored here; passing results must be verified against the resulting PR head in CI. Earlier PR checks for `c25223304bca8683be61b389f037a7ca60ee65e6` do not certify this follow-up.
+The first follow-up run, `38811911198` at head `28e163cd94557fbf3bcba61dbea62fc1377163bf`, compiled successfully but failed the model-only clone reproducer (250 tests completed, one failed in the primary job). Inspection of MockBukkit 4.110.0 `ItemMetaMock` showed that its copy constructor omits the modern CustomModelDataComponent, while equality considers the separate legacy scalar field. The initial fixture therefore did not faithfully represent native model data. The failing assertion is retained; the fixture now uses the supported scalar field. No production guard was weakened to accommodate the test framework.
+
+`CrafterManagerDisplayProbe` separately invokes the actual snapshot and strict source-comparison methods on native server ItemStacks. It requires a model-only rebuilding clone to differ, verifies exact floats/strings/flags/colors and typed PDC preservation, checks detached copies, and rejects real amount, owner and model changes. It covers native stacks, rebuilding/aliasing fixtures and a real SlimefunItemStack. This runs inside the existing disposable Purpur 1.21.11 and Paper 26.3 probes, without adding a live-server mutation or a production dependency.
+
+These fixtures do not load the reported extractor or certify every component/integration. Passing results must be verified against the resulting versioned PR head in CI; neither the old c252233 checks nor the failed 28e163c run certifies this revision.
 
 ## Release and operational boundary
 

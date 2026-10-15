@@ -31,7 +31,13 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-/** Exercises the real menu deposit boundary with template-rebuilding addon stacks. */
+/**
+ * Exercises the real menu deposit boundary with template-rebuilding addon stacks.
+ * MockBukkit 4.110.0 drops the modern model component while copying ItemMeta. Its
+ * supported scalar model field drives this fixture; native modern components are
+ * checked separately by CrafterManagerDisplayProbe on Paper and Purpur.
+ */
+@SuppressWarnings("deprecation") // Test-only scalar model fixture for MockBukkit 4.110.0.
 class NetworkMenuSourceSnapshotTest {
     private static final int SLOT = 2;
     private static final NamespacedKey OWNER = NamespacedKey.fromString("test:owner");
@@ -95,6 +101,8 @@ class NetworkMenuSourceSnapshotTest {
         ItemStack rebuilt = live.clone();
         assertEquals(expected, live);
         assertFalse(rebuilt.isSimilar(live));
+        assertEquals(7002, rebuilt.getItemMeta().getCustomModelData());
+        assertOriginalMetadata(live);
         assertEquals(16, live.getAmount());
     }
 
@@ -117,7 +125,7 @@ class NetworkMenuSourceSnapshotTest {
         assertEquals(amount, accepted);
         assertEquals(voidMode ? 0 : 16 - amount, remaining());
         assertEquals(expected, live, "A detached offer must not mutate the original addon object");
-        if (remaining() > 0) assertTrue(expected.isSimilar(source.get()));
+        if (remaining() > 0) assertOriginalMetadata(source.get());
         verify(root, never()).getItemStack0(any(), any());
         assertEquals(0, TransferAudit.snapshot().depositCompensationRequested());
     }
@@ -129,7 +137,7 @@ class NetworkMenuSourceSnapshotTest {
         assertEquals(4, NetworkTransferUtils.moveMenuSlotIntoNetwork(root, accessor, menu, SLOT, 64));
         assertEquals(12, remaining());
         assertEquals(16, accepted + remaining());
-        assertTrue(expected.isSimilar(source.get()));
+        assertOriginalMetadata(source.get());
         verify(root, never()).getItemStack0(any(), any());
     }
 
@@ -171,7 +179,7 @@ class NetworkMenuSourceSnapshotTest {
         assertTrue(result.failed());
         assertEquals(4, result.moved());
         assertEquals(16, accepted + remaining());
-        assertTrue(expected.isSimilar(source.get()));
+        assertOriginalMetadata(source.get());
         verify(menu, never()).replaceExistingItem(SLOT, null);
         verify(root, never()).getItemStack0(any(), any());
     }
@@ -189,6 +197,7 @@ class NetworkMenuSourceSnapshotTest {
 
         assertTrue(result.failed());
         assertEquals(expected, source.get());
+        assertOriginalMetadata(source.get());
         assertEquals(0, accepted);
         verify(menu, times(1)).replaceExistingItem(SLOT, null);
     }
@@ -223,11 +232,26 @@ class NetworkMenuSourceSnapshotTest {
     }
 
     private void accept(ItemStack offered, int amount) {
-        assertTrue(expected.isSimilar(offered), "Offers must keep model data, lore and typed PDC");
+        assertOriginalMetadata(offered);
         assertEquals(16, source.get().getAmount(), "The live source cannot be decremented by the offer");
         int moved = Math.min(amount, offered.getAmount());
         accepted += moved;
         offered.setAmount(offered.getAmount() - moved);
+    }
+
+    private void assertOriginalMetadata(ItemStack item) {
+        assertNotNull(item);
+        assertEquals(expected.getType(), item.getType());
+        var actual = item.getItemMeta();
+        assertEquals(expected.getItemMeta(), actual);
+        assertEquals(7001, actual.getCustomModelData());
+        assertEquals(Component.text("Extractor dust fixture"), actual.displayName());
+        assertEquals(List.of(Component.text("Existing item metadata")), actual.lore());
+        assertEquals("original-owner", actual.getPersistentDataContainer().get(OWNER, PersistentDataType.STRING));
+        assertEquals(Long.valueOf(9876543210L), actual.getPersistentDataContainer().get(
+            NamespacedKey.fromString("test:counter"), PersistentDataType.LONG));
+        assertArrayEquals(new byte[]{3, 1, 4}, actual.getPersistentDataContainer().get(
+            NamespacedKey.fromString("test:payload"), PersistentDataType.BYTE_ARRAY));
     }
 
     private int remaining() {
@@ -245,11 +269,7 @@ class NetworkMenuSourceSnapshotTest {
             PersistentDataType.LONG, 9876543210L);
         meta.getPersistentDataContainer().set(NamespacedKey.fromString("test:payload"),
             PersistentDataType.BYTE_ARRAY, new byte[]{3, 1, 4});
-        var models = meta.getCustomModelDataComponent();
-        models.setFloats(List.of(7001.0F, 55.0F));
-        models.setStrings(List.of("original-model"));
-        models.setFlags(List.of(true, false));
-        meta.setCustomModelDataComponent(models);
+        meta.setCustomModelData(7001);
         item.setItemMeta(meta);
         return item;
     }
@@ -265,9 +285,7 @@ class NetworkMenuSourceSnapshotTest {
         public ItemStack clone() {
             ItemStack rebuilt = new ItemStack(getType(), getAmount());
             var meta = getItemMeta();
-            var models = meta.getCustomModelDataComponent();
-            models.setFloats(List.of(7002.0F, 55.0F));
-            meta.setCustomModelDataComponent(models);
+            meta.setCustomModelData(7002);
             rebuilt.setItemMeta(meta);
             return rebuilt;
         }
