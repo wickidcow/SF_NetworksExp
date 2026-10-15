@@ -1,0 +1,121 @@
+name: Prepare isolated Networks 1.0.56 candidate
+
+on:
+  push:
+    branches: ["maintenance/prepare-networks-1.0.56-20261015"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prepare-networks-1.0.56-20261015
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out the exact PR source including the snapshot follow-up
+        uses: actions/checkout@v6
+        with:
+          ref: 28e163cd94557fbf3bcba61dbea62fc1377163bf
+          fetch-depth: 0
+      - name: Prepare a version-only candidate without changing PR or master
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          EXPECTED=28e163cd94557fbf3bcba61dbea62fc1377163bf
+          test "$(git rev-parse HEAD)" = "$EXPECTED"
+          test "$(git ls-remote origin refs/heads/fix/void-menu-source-guard-20261015 | cut -f1)" = "$EXPECTED"
+          test -z "$(git ls-remote origin refs/tags/v1.0.56)"
+          test -z "$(git ls-remote origin refs/heads/candidate/networks-1.0.56-void-20261015)"
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[].tag_name' > /tmp/networks-release-tags
+          if grep -Fxq v1.0.56 /tmp/networks-release-tags; then exit 1; fi
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          changed = set()
+          def replace(path, old, new, count=None):
+              p = Path(path)
+              text = p.read_text(encoding="utf-8")
+              actual = text.count(old)
+              if actual == 0 or (count is not None and actual != count):
+                  raise SystemExit(f"Unexpected replacement count in {path}: {actual}")
+              p.write_text(text.replace(old, new), encoding="utf-8")
+              changed.add(path)
+              print(f"Updated {path}: {actual} match(es)")
+
+          replace("build.gradle.kts", 'version = "1.0.55"', 'version = "1.0.56"', 1)
+          for path in (".github/workflows/build.yml", ".github/workflows/compatibility.yml"):
+              replace(path, "1.0.55", "1.0.56", 2)
+          replace("scripts/verify_legacy_compatibility.py", "1.0.55", "1.0.56")
+          replace(
+              "docs/void-menu-source-guard.md",
+              "No item IDs, recipes, serialization, storage identities, saved-data migrations, network ordering, or public release versions are changed. This development branch still carries the baseline build version; its artifact must not overwrite the published 1.0.55 asset or be described as a new stable release.",
+              "No item IDs, recipes, serialization, storage identities, saved-data migrations, or network ordering are changed. The release candidate now uses the distinct version 1.0.56 and canonical filename SF_Networks1.0.56.jar. It must complete fresh validation and receive merge/publication approval before being described as a stable release. The published 1.0.55 asset must remain unchanged.",
+              1,
+          )
+          replace(
+              "docs/void-menu-source-guard.md",
+              "At initial submission these cases are written, not yet claimed passing.",
+              "The original c25223304bca8683be61b389f037a7ca60ee65e6 source passed workflow 38767266503 with 236 primary-project tests, including all 30 VOID cases, and the existing compatibility/native/restart checks. Those results do not certify the later snapshot follow-up or this separately versioned 1.0.56 candidate; fresh exact-head checks are required. See docs/dust-extractor-source-snapshot.md for the additional 14 authored regression cases.",
+              1,
+          )
+          replace(
+              "docs/dust-extractor-source-snapshot.md",
+              "This remains draft development work with the existing 1.0.55 identity. Do not merge or publish it over the existing v1.0.55 asset. Synchronize a new unused release version and run exact-head validation before approval/publication.",
+              "This remains draft development work, now synchronized to the distinct 1.0.56 candidate identity. Do not replace the existing v1.0.55 asset. Run fresh exact-head validation of this versioned candidate and obtain explicit merge/publication approval before release.",
+              1,
+          )
+          p = Path("CHANGELOG.md")
+          text = p.read_text(encoding="utf-8")
+          if not text.startswith("# Changelog\n\n") or "## 1.0.56" in text:
+              raise SystemExit("Unexpected changelog state")
+          entry = "\n".join([
+              "## 1.0.56 — guarded VOID cleanup and exact menu snapshots (release candidate, not published)",
+              "",
+              "- Prevent directional VOID grabbers from clearing source slots after rejected or failed menu deposits. Keep intentional remainder disposal inside the checked source-commit boundary instead of a second unconditional clear.",
+              "- Preserve changed sources after compensation and stop the current menu pass on failure. After a partial offer exception, reconcile accepted items without voiding the unaccepted remainder.",
+              "- Verify detached menu-source snapshots before network acceptance. Preserve existing metadata when an addon clone rebuilds model data, and reject copies that cannot retain the full item identity. Keep the strict post-deposit guard.",
+              "- Retain clean successful VOID overflow behavior and existing ordinary integer-returning transfer APIs.",
+              "- Include 30 VOID regression cases and 14 snapshot cases for changed identity/quantity/metadata, partial acceptance, failure handling and rebuilding/aliasing clones.",
+              "- Synchronize build, both workflows and explicit release-version contract to SF_Networks1.0.56.jar. The published 1.0.55 asset must remain unchanged.",
+              "",
+              "No item IDs, recipes, storage formats, saved data, routing priorities or Minecraft 1.21.11+ baseline change. The snapshot follow-up addresses a plausible cause of the Infinity Dust Extractor warning, not a reproduced trigger on the installed server. Fresh checks for this exact versioned candidate and explicit merge/publication approval remain required. This does not certify all third-party integrations or recover historically lost items.",
+              "", "",
+          ])
+          p.write_text("# Changelog\n\n" + entry + text[len("# Changelog\n\n"):], encoding="utf-8")
+          changed.add("CHANGELOG.md")
+          actual = set(subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines())
+          if actual != changed or len(actual) != 7:
+              raise SystemExit(f"Unexpected changed files: {actual}")
+          PY
+          python3 scripts/verify_legacy_compatibility.py
+          git diff --check
+          git diff --stat
+          git diff > /tmp/networks-version-candidate.patch
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add build.gradle.kts .github/workflows/build.yml .github/workflows/compatibility.yml scripts/verify_legacy_compatibility.py CHANGELOG.md docs/void-menu-source-guard.md docs/dust-extractor-source-snapshot.md
+          git commit -m 'Prepare distinct Networks 1.0.56 release candidate' -m 'Synchronize release identity and documentation; preserve both the VOID cleanup fix and concurrent menu snapshot follow-up. No Java/test changes, merge, publication, bundle change or live-server modification.'
+          test "$(git rev-parse HEAD^)" = "$EXPECTED"
+          test "$(git ls-remote origin refs/heads/fix/void-menu-source-guard-20261015 | cut -f1)" = "$EXPECTED"
+          git push origin HEAD:refs/heads/candidate/networks-1.0.56-void-20261015
+          {
+            echo 'Prepared version-only candidate; PR/master/tags/releases unchanged.'
+            echo "Candidate commit: $(git rev-parse HEAD)"
+            echo "Parent source: $EXPECTED"
+            echo 'Source contract and git diff --check passed. Full CI has not run for this candidate.'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Retain exact candidate diff
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: networks-1.0.56-version-preparation
+          path: /tmp/networks-version-candidate.patch
+          if-no-files-found: warn
+          retention-days: 7
