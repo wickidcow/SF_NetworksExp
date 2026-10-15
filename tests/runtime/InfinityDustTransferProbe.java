@@ -180,7 +180,21 @@ public final class InfinityDustTransferProbe extends JavaPlugin {
         final ItemStack expected = external == null ? null : exact(external);
         var root = new Sink(fixture.menu().getLocation(), produced.original(), Math.min(4, produced.original().getAmount()));
         root.callback = () -> fixture.menu().replaceExistingItem(produced.slot(), external);
-        LineOperationUtil.grabItem(fixture.menu().getLocation(), root, fixture.menu(), TransportMode.VOID, 64);
+        try {
+            LineOperationUtil.grabItem(fixture.menu().getLocation(), root, fixture.menu(), TransportMode.VOID, 64);
+        } catch (AssertionError downstreamFailure) {
+            // The old caller clears the source and then visits the sentinel, which can fail
+            // the sink's identity check before we return. Inspect the original slot first,
+            // retaining every failure rather than letting that later assertion mask deletion.
+            try {
+                checkStack(expected, fixture.menu().getItemInSlot(produced.slot()), amount(expected),
+                    "SOURCE_CHANGED_WAS_CLEARED: " + mutation);
+            } catch (AssertionError sourceFailure) {
+                sourceFailure.addSuppressed(downstreamFailure);
+                throw sourceFailure;
+            }
+            throw downstreamFailure;
+        }
         checkStack(expected, fixture.menu().getItemInSlot(produced.slot()), amount(expected),
             "SOURCE_CHANGED_WAS_CLEARED: " + mutation);
         checkStack(sentinel, fixture.menu().getItemInSlot(next), 3, "Failure must stop before the next output slot");
