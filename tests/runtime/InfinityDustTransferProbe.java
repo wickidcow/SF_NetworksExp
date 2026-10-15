@@ -13,6 +13,7 @@ import java.util.Arrays;
 import java.util.List;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
+import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -66,8 +67,8 @@ public final class InfinityDustTransferProbe extends JavaPlugin {
             var preset = BlockMenuPreset.getPreset(machine.getId());
             require(preset != null, "Real extractor menu preset missing: " + machine.getId());
             var menu = new BlockMenu(preset, location);
-            int[] inputs = (int[]) machine.getClass().getMethod("getInputSlots").invoke(machine);
-            int[] outputs = (int[]) machine.getClass().getMethod("getOutputSlots").invoke(machine);
+            int[] inputs = preset.getSlotsAccessedByItemTransport(ItemTransportFlow.INSERT);
+            int[] outputs = preset.getSlotsAccessedByItemTransport(ItemTransportFlow.WITHDRAW);
             require(inputs.length > 0 && outputs.length > 1, "Expected extractor transport layout");
             Method process = findProcess(machine.getClass());
             var fixture = new Fixture(machine, menu, inputs, outputs, process);
@@ -138,7 +139,7 @@ public final class InfinityDustTransferProbe extends JavaPlugin {
         }
         ItemStack actual = fixture.menu().getItemInSlot(slot);
         getLogger().info("PRODUCED " + fixture.machine().getId() + " " + identified.getId() + " x" + actual.getAmount()
-            + " class=" + actual.getClass().getName() + " decorated=" + decorate
+            + " class=" + actual.getClass().getName().toString() + " decorated=" + decorate
             + " cloneEqual=" + actual.equals(actual.clone()));
         return new Produced(slot, exact(actual), inputLeft);
     }
