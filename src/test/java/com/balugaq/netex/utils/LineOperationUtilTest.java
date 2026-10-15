@@ -100,21 +100,26 @@ class LineOperationUtilTest {
     }
 
     @Test
-    void voidModeStillDiscardsLaterSlotsWhenTheNetworkStopsAccepting() {
+    void voidModeStillDelegatesLaterSlotsWhenTheNetworkStopsAccepting() {
         when(root.allowAccessInput(ACCESSOR)).thenReturn(true, false);
-        ItemStack item = stack(64);
-        for (int slot = 0; slot < 3; slot++) {
-            when(menu.getItemInSlot(slot)).thenReturn(item);
-        }
         try (MockedStatic<BlockMenuUtil> slots = slots(0, 1, 2);
              MockedStatic<NetworkTransferUtils> transfers = mockStatic(NetworkTransferUtils.class)) {
+            for (int slot = 0; slot < 3; slot++) {
+                final int current = slot;
+                transfers.when(() -> NetworkTransferUtils.moveMenuSlotIntoNetworkAndVoidRemainder(
+                    root, ACCESSOR, menu, current, 64))
+                    .thenReturn(new NetworkTransferUtils.MenuDepositResult(0, false));
+            }
             LineOperationUtil.grabItem(ACCESSOR, root, menu, TransportMode.VOID, 64);
             for (int slot = 0; slot < 3; slot++) {
                 final int current = slot;
-                transfers.verify(() -> NetworkTransferUtils.moveMenuSlotIntoNetwork(root, ACCESSOR, menu, current, 64));
-                verify(menu).replaceExistingItem(slot, null);
+                transfers.verify(() -> NetworkTransferUtils.moveMenuSlotIntoNetworkAndVoidRemainder(
+                    root, ACCESSOR, menu, current, 64));
             }
-            verify(menu, times(3)).markDirty();
+            transfers.verifyNoMoreInteractions();
+            // The checked helper owns intentional disposal; the caller must never perform a second clear.
+            verify(menu, never()).replaceExistingItem(anyInt(), any());
+            verify(menu, never()).markDirty();
         }
     }
 
@@ -185,6 +190,7 @@ class LineOperationUtilTest {
         when(root.allowAccessOutput(ACCESSOR)).thenReturn(true);
         ItemRequest request = request(64);
         ItemStack result = stack(8);
+        when(root.allowAccessOutput(ACCESSOR)).thenReturn(true);
         when(root.getItemStack0(ACCESSOR, request)).thenReturn(result, result, null, null);
         var memo = new LineOperationUtil.PushAvailabilityMemo(1);
         assertSame(result, LineOperationUtil.requestNetworkItem(root, ACCESSOR, request, 0, memo));
