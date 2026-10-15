@@ -393,7 +393,11 @@ public final class NetworkTransferUtils {
                     new IllegalStateException("The menu input changed during the network deposit"));
                 return MenuDepositResult.FAILED;
             }
-            sourceMenu.replaceExistingItem(slot, committedSource);
+            if (voidRemainder && !result.failed()) {
+                sourceMenu.replaceExistingItem(slot, null);
+            } else {
+                sourceMenu.replaceExistingItem(slot, result.remainingStack());
+            }
             sourceMenu.markDirty();
             return new MenuDepositResult(result.moved(), result.failed());
         } catch (RuntimeException | LinkageError exception) {
