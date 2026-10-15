@@ -438,21 +438,16 @@ public class LineOperationUtil {
                 }
             }
             case VOID -> {
-                /*
-                 * Attempt to store up to the transfer limit, then intentionally discard the source stack.
-                 * This preserves the historical VOID mode while committing the inventory mutation explicitly.
-                 */
+                // VOID cleanup belongs to the checked source commit, never to a failed transfer.
                 for (int slot : slots) {
-                    final ItemStack item = blockMenu.getItemInSlot(slot);
-                    if (item != null && item.getType() != Material.AIR) {
-                        final int moved = NetworkTransferUtils.moveMenuSlotIntoNetwork(
-                            root, accessor, blockMenu, slot, limit);
-                        limit -= moved;
-                        blockMenu.replaceExistingItem(slot, null);
-                        blockMenu.markDirty();
-                        if (limit <= 0) {
-                            break;
-                        }
+                    final var result = NetworkTransferUtils.moveMenuSlotIntoNetworkAndVoidRemainder(
+                        root, accessor, blockMenu, slot, limit);
+                    limit -= result.moved();
+                    if (result.failed()) {
+                        return;
+                    }
+                    if (limit <= 0) {
+                        break;
                     }
                 }
             }

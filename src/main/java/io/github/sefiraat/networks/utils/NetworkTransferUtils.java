@@ -336,37 +336,90 @@ public final class NetworkTransferUtils {
         @NotNull BlockMenu sourceMenu,
         int slot,
         int limit) {
+        return depositMenuSlot(root, accessor, sourceMenu, slot, limit, false).moved();
+    }
 
-        if (slot < 0 || slot >= sourceMenu.getSize()) {
-            return 0;
+    /**
+     * Deposits a menu slot and intentionally discards its remainder only after a clean offer and
+     * source check. A failed deposit still reconciles accepted items, but never authorizes voiding.
+     * Callers must stop their menu pass when {@link MenuDepositResult#failed()} is true.
+     */
+    public static @NotNull MenuDepositResult moveMenuSlotIntoNetworkAndVoidRemainder(
+        @NotNull NetworkRoot root,
+        @NotNull Location accessor,
+        @NotNull BlockMenu sourceMenu,
+        int slot,
+        int limit) {
+        return depositMenuSlot(root, accessor, sourceMenu, slot, limit, true);
+    }
+
+    /** A failure is distinct from an ordinary zero-capacity result, even after partial acceptance. */
+    public record MenuDepositResult(int moved, boolean failed) {
+        private static final MenuDepositResult NONE = new MenuDepositResult(0, false);
+        private static final MenuDepositResult FAILED = new MenuDepositResult(0, true);
+    }
+
+    private static @NotNull MenuDepositResult depositMenuSlot(
+        @NotNull NetworkRoot root,
+        @NotNull Location accessor,
+        @NotNull BlockMenu sourceMenu,
+        int slot,
+        int limit,
+        boolean voidRemainder) {
+
+        if (slot < 0 || slot >= sourceMenu.getSize() || limit <= 0) {
+            return MenuDepositResult.NONE;
         }
 
         final ItemStack source = sourceMenu.getItemInSlot(slot);
-        final ItemStack originalSource = source == null ? null : source.clone();
-        final TransferResult result = offer(root, accessor, source, limit);
-        if (result.moved() <= 0) {
-            return 0;
+        if (source == null || source.getType().isAir() || source.getAmount() <= 0) {
+            return MenuDepositResult.NONE;
+        }
+        final ItemStack originalSource;
+        try {
+            originalSource = snapshotMenuSource(source);
+        } catch (RuntimeException | LinkageError exception) {
+            TransferAudit.recordFailure();
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.WARNING,
+                "A Networks menu source could not be copied exactly at " + sourceMenu.getLocation()
+                    + " (slot " + slot + "). No items were offered to the network.",
+                exception);
+            return MenuDepositResult.FAILED;
+        }
+        // Offer and derive the remainder from the verified snapshot, not from a live addon
+        // subclass whose clone may rebuild its template or reapply configured model data.
+        final TransferResult result = offer(root, accessor, originalSource, limit);
+        if (result.moved() <= 0 && (!voidRemainder || result.failed())) {
+            return result.failed() ? MenuDepositResult.FAILED : MenuDepositResult.NONE;
         }
 
+        // Keep the clear inside the source-commit boundary. A second, unconditional caller-side
+        // write could erase an external replacement after compensation or a failed source write.
+        final ItemStack committedSource = voidRemainder && !result.failed() ? null : result.remainingStack();
         try {
             // The detached network offer can trigger callbacks before we commit this source slot.
-            // Never overwrite a stack that another operation changed in the meantime.
+            // Check even zero-acceptance offers before intentionally discarding their remainder.
             if (!sourceStillMatches(originalSource, sourceMenu.getItemInSlot(slot))) {
                 compensateCommittedDeposit(root, accessor, originalSource, result.moved(),
                     sourceMenu.getLocation(), "changed menu source",
                     new IllegalStateException("The menu input changed during the network deposit"));
-                return 0;
+                return MenuDepositResult.FAILED;
             }
-            sourceMenu.replaceExistingItem(slot, result.remainingStack());
+            if (voidRemainder && !result.failed()) {
+                sourceMenu.replaceExistingItem(slot, null);
+            } else {
+                sourceMenu.replaceExistingItem(slot, result.remainingStack());
+            }
             sourceMenu.markDirty();
-            return result.moved();
+            return new MenuDepositResult(result.moved(), result.failed());
         } catch (RuntimeException | LinkageError exception) {
             try {
                 ItemStack current = sourceMenu.getItemInSlot(slot);
-                // A failed write may have already installed the remaining amount. Restore only
-                // if the slot still contains our original or our partially committed stack.
+                // A failed write may have already installed our remainder or VOID clear. Restore
+                // only if the slot still contains our original or our partially committed state.
                 if (sourceStillMatches(originalSource, current)
-                    || sourceStillMatches(result.remainingStack(), current)) {
+                    || sourceStillMatches(committedSource, current)) {
                     sourceMenu.replaceExistingItem(slot, originalSource);
                     sourceMenu.markDirty();
                 }
@@ -375,8 +428,34 @@ public final class NetworkTransferUtils {
             }
             compensateCommittedDeposit(
                 root, accessor, originalSource, result.moved(), sourceMenu.getLocation(), "menu source commit", exception);
-            return 0;
+            return MenuDepositResult.FAILED;
         }
+    }
+
+    /**
+     * Keeps the normal native clone fast path, but verifies it before any network mutation.
+     * SlimefunItemStack implementations may reconstruct a template in clone(), reapplying
+     * model mappings and making an unchanged source fail the post-deposit identity check.
+     *
+     * <p>The fallback copies existing metadata without invoking that subclass constructor.
+     * It is accepted only when the strict full-stack comparison succeeds. A component that
+     * cannot survive this copy causes a pre-deposit failure, never silent normalization.
+     * The ItemStack copy constructor is unsuitable: on Paper it invokes source.clone().</p>
+     */
+    private static @NotNull ItemStack snapshotMenuSource(@NotNull ItemStack source) {
+        final ItemStack cloned = source.clone();
+        if (cloned != source && sourceStillMatches(cloned, source)) {
+            return cloned;
+        }
+
+        final ItemStack snapshot = ItemStack.of(source.getType(), source.getAmount());
+        if (source.hasItemMeta() && !snapshot.setItemMeta(source.getItemMeta())) {
+            throw new IllegalStateException("The menu source metadata could not be copied exactly");
+        }
+        if (!sourceStillMatches(snapshot, source)) {
+            throw new IllegalStateException("The menu source copy changed its item data or amount");
+        }
+        return snapshot;
     }
 
     /** Moves as much as possible from a Bukkit inventory slot. */
@@ -561,6 +640,10 @@ public final class NetworkTransferUtils {
         }
     }
 
+    /**
+     * Offers a live stack reference through clone-and-commit semantics. Callers that know the source slot
+     * should prefer one of the explicit menu, inventory, cursor or hand methods.
+     */
     private static @NotNull TransferResult offer(
         @NotNull NetworkRoot root,
         @NotNull Location accessor,
@@ -576,9 +659,11 @@ public final class NetworkTransferUtils {
         final ItemStack offered = source.clone();
         offered.setAmount(offeredAmount);
         TransferAudit.recordDepositAttempt(offeredAmount);
+        boolean failed = false;
         try {
             root.addItemStack0(accessor, offered);
         } catch (RuntimeException | LinkageError exception) {
+            failed = true;
             TransferAudit.recordFailure();
             Networks.getInstance().getLogger().log(
                 java.util.logging.Level.WARNING,
@@ -592,17 +677,17 @@ public final class NetworkTransferUtils {
         final int moved = offeredAmount - offeredRemaining;
         TransferAudit.recordDepositCommitted(moved);
         if (moved <= 0) {
-            return TransferResult.NONE;
+            return failed ? TransferResult.FAILED : TransferResult.NONE;
         }
 
         final int sourceRemaining = sourceAmount - moved;
         if (sourceRemaining <= 0) {
-            return new TransferResult(moved, null);
+            return new TransferResult(moved, null, failed);
         }
 
         final ItemStack committed = source.clone();
         committed.setAmount(sourceRemaining);
-        return new TransferResult(moved, committed);
+        return new TransferResult(moved, committed, failed);
     }
 
     /**
@@ -700,7 +785,8 @@ public final class NetworkTransferUtils {
         return stack == null ? new ItemStack(Material.AIR) : stack;
     }
 
-    private record TransferResult(int moved, ItemStack remainingStack) {
-        private static final TransferResult NONE = new TransferResult(0, null);
+    private record TransferResult(int moved, ItemStack remainingStack, boolean failed) {
+        private static final TransferResult NONE = new TransferResult(0, null, false);
+        private static final TransferResult FAILED = new TransferResult(0, null, true);
     }
 }
