@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.56 — guarded VOID cleanup and exact menu snapshots (release candidate, not published)
+
+- Prevent directional VOID grabbers from clearing source slots after rejected or failed menu deposits. Keep intentional remainder disposal inside the checked source-commit boundary instead of a second unconditional clear.
+- Preserve changed sources after compensation and stop the current menu pass on failure. After a partial offer exception, reconcile accepted items without voiding the unaccepted remainder.
+- Verify detached menu-source snapshots before network acceptance. Preserve existing metadata when an addon clone rebuilds model data, and reject copies that cannot retain the full item identity. Keep the strict post-deposit guard.
+- Retain clean successful VOID overflow behavior and existing ordinary integer-returning transfer APIs.
+- Include 30 VOID regression cases and 14 snapshot cases for changed identity/quantity/metadata, partial acceptance, failure handling and rebuilding/aliasing clones.
+- Synchronize build, both workflows and explicit release-version contract to SF_Networks1.0.56.jar. The published 1.0.55 asset must remain unchanged.
+
+No item IDs, recipes, storage formats, saved data, routing priorities or Minecraft 1.21.11+ baseline change. The snapshot follow-up addresses a plausible cause of the Infinity Dust Extractor warning, not a reproduced trigger on the installed server. Fresh checks for this exact versioned candidate and explicit merge/publication approval remain required. This does not certify all third-party integrations or recover historically lost items.
+
 ## 1.0.55 — source self-routing safeguard (candidate, not published)
 
 - Stop directional line grabbers from depositing a detached input stack back into that input's own storage block when the same block is also a network cell, greedy block, barrel, drawer, or cargo storage destination.

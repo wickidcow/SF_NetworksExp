@@ -14,13 +14,13 @@ Reported on Networks 1.0.55, Slimefun Legacy 4.1.74 and Purpur 1.21.11 build 256
 - Abort the current menu's VOID grab pass on failure instead of touching later slots.
 - Nonpositive transfer limits and invalid/empty slots do not authorize deletion. Clean positive-limit VOID offers retain intentional overflow disposal.
 
-No item IDs, recipes, serialization, storage identities, saved-data migrations, network ordering, or public release versions are changed. This development branch still carries the baseline build version; its artifact must not overwrite the published 1.0.55 asset or be described as a new stable release.
+No item IDs, recipes, serialization, storage identities, saved-data migrations, or network ordering are changed. The release candidate now uses the distinct version 1.0.56 and canonical filename SF_Networks1.0.56.jar. It must complete fresh validation and receive merge/publication approval before being described as a stable release. The published 1.0.55 asset must remain unchanged.
 
 ## Regression coverage and validation status
 
 `NetworkVoidTransferTest` adds 30 parameterized/test cases using the actual `LineOperationUtil.grabItem` caller and real MockBukkit item metadata. Coverage includes source type, quantity, metadata and empty-state changes; zero/partial/full acceptance; runtime/linkage deposit failures; failed writes and dirty marking; external replacements during writes; incomplete compensation; successful VOID overflow behavior; transfer limits; and unchanged ordinary menu remainder behavior.
 
-At initial submission these cases are written, not yet claimed passing. The editing container could not resolve GitHub or download Gradle dependencies, so a full project build was not run locally. Baseline file bytes were checked against their Git blob hashes, and the isolated patch is submitted for the existing compatibility, full-build, Java-21-bytecode and native-staging CI gates. Consult the PR check results for actual outcomes and exact tested core revisions.
+The original c25223304bca8683be61b389f037a7ca60ee65e6 source passed workflow 38767266503 with 236 primary-project tests, including all 30 VOID cases, and the existing compatibility/native/restart checks. Those results do not certify the later snapshot follow-up or this separately versioned 1.0.56 candidate; fresh exact-head checks are required. See docs/dust-extractor-source-snapshot.md for the additional 14 authored regression cases. The editing container could not resolve GitHub or download Gradle dependencies, so a full project build was not run locally. Baseline file bytes were checked against their Git blob hashes, and the isolated patch is submitted for the existing compatibility, full-build, Java-21-bytecode and native-staging CI gates. Consult the PR check results for actual outcomes and exact tested core revisions.
 
 ## Scope and remaining limitations
 

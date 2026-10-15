@@ -24,4 +24,4 @@ Tests are authored here; passing results must be verified against the resulting 
 
 ## Release and operational boundary
 
-This remains draft development work with the existing 1.0.55 identity. Do not merge or publish it over the existing v1.0.55 asset. Synchronize a new unused release version and run exact-head validation before approval/publication. No addon bundle or live-server change is part of this follow-up. Keep the affected connection paused pending an approved replacement; do not delete extractor or storage data.
+This remains draft development work, now synchronized to the distinct 1.0.56 candidate identity. Do not replace the existing v1.0.55 asset. Run fresh exact-head validation of this versioned candidate and obtain explicit merge/publication approval before release. No addon bundle or live-server change is part of this follow-up. Keep the affected connection paused pending an approved replacement; do not delete extractor or storage data.
