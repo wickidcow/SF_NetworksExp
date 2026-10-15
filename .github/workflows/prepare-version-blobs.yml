@@ -1,0 +1,82 @@
+name: Prepare Networks 1.0.56 ordinary file blobs
+
+on:
+  push:
+    branches: ["maintenance/prepare-networks-1.0.56-20261015"]
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out the exact source
+        uses: actions/checkout@v6
+        with:
+          ref: 28e163cd94557fbf3bcba61dbea62fc1377163bf
+          fetch-depth: 0
+      - name: Validate the prepared diff and export ordinary file blobs only
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import yaml
+
+          helper = subprocess.check_output([
+              "git", "show", "ef6f7cce60dd50c3f39ad29b800e31ac8a518384:.github/workflows/prepare-version.yml"
+          ], text=True)
+          run = yaml.safe_load(helper)["jobs"]["prepare"]["steps"][1]["run"]
+          marker = "git config user.name"
+          if run.count(marker) != 1:
+              raise SystemExit("Unexpected preparation script")
+          # Run only deterministic edits and checks. Never commit, push or modify a ref.
+          subprocess.run(["bash", "-euo", "pipefail", "-c", run.split(marker, 1)[0]], check=True)
+          expected = {
+              "build.gradle.kts", ".github/workflows/build.yml", ".github/workflows/compatibility.yml",
+              "scripts/verify_legacy_compatibility.py", "CHANGELOG.md",
+              "docs/void-menu-source-guard.md", "docs/dust-extractor-source-snapshot.md",
+          }
+          changed = set(subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines())
+          if changed != expected:
+              raise SystemExit(f"Unexpected files: {changed}")
+          records = []
+          for path in sorted(changed):
+              if path.startswith(".github/workflows/"):
+                  continue
+              data = Path(path).read_bytes()
+              payload = json.dumps({"content": data.decode("utf-8"), "encoding": "utf-8"})
+              result = subprocess.run([
+                  "gh", "api", "--method", "POST", f"repos/{os.environ['GITHUB_REPOSITORY']}/git/blobs",
+                  "--input", "-",
+              ], input=payload, text=True, capture_output=True, check=True)
+              sha = json.loads(result.stdout)["sha"]
+              expected_sha = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
+              if sha != expected_sha:
+                  raise SystemExit(f"Blob hash mismatch for {path}")
+              records.append({"path": path, "mode": "100644", "type": "blob", "sha": sha})
+          output = {"parent": "28e163cd94557fbf3bcba61dbea62fc1377163bf", "ordinary_blobs": records,
+                    "source_contract": "passed", "diff_check": "passed", "refs_changed": False}
+          Path("/tmp/networks-version-blobs.json").write_text(json.dumps(output, indent=2) + "\n")
+          print(json.dumps(output, indent=2))
+          # Workflow files will be updated through the authorized connected GitHub editor,
+          # not by an Actions token lacking workflow-write permission.
+          PY
+      - name: Retain prepared diff and ordinary blob identities
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: networks-1.0.56-prepared-blobs
+          path: |
+            /tmp/networks-version-blobs.json
+            /tmp/networks-version-candidate.patch
+          retention-days: 7
+          if-no-files-found: error
