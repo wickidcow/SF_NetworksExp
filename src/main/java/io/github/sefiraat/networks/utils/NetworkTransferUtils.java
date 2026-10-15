@@ -375,8 +375,21 @@ public final class NetworkTransferUtils {
         if (source == null || source.getType().isAir() || source.getAmount() <= 0) {
             return MenuDepositResult.NONE;
         }
-        final ItemStack originalSource = source.clone();
-        final TransferResult result = offer(root, accessor, source, limit);
+        final ItemStack originalSource;
+        try {
+            originalSource = snapshotMenuSource(source);
+        } catch (RuntimeException | LinkageError exception) {
+            TransferAudit.recordFailure();
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.WARNING,
+                "A Networks menu source could not be copied exactly at " + sourceMenu.getLocation()
+                    + " (slot " + slot + "). No items were offered to the network.",
+                exception);
+            return MenuDepositResult.FAILED;
+        }
+        // Offer and derive the remainder from the verified snapshot, not from a live addon
+        // subclass whose clone may rebuild its template or reapply configured model data.
+        final TransferResult result = offer(root, accessor, originalSource, limit);
         if (result.moved() <= 0 && (!voidRemainder || result.failed())) {
             return result.failed() ? MenuDepositResult.FAILED : MenuDepositResult.NONE;
         }
@@ -417,6 +430,32 @@ public final class NetworkTransferUtils {
                 root, accessor, originalSource, result.moved(), sourceMenu.getLocation(), "menu source commit", exception);
             return MenuDepositResult.FAILED;
         }
+    }
+
+    /**
+     * Keeps the normal native clone fast path, but verifies it before any network mutation.
+     * SlimefunItemStack implementations may reconstruct a template in clone(), reapplying
+     * model mappings and making an unchanged source fail the post-deposit identity check.
+     *
+     * <p>The fallback copies existing metadata without invoking that subclass constructor.
+     * It is accepted only when the strict full-stack comparison succeeds. A component that
+     * cannot survive this copy causes a pre-deposit failure, never silent normalization.
+     * The ItemStack copy constructor is unsuitable: on Paper it invokes source.clone().</p>
+     */
+    private static @NotNull ItemStack snapshotMenuSource(@NotNull ItemStack source) {
+        final ItemStack cloned = source.clone();
+        if (cloned != source && sourceStillMatches(cloned, source)) {
+            return cloned;
+        }
+
+        final ItemStack snapshot = ItemStack.of(source.getType(), source.getAmount());
+        if (source.hasItemMeta() && !snapshot.setItemMeta(source.getItemMeta())) {
+            throw new IllegalStateException("The menu source metadata could not be copied exactly");
+        }
+        if (!sourceStillMatches(snapshot, source)) {
+            throw new IllegalStateException("The menu source copy changed its item data or amount");
+        }
+        return snapshot;
     }
 
     /** Moves as much as possible from a Bukkit inventory slot. */
@@ -601,6 +640,10 @@ public final class NetworkTransferUtils {
         }
     }
 
+    /**
+     * Offers a live stack reference through clone-and-commit semantics. Callers that know the source slot
+     * should prefer one of the explicit menu, inventory, cursor or hand methods.
+     */
     private static @NotNull TransferResult offer(
         @NotNull NetworkRoot root,
         @NotNull Location accessor,
