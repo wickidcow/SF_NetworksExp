@@ -1,0 +1,116 @@
+name: Infinity Dust Extractor candidate validation
+
+on:
+  push:
+    branches: ['validation/infinity-dust-1.0.56-20261015']
+    paths:
+      - '.github/workflows/infinity-dust-validation.yml'
+      - 'tests/runtime/InfinityDustTransferProbe.java'
+      - 'scripts/prepare_infinity_dust_probe.py'
+
+# This workflow only reads pinned artifacts and runs disposable local servers.
+# It cannot publish, merge, update addon pins, or connect to a production server.
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  extractor:
+    name: Real extractor / ${{ matrix.server }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    strategy:
+      fail-fast: false
+      matrix:
+        server: [purpur-1.21.11, paper-26.3]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/download-artifact@v8
+        with:
+          repository: wickidcow/SF_NetworksExp
+          run-id: 38813592003
+          github-token: ${{ github.token }}
+          name: SF_Networks1.0.56.jar
+          path: .ci/candidate
+      - uses: actions/download-artifact@v8
+        with:
+          repository: wickidcow/SF_NetworksExp
+          run-id: 38813592003
+          github-token: ${{ github.token }}
+          name: slimefun-legacy-core
+          path: .ci/core
+      - name: Download and verify exact plugin inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .ci/infinity .ci/control
+          curl -fLsS --retry 3 --max-time 120 https://github.com/wickidcow/SF_InfinityExpansion2/releases/download/v2.0.13/SF_InfinityExpansion2.0.13.jar -o .ci/infinity/InfinityExpansion2.jar
+          curl -fLsS --retry 3 --max-time 120 https://github.com/wickidcow/SF_NetworksExp/releases/download/v1.0.55/SF_Networks1.0.55.jar -o .ci/control/Networks1.0.55.jar
+          printf '%s\n' \
+            '25a1bbeef780bb3d263506892df3b8b8cb42ec3be5ee5d36393c8fe1e7c52d89  .ci/candidate/SF_Networks1.0.56.jar' \
+            '04a90f1d0d4fe09358159dfc24fa3ca90c8a18ab9fce76fbb90528c8e6d922c9  .ci/core/Slimefun-Legacy-Core.jar' \
+            'a2f8a1ac7ada18c7a6cf774b09158e1567c6cace478bed10a160a897ce97198e  .ci/infinity/InfinityExpansion2.jar' \
+            '6f422abd70235c768ebbe9c07a2bade4cd8f1e2087b6c0649cc45e5eb8b141ee  .ci/control/Networks1.0.55.jar' | sha256sum --check
+          echo "INFINITY_JAR=$PWD/.ci/infinity/InfinityExpansion2.jar" >> "$GITHUB_ENV"
+          python3 scripts/prepare_infinity_dust_probe.py
+      - name: Pin actual server runtime
+        env:
+          SERVER: ${{ matrix.server }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$SERVER" = purpur-1.21.11 ]; then
+            curl -fLsS --retry 3 --max-time 180 https://api.purpurmc.org/v2/purpur/1.21.11/2568/download -o .ci/server.jar
+            echo 'ee199511bf0a970ee8459fe3a351703fec37293f00bc2de1c5cb746c7e4acc34  .ci/server.jar' | sha256sum --check
+          else
+            curl -fLsS --retry 3 --max-time 180 -H 'User-Agent: SF_NetworksExp-CI/1.0 (https://github.com/wickidcow/SF_NetworksExp)' https://fill.papermc.io/v3/projects/paper/versions/26.3/builds -o .ci/paper-builds.json
+            python3 scripts/prepare_paper_26_3_runtime.py .ci/paper-builds.json .ci/paper.json .ci/paper.url .ci/paper.sha256
+            curl -fLsS --retry 3 --max-time 360 -H 'User-Agent: SF_NetworksExp-CI/1.0 (https://github.com/wickidcow/SF_NetworksExp)' "$(cat .ci/paper.url)" -o .ci/server.jar
+            printf '%s  .ci/server.jar\n' "$(cat .ci/paper.sha256)" | sha256sum --check
+          fi
+      - name: Run actual extractor against immutable 1.0.56 candidate
+        env:
+          SERVER: ${{ matrix.server }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXTRA=()
+          if [ "$SERVER" = paper-26.3 ]; then EXTRA=(.ci/paper.json); fi
+          python3 scripts/infinity_dust_runtime_probe.py .ci/core/Slimefun-Legacy-Core.jar .ci/candidate/SF_Networks1.0.56.jar .ci/server.jar build/extractor-candidate "${EXTRA[@]}"
+      - name: Require released 1.0.55 to fail the destructive VOID regression
+        env:
+          SERVER: ${{ matrix.server }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXTRA=()
+          if [ "$SERVER" = paper-26.3 ]; then EXTRA=(.ci/paper.json); fi
+          set +e
+          python3 scripts/infinity_dust_runtime_probe.py .ci/core/Slimefun-Legacy-Core.jar .ci/control/Networks1.0.55.jar .ci/server.jar build/extractor-control "${EXTRA[@]}"
+          STATUS=$?
+          set -e
+          test "$STATUS" -ne 0
+          grep -F 'SOURCE_CHANGED_WAS_CLEARED' build/extractor-control/plugins/infinity-dust-result.txt
+          echo 'NEGATIVE CONTROL PASS: released 1.0.55 fails the exact changed-source preservation assertion'
+      - name: Retain evidence, not server worlds or diagnostic plugins
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: infinity-dust-${{ matrix.server }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            build/extractor-candidate/inputs.json
+            build/extractor-candidate/console.log
+            build/extractor-candidate/patch.log
+            build/extractor-candidate/plugins/infinity-dust-result.txt
+            build/extractor-control/inputs.json
+            build/extractor-control/console.log
+            build/extractor-control/patch.log
+            build/extractor-control/plugins/infinity-dust-result.txt
