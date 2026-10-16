@@ -236,13 +236,13 @@ require("extends RecipeChoice.ExactChoice" not in simple_recipe_choice,
         "SimpleRecipeChoice still extends final RecipeChoice.ExactChoice")
 require("implements RecipeChoice" in simple_recipe_choice, "SimpleRecipeChoice no longer implements RecipeChoice")
 # Public release metadata must move as one unit so JAR/plugin/workflow versions cannot drift.
-require('version = "1.0.56"' in build, "Gradle public version must remain 1.0.56")
-require('VERSION: "1.0.56"' in build_workflow
-        and 'OUTPUT_NAME: "SF_Networks1.0.56.jar"' in build_workflow,
-        "release workflow public version/JAR name must remain 1.0.56")
-require('VERSION: "1.0.56"' in compatibility_workflow
-        and 'OUTPUT_NAME: "SF_Networks1.0.56.jar"' in compatibility_workflow,
-        "compatibility workflow public version/JAR name must remain 1.0.56")
+require('version = "1.0.57"' in build, "Gradle public version must remain 1.0.57")
+require('VERSION: "1.0.57"' in build_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.57.jar"' in build_workflow,
+        "release workflow public version/JAR name must remain 1.0.57")
+require('VERSION: "1.0.57"' in compatibility_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.57.jar"' in compatibility_workflow,
+        "compatibility workflow public version/JAR name must remain 1.0.57")
 require("actions/upload-artifact@v7" in compatibility_workflow
         and "name: slimefun-legacy-core" in compatibility_workflow
         and "Slimefun-Legacy-Core.jar" in compatibility_workflow,
@@ -547,11 +547,13 @@ require("record LinePassCache" in abstract_transfer
         and "GRAB_LINE_CURSOR_MAP.getOrDefault(location, 0)" in abstract_transfer
         and "sharedLinePass = tryPushItem(" in abstract_transfer
         and "limitQuantity,\n                            sharedLinePass);" in abstract_transfer
+        and "final boolean fullLinePass = targetBudget <= 0 || targetBudget >= config.maxDistance" in abstract_transfer
         and "reusablePass.matches(" in abstract_transfer
         and "for (BlockMenu targetMenu : reusablePass.targets())" in abstract_transfer
-        and "final List<BlockMenu> visitedTargets" in abstract_transfer
+        and abstract_transfer.count("final List<BlockMenu> visitedTargets") >= 2
+        and "new LinePassCache(\n                    direction,\n                    config.maxDistance,\n                    0,\n                    targetBudget" in abstract_transfer
         and "LINE_PASS_CACHE_MAP" not in abstract_transfer,
-        "bidirectional line transfers must reuse one validated traversal without retaining BlockMenu references")
+        "bidirectional line transfers must reuse one validated traversal for budgeted and full-line passes without retaining BlockMenu references")
 require("Map<Location, IdleState> IDLE_STATE_MAP = new ConcurrentHashMap<>()" in auto_crafter
         and "AtomicInteger misses" in auto_crafter
         and "AtomicInteger skipTicks" in auto_crafter
@@ -598,10 +600,11 @@ require("public boolean contains(@NotNull ItemStackCache requestCache, int requi
         and "return contains(request, request.getAmount())" in network_root,
         "NetworkRoot cached-item availability probe is missing")
 require("new ItemStackCache(template)" in auto_crafter
-        and "root.contains(ingredient.cache(), request.getAmount())" in auto_crafter
         and "new ItemRequest(ingredient.cache(), (int) scaledAmount)" in auto_crafter
+        and "root.containsAll(requests)" in auto_crafter
+        and "public boolean containsAll(@NotNull ItemRequest @NotNull [] requests)" in network_root
         and "record IngredientRequest(" in auto_crafter,
-        "Auto Crafter ingredient metadata caches are not reused across preflight/withdrawal")
+        "Auto Crafter ingredient metadata caches are not reused by batched preflight/withdrawal")
 require("public ItemRequest(@NotNull ItemStackCache cache, int amount)" in item_request
         and "this.itemMeta = cache.itemMeta" in item_request
         and "this.metaCached = cache.metaCached" in item_request,
@@ -609,12 +612,12 @@ require("public ItemRequest(@NotNull ItemStackCache cache, int amount)" in item_
 require("final int[] requestedAmounts" not in auto_crafter,
         "Auto Crafter must not allocate a requested-amount scratch array per craft")
 require("final ItemRequest[] requests = new ItemRequest[ingredientCount]" in auto_crafter
-        and "final ItemRequest request = new ItemRequest(ingredient.cache(), (int) scaledAmount)" in auto_crafter
-        and "root.contains(ingredient.cache(), request.getAmount())" in auto_crafter
+        and "requests[i] = new ItemRequest(ingredient.cache(), (int) scaledAmount)" in auto_crafter
+        and "root.containsAll(requests)" in auto_crafter
         and "final ItemRequest request = requests[i]" in auto_crafter
         and "root.getItemStack0(location, request)" in auto_crafter
         and "root.getItemStack0(\n                location, new ItemRequest" not in auto_crafter,
-        "Auto Crafter must reuse cached preflight ItemRequests for withdrawal")
+        "Auto Crafter must reuse cached batched-preflight ItemRequests for withdrawal")
 require("root.allowAccessInput(accessor)" in network_import
         and "FeedbackType.ROOT_LIMITING_ACCESS_INPUT" in network_import,
         "Network Import must honor the root input limiter before repeated transport work")

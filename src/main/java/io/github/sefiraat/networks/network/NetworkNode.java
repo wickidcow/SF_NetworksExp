@@ -95,6 +95,7 @@ public class NetworkNode {
             return;
         }
 
+        final Location rootControllerLocation = normalizeBlockLocation(this.root.nodePosition);
         Deque<NetworkNode> nodeStack = new ArrayDeque<>(200);
         nodeStack.push(this);
 
@@ -127,9 +128,28 @@ public class NetworkNode {
                 final Location testLocation = probeLocation.clone();
                 final NodeType testType = testDefinition.getType();
 
-                // Kill additional controllers if it isn't the root
+                // Resolve invalid multi-controller topologies deterministically. If both controller
+                // tickers discover each other in the same cycle they must choose the same loser; otherwise each
+                // side can queue deletion of the other and remove both controllers.
                 if (testType == NodeType.CONTROLLER && !testLocation.equals(this.root.nodePosition)) {
-                    killAdditionalController(testLocation);
+                    final Location otherControllerLocation = normalizeBlockLocation(testLocation);
+                    final Location removalTarget = chooseControllerForRemoval(
+                        rootControllerLocation,
+                        NetworkController.getNetworks().containsKey(rootControllerLocation),
+                        otherControllerLocation,
+                        NetworkController.getNetworks().containsKey(otherControllerLocation));
+                    if (removalTarget != null) {
+                        final Location survivor = removalTarget.equals(rootControllerLocation)
+                            ? normalizeBlockLocation(testLocation)
+                            : rootControllerLocation;
+                        queueAdditionalControllerRemoval(
+                            removalTarget,
+                            survivor,
+                            this.root.getMaxNodes());
+                        if (removalTarget.equals(rootControllerLocation)) {
+                            return;
+                        }
+                    }
                     continue;
                 }
 
@@ -155,23 +175,36 @@ public class NetworkNode {
         }
     }
 
-    private void killAdditionalController(@NotNull Location location) {
-        final Location controllerLocation = normalizeBlockLocation(location);
+    private void queueAdditionalControllerRemoval(
+        @NotNull Location removalTarget,
+        @NotNull Location survivingController,
+        int maximumNodes) {
 
-        // A controller can be reached from more than one graph edge during the same discovery pass. Without this
-        // reservation, each edge can queue its own delayed removal and drop the same controller item more than once.
+        final Location controllerLocation = normalizeBlockLocation(removalTarget);
+        final Location survivorLocation = normalizeBlockLocation(survivingController);
+
+        // Both roots in a bad topology choose the same deterministic loser. The reservation then ensures that
+        // multiple graph edges and both controller tickers still produce only one physical removal/drop.
         if (!PENDING_CONTROLLER_REMOVALS.add(controllerLocation)) {
             return;
         }
+
+        // The surviving root may have had some NodeDefinition assignments temporarily touched by the losing
+        // discovery pass. Force one clean discovery after conflict resolution.
+        NetworkController.markTopologyDirty(survivorLocation);
 
         BukkitRunnable runnable = new BukkitRunnable() {
             @Override
             public void run() {
                 try {
-                    // Re-read the live Slimefun identity on the server thread. If the controller was already broken,
-                    // replaced, or cleaned up by another path, there is nothing left for this task to drop.
-                    SlimefunItem liveItem = StorageCacheUtils.getSlimefunItem(controllerLocation);
-                    if (!(liveItem instanceof NetworkController)) {
+                    // Re-read both controller identities and the physical registry graph on the server thread.
+                    // If the winner was broken or the connecting cable was removed before this delayed task ran,
+                    // the former loser is valid again and must not be destroyed.
+                    SlimefunItem liveLoser = StorageCacheUtils.getSlimefunItem(controllerLocation);
+                    SlimefunItem liveSurvivor = StorageCacheUtils.getSlimefunItem(survivorLocation);
+                    if (!(liveLoser instanceof NetworkController)
+                        || !(liveSurvivor instanceof NetworkController)
+                        || !controllersStillConnected(survivorLocation, controllerLocation, maximumNodes)) {
                         return;
                     }
 
@@ -181,15 +214,136 @@ public class NetworkNode {
 
                     if (controllerLocation.getWorld() != null
                         && controllerLocation.getBlock().getType() != Material.AIR) {
-                        controllerLocation.getWorld().dropItemNaturally(controllerLocation, liveItem.getItem());
+                        controllerLocation.getWorld().dropItemNaturally(controllerLocation, liveLoser.getItem());
                         controllerLocation.getBlock().setType(Material.AIR);
                     }
+
+                    NetworkController.markTopologyDirty(survivorLocation);
                 } finally {
                     PENDING_CONTROLLER_REMOVALS.remove(controllerLocation);
                 }
             }
         };
-        runnable.runTask(Networks.getInstance());
+
+        try {
+            runnable.runTask(Networks.getInstance());
+        } catch (RuntimeException exception) {
+            PENDING_CONTROLLER_REMOVALS.remove(controllerLocation);
+            throw exception;
+        }
+    }
+
+    /**
+     * Selects one controller to remove without depending on ticker/discovery order.
+     *
+     * <p>Connected controllers necessarily share a world. When exactly one side already owns a published root,
+     * that established controller survives. If both or neither are established, the lower block-coordinate tuple
+     * is retained and the higher tuple is removed. These rules matter only for an already-invalid multi-controller
+     * topology; normal player placement is rejected before the topology exists.</p>
+     */
+    static @Nullable Location chooseControllerForRemoval(
+        @NotNull Location firstController,
+        @NotNull Location secondController) {
+        return chooseControllerForRemoval(firstController, false, secondController, false);
+    }
+
+    static @Nullable Location chooseControllerForRemoval(
+        @NotNull Location firstController,
+        boolean firstHasActiveRoot,
+        @NotNull Location secondController,
+        boolean secondHasActiveRoot) {
+
+        final Location first = normalizeBlockLocation(firstController);
+        final Location second = normalizeBlockLocation(secondController);
+
+        if (first.getWorld() != second.getWorld() || first.equals(second)) {
+            return null;
+        }
+
+        // Preserve an already-established network when exactly one controller owns a published root.
+        // This makes a newly introduced conflicting controller the loser without depending on tick order.
+        if (firstHasActiveRoot != secondHasActiveRoot) {
+            return firstHasActiveRoot ? second : first;
+        }
+
+        // If both or neither are established, use an order-independent coordinate tie-break.
+        int comparison = Integer.compare(first.getBlockX(), second.getBlockX());
+        if (comparison == 0) {
+            comparison = Integer.compare(first.getBlockY(), second.getBlockY());
+        }
+        if (comparison == 0) {
+            comparison = Integer.compare(first.getBlockZ(), second.getBlockZ());
+        }
+
+        return comparison <= 0 ? second : first;
+    }
+
+    public static boolean isControllerRemovalPending(@NotNull Location location) {
+        return PENDING_CONTROLLER_REMOVALS.contains(normalizeBlockLocation(location));
+    }
+
+    /** Clears delayed-removal reservations during plugin/runtime shutdown. */
+    public static void clearPendingControllerRemovals() {
+        PENDING_CONTROLLER_REMOVALS.clear();
+    }
+
+    /**
+     * Revalidates a delayed destructive action against the loaded physical node registry.
+     *
+     * <p>Controller removal is rare, so a bounded graph walk is preferable to deleting a controller after the
+     * topology has already changed. Other controllers terminate traversal; only the selected loser is accepted.</p>
+     */
+    private static boolean controllersStillConnected(
+        @NotNull Location survivingController,
+        @NotNull Location removalTarget,
+        int maximumNodes) {
+
+        final Location survivor = normalizeBlockLocation(survivingController);
+        final Location target = normalizeBlockLocation(removalTarget);
+        if (survivor.getWorld() != target.getWorld() || survivor.equals(target)) {
+            return false;
+        }
+
+        final NodeDefinition survivorDefinition = NetworkStorage.getTopologyNode(survivor);
+        final NodeDefinition targetDefinition = NetworkStorage.getTopologyNode(target);
+        if (survivorDefinition == null
+            || targetDefinition == null
+            || survivorDefinition.getType() != NodeType.CONTROLLER
+            || targetDefinition.getType() != NodeType.CONTROLLER) {
+            return false;
+        }
+
+        final int visitBudget = Math.max(1, maximumNodes) + 2;
+        final Set<Location> visited = new HashSet<>();
+        final Deque<Location> pending = new ArrayDeque<>();
+        pending.add(survivor);
+
+        while (!pending.isEmpty() && visited.size() <= visitBudget) {
+            final Location current = pending.removeFirst();
+            if (!visited.add(current)) {
+                continue;
+            }
+
+            for (BlockFace face : VALID_FACES) {
+                final Location adjacent = normalizeBlockLocation(current.clone().add(face.getDirection()));
+                final NodeDefinition definition = NetworkStorage.getTopologyNode(adjacent);
+                if (definition == null) {
+                    continue;
+                }
+
+                if (adjacent.equals(target)) {
+                    return definition.getType() == NodeType.CONTROLLER;
+                }
+
+                if (definition.getType() == NodeType.CONTROLLER || visited.contains(adjacent)) {
+                    continue;
+                }
+
+                pending.addLast(adjacent);
+            }
+        }
+
+        return false;
     }
 
     private static @NotNull Location normalizeBlockLocation(@NotNull Location location) {
