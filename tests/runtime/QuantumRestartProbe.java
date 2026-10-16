@@ -210,14 +210,55 @@ public final class QuantumRestartProbe extends JavaPlugin {
         require(menu.getItemInSlot(NetworkQuantumStorage.OUTPUT_SLOT) == null,
             "Break must remove output items from the original inventory");
 
-        // Paper may register entities spawned by dropItemNaturally on the next
-        // world tick, while dropItem has already made the storage entity visible.
-        // Assert both item types AFTER the entity-registration boundary.
-        Bukkit.getScheduler().runTaskLater(this,
-            () -> verifyDropsAfterWorldTick(location, menu), 2L);
+        /*
+         * Paper can expose the direct storage drop before inventory-slot drops become visible in
+         * the world's entity index. A fixed two-tick delay proved flaky on busy CI runners even
+         * though the persisted output slot was verified immediately before this break.
+         *
+         * Poll only the disposable world's entity-registration boundary. The deadline remains
+         * strict: if the 64 emeralds never become visible, the existing verification still fails.
+         */
+        waitForDropsAfterBreak(location, menu);
     }
 
-    private void verifyDropsAfterWorldTick(Location location, BlockMenu menu) {
+    private void waitForDropsAfterBreak(Location location, BlockMenu menu) {
+        new BukkitRunnable() {
+            int checks;
+
+            @Override
+            public void run() {
+                try {
+                    checks++;
+                    if (expectedDropsVisible(location) || checks >= 40) {
+                        cancel();
+                        verifyDropsAfterWorldTick(location, menu, checks);
+                    }
+                } catch (Throwable failure) {
+                    cancel();
+                    fail("waiting for post-break item entity registration", failure);
+                }
+            }
+        }.runTaskTimer(this, 1L, 1L);
+    }
+
+    private boolean expectedDropsVisible(Location location) {
+        int carrying = 0;
+        int emeralds = 0;
+        for (var entity : location.getWorld().getNearbyEntities(location, 3, 3, 3)) {
+            if (!(entity instanceof Item drop)) {
+                continue;
+            }
+            final ItemStack item = drop.getItemStack();
+            if (Keys.getQuantumCache(item.getItemMeta()) != null) {
+                carrying++;
+            } else if (item.getType() == Material.EMERALD) {
+                emeralds += item.getAmount();
+            }
+        }
+        return carrying >= 1 && emeralds >= OUTPUT;
+    }
+
+    private void verifyDropsAfterWorldTick(Location location, BlockMenu menu, int ticksWaited) {
         final List<Item> drops = new ArrayList<>();
         Throwable problem = null;
         try {
@@ -247,10 +288,10 @@ public final class QuantumRestartProbe extends JavaPlugin {
                     + entity.getItemStack().getAmount() + " at " + entity.getLocation())
                 .toList();
             getLogger().info("RESTART OUTPUT POST-TICK expected=64 observed=" + emeralds
-                + " entities=" + details + " outputSlot=" + slot);
+                + " waitedTicks=" + ticksWaited + " entities=" + details + " outputSlot=" + slot);
             require(carrying == 1, "Expected exactly one stored-contents carrying item");
             require(emeralds == OUTPUT, "Expected 64 emeralds, found " + emeralds
-                + " after two server ticks; entities=" + details);
+                + " within " + ticksWaited + " server ticks; entities=" + details);
         } catch (Throwable failure) {
             problem = failure;
         } finally {
