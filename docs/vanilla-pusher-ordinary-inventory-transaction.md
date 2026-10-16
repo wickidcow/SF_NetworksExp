@@ -14,8 +14,10 @@ pusher can no longer prove that the source reduction and destination mutation de
 - Give the destination a second detached write array, so in-place normalization cannot redefine expected readback.
 - Require exact destination readback before reducing the live pusher source by the accepted amount.
 - On write/read mismatch, restore the detached baseline before preserving the source.
-- If rollback remains unresolved, reduce only the amount that was actually attempted, preserving source items that
-  never fit in the destination.
+- If rollback remains unresolved but destination contents are readable, calculate the amount actually proven to
+  survive relative to the immutable baseline and preserve the complementary source remainder.
+- If destination state is unreadable or contains unexplained changes, fall back conservatively to the attempted
+  amount rather than knowingly retaining a duplicate.
 - Keep furnace/brewing special-slot handling in the preceding focused transaction helper.
 
 No inventory routing, slot preference, stack limit, item identity, recipe behavior, transfer rate, permissions, saved
@@ -24,5 +26,6 @@ data, or WildChests exclusion changes are included.
 ## Validation boundary
 
 Focused tests cover partial-stack then empty-slot ordering, write-then-throw reconciliation, destination
-normalization with successful rollback, rollback refusal with partial source consumption, and no-capacity no-op.
+normalization with successful rollback, readable rollback refusal with exact item conservation, surviving-insert
+accounting across partial/empty slots, and no-capacity no-op.
 The full Legacy/United/Gugu, Java 21 universal-JAR, Paper 26.3 and native/restart workflows remain required.
