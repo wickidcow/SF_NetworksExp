@@ -94,6 +94,33 @@ class NetworkVanillaPusherTransactionTest {
     }
 
     @Test
+    void ordinaryInventorySourceSetterWriteThenThrowIsRecognizedAsCommitted() {
+        ItemStack source = mutableStack(Material.IRON_INGOT, 10, 64);
+        ItemStack partial = mutableStack(Material.IRON_INGOT, 60, 64);
+        AtomicReference<ItemStack[]> destination = new AtomicReference<>(new ItemStack[]{partial});
+
+        AtomicInteger amount = new AtomicInteger(10);
+        when(source.getAmount()).thenAnswer(invocation -> amount.get());
+        org.mockito.Mockito.doAnswer(invocation -> {
+            amount.set(invocation.getArgument(0));
+            throw new IllegalStateException("source setter threw after applying amount");
+        }).when(source).setAmount(org.mockito.ArgumentMatchers.anyInt());
+
+        try (MockedStatic<StackUtils> stacks = matchingByMaterial()) {
+            var result = NetworkVanillaPusher.commitIntoStorageContents(
+                source,
+                destination::get,
+                destination::set);
+
+            assertTrue(result.moved());
+            assertFalse(result.ambiguous());
+            assertTrue(result.failure() instanceof IllegalStateException);
+            assertTrue(source.getAmount() == 6);
+            assertTrue(destination.get()[0].getAmount() == 64);
+        }
+    }
+
+    @Test
     void ordinaryInventoryNormalizationRollsBackAndPreservesSource() {
         ItemStack source = mutableStack(Material.GOLD_INGOT, 5, 64);
         AtomicReference<ItemStack[]> destination = new AtomicReference<>(new ItemStack[]{null});
