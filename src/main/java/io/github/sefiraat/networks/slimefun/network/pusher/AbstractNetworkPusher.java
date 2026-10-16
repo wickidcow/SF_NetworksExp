@@ -438,6 +438,12 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
         return (int) count;
     }
 
+    public static void resetRuntimeState() {
+        RECIPE_BUFFER_BATCHES.clear();
+        FAILED_REQUEST_BACKOFF.clear();
+        BACKOFF_PRUNE_COUNTER.set(0);
+    }
+
     private static void clearBackoffForSource(@NotNull org.bukkit.Location location) {
         final UUID worldId = location.getWorld().getUID();
         final int x = location.getBlockX();
