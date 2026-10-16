@@ -1,6 +1,25 @@
 # Dust extractor menu-source snapshot follow-up
 
-## Report and evidence boundary
+## Confirmed producer-side trigger and published fix
+
+A later live trace on Networks 1.0.56 reported the same guarded conflict at `world -5274,-26,-5510`: the network accepted 8 items, detected that the menu source changed, and removed all 8 accepted items as compensation. That is the intended 1.0.56 safety behavior: the conflict is rejected without authorizing the old destructive VOID cleanup.
+
+The producer-side scheduling condition is now confirmed. InfinityExpansion2 2.0.13 shades GuizhanLib 2.5.0, whose `TickingMenuBlock.isSync()` default is `false`. IE2's Dust Extractor inherits `RandomHopperMachine -> HopperMachine -> AbstractTickingMachine -> TickingMenuBlock` and, before IE2 2.0.14, did not override that default. Its input/output transaction could therefore run asynchronously while Networks performed the synchronized source snapshot/deposit/commit sequence.
+
+InfinityExpansion2 2.0.14 narrows the fix to `HopperMachine.isSync() = true`. This keeps Dust Extractor and the same short converter family synchronized without moving heavier Quarry/Growing-style machines onto the main ticker. Networks 1.0.57 retains the 1.0.56 exact-source snapshot and compensation guard as a safety net for other producers.
+
+Published-pair validation run `38895397648` used the exact public JARs:
+
+- Networks 1.0.57 SHA-256 `125a54605244f3ecaa2d873cca4dff7a78ff7772a445ad5d6f4c38f3603d57ab`.
+- InfinityExpansion2 2.0.14 SHA-256 `4c3d5a19b751d13f769937d6e5faf18f67ddb40465db3d9759a1d8800c0cbdb9`.
+- Slimefun Legacy 4.1.74 SHA-256 `72a524d7c0d6f75a9decbf06679515887273ae53673d3f5ee38f355bef952c96`.
+
+On both Purpur 1.21.11 and Paper 26.3, the real registered Dust Extractor ticker reported synchronized and 140 real IE2 production/menu/Networks line-transfer cases passed. The negative control kept Networks 1.0.57 fixed and swapped only IE2 back to 2.0.13; both runtimes failed specifically with `DUST_EXTRACTOR_TICKER_ASYNC: IE_DUST_EXTRACTOR`.
+
+This validation does not reproduce a live server's exact tick interleaving or storage topology. It does verify the concrete scheduler difference that allowed the race and the exact published pair that removes that condition.
+
+## Earlier report and snapshot-defense boundary
+
 
 The reported source is an Infinity Dust Extractor. The supplied trace identifies Networks 1.0.55, Slimefun Legacy 4.1.74 and Purpur 1.21.11 build 2568, at world `world`, block `-1314,66,817`. It reports four items accepted and four removed as compensation. It does not identify the installed Infinity Expansion/IE2 version or the source stack's class and metadata.
 
@@ -28,4 +47,4 @@ These fixtures do not load the reported extractor or certify every component/int
 
 ## Release and operational boundary
 
-This remains draft development work, now synchronized to the distinct 1.0.56 candidate identity. Do not replace the existing v1.0.55 asset. Run fresh exact-head validation of this versioned candidate and obtain explicit merge/publication approval before release. No addon bundle or live-server change is part of this follow-up. Keep the affected connection paused pending an approved replacement; do not delete extractor or storage data.
+Networks 1.0.57 and InfinityExpansion2 2.0.14 are published. For this specific Dust Extractor conflict, upgrade both JARs together during a clean restart; installing Networks 1.0.57 while leaving IE2 2.0.13 retains the asynchronous producer condition. Keep only one JAR per plugin and preserve world/plugin data. The source-change safeguard must remain enabled even after the producer fix.
