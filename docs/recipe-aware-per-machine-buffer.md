@@ -13,6 +13,9 @@ without changing the menu layout:
 - **Shift-right**: increase the batch target by one.
 - Quick adjustments wrap between 1 and 64.
 
+The selected value is also shown directly as the stack count on the Recipe-Aware control icon, so a target of 12
+visibly displays `12` in the menu.
+
 The value is stored as block data under `recipe-aware-buffer-batches`, cached for hot-path reads, and removed from the
 runtime cache when the pusher breaks. Existing placed pushers with no per-machine value continue to inherit the
 server-wide `recipe_buffer_batches` default, preserving current behavior.
