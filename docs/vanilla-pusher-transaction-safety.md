@@ -14,8 +14,8 @@ item-duplication boundary even though the ticker itself is synchronized.
 Furnace fuel/input and brewing fuel/ingredient/bottle writes now use one transaction helper:
 
 1. require an empty destination;
-2. clone and write the source;
-3. require exact amount and Bukkit metadata similarity before consuming the source;
+2. require the detached clone to preserve the source's exact amount and Bukkit metadata before any destination write;
+3. write the verified clone and require exact amount and metadata on destination readback before consuming the source;
 4. if the readback is different, roll the destination back to empty before preserving the source;
 5. if rollback cannot be verified and the destination remains non-empty or unreadable, consume the source
    conservatively rather than knowingly leave the same logical item on both sides.
