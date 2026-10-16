@@ -262,6 +262,12 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
         } catch (RuntimeException | LinkageError cloneFailure) {
             return new DestinationCommitResult(false, false, cloneFailure);
         }
+        if (transfer == source || !exactlyMatches(source, transfer)) {
+            return new DestinationCommitResult(
+                false,
+                false,
+                new IllegalStateException("Vanilla Pusher source clone changed item data or aliased the live source"));
+        }
 
         Throwable failure = null;
         try {
