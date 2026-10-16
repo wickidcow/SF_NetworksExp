@@ -22,6 +22,19 @@ class NetworkControllerConflictResolutionTest {
     }
 
     @Test
+    void activeControllerSurvivesRegardlessOfCoordinate() {
+        Location highCoordinateActive = new Location(null, 40, 70, 8);
+        Location lowCoordinateNew = new Location(null, -40, 64, -20);
+
+        assertEquals(
+            new Location(null, -40, 64, -20),
+            NetworkNode.chooseControllerForRemoval(highCoordinateActive, true, lowCoordinateNew, false));
+        assertEquals(
+            new Location(null, -40, 64, -20),
+            NetworkNode.chooseControllerForRemoval(lowCoordinateNew, false, highCoordinateActive, true));
+    }
+
+    @Test
     void comparesYAndZWhenEarlierCoordinatesMatch() {
         Location lowY = new Location(null, 5, 60, 99);
         Location highY = new Location(null, 5, 61, -99);
