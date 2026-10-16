@@ -270,6 +270,45 @@ class NetworkVanillaGrabberTransactionTest {
     }
 
     @Test
+    void appliedSourceRemovalWithFailedReadbackRestoresExactPartialRemainder() {
+        ItemStack source = mutableStack(Material.DIAMOND, 2);
+        AtomicReference<ItemStack> sourceSlot = new AtomicReference<>(source);
+        AtomicReference<ItemStack> destination = new AtomicReference<>();
+        AtomicInteger sourceReads = new AtomicInteger();
+        AtomicInteger destinationWrites = new AtomicInteger();
+
+        var result = NetworkVanillaGrabber.commitInventorySourceToOutput(
+            source,
+            () -> {
+                int read = sourceReads.getAndIncrement();
+                if (read == 2) {
+                    throw new IllegalStateException("source read failed after applied removal");
+                }
+                return sourceSlot.get();
+            },
+            sourceSlot::set,
+            destination::get,
+            item -> {
+                if (destinationWrites.getAndIncrement() == 0) {
+                    destination.set(item);
+                } else {
+                    destination.get().setAmount(1);
+                    throw new IllegalStateException("destination rollback left one item");
+                }
+            });
+
+        assertTrue(result.moved());
+        assertTrue(result.ambiguous());
+        assertTrue(result.failure() instanceof IllegalStateException);
+        assertTrue(destination.get() != null);
+        assertTrue(destination.get().getAmount() == 1);
+        assertTrue(sourceSlot.get() != null);
+        assertTrue(sourceSlot.get().getAmount() == 1);
+        assertTrue(source.isSimilar(sourceSlot.get()));
+        assertTrue(sourceSlot.get().getAmount() + destination.get().getAmount() == 2);
+    }
+
+    @Test
     void unreadableUnresolvedDestinationFallsBackToWholeSourceRemoval() {
         ItemStack source = mutableStack(Material.NETHERITE_INGOT, 2);
         AtomicReference<ItemStack> sourceSlot = new AtomicReference<>(source);
