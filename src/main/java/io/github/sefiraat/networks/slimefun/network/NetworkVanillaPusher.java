@@ -363,15 +363,11 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
                 failure = appendFailure(failure, sourceReadFailure);
             }
 
-            if (!sourceConsumed) {
-                try {
-                    // Fallback for unusual ItemStack subclasses that reject amount writes.
-                    source.setType(Material.AIR);
-                    sourceConsumed = isEmpty(source);
-                } catch (RuntimeException | LinkageError sourceFallbackFailure) {
-                    failure = appendFailure(failure, sourceFallbackFailure);
-                }
-            }
+            /*
+             * There is no independent non-deprecated in-place consume primitive: ItemStack#subtract
+             * delegates back to setAmount. If an exotic ItemStack rejects that write, retain the
+             * unresolved ambiguity and report it rather than falling back to deprecated setType(AIR).
+             */
         }
         if (failure == null) {
             failure = new IllegalStateException("Vanilla Pusher destination could not be rolled back to empty");
