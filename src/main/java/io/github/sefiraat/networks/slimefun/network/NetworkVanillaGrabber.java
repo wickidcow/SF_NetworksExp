@@ -33,6 +33,10 @@ import org.bukkit.potion.PotionType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+import java.util.logging.Level;
+
 @SuppressWarnings({"DuplicatedCode", "GrazieInspection"})
 public class NetworkVanillaGrabber extends NetworkDirectional implements SoftCellBannable {
 
@@ -193,25 +197,208 @@ public class NetworkVanillaGrabber extends NetworkDirectional implements SoftCel
         }
 
         final ItemStack stack = inventory.getItem(sourceSlot);
-        if (stack == null || stack.getType() == Material.AIR || stack.getAmount() <= 0) {
+        if (isEmpty(stack)) {
             return false;
         }
 
-        // Clone first and verify the destination before committing the source removal. This keeps vanilla
-        // and third-party inventories loss-safe if a menu implementation rejects or rewrites the output.
-        final ItemStack transfer = stack.clone();
-        blockMenu.replaceExistingItem(OUTPUT_SLOT, transfer);
-        final ItemStack committed = blockMenu.getItemInSlot(OUTPUT_SLOT);
-        if (!io.github.sefiraat.networks.utils.StackUtils.itemsMatch(committed, transfer, true, true)) {
-            blockMenu.replaceExistingItem(OUTPUT_SLOT, null);
+        final GrabCommitResult result = commitInventorySourceToOutput(
+            stack,
+            () -> inventory.getItem(sourceSlot),
+            item -> inventory.setItem(sourceSlot, item),
+            () -> blockMenu.getItemInSlot(OUTPUT_SLOT),
+            item -> blockMenu.replaceExistingItem(OUTPUT_SLOT, item));
+
+        if (result.failure() != null) {
+            Networks.getInstance().getLogger().log(
+                result.ambiguous() ? Level.SEVERE : Level.WARNING,
+                result.ambiguous()
+                    ? "A Network Vanilla Grabber could not fully reconcile source/destination state at "
+                        + blockMenu.getLocation() + "; source removal was attempted to prevent a duplicate."
+                    : "A Network Vanilla Grabber encountered a transfer failure at " + blockMenu.getLocation()
+                        + "; item conservation was reconciled.",
+                result.failure());
+        }
+
+        if (result.moved() || result.failure() != null) {
             blockMenu.markDirty();
+        }
+        if (!result.moved()) {
             return false;
         }
 
-        blockMenu.markDirty();
-        inventory.setItem(sourceSlot, null);
         sendFeedback(blockMenu.getLocation(), FeedbackType.WORKING);
         return true;
+    }
+
+    /**
+     * Moves one complete vanilla-inventory stack into the grabber output as a verified two-sided transaction.
+     *
+     * <p>The source and destination are snapshotted before mutation. The destination receives a second detached
+     * copy so in-place normalization cannot redefine the expected item. The vanilla source is cleared only after
+     * exact destination readback. If source removal fails, the destination is rolled back before the source is
+     * preserved/restored. If destination rollback itself cannot be verified, source removal is retried
+     * conservatively so the same logical stack is not knowingly left on both sides.</p>
+     */
+    static @NotNull GrabCommitResult commitInventorySourceToOutput(
+        @NotNull ItemStack liveSource,
+        @NotNull Supplier<ItemStack> sourceReader,
+        @NotNull Consumer<ItemStack> sourceWriter,
+        @NotNull Supplier<ItemStack> destinationReader,
+        @NotNull Consumer<ItemStack> destinationWriter) {
+
+        final ItemStack sourceSnapshot;
+        final ItemStack transfer;
+        try {
+            final ItemStack currentSource = sourceReader.get();
+            if (isEmpty(currentSource) || !exactlyMatches(liveSource, currentSource)) {
+                return GrabCommitResult.NONE;
+            }
+            if (!isEmpty(destinationReader.get())) {
+                return GrabCommitResult.NONE;
+            }
+
+            sourceSnapshot = detachedExactClone(currentSource, "Vanilla Grabber source");
+            transfer = detachedExactClone(sourceSnapshot, "Vanilla Grabber transfer");
+        } catch (RuntimeException | LinkageError setupFailure) {
+            return new GrabCommitResult(false, false, setupFailure);
+        }
+
+        Throwable failure = null;
+        try {
+            destinationWriter.accept(transfer);
+        } catch (RuntimeException | LinkageError writeFailure) {
+            failure = writeFailure;
+        }
+
+        boolean destinationKnown = true;
+        ItemStack destinationCurrent = null;
+        try {
+            destinationCurrent = destinationReader.get();
+        } catch (RuntimeException | LinkageError readFailure) {
+            failure = appendFailure(failure, readFailure);
+            destinationKnown = false;
+        }
+
+        if (destinationKnown && exactlyMatches(sourceSnapshot, destinationCurrent)) {
+            try {
+                sourceWriter.accept(null);
+            } catch (RuntimeException | LinkageError sourceWriteFailure) {
+                failure = appendFailure(failure, sourceWriteFailure);
+            }
+
+            try {
+                if (isEmpty(sourceReader.get())) {
+                    // Source removers may report failure after applying the removal.
+                    return new GrabCommitResult(true, false, failure);
+                }
+            } catch (RuntimeException | LinkageError sourceReadFailure) {
+                failure = appendFailure(failure, sourceReadFailure);
+            }
+            // Destination is committed but source removal was not verified. Roll back destination first.
+        } else if (destinationKnown && isEmpty(destinationCurrent)) {
+            return new GrabCommitResult(false, false, failure);
+        }
+
+        try {
+            destinationWriter.accept(null);
+        } catch (RuntimeException | LinkageError rollbackFailure) {
+            failure = appendFailure(failure, rollbackFailure);
+        }
+
+        boolean destinationRolledBack = false;
+        try {
+            destinationRolledBack = isEmpty(destinationReader.get());
+        } catch (RuntimeException | LinkageError readFailure) {
+            failure = appendFailure(failure, readFailure);
+        }
+
+        if (destinationRolledBack) {
+            try {
+                final ItemStack sourceCurrent = sourceReader.get();
+                if (exactlyMatches(sourceSnapshot, sourceCurrent)) {
+                    return new GrabCommitResult(false, false, failure);
+                }
+
+                sourceWriter.accept(detachedExactClone(sourceSnapshot, "Vanilla Grabber source restore"));
+                if (exactlyMatches(sourceSnapshot, sourceReader.get())) {
+                    return new GrabCommitResult(false, false, failure);
+                }
+                failure = appendFailure(
+                    failure,
+                    new IllegalStateException(
+                        "Vanilla Grabber rolled back the destination but could not restore the source"));
+            } catch (RuntimeException | LinkageError sourceRestoreFailure) {
+                failure = appendFailure(failure, sourceRestoreFailure);
+            }
+            return new GrabCommitResult(false, true, failure);
+        }
+
+        // Destination may still contain our attempted transfer. Remove the source conservatively to avoid
+        // knowingly retaining the same logical stack in both places.
+        boolean sourceRemoved = false;
+        try {
+            sourceWriter.accept(null);
+        } catch (RuntimeException | LinkageError sourceWriteFailure) {
+            failure = appendFailure(failure, sourceWriteFailure);
+        }
+        try {
+            sourceRemoved = isEmpty(sourceReader.get());
+        } catch (RuntimeException | LinkageError sourceReadFailure) {
+            failure = appendFailure(failure, sourceReadFailure);
+        }
+
+        if (!sourceRemoved) {
+            try {
+                liveSource.setAmount(0);
+                sourceRemoved = isEmpty(sourceReader.get());
+            } catch (RuntimeException | LinkageError sourceFallbackFailure) {
+                failure = appendFailure(failure, sourceFallbackFailure);
+            }
+        }
+
+        if (failure == null) {
+            failure = new IllegalStateException("Vanilla Grabber destination could not be rolled back");
+        }
+        if (!sourceRemoved) {
+            failure = appendFailure(
+                failure,
+                new IllegalStateException(
+                    "Vanilla Grabber could not remove the source after an unresolved destination commit"));
+        }
+        return new GrabCommitResult(sourceRemoved, true, failure);
+    }
+
+    private static @NotNull ItemStack detachedExactClone(
+        @NotNull ItemStack source,
+        @NotNull String context) {
+
+        final ItemStack clone = source.clone();
+        if (clone == source || !exactlyMatches(source, clone)) {
+            throw new IllegalStateException(context + " clone changed item data or aliased its source");
+        }
+        return clone;
+    }
+
+    private static boolean exactlyMatches(@NotNull ItemStack expected, ItemStack actual) {
+        return actual != null
+            && actual.getAmount() == expected.getAmount()
+            && expected.isSimilar(actual);
+    }
+
+    private static boolean isEmpty(ItemStack stack) {
+        return stack == null || stack.getType() == Material.AIR || stack.getAmount() <= 0;
+    }
+
+    private static @NotNull Throwable appendFailure(Throwable existing, @NotNull Throwable next) {
+        if (existing == null) {
+            return next;
+        }
+        existing.addSuppressed(next);
+        return existing;
+    }
+
+    record GrabCommitResult(boolean moved, boolean ambiguous, Throwable failure) {
+        static final GrabCommitResult NONE = new GrabCommitResult(false, false, null);
     }
 
     @Override

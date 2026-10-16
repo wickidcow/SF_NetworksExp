@@ -697,10 +697,15 @@ require("inventory instanceof CrafterInventory" in vanilla_pusher
         and "InventoryUtil.addItem(holder.getInventory(), stack)" in vanilla_pusher
         and "stack.getAmount() < before" in vanilla_pusher,
         "vanilla cargo pusher partial-commit/Crafter protection is missing")
-require("final ItemStack transfer = stack.clone()" in vanilla_grabber
-        and "itemsMatch(committed, transfer, true, true)" in vanilla_grabber
-        and "inventory.setItem(sourceSlot, null)" in vanilla_grabber,
-        "vanilla cargo grabber clone-verify-commit protection is missing")
+require("commitInventorySourceToOutput" in vanilla_grabber
+        and "sourceSnapshot = detachedExactClone" in vanilla_grabber
+        and "transfer = detachedExactClone(sourceSnapshot" in vanilla_grabber
+        and "exactlyMatches(sourceSnapshot, destinationCurrent)" in vanilla_grabber
+        and "sourceWriter.accept(null)" in vanilla_grabber
+        and "destinationWriter.accept(null)" in vanilla_grabber
+        and "source removal was attempted to prevent a duplicate" in vanilla_grabber
+        and "inventory.setItem(sourceSlot, null)" not in vanilla_grabber,
+        "vanilla cargo grabber must verify destination commit and reconcile source removal failures")
 require("super(!Bukkit.isPrimaryThread())" in root_ready_event,
         "NetworkRootReadyEvent thread mode is not derived from the actual caller")
 require("block.getType() == Material.AIR" in network_controller
