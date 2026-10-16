@@ -187,7 +187,7 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
         boolean enabled) {
 
         final int bufferedBatches = getRecipeBufferBatches(location);
-        return new CustomItemStack(
+        final ItemStack control = new CustomItemStack(
             enabled ? Material.CRAFTING_TABLE : Material.HOPPER,
             enabled ? "&aRecipe-Aware Mode: ON" : "&7Recipe-Aware Mode: OFF",
             "",
@@ -202,6 +202,8 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
             "&eRight-click: enter an exact batch target",
             "&eShift-left: -1 batch",
             "&eShift-right: +1 batch");
+        control.setAmount(bufferedBatches);
+        return control;
     }
 
     private static boolean isRecipeAware(@NotNull BlockMenu blockMenu) {
