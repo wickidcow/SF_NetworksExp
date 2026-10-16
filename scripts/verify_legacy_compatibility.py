@@ -719,6 +719,10 @@ require('"recipe-aware-buffer-batches"' in abstract_network_pusher
         and "getRecipeBufferBatches(blockMenu.getLocation())" in abstract_network_pusher
         and "RECIPE_BUFFER_BATCHES.putIfAbsent(location.clone(), value)" in abstract_network_pusher
         and "RECIPE_BUFFER_BATCHES.remove(event.getBlock().getLocation())" in abstract_network_pusher
+        and "public static void resetRuntimeState()" in abstract_network_pusher
+        and "RECIPE_BUFFER_BATCHES.clear()" in abstract_network_pusher
+        and "FAILED_REQUEST_BACKOFF.clear()" in abstract_network_pusher
+        and "AbstractNetworkPusher.resetRuntimeState()" in networks
         and "MIN_BUFFERED_BATCHES = 1" in recipe_aware_pusher_planner
         and "MAX_BUFFERED_BATCHES = 64" in recipe_aware_pusher_planner
         and "stepBufferedBatches" in recipe_aware_pusher_planner,
