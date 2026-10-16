@@ -75,6 +75,65 @@ class NetworkVanillaGrabberTransactionTest {
     }
 
     @Test
+    void changedSourceBeforeCommitRollsDestinationBackWithoutOverwritingReplacement() {
+        ItemStack source = mutableStack(Material.DIAMOND, 7);
+        ItemStack replacement = mutableStack(Material.EMERALD, 3);
+        AtomicReference<ItemStack> sourceSlot = new AtomicReference<>(source);
+        AtomicReference<ItemStack> destination = new AtomicReference<>();
+
+        var result = NetworkVanillaGrabber.commitInventorySourceToOutput(
+            source,
+            sourceSlot::get,
+            sourceSlot::set,
+            destination::get,
+            item -> {
+                destination.set(item);
+                if (item != null) {
+                    sourceSlot.set(replacement);
+                }
+            });
+
+        assertFalse(result.moved());
+        assertFalse(result.ambiguous());
+        assertTrue(result.failure() instanceof IllegalStateException);
+        assertTrue(sourceSlot.get() == replacement);
+        assertTrue(sourceSlot.get().getAmount() == 3);
+        assertTrue(destination.get() == null);
+    }
+
+    @Test
+    void changedSourceIsPreservedWhenDestinationRollbackAlsoFails() {
+        ItemStack source = mutableStack(Material.DIAMOND, 7);
+        ItemStack replacement = mutableStack(Material.EMERALD, 3);
+        AtomicReference<ItemStack> sourceSlot = new AtomicReference<>(source);
+        AtomicReference<ItemStack> destination = new AtomicReference<>();
+        AtomicInteger writes = new AtomicInteger();
+
+        var result = NetworkVanillaGrabber.commitInventorySourceToOutput(
+            source,
+            sourceSlot::get,
+            sourceSlot::set,
+            destination::get,
+            item -> {
+                if (writes.getAndIncrement() == 0) {
+                    destination.set(item);
+                    sourceSlot.set(replacement);
+                } else {
+                    throw new IllegalStateException("destination rollback refused");
+                }
+            });
+
+        assertFalse(result.moved());
+        assertTrue(result.ambiguous());
+        assertTrue(result.failure() instanceof IllegalStateException);
+        assertTrue(sourceSlot.get() == replacement);
+        assertTrue(sourceSlot.get().getAmount() == 3);
+        assertTrue(destination.get() != null);
+        assertTrue(destination.get().getAmount() == 7);
+        assertTrue(writes.get() == 2);
+    }
+
+    @Test
     void sourceRemovalWriteThenThrowIsRecognizedAsCommitted() {
         ItemStack source = mutableStack(Material.GOLD_INGOT, 3);
         AtomicReference<ItemStack> sourceSlot = new AtomicReference<>(source);
