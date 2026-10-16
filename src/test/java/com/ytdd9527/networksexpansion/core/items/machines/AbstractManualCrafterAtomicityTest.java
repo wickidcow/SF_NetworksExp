@@ -1,7 +1,9 @@
 package com.ytdd9527.networksexpansion.core.items.machines;
 
 import com.balugaq.netex.api.data.SuperRecipe;
+import com.balugaq.netex.api.interfaces.FeedbackSendable;
 import com.balugaq.netex.utils.BlockMenuUtil;
+import com.balugaq.netex.utils.Lang;
 import io.github.sefiraat.networks.events.NetworkCraftEvent;
 import io.github.sefiraat.networks.utils.StackUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
@@ -52,6 +54,7 @@ class AbstractManualCrafterAtomicityTest {
         when(crafter.getInputSlots()).thenReturn(INPUT_SLOTS);
         when(crafter.getOutputSlots()).thenReturn(OUTPUT_SLOTS);
         when(menu.getLocation()).thenReturn(location);
+        FeedbackSendable.SUBSCRIBED_LOCATIONS.clear();
     }
 
     private static ItemStack stack(Material material, int amount) {
@@ -122,7 +125,8 @@ class AbstractManualCrafterAtomicityTest {
 
         try (MockedStatic<BlockMenuUtil> menus = mockStatic(BlockMenuUtil.class);
              MockedStatic<StackUtils> stacks = mockStatic(StackUtils.class);
-             MockedStatic<SlimefunItem> slimefunItems = mockStatic(SlimefunItem.class)) {
+             MockedStatic<SlimefunItem> slimefunItems = mockStatic(SlimefunItem.class);
+             MockedStatic<Lang> lang = mockStatic(Lang.class)) {
             menus.when(() -> BlockMenuUtil.fits(menu, recipe.getOutput(), OUTPUT_SLOTS)).thenReturn(true);
             menus.when(() -> BlockMenuUtil.pushItem(menu, output, OUTPUT_SLOTS)).thenReturn(null);
             stacks.when(() -> StackUtils.itemsMatch(diamond, diamond)).thenReturn(true);
@@ -130,6 +134,8 @@ class AbstractManualCrafterAtomicityTest {
             stacks.when(() -> StackUtils.itemsMatch(gold, diamond)).thenReturn(false);
             stacks.when(() -> StackUtils.itemsMatch(gold, gold)).thenReturn(true);
             slimefunItems.when(() -> SlimefunItem.getByItem(output)).thenReturn(null);
+            lang.when(() -> Lang.getString("messages.completed-operation.manual_crafter.success"))
+                .thenReturn("success");
 
             assertTrue(crafter.shapelessCraft(recipe, player, menu));
             menus.verify(() -> BlockMenuUtil.consumeItem(menu, 0, 1), times(1));
