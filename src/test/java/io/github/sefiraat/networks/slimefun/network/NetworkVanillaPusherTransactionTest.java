@@ -186,6 +186,26 @@ class NetworkVanillaPusherTransactionTest {
     }
 
     @Test
+    void sourceCommitFailureRollsDestinationBackAndPreservesSource() {
+        ItemStack source = source(Material.GOLD_INGOT, 4);
+        ItemStack transfer = exactTransferChain(source, Material.GOLD_INGOT, 4);
+        org.mockito.Mockito.doThrow(new IllegalStateException("source amount write refused"))
+            .when(source).setAmount(0);
+
+        AtomicReference<ItemStack> destination = new AtomicReference<>();
+        var result = NetworkVanillaPusher.commitIntoEmptyDestination(
+            source,
+            destination::get,
+            destination::set);
+
+        assertFalse(result.moved());
+        assertFalse(result.ambiguous());
+        assertTrue(result.failure() instanceof IllegalStateException);
+        assertTrue(destination.get() == null);
+        verify(source).setAmount(0);
+    }
+
+    @Test
     void failedRollbackConsumesSourceInsteadOfLeavingDuplicate() {
         ItemStack source = source(Material.EMERALD, 5);
         ItemStack snapshot = transfer(Material.EMERALD, 5);
