@@ -402,7 +402,9 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
         // to commit; preserve any source remainder that never fit.
         boolean sourceReconciled = false;
         try {
-            if (sourceSnapshot.isSimilar(source) && source.getAmount() == originalAmount) {
+            if (sourceHasExpectedRemainder(sourceSnapshot, source, remaining)) {
+                sourceReconciled = true;
+            } else if (sourceSnapshot.isSimilar(source) && source.getAmount() == originalAmount) {
                 source.setAmount(remaining);
                 sourceReconciled = sourceHasExpectedRemainder(sourceSnapshot, source, remaining);
             }
