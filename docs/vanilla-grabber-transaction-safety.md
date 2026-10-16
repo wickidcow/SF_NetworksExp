@@ -17,8 +17,10 @@ in-place destination normalization to redefine the expected commit identity.
 - Require exact output readback before clearing the vanilla source.
 - Treat source setters that remove then throw as successful after readback confirms the source is empty.
 - If source removal is not verified, roll the output back before preserving/restoring the source.
-- If output rollback cannot be verified, retry source removal and verify it so the same logical stack is not knowingly
-  retained on both sides.
+- If output rollback cannot be verified but a readable partial destination remains the same logical item, preserve
+  the exact complementary source remainder through the vanilla inventory writer.
+- If the destination becomes unreadable or its identity changes, fall back to conservative source removal and log
+  the unresolved ambiguity.
 - Log unresolved reconciliation at SEVERE without dumping item metadata.
 
 No furnace/brewing selection logic, potion filtering, source-slot order, transfer rate, item IDs, storage formats,
@@ -27,5 +29,6 @@ permissions or WildChests behavior changes.
 ## Validation boundary
 
 Focused tests cover exact success, destination write-then-throw, source remove-then-throw, rejected source removal,
-in-place destination normalization, rollback refusal with conservative source removal, and aliased clone rejection.
+in-place destination normalization, readable partial rollback failure with exact conservation (including detached
+source readback), unreadable rollback failure, and aliased clone rejection.
 Full three-core, Java 21 universal-JAR, Paper 26.3 and native/restart gates remain required before merge.
