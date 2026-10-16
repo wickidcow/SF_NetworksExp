@@ -598,10 +598,11 @@ require("public boolean contains(@NotNull ItemStackCache requestCache, int requi
         and "return contains(request, request.getAmount())" in network_root,
         "NetworkRoot cached-item availability probe is missing")
 require("new ItemStackCache(template)" in auto_crafter
-        and "root.contains(ingredient.cache(), request.getAmount())" in auto_crafter
         and "new ItemRequest(ingredient.cache(), (int) scaledAmount)" in auto_crafter
+        and "root.containsAll(requests)" in auto_crafter
+        and "public boolean containsAll(@NotNull ItemRequest @NotNull [] requests)" in network_root
         and "record IngredientRequest(" in auto_crafter,
-        "Auto Crafter ingredient metadata caches are not reused across preflight/withdrawal")
+        "Auto Crafter ingredient metadata caches are not reused by batched preflight/withdrawal")
 require("public ItemRequest(@NotNull ItemStackCache cache, int amount)" in item_request
         and "this.itemMeta = cache.itemMeta" in item_request
         and "this.metaCached = cache.metaCached" in item_request,
@@ -609,12 +610,12 @@ require("public ItemRequest(@NotNull ItemStackCache cache, int amount)" in item_
 require("final int[] requestedAmounts" not in auto_crafter,
         "Auto Crafter must not allocate a requested-amount scratch array per craft")
 require("final ItemRequest[] requests = new ItemRequest[ingredientCount]" in auto_crafter
-        and "final ItemRequest request = new ItemRequest(ingredient.cache(), (int) scaledAmount)" in auto_crafter
-        and "root.contains(ingredient.cache(), request.getAmount())" in auto_crafter
+        and "requests[i] = new ItemRequest(ingredient.cache(), (int) scaledAmount)" in auto_crafter
+        and "root.containsAll(requests)" in auto_crafter
         and "final ItemRequest request = requests[i]" in auto_crafter
         and "root.getItemStack0(location, request)" in auto_crafter
         and "root.getItemStack0(\n                location, new ItemRequest" not in auto_crafter,
-        "Auto Crafter must reuse cached preflight ItemRequests for withdrawal")
+        "Auto Crafter must reuse cached batched-preflight ItemRequests for withdrawal")
 require("root.allowAccessInput(accessor)" in network_import
         and "FeedbackType.ROOT_LIMITING_ACCESS_INPUT" in network_import,
         "Network Import must honor the root input limiter before repeated transport work")
