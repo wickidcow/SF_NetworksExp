@@ -232,8 +232,10 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
      * Commits a live pusher stack into an empty special inventory slot without leaving a duplicate
      * when a Bukkit/third-party setter writes, normalizes, or throws before returning.
      *
-     * <p>The destination is written first. The source is consumed only after an exact amount+metadata
-     * readback. A mismatched destination is rolled back to empty. If rollback cannot be verified and
+     * <p>The destination is written from a detached transfer copy. A separate immutable snapshot is
+     * retained for exact amount+metadata readback so an in-place destination normalization cannot redefine
+     * what counts as a successful commit. The source is consumed only after that exact readback. A mismatched
+     * destination is rolled back to empty. If rollback cannot be verified and
      * the destination remains non-empty (or cannot be read), the source is consumed conservatively:
      * once a write may have survived, retaining the source would create a duplicate.</p>
      */
@@ -256,17 +258,35 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
             return DestinationCommitResult.NONE;
         }
 
+        final ItemStack snapshot;
         final ItemStack transfer;
         try {
-            transfer = source.clone();
+            snapshot = source.clone();
+            if (snapshot == source || !exactlyMatches(source, snapshot)) {
+                return new DestinationCommitResult(
+                    false,
+                    false,
+                    new IllegalStateException(
+                        "Vanilla Pusher source clone changed item data or aliased the live source"));
+            }
+
+            /*
+             * Keep a second, detached expected snapshot. Some InventoryHolder implementations mutate
+             * the ItemStack object passed to their setter in place. Comparing readback with that same
+             * mutable object can falsely accept a normalized amount/metadata value and then clear the
+             * complete source stack. The destination receives transfer; snapshot remains immutable
+             * from the destination's perspective and is the commit identity.
+             */
+            transfer = snapshot.clone();
+            if (transfer == snapshot || !exactlyMatches(snapshot, transfer)) {
+                return new DestinationCommitResult(
+                    false,
+                    false,
+                    new IllegalStateException(
+                        "Vanilla Pusher transfer clone changed item data or aliased the commit snapshot"));
+            }
         } catch (RuntimeException | LinkageError cloneFailure) {
             return new DestinationCommitResult(false, false, cloneFailure);
-        }
-        if (transfer == source || !exactlyMatches(source, transfer)) {
-            return new DestinationCommitResult(
-                false,
-                false,
-                new IllegalStateException("Vanilla Pusher source clone changed item data or aliased the live source"));
         }
 
         Throwable failure = null;
@@ -285,7 +305,7 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
             destinationKnown = false;
         }
 
-        if (destinationKnown && exactlyMatches(transfer, current)) {
+        if (destinationKnown && exactlyMatches(snapshot, current)) {
             source.setAmount(0);
             return new DestinationCommitResult(true, false, failure);
         }
