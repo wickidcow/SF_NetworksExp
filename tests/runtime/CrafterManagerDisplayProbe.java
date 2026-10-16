@@ -18,6 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.network.NetworkRoot;
+import io.github.sefiraat.networks.network.NetworkNode;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
 import io.github.sefiraat.networks.network.stackcaches.BlueprintInstance;
@@ -87,6 +88,8 @@ public final class CrafterManagerDisplayProbe extends JavaPlugin {
         probe("Quantum live item conservation", this::verifyQuantumConservation, failures);
         probe("Real Quantum block and break handler", this::verifyRealQuantumBlockBreak, failures);
         probe("Native menu source snapshots and strict guards", this::verifyNativeMenuSnapshots, failures);
+        probe("Connected controller conflict reserves one deterministic loser",
+            this::verifyControllerConflictReservation, failures);
         if (!failures.isEmpty()) throw new AssertionError(String.join("; ", failures));
     }
 
@@ -553,6 +556,46 @@ public final class CrafterManagerDisplayProbe extends JavaPlugin {
                 block.setType(Material.AIR);
                 QuantumCacheLifecycle.clearBreakMarker(location);
             }
+        }
+    }
+
+    /**
+     * Exercises the production topology-discovery path from both controller directions in one
+     * server tick. The delayed cleanup task intentionally sees no physical Slimefun controller
+     * fixture and therefore cannot mutate the disposable world; this case verifies the race
+     * boundary itself: both discoveries must reserve only the same loser.
+     */
+    private void verifyControllerConflictReservation() {
+        final var world = Bukkit.getWorlds().getFirst();
+        final Location survivor = new Location(world, 92, 100, 0);
+        final Location loser = new Location(world, 93, 100, 0);
+        world.getChunkAt(survivor).load();
+
+        final NodeDefinition survivorDefinition = new NodeDefinition(NodeType.CONTROLLER);
+        final NodeDefinition loserDefinition = new NodeDefinition(NodeType.CONTROLLER);
+        NetworkStorage.registerNode(survivor, survivorDefinition);
+        NetworkStorage.registerNode(loser, loserDefinition);
+
+        final NetworkRoot survivorRoot = new NetworkRoot(survivor, NodeType.CONTROLLER, 16);
+        final NetworkRoot loserRoot = new NetworkRoot(loser, NodeType.CONTROLLER, 16);
+        survivorDefinition.setNode(survivorRoot);
+        loserDefinition.setNode(loserRoot);
+
+        try {
+            survivorRoot.addAllChildren();
+            require(!NetworkNode.isControllerRemovalPending(survivor),
+                "Lower-coordinate controller must never be selected for cleanup");
+            require(NetworkNode.isControllerRemovalPending(loser),
+                "Higher-coordinate controller must be the single pending cleanup target");
+
+            loserRoot.addAllChildren();
+            require(!NetworkNode.isControllerRemovalPending(survivor),
+                "Reverse discovery must not schedule the survivor");
+            require(NetworkNode.isControllerRemovalPending(loser),
+                "Reverse discovery must retain the same cleanup target");
+        } finally {
+            NetworkStorage.removeNodeOnly(survivor);
+            NetworkStorage.removeNodeOnly(loser);
         }
     }
 
