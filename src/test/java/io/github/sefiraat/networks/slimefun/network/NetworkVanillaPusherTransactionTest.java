@@ -1,8 +1,12 @@
 package io.github.sefiraat.networks.slimefun.network;
 
+import com.ytdd9527.networksexpansion.core.managers.ConfigManager;
+import io.github.sefiraat.networks.Networks;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -10,11 +14,28 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class NetworkVanillaPusherTransactionTest {
+
+    @BeforeAll
+    static void initializePusherClassUnderConfigFixture() throws ClassNotFoundException {
+        /*
+         * NetworkVanillaPusher implements SoftCellBannable. That interface owns historical
+         * static config snapshots, so loading the pusher without a plugin/config instance
+         * poisons the JVM with an ExceptionInInitializerError before this focused helper can run.
+         */
+        try (MockedStatic<Networks> networks = mockStatic(Networks.class)) {
+            ConfigManager config = mock(ConfigManager.class);
+            networks.when(Networks::getConfigManager).thenReturn(config);
+            when(config.isSoftCellBan()).thenReturn(false);
+            when(config.getSoftCellBanThreshold()).thenReturn(64);
+            Class.forName(NetworkVanillaPusher.class.getName());
+        }
+    }
 
     @Test
     void exactDestinationCommitConsumesSourceOnce() {
