@@ -337,17 +337,24 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
         if (destinationKnown && storageExactlyMatches(desiredSnapshot, current)) {
             try {
                 source.setAmount(remaining);
+            } catch (RuntimeException | LinkageError sourceCommitFailure) {
+                failure = appendFailure(failure, sourceCommitFailure);
+            }
+
+            try {
                 if (sourceHasExpectedRemainder(sourceSnapshot, source, remaining)) {
+                    // A source setter may report failure after applying the amount. Exact readback makes
+                    // that a committed transaction, matching the destination write.
                     return new DestinationCommitResult(true, false, failure);
                 }
                 failure = appendFailure(
                     failure,
                     new IllegalStateException("Vanilla Pusher source did not retain the expected remainder"));
-            } catch (RuntimeException | LinkageError sourceCommitFailure) {
-                failure = appendFailure(failure, sourceCommitFailure);
+            } catch (RuntimeException | LinkageError sourceReadFailure) {
+                failure = appendFailure(failure, sourceReadFailure);
             }
-            // Destination committed but source could not be reconciled. Restore the destination before
-            // preserving the source.
+            // Destination committed but source could not be reconciled. Restore the destination and then
+            // restore the original source amount before reporting that no move occurred.
         } else if (destinationKnown && storageExactlyMatches(beforeSnapshot, current)) {
             return new DestinationCommitResult(false, false, failure);
         }
@@ -368,7 +375,26 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
         }
 
         if (rollbackKnown && storageExactlyMatches(beforeSnapshot, afterRollback)) {
-            return new DestinationCommitResult(false, false, failure);
+            try {
+                if (sourceHasExpectedRemainder(sourceSnapshot, source, originalAmount)) {
+                    return new DestinationCommitResult(false, false, failure);
+                }
+
+                if (sourceSnapshot.isSimilar(source)) {
+                    source.setAmount(originalAmount);
+                    if (sourceHasExpectedRemainder(sourceSnapshot, source, originalAmount)) {
+                        return new DestinationCommitResult(false, false, failure);
+                    }
+                }
+
+                failure = appendFailure(
+                    failure,
+                    new IllegalStateException(
+                        "Vanilla Pusher rolled back the destination but could not restore the original source"));
+            } catch (RuntimeException | LinkageError sourceRestoreFailure) {
+                failure = appendFailure(failure, sourceRestoreFailure);
+            }
+            return new DestinationCommitResult(false, true, failure);
         }
 
         // The attempted destination state may still have survived. Reduce only the amount we attempted
