@@ -242,8 +242,9 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
      * only then is the live source reduced by the accepted amount.</p>
      *
      * <p>If the destination write throws or normalizes data, the original storage snapshot is restored before
-     * preserving the source. If rollback cannot be verified, the attempted accepted amount is removed from the
-     * source conservatively so the same logical items are not knowingly left on both sides.</p>
+     * preserving the source. If rollback cannot be verified but the surviving destination state is readable,
+     * the source is reduced by only the amount proven to remain there. An unreadable/unexplained destination
+     * falls back to the attempted accepted amount rather than knowingly retaining a duplicate.</p>
      */
     static @NotNull DestinationCommitResult commitIntoStorageContents(
         @NotNull ItemStack source,
@@ -398,18 +399,47 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
             return new DestinationCommitResult(false, true, failure);
         }
 
-        // The attempted destination state may still have survived. Reduce only the amount we attempted
-        // to commit; preserve any source remainder that never fit.
+        /*
+         * Rollback is unresolved. If the destination remains readable and every difference from the
+         * baseline can be explained as this source item, calculate the amount that actually survived
+         * there. Do not blindly consume the amount we attempted to insert: a destination may normalize
+         * an intended +4 to +3 and then refuse rollback, in which case consuming 4 would lose one item.
+         */
+        if (failure == null) {
+            failure = new IllegalStateException("Vanilla Pusher inventory destination could not be rolled back");
+        }
+
+        int survivingInserted = -1;
+        if (rollbackKnown) {
+            try {
+                survivingInserted = survivingInsertedAmount(beforeSnapshot, afterRollback, sourceSnapshot);
+            } catch (RuntimeException | LinkageError countFailure) {
+                failure = appendFailure(failure, countFailure);
+            }
+        }
+
+        final int expectedRemainder = survivingInserted >= 0
+            ? originalAmount - survivingInserted
+            : remaining;
+
         boolean sourceReconciled = false;
         try {
-            if (sourceHasExpectedRemainder(sourceSnapshot, source, remaining)) {
+            if (sourceHasExpectedRemainder(sourceSnapshot, source, expectedRemainder)) {
                 sourceReconciled = true;
-            } else if (sourceSnapshot.isSimilar(source) && source.getAmount() == originalAmount) {
-                source.setAmount(remaining);
-                sourceReconciled = sourceHasExpectedRemainder(sourceSnapshot, source, remaining);
+            } else if (sourceSnapshot.isSimilar(source)) {
+                source.setAmount(expectedRemainder);
+                sourceReconciled = sourceHasExpectedRemainder(sourceSnapshot, source, expectedRemainder);
             }
         } catch (RuntimeException | LinkageError sourceFailure) {
             failure = appendFailure(failure, sourceFailure);
+            try {
+                sourceReconciled = sourceHasExpectedRemainder(
+                    sourceSnapshot,
+                    source,
+                    expectedRemainder);
+            } catch (RuntimeException | LinkageError sourceReadFailure) {
+                failure = appendFailure(failure, sourceReadFailure);
+            }
         }
 
         if (!sourceReconciled) {
@@ -418,10 +448,57 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
                 new IllegalStateException(
                     "Vanilla Pusher could not reconcile the source after an unresolved inventory commit"));
         }
-        if (failure == null) {
-            failure = new IllegalStateException("Vanilla Pusher inventory destination could not be rolled back");
-        }
         return new DestinationCommitResult(sourceReconciled, true, failure);
+    }
+
+    /**
+     * Returns how many source items can be proven to have survived relative to the immutable
+     * destination baseline, or -1 when the post-rollback state contains an unexplained change.
+     */
+    static int survivingInsertedAmount(
+        ItemStack @NotNull [] baseline,
+        ItemStack @NotNull [] current,
+        @NotNull ItemStack source) {
+
+        if (baseline.length != current.length) {
+            return -1;
+        }
+
+        long inserted = 0L;
+        for (int slot = 0; slot < baseline.length; slot++) {
+            final ItemStack before = baseline[slot];
+            final ItemStack after = current[slot];
+
+            if (isEmpty(before)) {
+                if (isEmpty(after)) {
+                    continue;
+                }
+                if (!source.isSimilar(after) || after.getAmount() <= 0) {
+                    return -1;
+                }
+                inserted += after.getAmount();
+            } else {
+                if (isEmpty(after) || !before.isSimilar(after)) {
+                    return -1;
+                }
+
+                final int delta = after.getAmount() - before.getAmount();
+                if (delta < 0) {
+                    return -1;
+                }
+                if (delta > 0) {
+                    if (!StackUtils.itemsMatch(before, source, true, false)) {
+                        return -1;
+                    }
+                    inserted += delta;
+                }
+            }
+
+            if (inserted > source.getAmount()) {
+                return -1;
+            }
+        }
+        return (int) inserted;
     }
 
     private static @NotNull ItemStack detachedExactClone(
