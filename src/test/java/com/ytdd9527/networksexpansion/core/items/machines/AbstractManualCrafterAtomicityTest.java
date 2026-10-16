@@ -1,0 +1,133 @@
+package com.ytdd9527.networksexpansion.core.items.machines;
+
+import com.balugaq.netex.api.data.SuperRecipe;
+import com.balugaq.netex.utils.BlockMenuUtil;
+import io.github.sefiraat.networks.events.NetworkCraftEvent;
+import io.github.sefiraat.networks.utils.StackUtils;
+import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
+import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.World;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.PluginManager;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+class AbstractManualCrafterAtomicityTest {
+    private static final int[] INPUT_SLOTS = {0, 1, 2};
+    private static final int[] OUTPUT_SLOTS = {8};
+
+    private AbstractManualCrafter crafter;
+    private BlockMenu menu;
+    private Player player;
+    private World world;
+    private Location location;
+
+    @BeforeEach
+    void setup() {
+        crafter = mock(AbstractManualCrafter.class, CALLS_REAL_METHODS);
+        menu = mock(BlockMenu.class);
+        player = mock(Player.class);
+        world = mock(World.class);
+        location = new Location(world, 4, 64, 9);
+
+        when(crafter.getInputSlots()).thenReturn(INPUT_SLOTS);
+        when(crafter.getOutputSlots()).thenReturn(OUTPUT_SLOTS);
+        when(menu.getLocation()).thenReturn(location);
+    }
+
+    @Test
+    void cancelledShapedCraftDoesNotConsumeInputsOrEmitEarlierOutputs() {
+        ItemStack input = new ItemStack(Material.DIAMOND);
+        ItemStack firstOutput = new ItemStack(Material.STONE);
+        ItemStack secondOutput = new ItemStack(Material.DIRT);
+        SuperRecipe recipe = new SuperRecipe(true, new ItemStack[]{input}, new ItemStack[]{firstOutput, secondOutput});
+        when(menu.getItemInSlot(0)).thenReturn(input);
+
+        PluginManager pluginManager = mock(PluginManager.class);
+        AtomicInteger events = new AtomicInteger();
+        doAnswer(invocation -> {
+            NetworkCraftEvent event = invocation.getArgument(0);
+            if (events.incrementAndGet() == 2) {
+                event.setCancelled(true);
+            }
+            return null;
+        }).when(pluginManager).callEvent(any());
+
+        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class);
+             MockedStatic<BlockMenuUtil> menus = mockStatic(BlockMenuUtil.class);
+             MockedStatic<StackUtils> stacks = mockStatic(StackUtils.class);
+             MockedStatic<SlimefunItem> slimefunItems = mockStatic(SlimefunItem.class)) {
+            bukkit.when(Bukkit::getPluginManager).thenReturn(pluginManager);
+            menus.when(() -> BlockMenuUtil.fits(menu, recipe.getOutput(), OUTPUT_SLOTS)).thenReturn(true);
+            stacks.when(() -> StackUtils.itemsMatch(input, input, false, true)).thenReturn(true);
+            slimefunItems.when(() -> SlimefunItem.getByItem(firstOutput)).thenReturn(null);
+            slimefunItems.when(() -> SlimefunItem.getByItem(secondOutput)).thenReturn(null);
+
+            assertFalse(crafter.shapedCraft(recipe, player, menu));
+            menus.verify(() -> BlockMenuUtil.consumeItem(menu, 0, 1), never());
+            menus.verify(() -> BlockMenuUtil.pushItem(any(BlockMenu.class), any(ItemStack.class), any(int[].class)), never());
+            verify(player, never()).sendMessage(any(String.class));
+        }
+    }
+
+    @Test
+    void missingShapelessIngredientFailsBeforeOutputOrConsumption() {
+        ItemStack input = new ItemStack(Material.DIAMOND);
+        ItemStack output = new ItemStack(Material.STONE);
+        SuperRecipe recipe = new SuperRecipe(false, new ItemStack[]{input}, output);
+
+        try (MockedStatic<BlockMenuUtil> menus = mockStatic(BlockMenuUtil.class)) {
+            assertFalse(crafter.shapelessCraft(recipe, player, menu));
+            menus.verify(() -> BlockMenuUtil.fits(menu, recipe.getOutput(), OUTPUT_SLOTS), never());
+            menus.verify(() -> BlockMenuUtil.consumeItem(any(BlockMenu.class), org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt()), never());
+            menus.verify(() -> BlockMenuUtil.pushItem(any(BlockMenu.class), any(ItemStack.class), any(int[].class)), never());
+        }
+    }
+
+    @Test
+    void multiIngredientShapelessCraftConsumesWithoutMutatingRequirementMap() {
+        ItemStack diamond = new ItemStack(Material.DIAMOND);
+        ItemStack gold = new ItemStack(Material.GOLD_INGOT);
+        ItemStack output = new ItemStack(Material.STONE);
+        SuperRecipe recipe = new SuperRecipe(false, new ItemStack[]{diamond, gold}, output);
+        when(menu.getItemInSlot(0)).thenReturn(diamond);
+        when(menu.getItemInSlot(1)).thenReturn(gold);
+
+        try (MockedStatic<BlockMenuUtil> menus = mockStatic(BlockMenuUtil.class);
+             MockedStatic<StackUtils> stacks = mockStatic(StackUtils.class);
+             MockedStatic<SlimefunItem> slimefunItems = mockStatic(SlimefunItem.class)) {
+            menus.when(() -> BlockMenuUtil.fits(menu, recipe.getOutput(), OUTPUT_SLOTS)).thenReturn(true);
+            menus.when(() -> BlockMenuUtil.pushItem(menu, output, OUTPUT_SLOTS)).thenReturn(null);
+            stacks.when(() -> StackUtils.itemsMatch(diamond, diamond)).thenReturn(true);
+            stacks.when(() -> StackUtils.itemsMatch(diamond, gold)).thenReturn(false);
+            stacks.when(() -> StackUtils.itemsMatch(gold, diamond)).thenReturn(false);
+            stacks.when(() -> StackUtils.itemsMatch(gold, gold)).thenReturn(true);
+            slimefunItems.when(() -> SlimefunItem.getByItem(output)).thenReturn(null);
+
+            assertTrue(crafter.shapelessCraft(recipe, player, menu));
+            menus.verify(() -> BlockMenuUtil.consumeItem(menu, 0, 1), times(1));
+            menus.verify(() -> BlockMenuUtil.consumeItem(menu, 1, 1), times(1));
+            menus.verify(() -> BlockMenuUtil.pushItem(menu, output, OUTPUT_SLOTS), times(1));
+        }
+    }
+}
