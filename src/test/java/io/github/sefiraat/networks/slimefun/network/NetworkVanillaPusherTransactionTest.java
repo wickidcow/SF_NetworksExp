@@ -69,6 +69,38 @@ class NetworkVanillaPusherTransactionTest {
     }
 
     @Test
+    void ordinaryInventorySourceReplacementDuringDestinationCommitIsPreserved() {
+        ItemStack source = mutableStack(Material.DIAMOND, 8, 64);
+        ItemStack replacement = mutableStack(Material.GOLD_INGOT, 3, 64);
+        AtomicReference<ItemStack> sourceSlot = new AtomicReference<>(source);
+        AtomicReference<ItemStack[]> destination = new AtomicReference<>(new ItemStack[]{null});
+        AtomicInteger writes = new AtomicInteger();
+
+        try (MockedStatic<StackUtils> stacks = matchingByMaterial()) {
+            var result = NetworkVanillaPusher.commitIntoStorageContents(
+                source,
+                sourceSlot::get,
+                sourceSlot::set,
+                destination::get,
+                contents -> {
+                    if (writes.getAndIncrement() == 0) {
+                        destination.set(contents);
+                        sourceSlot.set(replacement);
+                    } else {
+                        destination.set(contents);
+                    }
+                });
+
+            assertFalse(result.moved());
+            assertFalse(result.ambiguous());
+            assertTrue(result.failure() instanceof IllegalStateException);
+            assertTrue(sourceSlot.get() == replacement);
+            assertTrue(destination.get()[0] == null);
+            assertTrue(writes.get() == 2);
+        }
+    }
+
+    @Test
     void ordinaryInventoryWriteThenThrowStillCommitsOnlyAcceptedAmount() {
         ItemStack source = mutableStack(Material.IRON_INGOT, 10, 64);
         ItemStack occupied = mutableStack(Material.DIAMOND, 64, 64);

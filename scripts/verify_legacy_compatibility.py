@@ -695,15 +695,20 @@ require("blockMenu.markDirty()" in vanilla_pusher and "handleFurnace" in vanilla
         "vanilla cargo pusher persistence verification is missing")
 require("inventory instanceof CrafterInventory" in vanilla_pusher
         and "commitIntoStorageContents(" in vanilla_pusher
+        and "() -> blockMenu.getItemInSlot(INPUT_SLOT)" in vanilla_pusher
+        and "blockMenu.replaceExistingItem(INPUT_SLOT, item)" in vanilla_pusher
+        and "sourceChangedBeforeCommit" in vanilla_pusher
+        and "source slot changed before source-side commit" in vanilla_pusher
+        and "reconcileSourceRemainder(" in vanilla_pusher
+        and "sourceReaderHasExpectedRemainder(" in vanilla_pusher
         and "inventory::getStorageContents" in vanilla_pusher
         and "inventory::setStorageContents" in vanilla_pusher
         and "detachedStorageClone(" in vanilla_pusher
         and "storageExactlyMatches(" in vanilla_pusher
         and "survivingInsertedAmount(" in vanilla_pusher
         and "expectedRemainder = survivingInserted >= 0" in vanilla_pusher
-        and "sourceHasExpectedRemainder(" in vanilla_pusher
         and "InventoryUtil.addItem(holder.getInventory(), stack)" not in vanilla_pusher,
-        "vanilla cargo pusher ordinary-inventory path must use detached transactional partial commits")
+        "vanilla cargo pusher ordinary-inventory path must bind to the live source slot and reconcile both sides transactionally")
 require("final ItemStack transfer = stack.clone()" in vanilla_grabber
         and "itemsMatch(committed, transfer, true, true)" in vanilla_grabber
         and "inventory.setItem(sourceSlot, null)" in vanilla_grabber,

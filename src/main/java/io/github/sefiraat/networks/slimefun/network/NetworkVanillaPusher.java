@@ -152,6 +152,11 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
             moved = finishDestinationCommit(
                 commitIntoStorageContents(
                     stack,
+                    () -> blockMenu.getItemInSlot(INPUT_SLOT),
+                    item -> {
+                        blockMenu.replaceExistingItem(INPUT_SLOT, item);
+                        blockMenu.markDirty();
+                    },
                     inventory::getStorageContents,
                     inventory::setStorageContents),
                 blockMenu.getLocation(),
@@ -251,7 +256,32 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
         @NotNull Supplier<ItemStack[]> contentsReader,
         @NotNull Consumer<ItemStack[]> contentsWriter) {
 
-        if (isEmpty(source)) {
+        return commitIntoStorageContents(
+            source,
+            () -> source,
+            item -> {
+                if (item == null) {
+                    source.setAmount(0);
+                } else {
+                    if (!source.isSimilar(item)) {
+                        throw new IllegalStateException(
+                            "Vanilla Pusher object-bound source writer received a different item identity");
+                    }
+                    source.setAmount(item.getAmount());
+                }
+            },
+            contentsReader,
+            contentsWriter);
+    }
+
+    static @NotNull DestinationCommitResult commitIntoStorageContents(
+        @NotNull ItemStack liveSource,
+        @NotNull Supplier<ItemStack> sourceReader,
+        @NotNull Consumer<ItemStack> sourceWriter,
+        @NotNull Supplier<ItemStack[]> contentsReader,
+        @NotNull Consumer<ItemStack[]> contentsWriter) {
+
+        if (isEmpty(liveSource)) {
             return DestinationCommitResult.NONE;
         }
 
@@ -259,7 +289,12 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
         final ItemStack[] beforeSnapshot;
         final ItemStack[] desiredSnapshot;
         try {
-            sourceSnapshot = detachedExactClone(source, "Vanilla Pusher source");
+            final ItemStack currentSource = sourceReader.get();
+            if (isEmpty(currentSource) || !exactlyMatches(liveSource, currentSource)) {
+                return DestinationCommitResult.NONE;
+            }
+
+            sourceSnapshot = detachedExactClone(currentSource, "Vanilla Pusher source");
             final ItemStack[] before = contentsReader.get();
             if (before == null) {
                 return new DestinationCommitResult(
@@ -336,27 +371,38 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
             destinationKnown = false;
         }
 
+        boolean sourceChangedBeforeCommit = false;
         if (destinationKnown && storageExactlyMatches(desiredSnapshot, current)) {
             try {
-                source.setAmount(remaining);
-            } catch (RuntimeException | LinkageError sourceCommitFailure) {
-                failure = appendFailure(failure, sourceCommitFailure);
-            }
-
-            try {
-                if (sourceHasExpectedRemainder(sourceSnapshot, source, remaining)) {
-                    // A source setter may report failure after applying the amount. Exact readback makes
-                    // that a committed transaction, matching the destination write.
-                    return new DestinationCommitResult(true, false, failure);
-                }
-                failure = appendFailure(
-                    failure,
-                    new IllegalStateException("Vanilla Pusher source did not retain the expected remainder"));
+                sourceChangedBeforeCommit = !exactlyMatches(sourceSnapshot, sourceReader.get());
             } catch (RuntimeException | LinkageError sourceReadFailure) {
                 failure = appendFailure(failure, sourceReadFailure);
+                sourceChangedBeforeCommit = true;
             }
-            // Destination committed but source could not be reconciled. Restore the destination and then
-            // restore the original source amount before reporting that no move occurred.
+
+            if (!sourceChangedBeforeCommit) {
+                try {
+                    sourceWriter.accept(remainderStack(sourceSnapshot, remaining, "Vanilla Pusher source commit"));
+                } catch (RuntimeException | LinkageError sourceCommitFailure) {
+                    failure = appendFailure(failure, sourceCommitFailure);
+                }
+
+                try {
+                    if (sourceReaderHasExpectedRemainder(sourceSnapshot, sourceReader, remaining)) {
+                        return new DestinationCommitResult(true, false, failure);
+                    }
+                    failure = appendFailure(
+                        failure,
+                        new IllegalStateException("Vanilla Pusher source did not retain the expected remainder"));
+                } catch (RuntimeException | LinkageError sourceReadFailure) {
+                    failure = appendFailure(failure, sourceReadFailure);
+                }
+            } else {
+                failure = appendFailure(
+                    failure,
+                    new IllegalStateException(
+                        "Vanilla Pusher source slot changed before source-side commit; refusing to overwrite it"));
+            }
         } else if (destinationKnown && storageExactlyMatches(beforeSnapshot, current)) {
             return new DestinationCommitResult(false, false, failure);
         }
@@ -377,36 +423,34 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
         }
 
         if (rollbackKnown && storageExactlyMatches(beforeSnapshot, afterRollback)) {
-            try {
-                if (sourceHasExpectedRemainder(sourceSnapshot, source, originalAmount)) {
-                    return new DestinationCommitResult(false, false, failure);
-                }
-
-                if (sourceSnapshot.isSimilar(source)) {
-                    source.setAmount(originalAmount);
-                    if (sourceHasExpectedRemainder(sourceSnapshot, source, originalAmount)) {
-                        return new DestinationCommitResult(false, false, failure);
-                    }
-                }
-
-                failure = appendFailure(
-                    failure,
-                    new IllegalStateException(
-                        "Vanilla Pusher rolled back the destination but could not restore the original source"));
-            } catch (RuntimeException | LinkageError sourceRestoreFailure) {
-                failure = appendFailure(failure, sourceRestoreFailure);
+            if (sourceChangedBeforeCommit) {
+                // Compensation succeeded. Preserve the externally changed pusher source exactly.
+                return new DestinationCommitResult(false, false, failure);
             }
+
+            final boolean restored = reconcileSourceRemainder(
+                sourceSnapshot, sourceReader, sourceWriter, originalAmount, failure);
+            if (restored) {
+                return new DestinationCommitResult(false, false, failure);
+            }
+            failure = appendFailure(
+                failure,
+                new IllegalStateException(
+                    "Vanilla Pusher rolled back the destination but could not restore the original source"));
             return new DestinationCommitResult(false, true, failure);
         }
 
-        /*
-         * Rollback is unresolved. If the destination remains readable and every difference from the
-         * baseline can be explained as this source item, calculate the amount that actually survived
-         * there. Do not blindly consume the amount we attempted to insert: a destination may normalize
-         * an intended +4 to +3 and then refuse rollback, in which case consuming 4 would lose one item.
-         */
         if (failure == null) {
             failure = new IllegalStateException("Vanilla Pusher inventory destination could not be rolled back");
+        }
+
+        if (sourceChangedBeforeCommit) {
+            failure = appendFailure(
+                failure,
+                new IllegalStateException(
+                    "Vanilla Pusher destination rollback remained unresolved after the source slot changed; "
+                        + "the external source replacement was preserved"));
+            return new DestinationCommitResult(false, true, failure);
         }
 
         int survivingInserted = -1;
@@ -422,25 +466,8 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
             ? originalAmount - survivingInserted
             : remaining;
 
-        boolean sourceReconciled = false;
-        try {
-            if (sourceHasExpectedRemainder(sourceSnapshot, source, expectedRemainder)) {
-                sourceReconciled = true;
-            } else if (sourceSnapshot.isSimilar(source)) {
-                source.setAmount(expectedRemainder);
-                sourceReconciled = sourceHasExpectedRemainder(sourceSnapshot, source, expectedRemainder);
-            }
-        } catch (RuntimeException | LinkageError sourceFailure) {
-            failure = appendFailure(failure, sourceFailure);
-            try {
-                sourceReconciled = sourceHasExpectedRemainder(
-                    sourceSnapshot,
-                    source,
-                    expectedRemainder);
-            } catch (RuntimeException | LinkageError sourceReadFailure) {
-                failure = appendFailure(failure, sourceReadFailure);
-            }
-        }
+        final boolean sourceReconciled = reconcileSourceRemainder(
+            sourceSnapshot, sourceReader, sourceWriter, expectedRemainder, failure);
 
         if (!sourceReconciled) {
             failure = appendFailure(
@@ -449,6 +476,63 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
                     "Vanilla Pusher could not reconcile the source after an unresolved inventory commit"));
         }
         return new DestinationCommitResult(sourceReconciled, true, failure);
+    }
+
+    private static boolean reconcileSourceRemainder(
+        @NotNull ItemStack original,
+        @NotNull Supplier<ItemStack> sourceReader,
+        @NotNull Consumer<ItemStack> sourceWriter,
+        int expectedAmount,
+        @NotNull Throwable failure) {
+
+        try {
+            if (sourceReaderHasExpectedRemainder(original, sourceReader, expectedAmount)) {
+                return true;
+            }
+
+            final ItemStack current = sourceReader.get();
+            if (!exactlyMatches(original, current)) {
+                return false;
+            }
+
+            sourceWriter.accept(remainderStack(original, expectedAmount, "Vanilla Pusher source remainder"));
+            return sourceReaderHasExpectedRemainder(original, sourceReader, expectedAmount);
+        } catch (RuntimeException | LinkageError reconciliationFailure) {
+            failure.addSuppressed(reconciliationFailure);
+            try {
+                return sourceReaderHasExpectedRemainder(original, sourceReader, expectedAmount);
+            } catch (RuntimeException | LinkageError readFailure) {
+                failure.addSuppressed(readFailure);
+                return false;
+            }
+        }
+    }
+
+    private static ItemStack remainderStack(
+        @NotNull ItemStack original,
+        int amount,
+        @NotNull String context) {
+
+        if (amount <= 0) {
+            return null;
+        }
+        final ItemStack remainder = detachedExactClone(original, context);
+        remainder.setAmount(amount);
+        return remainder;
+    }
+
+    private static boolean sourceReaderHasExpectedRemainder(
+        @NotNull ItemStack original,
+        @NotNull Supplier<ItemStack> sourceReader,
+        int expectedAmount) {
+
+        final ItemStack current = sourceReader.get();
+        if (expectedAmount <= 0) {
+            return isEmpty(current);
+        }
+        return current != null
+            && current.getAmount() == expectedAmount
+            && original.isSimilar(current);
     }
 
     /**
