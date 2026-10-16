@@ -98,6 +98,8 @@ networks_drawer = read("src/main/java/com/ytdd9527/networksexpansion/implementat
 fluffy_barrel = read("src/main/java/io/github/sefiraat/networks/network/barrel/FluffyBarrel.java")
 root_ready_event = read("src/main/java/com/balugaq/netex/api/events/NetworkRootReadyEvent.java")
 network_controller = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkController.java")
+abstract_network_pusher = read("src/main/java/io/github/sefiraat/networks/slimefun/network/pusher/AbstractNetworkPusher.java")
+recipe_aware_pusher_planner = read("src/main/java/io/github/sefiraat/networks/slimefun/network/pusher/RecipeAwarePusherPlanner.java")
 network_monitor = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkMonitor.java")
 quantum_cache = read("src/main/java/io/github/sefiraat/networks/network/stackcaches/QuantumCache.java")
 quantum_workbench = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkQuantumWorkbench.java")
@@ -710,6 +712,18 @@ require("NetworkRoot previous = NETWORKS.put(location, candidate);" in network_c
         and "FailureCircuitBreaker.FailureSnapshot recoverySnapshot" in network_controller
         and "FailureCircuitBreaker.FailureSnapshot previous =" not in network_controller,
         "controller rebuild success handling reuses the previous local variable name")
+require('"recipe-aware-buffer-batches"' in abstract_network_pusher
+        and "ChatUtils.awaitInput(player" in abstract_network_pusher
+        and "Calculator.calculate(input).intValue()" in abstract_network_pusher
+        and "clickAction.isShiftClicked()" in abstract_network_pusher
+        and "getRecipeBufferBatches(blockMenu.getLocation())" in abstract_network_pusher
+        and "RECIPE_BUFFER_BATCHES.putIfAbsent(location.clone(), value)" in abstract_network_pusher
+        and "RECIPE_BUFFER_BATCHES.remove(event.getBlock().getLocation())" in abstract_network_pusher
+        and "MIN_BUFFERED_BATCHES = 1" in recipe_aware_pusher_planner
+        and "MAX_BUFFERED_BATCHES = 64" in recipe_aware_pusher_planner
+        and "stepBufferedBatches" in recipe_aware_pusher_planner,
+        "Recipe-Aware pusher batch target must be persisted per machine and player-adjustable")
+
 require("candidate = cachedRoot;" in network_controller
         and "refreshStableRoot(candidate, location)" in network_controller
         and "STABLE_ROOT_REUSES.increment()" in network_controller
