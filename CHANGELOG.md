@@ -1,6 +1,17 @@
 # Changelog
 
-## 1.0.56 — guarded VOID cleanup and exact menu snapshots (release candidate, not published)
+## 1.0.57 — controller integrity, craft atomicity and transfer hot-path follow-up (release candidate)
+
+- Resolve invalid multi-controller topologies deterministically. Preserve an established controller when exactly one side already owns a published root; otherwise use a stable block-coordinate tie-break. Revalidate both controllers and their loaded connection before delayed destructive cleanup.
+- Prevent manual shaped crafting from consuming inputs before cancellable craft events complete. Fail shapeless crafts immediately when ingredients are missing and avoid mutating the requirement map while iterating it.
+- Batch Auto Crafter availability checks into one read-only traversal of the same storage classes used by the existing single-item probe, while retaining historical withdrawal order and rollback behavior.
+- Reuse the push-resolved target menus for the paired grab phase on customized unlimited/full-distance Expansion line transfers. Default 8/12 target budgets are unchanged.
+- Harden the two-process Quantum restart test against delayed Paper entity registration with a bounded per-tick wait; exact quantity, metadata, persistence and break checks remain strict.
+- Prevent ordinary default-branch builds from clobbering an already-published version. A newly bumped version may publish once after its combined validation succeeds.
+
+No item IDs, recipes, saved-storage serialization, Quantum routing order, empty-Quantum assignment policy, default transfer budgets or normal controller limits change. The Infinity Dust Extractor changed-source trigger is addressed separately in InfinityExpansion2 by synchronizing its HopperMachine producer transaction; Networks retains its 1.0.56 source-snapshot and compensation safeguards regardless.
+
+## 1.0.56 — guarded VOID cleanup and exact menu snapshots
 
 - Prevent directional VOID grabbers from clearing source slots after rejected or failed menu deposits. Keep intentional remainder disposal inside the checked source-commit boundary instead of a second unconditional clear.
 - Preserve changed sources after compensation and stop the current menu pass on failure. After a partial offer exception, reconcile accepted items without voiding the unaccepted remainder.
