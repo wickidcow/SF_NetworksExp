@@ -699,6 +699,8 @@ require("inventory instanceof CrafterInventory" in vanilla_pusher
         and "inventory::setStorageContents" in vanilla_pusher
         and "detachedStorageClone(" in vanilla_pusher
         and "storageExactlyMatches(" in vanilla_pusher
+        and "survivingInsertedAmount(" in vanilla_pusher
+        and "expectedRemainder = survivingInserted >= 0" in vanilla_pusher
         and "sourceHasExpectedRemainder(" in vanilla_pusher
         and "InventoryUtil.addItem(holder.getInventory(), stack)" not in vanilla_pusher,
         "vanilla cargo pusher ordinary-inventory path must use detached transactional partial commits")
