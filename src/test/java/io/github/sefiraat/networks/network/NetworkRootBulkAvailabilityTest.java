@@ -18,10 +18,10 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -62,7 +62,7 @@ class NetworkRootBulkAvailabilityTest {
         barrels.add(secondDiamond);
         barrels.add(goldBarrel);
 
-        NetworkRoot root = mock(NetworkRoot.class, CALLS_REAL_METHODS);
+        NetworkRoot root = spy(new NetworkRoot(new Location(null, 0, 64, 0), NodeType.CONTROLLER, 100));
         doReturn(barrels).when(root).getOutputAbleBarrels();
 
         try (MockedStatic<StackUtils> stacks = mockStatic(StackUtils.class)) {
@@ -90,7 +90,7 @@ class NetworkRootBulkAvailabilityTest {
         barrels.add(barrel(diamond, 5));
         barrels.add(barrel(gold, 7));
 
-        NetworkRoot root = mock(NetworkRoot.class, CALLS_REAL_METHODS);
+        NetworkRoot root = spy(new NetworkRoot(new Location(null, 0, 64, 0), NodeType.CONTROLLER, 100));
         doReturn(barrels).when(root).getOutputAbleBarrels();
         // Remaining storage classes are empty in this focused fixture.
         doReturn(java.util.Map.of()).when(root).getOutputAbleCargoStorageUnitDatas();
