@@ -25,6 +25,7 @@ import io.github.sefiraat.networks.network.stackcaches.BlueprintInstance;
 import io.github.sefiraat.networks.network.stackcaches.QuantumCache;
 import io.github.sefiraat.networks.slimefun.network.QuantumCacheLifecycle;
 import io.github.sefiraat.networks.slimefun.network.NetworkQuantumStorage;
+import io.github.sefiraat.networks.slimefun.network.NetworkController;
 import io.github.sefiraat.networks.slimefun.NetworkSlimefunItems;
 import io.github.sefiraat.networks.utils.Keys;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
@@ -567,35 +568,39 @@ public final class CrafterManagerDisplayProbe extends JavaPlugin {
      */
     private void verifyControllerConflictReservation() {
         final var world = Bukkit.getWorlds().getFirst();
-        final Location survivor = new Location(world, 92, 100, 0);
-        final Location loser = new Location(world, 93, 100, 0);
-        world.getChunkAt(survivor).load();
+        // Give the established controller the higher coordinate so this case proves active-root
+        // precedence instead of accidentally succeeding through the coordinate tie-break.
+        final Location newcomer = new Location(world, 92, 100, 0);
+        final Location established = new Location(world, 93, 100, 0);
+        world.getChunkAt(established).load();
 
-        final NodeDefinition survivorDefinition = new NodeDefinition(NodeType.CONTROLLER);
-        final NodeDefinition loserDefinition = new NodeDefinition(NodeType.CONTROLLER);
-        NetworkStorage.registerNode(survivor, survivorDefinition);
-        NetworkStorage.registerNode(loser, loserDefinition);
+        final NodeDefinition establishedDefinition = new NodeDefinition(NodeType.CONTROLLER);
+        final NodeDefinition newcomerDefinition = new NodeDefinition(NodeType.CONTROLLER);
+        NetworkStorage.registerNode(established, establishedDefinition);
+        NetworkStorage.registerNode(newcomer, newcomerDefinition);
 
-        final NetworkRoot survivorRoot = new NetworkRoot(survivor, NodeType.CONTROLLER, 16);
-        final NetworkRoot loserRoot = new NetworkRoot(loser, NodeType.CONTROLLER, 16);
-        survivorDefinition.setNode(survivorRoot);
-        loserDefinition.setNode(loserRoot);
+        final NetworkRoot establishedRoot = new NetworkRoot(established, NodeType.CONTROLLER, 16);
+        final NetworkRoot newcomerRoot = new NetworkRoot(newcomer, NodeType.CONTROLLER, 16);
+        establishedDefinition.setNode(establishedRoot);
+        newcomerDefinition.setNode(newcomerRoot);
+        NetworkController.getNetworks().put(established, establishedRoot);
 
         try {
-            survivorRoot.addAllChildren();
-            require(!NetworkNode.isControllerRemovalPending(survivor),
-                "Lower-coordinate controller must never be selected for cleanup");
-            require(NetworkNode.isControllerRemovalPending(loser),
-                "Higher-coordinate controller must be the single pending cleanup target");
+            establishedRoot.addAllChildren();
+            require(!NetworkNode.isControllerRemovalPending(established),
+                "Existing active controller must survive even when its coordinate sorts later");
+            require(NetworkNode.isControllerRemovalPending(newcomer),
+                "Newly introduced controller must be the single pending cleanup target");
 
-            loserRoot.addAllChildren();
-            require(!NetworkNode.isControllerRemovalPending(survivor),
-                "Reverse discovery must not schedule the survivor");
-            require(NetworkNode.isControllerRemovalPending(loser),
-                "Reverse discovery must retain the same cleanup target");
+            newcomerRoot.addAllChildren();
+            require(!NetworkNode.isControllerRemovalPending(established),
+                "Reverse discovery must not schedule the established controller");
+            require(NetworkNode.isControllerRemovalPending(newcomer),
+                "Reverse discovery must retain the same newcomer cleanup target");
         } finally {
-            NetworkStorage.removeNodeOnly(survivor);
-            NetworkStorage.removeNodeOnly(loser);
+            NetworkController.getNetworks().remove(established, establishedRoot);
+            NetworkStorage.removeNodeOnly(established);
+            NetworkStorage.removeNodeOnly(newcomer);
         }
     }
 
