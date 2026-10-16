@@ -262,6 +262,11 @@ public class NetworkNode {
         return PENDING_CONTROLLER_REMOVALS.contains(normalizeBlockLocation(location));
     }
 
+    /** Clears delayed-removal reservations during plugin/runtime shutdown. */
+    public static void clearPendingControllerRemovals() {
+        PENDING_CONTROLLER_REMOVALS.clear();
+    }
+
     /**
      * Revalidates a delayed destructive action against the loaded physical node registry.
      *
