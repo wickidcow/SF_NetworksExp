@@ -54,11 +54,18 @@ class AbstractManualCrafterAtomicityTest {
         when(menu.getLocation()).thenReturn(location);
     }
 
+    private static ItemStack stack(Material material, int amount) {
+        ItemStack stack = mock(ItemStack.class);
+        when(stack.getType()).thenReturn(material);
+        when(stack.getAmount()).thenReturn(amount);
+        return stack;
+    }
+
     @Test
     void cancelledShapedCraftDoesNotConsumeInputsOrEmitEarlierOutputs() {
-        ItemStack input = new ItemStack(Material.DIAMOND);
-        ItemStack firstOutput = new ItemStack(Material.STONE);
-        ItemStack secondOutput = new ItemStack(Material.DIRT);
+        ItemStack input = stack(Material.DIAMOND, 1);
+        ItemStack firstOutput = stack(Material.STONE, 1);
+        ItemStack secondOutput = stack(Material.DIRT, 1);
         SuperRecipe recipe = new SuperRecipe(true, new ItemStack[]{input}, new ItemStack[]{firstOutput, secondOutput});
         when(menu.getItemInSlot(0)).thenReturn(input);
 
@@ -91,8 +98,8 @@ class AbstractManualCrafterAtomicityTest {
 
     @Test
     void missingShapelessIngredientFailsBeforeOutputOrConsumption() {
-        ItemStack input = new ItemStack(Material.DIAMOND);
-        ItemStack output = new ItemStack(Material.STONE);
+        ItemStack input = stack(Material.DIAMOND, 1);
+        ItemStack output = stack(Material.STONE, 1);
         SuperRecipe recipe = new SuperRecipe(false, new ItemStack[]{input}, output);
 
         try (MockedStatic<BlockMenuUtil> menus = mockStatic(BlockMenuUtil.class)) {
@@ -106,9 +113,9 @@ class AbstractManualCrafterAtomicityTest {
 
     @Test
     void multiIngredientShapelessCraftConsumesWithoutMutatingRequirementMap() {
-        ItemStack diamond = new ItemStack(Material.DIAMOND);
-        ItemStack gold = new ItemStack(Material.GOLD_INGOT);
-        ItemStack output = new ItemStack(Material.STONE);
+        ItemStack diamond = stack(Material.DIAMOND, 1);
+        ItemStack gold = stack(Material.GOLD_INGOT, 1);
+        ItemStack output = stack(Material.STONE, 1);
         SuperRecipe recipe = new SuperRecipe(false, new ItemStack[]{diamond, gold}, output);
         when(menu.getItemInSlot(0)).thenReturn(diamond);
         when(menu.getItemInSlot(1)).thenReturn(gold);
