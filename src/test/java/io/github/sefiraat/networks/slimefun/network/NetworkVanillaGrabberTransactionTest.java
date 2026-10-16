@@ -152,7 +152,7 @@ class NetworkVanillaGrabberTransactionTest {
     }
 
     @Test
-    void rollbackFailureConsumesSourceToAvoidDuplicate() {
+    void rollbackFailurePreservesRemainderForReadablePartialDestination() {
         ItemStack source = mutableStack(Material.NETHERITE_INGOT, 2);
         AtomicReference<ItemStack> sourceSlot = new AtomicReference<>(source);
         AtomicReference<ItemStack> destination = new AtomicReference<>();
@@ -175,8 +175,34 @@ class NetworkVanillaGrabberTransactionTest {
         assertTrue(result.moved());
         assertTrue(result.ambiguous());
         assertTrue(result.failure() instanceof IllegalStateException);
-        assertTrue(sourceSlot.get() == null);
+        assertTrue(sourceSlot.get() == source);
+        assertTrue(sourceSlot.get().getAmount() == 1);
         assertTrue(destination.get().getAmount() == 1);
+    }
+
+    @Test
+    void unreadableUnresolvedDestinationFallsBackToWholeSourceRemoval() {
+        ItemStack source = mutableStack(Material.NETHERITE_INGOT, 2);
+        AtomicReference<ItemStack> sourceSlot = new AtomicReference<>(source);
+        AtomicReference<ItemStack> destination = new AtomicReference<>();
+        AtomicInteger reads = new AtomicInteger();
+
+        var result = NetworkVanillaGrabber.commitInventorySourceToOutput(
+            source,
+            sourceSlot::get,
+            sourceSlot::set,
+            () -> {
+                if (reads.getAndIncrement() == 0) {
+                    return null;
+                }
+                throw new IllegalStateException("destination read unavailable");
+            },
+            destination::set);
+
+        assertTrue(result.moved());
+        assertTrue(result.ambiguous());
+        assertTrue(result.failure() instanceof IllegalStateException);
+        assertTrue(sourceSlot.get() == null);
     }
 
     @Test
