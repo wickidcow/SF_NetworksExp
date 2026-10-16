@@ -701,11 +701,16 @@ require("commitInventorySourceToOutput" in vanilla_grabber
         and "sourceSnapshot = detachedExactClone" in vanilla_grabber
         and "transfer = detachedExactClone(sourceSnapshot" in vanilla_grabber
         and "exactlyMatches(sourceSnapshot, destinationCurrent)" in vanilla_grabber
+        and "destinationAfterRollback = destinationReader.get()" in vanilla_grabber
+        and "sourceSnapshot.isSimilar(destinationAfterRollback)" in vanilla_grabber
+        and "expectedSourceRemainder = sourceSnapshot.getAmount() - survivingDestinationAmount" in vanilla_grabber
+        and "reconcileSourceRemainder(" in vanilla_grabber
+        and "sourceWriter.accept(remainder)" in vanilla_grabber
         and "sourceWriter.accept(null)" in vanilla_grabber
         and "destinationWriter.accept(null)" in vanilla_grabber
         and "source removal was attempted to prevent a duplicate" in vanilla_grabber
         and "inventory.setItem(sourceSlot, null)" not in vanilla_grabber,
-        "vanilla cargo grabber must verify destination commit and reconcile source removal failures")
+        "vanilla cargo grabber must verify destination commits, preserve partial surviving amounts, and reconcile source removal failures")
 require("super(!Bukkit.isPrimaryThread())" in root_ready_event,
         "NetworkRootReadyEvent thread mode is not derived from the actual caller")
 require("block.getType() == Material.AIR" in network_controller
