@@ -867,12 +867,16 @@ require("commitIntoEmptyDestination" in vanilla_pusher
         and "destinationWriter.accept(null)" in vanilla_pusher
         and "actual.getAmount() == expected.getAmount()" in vanilla_pusher
         and "expected.isSimilar(actual)" in vanilla_pusher
-        and "transfer == source || !exactlyMatches(source, transfer)" in vanilla_pusher
+        and "snapshot = source.clone()" in vanilla_pusher
+        and "snapshot == source || !exactlyMatches(source, snapshot)" in vanilla_pusher
+        and "transfer = snapshot.clone()" in vanilla_pusher
+        and "transfer == snapshot || !exactlyMatches(snapshot, transfer)" in vanilla_pusher
+        and "exactlyMatches(snapshot, current)" in vanilla_pusher
         and "the source was consumed to prevent a duplicate" in vanilla_pusher
         and "furnace.setFuel(transfer)" not in vanilla_pusher
         and "furnace.setSmelting(transfer)" not in vanilla_pusher
         and "brewer.setContents(contents)" not in vanilla_pusher,
-        "Vanilla Pusher furnace/brewing commits must verify or roll back destination writes before preserving the source")
+        "Vanilla Pusher furnace/brewing commits must use a detached immutable snapshot, verify readback, and roll back before preserving the source")
 
 quantum_get_start = quantum_storage.find("public static ItemStack getItemStack")
 quantum_get_end = quantum_storage.find("public void", quantum_get_start + 1)
