@@ -2,6 +2,7 @@ package io.github.sefiraat.networks.utils;
 
 import com.balugaq.netex.utils.BlockMenuUtil;
 import com.balugaq.netex.utils.InventoryUtil;
+import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
@@ -13,6 +14,7 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Map;
@@ -400,10 +402,14 @@ public final class NetworkTransferUtils {
         try {
             // The detached network offer can trigger callbacks before we commit this source slot.
             // Check even zero-acceptance offers before intentionally discarding their remainder.
-            if (!sourceStillMatches(originalSource, sourceMenu.getItemInSlot(slot))) {
+            final ItemStack currentSource = sourceMenu.getItemInSlot(slot);
+            if (!sourceStillMatches(originalSource, currentSource)) {
+                final String sourceContext =
+                    describeMenuSourceChange(sourceMenu.getLocation(), slot, originalSource, currentSource);
                 compensateCommittedDeposit(root, accessor, originalSource, result.moved(),
-                    sourceMenu.getLocation(), "changed menu source",
-                    new IllegalStateException("The menu input changed during the network deposit"));
+                    sourceMenu.getLocation(), "changed menu source " + sourceContext,
+                    new IllegalStateException(
+                        "The menu input changed during the network deposit " + sourceContext));
                 return MenuDepositResult.FAILED;
             }
             if (voidRemainder && !result.failed()) {
@@ -745,6 +751,74 @@ public final class NetworkTransferUtils {
         return current != null
             && current.getAmount() == expected.getAmount()
             && expected.isSimilar(current);
+    }
+
+    static @NotNull String describeMenuSourceChange(
+        @NotNull Location location,
+        int slot,
+        @NotNull ItemStack before,
+        ItemStack after) {
+
+        /*
+         * This method runs only after the strict source guard has already detected a conflict.
+         * Diagnostics are never allowed to interfere with the compensation path, including when a
+         * third-party ItemStack subclass throws from ordinary identity/metadata accessors.
+         */
+        try {
+            String machineId = "unknown";
+            try {
+                final SlimefunItem machine = StorageCacheUtils.getSlimefunItem(location);
+                if (machine != null) {
+                    machineId = machine.getId();
+                }
+            } catch (RuntimeException | LinkageError ignored) {
+                // Keep the generic machine id.
+            }
+
+            return "[machine=" + machineId
+                + ", slot=" + slot
+                + ", change=" + describeStackChange(before, after)
+                + ", before=" + describeStack(before)
+                + ", after=" + describeStack(after)
+                + ']';
+        } catch (RuntimeException | LinkageError diagnosticFailure) {
+            return "[machine=unknown, slot=" + slot + ", change=diagnostic-error]";
+        }
+    }
+
+    private static @NotNull String describeStackChange(@NotNull ItemStack before, ItemStack after) {
+        if (after == null || after.getType().isAir() || after.getAmount() <= 0) {
+            return "removed";
+        }
+
+        String change = "";
+        if (before.getType() != after.getType()) {
+            change = "type";
+        }
+        if (before.getAmount() != after.getAmount()) {
+            change += change.isEmpty() ? "amount" : "+amount";
+        }
+        if (before.getType() == after.getType() && !before.isSimilar(after)) {
+            change += change.isEmpty() ? "metadata" : "+metadata";
+        }
+        return change.isEmpty() ? "unknown" : change;
+    }
+
+    private static @NotNull String describeStack(ItemStack stack) {
+        if (stack == null || stack.getType().isAir() || stack.getAmount() <= 0) {
+            return "empty";
+        }
+
+        String identity = "material:" + stack.getType();
+        try {
+            final SlimefunItem item = SlimefunItem.getByItem(stack);
+            if (item != null) {
+                identity = "sf:" + item.getId();
+            }
+        } catch (RuntimeException | LinkageError ignored) {
+            // Keep the material fallback if an optional addon cannot resolve the stack.
+        }
+        return identity + 'x' + stack.getAmount();
     }
 
     private static int validAmount(ItemStack stack) {

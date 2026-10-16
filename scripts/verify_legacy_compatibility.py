@@ -696,8 +696,12 @@ require("blockMenu.markDirty()" in vanilla_pusher and "handleFurnace" in vanilla
 require("inventory instanceof CrafterInventory" in vanilla_pusher
         and "commitIntoStorageContents(" in vanilla_pusher
         and "inventory::getStorageContents" in vanilla_pusher
-        and "inventory::setStorageContents" in vanilla_pusher,
-        "vanilla cargo pusher transactional partial-commit/Crafter protection is missing")
+        and "inventory::setStorageContents" in vanilla_pusher
+        and "detachedStorageClone(" in vanilla_pusher
+        and "storageExactlyMatches(" in vanilla_pusher
+        and "sourceHasExpectedRemainder(" in vanilla_pusher
+        and "InventoryUtil.addItem(holder.getInventory(), stack)" not in vanilla_pusher,
+        "vanilla cargo pusher ordinary-inventory path must use detached transactional partial commits")
 require("final ItemStack transfer = stack.clone()" in vanilla_grabber
         and "itemsMatch(committed, transfer, true, true)" in vanilla_grabber
         and "inventory.setItem(sourceSlot, null)" in vanilla_grabber,
@@ -878,15 +882,6 @@ require("commitIntoEmptyDestination" in vanilla_pusher
         and "furnace.setSmelting(transfer)" not in vanilla_pusher
         and "brewer.setContents(contents)" not in vanilla_pusher,
         "Vanilla Pusher furnace/brewing commits must use a detached immutable snapshot, verify readback, and roll back before preserving the source")
-require("commitIntoStorageContents" in vanilla_pusher
-        and "inventory::getStorageContents" in vanilla_pusher
-        and "inventory::setStorageContents" in vanilla_pusher
-        and "detachedStorageClone" in vanilla_pusher
-        and "storageExactlyMatches(desiredSnapshot, current)" in vanilla_pusher
-        and "storageExactlyMatches(beforeSnapshot, afterRollback)" in vanilla_pusher
-        and "source.setAmount(remaining)" in vanilla_pusher
-        and "InventoryUtil.addItem(holder.getInventory(), stack)" not in vanilla_pusher,
-        "Vanilla Pusher ordinary inventories must use copy-on-write destination snapshots and verified source commit")
 
 quantum_get_start = quantum_storage.find("public static ItemStack getItemStack")
 quantum_get_end = quantum_storage.find("public void", quantum_get_start + 1)
