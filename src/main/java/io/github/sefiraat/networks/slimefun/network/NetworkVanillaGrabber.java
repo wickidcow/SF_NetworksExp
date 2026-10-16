@@ -236,8 +236,9 @@ public class NetworkVanillaGrabber extends NetworkDirectional implements SoftCel
      * <p>The source and destination are snapshotted before mutation. The destination receives a second detached
      * copy so in-place normalization cannot redefine the expected item. The vanilla source is cleared only after
      * exact destination readback. If source removal fails, the destination is rolled back before the source is
-     * preserved/restored. If destination rollback itself cannot be verified, source removal is retried
-     * conservatively so the same logical stack is not knowingly left on both sides.</p>
+     * preserved/restored. If destination rollback itself cannot be verified but a readable partial source item
+     * remains in the destination, only that proven surviving amount is removed from the source. Unreadable or
+     * identity-changed destination state falls back to conservative source removal.</p>
      */
     static @NotNull GrabCommitResult commitInventorySourceToOutput(
         @NotNull ItemStack liveSource,
