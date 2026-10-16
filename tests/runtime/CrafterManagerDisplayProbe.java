@@ -18,12 +18,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.network.NetworkRoot;
+import io.github.sefiraat.networks.network.NetworkNode;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
 import io.github.sefiraat.networks.network.stackcaches.BlueprintInstance;
 import io.github.sefiraat.networks.network.stackcaches.QuantumCache;
 import io.github.sefiraat.networks.slimefun.network.QuantumCacheLifecycle;
 import io.github.sefiraat.networks.slimefun.network.NetworkQuantumStorage;
+import io.github.sefiraat.networks.slimefun.network.NetworkController;
 import io.github.sefiraat.networks.slimefun.NetworkSlimefunItems;
 import io.github.sefiraat.networks.utils.Keys;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
@@ -87,6 +89,8 @@ public final class CrafterManagerDisplayProbe extends JavaPlugin {
         probe("Quantum live item conservation", this::verifyQuantumConservation, failures);
         probe("Real Quantum block and break handler", this::verifyRealQuantumBlockBreak, failures);
         probe("Native menu source snapshots and strict guards", this::verifyNativeMenuSnapshots, failures);
+        probe("Connected controller conflict reserves one deterministic loser",
+            this::verifyControllerConflictReservation, failures);
         if (!failures.isEmpty()) throw new AssertionError(String.join("; ", failures));
     }
 
@@ -553,6 +557,50 @@ public final class CrafterManagerDisplayProbe extends JavaPlugin {
                 block.setType(Material.AIR);
                 QuantumCacheLifecycle.clearBreakMarker(location);
             }
+        }
+    }
+
+    /**
+     * Exercises the production topology-discovery path from both controller directions in one
+     * server tick. The delayed cleanup task intentionally sees no physical Slimefun controller
+     * fixture and therefore cannot mutate the disposable world; this case verifies the race
+     * boundary itself: both discoveries must reserve only the same loser.
+     */
+    private void verifyControllerConflictReservation() {
+        final var world = Bukkit.getWorlds().getFirst();
+        // Give the established controller the higher coordinate so this case proves active-root
+        // precedence instead of accidentally succeeding through the coordinate tie-break.
+        final Location newcomer = new Location(world, 92, 100, 0);
+        final Location established = new Location(world, 93, 100, 0);
+        world.getChunkAt(established).load();
+
+        final NodeDefinition establishedDefinition = new NodeDefinition(NodeType.CONTROLLER);
+        final NodeDefinition newcomerDefinition = new NodeDefinition(NodeType.CONTROLLER);
+        NetworkStorage.registerNode(established, establishedDefinition);
+        NetworkStorage.registerNode(newcomer, newcomerDefinition);
+
+        final NetworkRoot establishedRoot = new NetworkRoot(established, NodeType.CONTROLLER, 16);
+        final NetworkRoot newcomerRoot = new NetworkRoot(newcomer, NodeType.CONTROLLER, 16);
+        establishedDefinition.setNode(establishedRoot);
+        newcomerDefinition.setNode(newcomerRoot);
+        NetworkController.getNetworks().put(established, establishedRoot);
+
+        try {
+            establishedRoot.addAllChildren();
+            require(!NetworkNode.isControllerRemovalPending(established),
+                "Existing active controller must survive even when its coordinate sorts later");
+            require(NetworkNode.isControllerRemovalPending(newcomer),
+                "Newly introduced controller must be the single pending cleanup target");
+
+            newcomerRoot.addAllChildren();
+            require(!NetworkNode.isControllerRemovalPending(established),
+                "Reverse discovery must not schedule the established controller");
+            require(NetworkNode.isControllerRemovalPending(newcomer),
+                "Reverse discovery must retain the same newcomer cleanup target");
+        } finally {
+            NetworkController.getNetworks().remove(established, establishedRoot);
+            NetworkStorage.removeNodeOnly(established);
+            NetworkStorage.removeNodeOnly(newcomer);
         }
     }
 

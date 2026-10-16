@@ -1128,6 +1128,182 @@ public class NetworkRoot extends NetworkNode {
         return false;
     }
 
+    /**
+     * Checks several independent item requirements in one storage traversal.
+     *
+     * <p>Auto Crafters preflight an aggregated recipe before withdrawing anything. Calling
+     * {@link #contains(ItemStackCache, int)} once per ingredient repeats the same network walk for
+     * every unique recipe item. This batched probe preserves the exact storage types and quantity
+     * accounting used by the single-request probe while visiting each storage view only once.</p>
+     *
+     * <p>The requests are availability checks only and are never mutated.</p>
+     */
+    public boolean containsAll(@NotNull ItemRequest @NotNull [] requests) {
+        if (requests.length == 0) {
+            return true;
+        }
+
+        final long[] found = new long[requests.length];
+        int remaining = 0;
+        for (ItemRequest request : requests) {
+            if (request != null && request.getAmount() > 0) {
+                remaining++;
+            }
+        }
+        if (remaining == 0) {
+            return true;
+        }
+
+        // Barrels / Quantum / optional deep storage adapters.
+        for (BarrelIdentity barrelIdentity : getOutputAbleBarrels()) {
+            final ItemStack itemStack = barrelIdentity.getItemStack();
+            if (itemStack == null || itemStack.getType() == Material.AIR) {
+                continue;
+            }
+
+            long available;
+            if (barrelIdentity instanceof InfinityBarrel) {
+                available = itemStack.getMaxStackSize() > 1 ? barrelIdentity.getAmount() - 2 : 0;
+            } else {
+                available = barrelIdentity.getAmount();
+            }
+
+            remaining = accumulateAvailability(requests, found, remaining, itemStack, available);
+            if (remaining == 0) {
+                return true;
+            }
+        }
+
+        // Crafter outputs.
+        for (Location crafterLocation : crafters) {
+            BlockMenu blockMenu = StorageCacheUtils.getMenu(crafterLocation);
+            if (blockMenu == null) {
+                continue;
+            }
+            for (int slot : BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW)) {
+                final ItemStack itemStack = blockMenu.getItemInSlot(slot);
+                if (itemStack == null || itemStack.getType() == Material.AIR) {
+                    continue;
+                }
+                remaining = accumulateAvailability(
+                    requests, found, remaining, itemStack, itemStack.getAmount());
+                if (remaining == 0) {
+                    return true;
+                }
+            }
+        }
+
+        // Drawer / cargo storage.
+        for (StorageUnitData cache : getOutputAbleCargoStorageUnitDatas().keySet()) {
+            for (ItemContainer itemContainer : cache.getStoredItemsDirectly()) {
+                final ItemStack itemStack = itemContainer.getItemStack();
+                if (itemStack == null || itemStack.getType() == Material.AIR) {
+                    continue;
+                }
+                remaining = accumulateAvailability(
+                    requests, found, remaining, itemStack, itemContainer.getAmount());
+                if (remaining == 0) {
+                    return true;
+                }
+            }
+        }
+
+        // Advanced Greedy storage.
+        for (Location greedyLocation : advancedGreedyBlocks) {
+            BlockMenu blockMenu = StorageCacheUtils.getMenu(greedyLocation);
+            if (blockMenu == null) {
+                continue;
+            }
+            for (int slot : BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW)) {
+                final ItemStack itemStack = blockMenu.getItemInSlot(slot);
+                if (itemStack == null || itemStack.getType() == Material.AIR) {
+                    continue;
+                }
+                remaining = accumulateAvailability(
+                    requests, found, remaining, itemStack, itemStack.getAmount());
+                if (remaining == 0) {
+                    return true;
+                }
+            }
+        }
+
+        // Greedy storage.
+        for (Location greedyLocation : greedyBlocks) {
+            BlockMenu blockMenu = StorageCacheUtils.getMenu(greedyLocation);
+            if (blockMenu == null) {
+                continue;
+            }
+            final int[] slots = BlockMenuUtil.getSafeTransportSlots(blockMenu, ItemTransportFlow.WITHDRAW);
+            if (slots.length == 0) {
+                continue;
+            }
+            final ItemStack itemStack = blockMenu.getItemInSlot(slots[0]);
+            if (itemStack == null || itemStack.getType() == Material.AIR) {
+                continue;
+            }
+            remaining = accumulateAvailability(
+                requests, found, remaining, itemStack, itemStack.getAmount());
+            if (remaining == 0) {
+                return true;
+            }
+        }
+
+        // Cells.
+        for (Location cellLocation : cells) {
+            BlockMenu blockMenu = StorageCacheUtils.getMenu(cellLocation);
+            if (blockMenu == null || !isRealCell(blockMenu)) {
+                continue;
+            }
+            for (int slot : CELL_AVAILABLE_SLOTS) {
+                final ItemStack itemStack = blockMenu.getItemInSlot(slot);
+                if (itemStack == null || itemStack.getType() == Material.AIR) {
+                    continue;
+                }
+                remaining = accumulateAvailability(
+                    requests, found, remaining, itemStack, itemStack.getAmount());
+                if (remaining == 0) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Applies one available stack to the first still-unsatisfied matching request.
+     * Auto Crafter ingredient plans are already aggregated by item identity, so a physical stack
+     * must never be counted toward two recipe requirements.
+     */
+    static int accumulateAvailability(
+        @NotNull ItemRequest @NotNull [] requests,
+        long @NotNull [] found,
+        int remaining,
+        @NotNull ItemStack available,
+        long amount) {
+
+        if (remaining <= 0 || amount == 0) {
+            return remaining;
+        }
+
+        for (int i = 0; i < requests.length; i++) {
+            final ItemRequest request = requests[i];
+            if (request == null || request.getAmount() <= 0 || found[i] >= request.getAmount()) {
+                continue;
+            }
+            if (!StackUtils.itemsMatch(request, available)) {
+                continue;
+            }
+
+            found[i] += amount;
+            if (found[i] >= request.getAmount()) {
+                remaining--;
+            }
+            break;
+        }
+        return remaining;
+    }
+
     public int getAmount(@NotNull ItemStack itemStack) {
         long totalAmount = 0;
         for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {

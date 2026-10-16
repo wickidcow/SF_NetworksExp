@@ -163,40 +163,56 @@ public abstract class AbstractManualCrafter extends SpecialSlimefunItem implemen
             return false;
         }
 
+        /*
+         * Fire every cancellable craft event before committing the input mutation. Previously the
+         * recipe inputs were consumed first, so a listener cancelling this event could delete the
+         * ingredients. Multi-output recipes could also push an earlier output before a later event
+         * cancelled the same craft. Retain the existing output order and disabled-output behavior,
+         * but make cancellation an all-or-nothing pre-commit decision.
+         */
+        final ItemStack[] preparedOutputs = recipe.getOutput().clone();
+        for (int i = 0; i < preparedOutputs.length; i++) {
+            ItemStack item = preparedOutputs[i];
+            if (item == null || item.getType() == Material.AIR) {
+                continue;
+            }
+
+            SlimefunItem sfi = SlimefunItem.getByItem(item);
+            if (sfi != null && (sfi.isDisabled() || sfi.isDisabledIn(world))) {
+                player.sendMessage(
+                    Lang.getString("messages.unsupported-operation.manual_crafter.disabled-output"));
+                sendFeedback(blockMenu.getLocation(), FeedbackType.DISABLED_OUTPUT);
+                preparedOutputs[i] = null;
+                continue;
+            }
+
+            NetworkCraftEvent event = new NetworkCraftEvent(player, this, recipe.getInput(), item);
+            Bukkit.getPluginManager().callEvent(event);
+            if (event.isCancelled()) {
+                return false;
+            }
+            preparedOutputs[i] = event.getOutput();
+        }
+
         for (int i = 0; i < Math.min(recipe.getInput().length, getInputSlots().length); i++) {
             ItemStack wanted = recipe.getInput()[i];
             if (wanted == null || wanted.getType() == Material.AIR) {
                 continue;
             }
 
-            BlockMenuUtil.consumeItem(blockMenu, getInputSlots()[i], recipe.getInput()[i].getAmount());
+            BlockMenuUtil.consumeItem(blockMenu, getInputSlots()[i], wanted.getAmount());
         }
 
-        for (ItemStack item : recipe.getOutput()) {
-            if (item != null && item.getType() != Material.AIR) {
-                SlimefunItem sfi = SlimefunItem.getByItem(item);
-                if (sfi != null) {
-                    if (sfi.isDisabled() || sfi.isDisabledIn(world)) {
-                        player.sendMessage(
-                            Lang.getString("messages.unsupported-operation.manual_crafter.disabled-output"));
-                        sendFeedback(blockMenu.getLocation(), FeedbackType.DISABLED_OUTPUT);
-                        continue;
-                    }
-                }
-                // fire craft event
-                NetworkCraftEvent event = new NetworkCraftEvent(player, this, recipe.getInput(), item);
-                Bukkit.getPluginManager().callEvent(event);
-                if (event.isCancelled()) {
-                    return false;
-                }
-                item = event.getOutput();
+        for (ItemStack item : preparedOutputs) {
+            if (item == null || item.getType() == Material.AIR) {
+                continue;
+            }
 
-                ItemStack left = BlockMenuUtil.pushItem(blockMenu, ItemStackUtil.getCleanItem(item), getOutputSlots());
-                if (left != null && left.getType() != Material.AIR) {
-                    player.sendMessage(Lang.getString("messages.unsupported-operation.manual_crafter.full-output"));
-                    sendFeedback(blockMenu.getLocation(), FeedbackType.NO_ENOUGH_SPACE);
-                    world.dropItem(blockMenu.getLocation(), left);
-                }
+            ItemStack left = BlockMenuUtil.pushItem(blockMenu, ItemStackUtil.getCleanItem(item), getOutputSlots());
+            if (left != null && left.getType() != Material.AIR) {
+                player.sendMessage(Lang.getString("messages.unsupported-operation.manual_crafter.full-output"));
+                sendFeedback(blockMenu.getLocation(), FeedbackType.NO_ENOUGH_SPACE);
+                world.dropItem(blockMenu.getLocation(), left);
             }
         }
 
@@ -213,7 +229,8 @@ public abstract class AbstractManualCrafter extends SpecialSlimefunItem implemen
         if (world == null) {
             return false;
         }
-        // ItemStack : ItemStack.getAmount()
+
+        // Preserve the historical ItemStack-key grouping used by authored recipes.
         Map<ItemStack, Integer> wanted = new HashMap<>();
         for (int i = 0; i < Math.min(recipe.getInput().length, getInputSlots().length); i++) {
             ItemStack wantedItem = recipe.getInput()[i];
@@ -228,7 +245,6 @@ public abstract class AbstractManualCrafter extends SpecialSlimefunItem implemen
             }
         }
 
-        // ItemStack : ItemStack.getAmount()
         Map<ItemStack, Integer> have = new HashMap<>();
         for (int slot : getInputSlots()) {
             ItemStack itemInSlot = blockMenu.getItemInSlot(slot);
@@ -245,7 +261,9 @@ public abstract class AbstractManualCrafter extends SpecialSlimefunItem implemen
 
         for (Map.Entry<ItemStack, Integer> entry : wanted.entrySet()) {
             if (!have.containsKey(entry.getKey()) || have.get(entry.getKey()) < entry.getValue()) {
-                break;
+                // Missing ingredients are a failed preflight. The previous break continued into output
+                // handling and could complete a craft without the complete shapeless recipe.
+                return false;
             }
         }
 
@@ -254,8 +272,12 @@ public abstract class AbstractManualCrafter extends SpecialSlimefunItem implemen
             return false;
         }
 
-        // Consume items
+        /*
+         * Do not structurally modify the requirement map while iterating it. Track each ingredient's
+         * remaining quantity locally; successful preflight guarantees the matching amount exists.
+         */
         for (Map.Entry<ItemStack, Integer> entry : wanted.entrySet()) {
+            int remaining = entry.getValue();
             for (int slot : getInputSlots()) {
                 ItemStack itemInSlot = blockMenu.getItemInSlot(slot);
                 if (itemInSlot == null || itemInSlot.getType() == Material.AIR) {
@@ -263,20 +285,23 @@ public abstract class AbstractManualCrafter extends SpecialSlimefunItem implemen
                 }
 
                 if (StackUtils.itemsMatch(itemInSlot, entry.getKey())) {
-                    int amount = Math.min(entry.getValue(), itemInSlot.getAmount());
-                    BlockMenuUtil.consumeItem(blockMenu, slot, amount);
-
-                    wanted.put(entry.getKey(), wanted.get(entry.getKey()) - amount);
+                    int amount = Math.min(remaining, itemInSlot.getAmount());
+                    if (amount > 0) {
+                        BlockMenuUtil.consumeItem(blockMenu, slot, amount);
+                        remaining -= amount;
+                    }
                 }
 
-                if (wanted.get(entry.getKey()) <= 0) {
-                    wanted.remove(entry.getKey());
+                if (remaining <= 0) {
                     break;
                 }
             }
-        }
 
-        assert wanted.isEmpty();
+            if (remaining > 0) {
+                throw new IllegalStateException(
+                    "Manual crafter shapeless preflight and consumption disagreed for " + entry.getKey().getType());
+            }
+        }
 
         for (ItemStack item : recipe.getOutput()) {
             if (item != null && item.getType() != Material.AIR) {
