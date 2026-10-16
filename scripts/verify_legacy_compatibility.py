@@ -714,7 +714,7 @@ require("NetworkRoot previous = NETWORKS.put(location, candidate);" in network_c
         "controller rebuild success handling reuses the previous local variable name")
 require('"recipe-aware-buffer-batches"' in abstract_network_pusher
         and "ChatUtils.awaitInput(player" in abstract_network_pusher
-        and "Calculator.calculate(input).intValue()" in abstract_network_pusher
+        and "Calculator.calculate(input).intValueExact()" in abstract_network_pusher
         and "clickAction.isShiftClicked()" in abstract_network_pusher
         and "getRecipeBufferBatches(blockMenu.getLocation())" in abstract_network_pusher
         and "RECIPE_BUFFER_BATCHES.putIfAbsent(location.clone(), value)" in abstract_network_pusher
