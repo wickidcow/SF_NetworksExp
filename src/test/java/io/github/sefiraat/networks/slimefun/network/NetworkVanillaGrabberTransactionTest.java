@@ -175,8 +175,10 @@ class NetworkVanillaGrabberTransactionTest {
         assertTrue(result.moved());
         assertTrue(result.ambiguous());
         assertTrue(result.failure() instanceof IllegalStateException);
-        assertTrue(sourceSlot.get() == source);
+        assertTrue(sourceSlot.get() != null);
+        assertTrue(sourceSlot.get() != source);
         assertTrue(sourceSlot.get().getAmount() == 1);
+        assertTrue(source.isSimilar(sourceSlot.get()));
         assertTrue(destination.get().getAmount() == 1);
     }
 
