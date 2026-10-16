@@ -40,10 +40,7 @@ class NetworkVanillaPusherTransactionTest {
     @Test
     void exactDestinationCommitConsumesSourceOnce() {
         ItemStack source = source(Material.DIAMOND, 7);
-        ItemStack transfer = transfer(Material.DIAMOND, 7);
-        when(source.clone()).thenReturn(transfer);
-        when(source.isSimilar(transfer)).thenReturn(true);
-        when(transfer.isSimilar(transfer)).thenReturn(true);
+        ItemStack transfer = exactTransferChain(source, Material.DIAMOND, 7);
 
         AtomicReference<ItemStack> destination = new AtomicReference<>();
         var result = NetworkVanillaPusher.commitIntoEmptyDestination(
@@ -89,11 +86,14 @@ class NetworkVanillaPusherTransactionTest {
     @Test
     void normalizedDestinationRollsBackAndPreservesSource() {
         ItemStack source = source(Material.DIAMOND, 7);
+        ItemStack snapshot = transfer(Material.DIAMOND, 7);
         ItemStack transfer = transfer(Material.DIAMOND, 7);
         ItemStack normalized = transfer(Material.DIAMOND, 7);
-        when(source.clone()).thenReturn(transfer);
-        when(source.isSimilar(transfer)).thenReturn(true);
-        when(transfer.isSimilar(normalized)).thenReturn(false);
+        when(source.clone()).thenReturn(snapshot);
+        when(source.isSimilar(snapshot)).thenReturn(true);
+        when(snapshot.clone()).thenReturn(transfer);
+        when(snapshot.isSimilar(transfer)).thenReturn(true);
+        when(snapshot.isSimilar(normalized)).thenReturn(false);
 
         AtomicReference<ItemStack> destination = new AtomicReference<>();
         AtomicInteger writes = new AtomicInteger();
@@ -117,12 +117,39 @@ class NetworkVanillaPusherTransactionTest {
     }
 
     @Test
+    void inPlaceDestinationNormalizationCannotRedefineSuccessfulCommit() {
+        ItemStack source = source(Material.DIAMOND, 7);
+        ItemStack snapshot = transfer(Material.DIAMOND, 7);
+        ItemStack transfer = transfer(Material.DIAMOND, 7);
+        when(source.clone()).thenReturn(snapshot);
+        when(source.isSimilar(snapshot)).thenReturn(true);
+        when(snapshot.clone()).thenReturn(transfer);
+        when(snapshot.isSimilar(transfer)).thenReturn(true);
+
+        AtomicReference<ItemStack> destination = new AtomicReference<>();
+        var result = NetworkVanillaPusher.commitIntoEmptyDestination(
+            source,
+            destination::get,
+            item -> {
+                if (item == null) {
+                    destination.set(null);
+                } else {
+                    when(item.getAmount()).thenReturn(1);
+                    when(snapshot.isSimilar(item)).thenReturn(true);
+                    destination.set(item);
+                }
+            });
+
+        assertFalse(result.moved());
+        assertFalse(result.ambiguous());
+        assertTrue(destination.get() == null);
+        verify(source, never()).setAmount(0);
+    }
+
+    @Test
     void writeThenThrowStillConsumesCommittedSource() {
         ItemStack source = source(Material.GOLD_INGOT, 4);
-        ItemStack transfer = transfer(Material.GOLD_INGOT, 4);
-        when(source.clone()).thenReturn(transfer);
-        when(source.isSimilar(transfer)).thenReturn(true);
-        when(transfer.isSimilar(transfer)).thenReturn(true);
+        ItemStack transfer = exactTransferChain(source, Material.GOLD_INGOT, 4);
 
         AtomicReference<ItemStack> destination = new AtomicReference<>();
         var result = NetworkVanillaPusher.commitIntoEmptyDestination(
@@ -142,9 +169,7 @@ class NetworkVanillaPusherTransactionTest {
     @Test
     void throwBeforeWritePreservesSource() {
         ItemStack source = source(Material.IRON_INGOT, 3);
-        ItemStack transfer = transfer(Material.IRON_INGOT, 3);
-        when(source.clone()).thenReturn(transfer);
-        when(source.isSimilar(transfer)).thenReturn(true);
+        exactTransferChain(source, Material.IRON_INGOT, 3);
 
         AtomicReference<ItemStack> destination = new AtomicReference<>();
         var result = NetworkVanillaPusher.commitIntoEmptyDestination(
@@ -163,11 +188,14 @@ class NetworkVanillaPusherTransactionTest {
     @Test
     void failedRollbackConsumesSourceInsteadOfLeavingDuplicate() {
         ItemStack source = source(Material.EMERALD, 5);
+        ItemStack snapshot = transfer(Material.EMERALD, 5);
         ItemStack transfer = transfer(Material.EMERALD, 5);
         ItemStack normalized = transfer(Material.EMERALD, 5);
-        when(source.clone()).thenReturn(transfer);
-        when(source.isSimilar(transfer)).thenReturn(true);
-        when(transfer.isSimilar(normalized)).thenReturn(false);
+        when(source.clone()).thenReturn(snapshot);
+        when(source.isSimilar(snapshot)).thenReturn(true);
+        when(snapshot.clone()).thenReturn(transfer);
+        when(snapshot.isSimilar(transfer)).thenReturn(true);
+        when(snapshot.isSimilar(normalized)).thenReturn(false);
 
         AtomicReference<ItemStack> destination = new AtomicReference<>();
         var result = NetworkVanillaPusher.commitIntoEmptyDestination(
@@ -204,6 +232,16 @@ class NetworkVanillaPusherTransactionTest {
         assertTrue(writes.get() == 0);
         verify(source, never()).clone();
         verify(source, never()).setAmount(0);
+    }
+
+    private static ItemStack exactTransferChain(ItemStack source, Material type, int amount) {
+        ItemStack snapshot = transfer(type, amount);
+        ItemStack write = transfer(type, amount);
+        when(source.clone()).thenReturn(snapshot);
+        when(source.isSimilar(snapshot)).thenReturn(true);
+        when(snapshot.clone()).thenReturn(write);
+        when(snapshot.isSimilar(write)).thenReturn(true);
+        return write;
     }
 
     private static ItemStack source(Material type, int amount) {
