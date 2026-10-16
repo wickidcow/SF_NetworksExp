@@ -111,6 +111,9 @@ public class NetworkController extends NetworkObject {
                 if (circuitBreakerEnabled && !controllerCircuitBreaker.canAttempt(location, now)) {
                     return;
                 }
+                if (NetworkNode.isControllerRemovalPending(location)) {
+                    return;
+                }
 
                 NetworkRoot candidate = null;
                 try {
@@ -147,6 +150,13 @@ public class NetworkController extends NetworkObject {
                             recordFlow.getOrDefault(location, false),
                             records.get(location));
                         candidate.addAllChildren();
+                        if (NetworkNode.isControllerRemovalPending(location)) {
+                            // This controller lost deterministic conflict resolution. Do not publish a temporary
+                            // root or fire a ready event while its synchronous removal is pending.
+                            NetworkStorage.clearRuntimeAssignments(candidate);
+                            DIRTY_CONTROLLERS.add(controllerKey);
+                            return;
+                        }
                         final long rebuildNanos = Math.max(0L, System.nanoTime() - rebuildStartedNanos);
                         FULL_TOPOLOGY_REBUILDS.increment();
                         FULL_TOPOLOGY_REBUILD_NANOS.add(rebuildNanos);
