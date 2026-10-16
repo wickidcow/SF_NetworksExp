@@ -181,6 +181,34 @@ class NetworkVanillaGrabberTransactionTest {
     }
 
     @Test
+    void partialReconciliationUsesSourceWriterWhenReaderReturnsDetachedStack() {
+        ItemStack liveSource = mutableStack(Material.DIAMOND, 2);
+        AtomicReference<ItemStack> sourceSlot = new AtomicReference<>(mutableStack(Material.DIAMOND, 2));
+        AtomicReference<ItemStack> destination = new AtomicReference<>();
+        AtomicInteger destinationWrites = new AtomicInteger();
+
+        var result = NetworkVanillaGrabber.commitInventorySourceToOutput(
+            liveSource,
+            sourceSlot::get,
+            sourceSlot::set,
+            destination::get,
+            item -> {
+                if (destinationWrites.getAndIncrement() == 0) {
+                    item.setAmount(1);
+                    destination.set(item);
+                } else {
+                    throw new IllegalStateException("destination rollback refused");
+                }
+            });
+
+        assertTrue(result.moved());
+        assertTrue(result.ambiguous());
+        assertTrue(sourceSlot.get() != liveSource);
+        assertTrue(sourceSlot.get().getAmount() == 1);
+        assertTrue(destination.get().getAmount() == 1);
+    }
+
+    @Test
     void unreadableUnresolvedDestinationFallsBackToWholeSourceRemoval() {
         ItemStack source = mutableStack(Material.NETHERITE_INGOT, 2);
         AtomicReference<ItemStack> sourceSlot = new AtomicReference<>(source);
