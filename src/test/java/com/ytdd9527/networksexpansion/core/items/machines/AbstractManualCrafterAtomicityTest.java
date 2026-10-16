@@ -1,10 +1,13 @@
 package com.ytdd9527.networksexpansion.core.items.machines;
 
 import com.balugaq.netex.api.data.SuperRecipe;
+import com.balugaq.netex.api.enums.FeedbackType;
 import com.balugaq.netex.api.interfaces.FeedbackSendable;
 import com.balugaq.netex.utils.BlockMenuUtil;
 import com.balugaq.netex.utils.Lang;
+import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.events.NetworkCraftEvent;
+import io.github.sefiraat.networks.managers.SupportedPluginManager;
 import io.github.sefiraat.networks.utils.StackUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
@@ -15,6 +18,7 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.PluginManager;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
@@ -36,6 +40,26 @@ import static org.mockito.Mockito.when;
 class AbstractManualCrafterAtomicityTest {
     private static final int[] INPUT_SLOTS = {0, 1, 2};
     private static final int[] OUTPUT_SLOTS = {8};
+
+    @BeforeAll
+    static void initializeFeedbackTypes() throws ClassNotFoundException {
+        try (MockedStatic<Networks> networks = mockStatic(Networks.class);
+             MockedStatic<SupportedPluginManager> integrations = mockStatic(SupportedPluginManager.class);
+             MockedStatic<Lang> lang = mockStatic(Lang.class)) {
+            Networks plugin = mock(Networks.class);
+            SupportedPluginManager supported = mock(SupportedPluginManager.class);
+            networks.when(Networks::getInstance).thenReturn(plugin);
+            networks.when(Networks::getSupportedPluginManager).thenReturn(supported);
+            integrations.when(SupportedPluginManager::getInstance).thenReturn(supported);
+            when(plugin.getName()).thenReturn("Networks");
+            when(plugin.namespace()).thenReturn("networks");
+            when(supported.isInfinityExpansion()).thenReturn(false);
+            lang.when(() -> Lang.getString(org.mockito.ArgumentMatchers.anyString()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+            Class.forName(FeedbackType.class.getName());
+        }
+    }
 
     private AbstractManualCrafter crafter;
     private BlockMenu menu;
