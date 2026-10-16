@@ -305,14 +305,16 @@ public class NetworkVanillaGrabber extends NetworkDirectional implements SoftCel
             failure = appendFailure(failure, rollbackFailure);
         }
 
-        boolean destinationRolledBack = false;
+        boolean destinationRollbackKnown = true;
+        ItemStack destinationAfterRollback = null;
         try {
-            destinationRolledBack = isEmpty(destinationReader.get());
+            destinationAfterRollback = destinationReader.get();
         } catch (RuntimeException | LinkageError readFailure) {
             failure = appendFailure(failure, readFailure);
+            destinationRollbackKnown = false;
         }
 
-        if (destinationRolledBack) {
+        if (destinationRollbackKnown && isEmpty(destinationAfterRollback)) {
             try {
                 final ItemStack sourceCurrent = sourceReader.get();
                 if (exactlyMatches(sourceSnapshot, sourceCurrent)) {
@@ -333,8 +335,44 @@ public class NetworkVanillaGrabber extends NetworkDirectional implements SoftCel
             return new GrabCommitResult(false, true, failure);
         }
 
-        // Destination may still contain our attempted transfer. Remove the source conservatively to avoid
-        // knowingly retaining the same logical stack in both places.
+        /*
+         * Destination rollback is unresolved. If its surviving state is readable and still the same
+         * logical item, reconcile by amount instead of deleting the entire source stack. A destination
+         * that normalized 2 items down to 1 must leave 1 at the source; clearing all 2 would avoid a
+         * duplicate by silently losing one item.
+         *
+         * If the destination is unreadable or its identity changed, the surviving amount cannot be
+         * proven. In that genuinely ambiguous case retain the conservative whole-source removal fallback.
+         */
+        if (failure == null) {
+            failure = new IllegalStateException("Vanilla Grabber destination could not be rolled back");
+        }
+
+        if (destinationRollbackKnown
+            && !isEmpty(destinationAfterRollback)
+            && sourceSnapshot.isSimilar(destinationAfterRollback)
+            && destinationAfterRollback.getAmount() > 0
+            && destinationAfterRollback.getAmount() <= sourceSnapshot.getAmount()) {
+
+            final int survivingDestinationAmount = destinationAfterRollback.getAmount();
+            final int expectedSourceRemainder = sourceSnapshot.getAmount() - survivingDestinationAmount;
+            final boolean reconciled = reconcileSourceRemainder(
+                sourceSnapshot,
+                liveSource,
+                sourceReader,
+                expectedSourceRemainder,
+                failure);
+
+            if (reconciled) {
+                return new GrabCommitResult(true, true, failure);
+            }
+
+            failure = appendFailure(
+                failure,
+                new IllegalStateException(
+                    "Vanilla Grabber could not reconcile the source remainder after a partial destination commit"));
+        }
+
         boolean sourceRemoved = false;
         try {
             sourceWriter.accept(null);
@@ -356,9 +394,6 @@ public class NetworkVanillaGrabber extends NetworkDirectional implements SoftCel
             }
         }
 
-        if (failure == null) {
-            failure = new IllegalStateException("Vanilla Grabber destination could not be rolled back");
-        }
         if (!sourceRemoved) {
             failure = appendFailure(
                 failure,
@@ -366,6 +401,56 @@ public class NetworkVanillaGrabber extends NetworkDirectional implements SoftCel
                     "Vanilla Grabber could not remove the source after an unresolved destination commit"));
         }
         return new GrabCommitResult(sourceRemoved, true, failure);
+    }
+
+    private static boolean reconcileSourceRemainder(
+        @NotNull ItemStack original,
+        @NotNull ItemStack liveSource,
+        @NotNull Supplier<ItemStack> sourceReader,
+        int expectedAmount,
+        @NotNull Throwable failure) {
+
+        try {
+            final ItemStack current = sourceReader.get();
+            if (expectedAmount <= 0) {
+                if (isEmpty(current)) {
+                    return true;
+                }
+                if (!exactlyMatches(original, current)) {
+                    return false;
+                }
+                liveSource.setAmount(0);
+                return isEmpty(sourceReader.get());
+            }
+
+            if (current == null
+                || current.getAmount() != original.getAmount()
+                || !original.isSimilar(current)) {
+                return current != null
+                    && current.getAmount() == expectedAmount
+                    && original.isSimilar(current);
+            }
+
+            liveSource.setAmount(expectedAmount);
+            final ItemStack after = sourceReader.get();
+            return after != null
+                && after.getAmount() == expectedAmount
+                && original.isSimilar(after);
+        } catch (RuntimeException | LinkageError reconciliationFailure) {
+            failure.addSuppressed(reconciliationFailure);
+            try {
+                final ItemStack afterFailure = sourceReader.get();
+                if (expectedAmount <= 0) {
+                    return isEmpty(afterFailure);
+                }
+                return afterFailure != null
+                    && afterFailure.getAmount() == expectedAmount
+                    && original.isSimilar(afterFailure);
+            } catch (RuntimeException | LinkageError readFailure) {
+                failure.addSuppressed(readFailure);
+                return false;
+            }
+        }
     }
 
     private static @NotNull ItemStack detachedExactClone(
