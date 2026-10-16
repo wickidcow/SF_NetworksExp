@@ -131,7 +131,7 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
                     "&eEnter the Recipe-Aware batch target (1-" + RecipeAwarePusherPlanner.MAX_BUFFERED_BATCHES + ")"));
                 ChatUtils.awaitInput(player, input -> {
                     try {
-                        final int value = Calculator.calculate(input).intValue();
+                        final int value = Calculator.calculate(input).intValueExact();
                         if (!RecipeAwarePusherPlanner.isValidBufferedBatches(value)) {
                             player.sendMessage(ChatColors.color(
                                 "&cEnter a whole number between "
@@ -153,8 +153,13 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
                                 createRecipeAwareModeStack(location, isRecipeAware(menu)));
                             menu.open(player);
                         }
-                    } catch (NumberFormatException exception) {
-                        player.sendMessage(ChatColors.color("&c" + exception.getMessage()));
+                    } catch (NumberFormatException | ArithmeticException exception) {
+                        player.sendMessage(ChatColors.color(
+                            "&cEnter a whole number between "
+                                + RecipeAwarePusherPlanner.MIN_BUFFERED_BATCHES
+                                + " and "
+                                + RecipeAwarePusherPlanner.MAX_BUFFERED_BATCHES
+                                + "."));
                         final BlockMenu menu = StorageCacheUtils.getMenu(location);
                         if (menu != null) {
                             menu.open(player);
