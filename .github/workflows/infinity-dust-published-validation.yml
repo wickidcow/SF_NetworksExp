@@ -1,0 +1,135 @@
+name: Infinity Dust Extractor published-pair validation
+
+on:
+  push:
+    branches: ['validation/infinity-dust-1.0.57-ie2-2.0.14-20261016']
+    paths:
+      - '.github/workflows/infinity-dust-published-validation.yml'
+      - 'tests/runtime/InfinityDustTransferProbe.java'
+      - 'scripts/prepare_infinity_dust_probe.py'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  extractor:
+    name: Published pair / ${{ matrix.server }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    strategy:
+      fail-fast: false
+      matrix:
+        server: [purpur-1.21.11, paper-26.3]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Download and verify exact public plugin inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .ci/core .ci/networks .ci/infinity .ci/control
+          curl -fLsS --retry 3 --max-time 180 \
+            https://github.com/wickidcow/Slimefun-Legacy/releases/download/v4.1.74/Slimefun-Legacy4.1.74.jar \
+            -o .ci/core/Slimefun-Legacy4.1.74.jar
+          curl -fLsS --retry 3 --max-time 180 \
+            https://github.com/wickidcow/SF_NetworksExp/releases/download/v1.0.57/SF_Networks1.0.57.jar \
+            -o .ci/networks/SF_Networks1.0.57.jar
+          curl -fLsS --retry 3 --max-time 180 \
+            https://github.com/wickidcow/SF_InfinityExpansion2/releases/download/v2.0.14/SF_InfinityExpansion2.0.14.jar \
+            -o .ci/infinity/SF_InfinityExpansion2.0.14.jar
+          curl -fLsS --retry 3 --max-time 180 \
+            https://github.com/wickidcow/SF_InfinityExpansion2/releases/download/v2.0.13/SF_InfinityExpansion2.0.13.jar \
+            -o .ci/control/SF_InfinityExpansion2.0.13.jar
+          printf '%s\n' \
+            '72a524d7c0d6f75a9decbf06679515887273ae53673d3f5ee38f355bef952c96  .ci/core/Slimefun-Legacy4.1.74.jar' \
+            '125a54605244f3ecaa2d873cca4dff7a78ff7772a445ad5d6f4c38f3603d57ab  .ci/networks/SF_Networks1.0.57.jar' \
+            '4c3d5a19b751d13f769937d6e5faf18f67ddb40465db3d9759a1d8800c0cbdb9  .ci/infinity/SF_InfinityExpansion2.0.14.jar' \
+            'a2f8a1ac7ada18c7a6cf774b09158e1567c6cace478bed10a160a897ce97198e  .ci/control/SF_InfinityExpansion2.0.13.jar' | sha256sum --check
+          python3 scripts/prepare_infinity_dust_probe.py
+
+      - name: Pin actual server runtime
+        env:
+          SERVER: ${{ matrix.server }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$SERVER" = purpur-1.21.11 ]; then
+            curl -fLsS --retry 3 --max-time 180 \
+              https://api.purpurmc.org/v2/purpur/1.21.11/2568/download \
+              -o .ci/server.jar
+            echo 'ee199511bf0a970ee8459fe3a351703fec37293f00bc2de1c5cb746c7e4acc34  .ci/server.jar' | sha256sum --check
+          else
+            curl -fLsS --retry 3 --max-time 180 \
+              -H 'User-Agent: SF_NetworksExp-CI/1.0 (https://github.com/wickidcow/SF_NetworksExp)' \
+              https://fill.papermc.io/v3/projects/paper/versions/26.3/builds \
+              -o .ci/paper-builds.json
+            python3 scripts/prepare_paper_26_3_runtime.py \
+              .ci/paper-builds.json .ci/paper.json .ci/paper.url .ci/paper.sha256
+            curl -fLsS --retry 3 --max-time 360 \
+              -H 'User-Agent: SF_NetworksExp-CI/1.0 (https://github.com/wickidcow/SF_NetworksExp)' \
+              "$(cat .ci/paper.url)" -o .ci/server.jar
+            printf '%s  .ci/server.jar\n' "$(cat .ci/paper.sha256)" | sha256sum --check
+          fi
+
+      - name: Run published Networks 1.0.57 with published IE2 2.0.14
+        env:
+          SERVER: ${{ matrix.server }}
+          INFINITY_JAR: ${{ github.workspace }}/.ci/infinity/SF_InfinityExpansion2.0.14.jar
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXTRA=()
+          if [ "$SERVER" = paper-26.3 ]; then EXTRA=(.ci/paper.json); fi
+          python3 scripts/infinity_dust_runtime_probe.py \
+            .ci/core/Slimefun-Legacy4.1.74.jar \
+            .ci/networks/SF_Networks1.0.57.jar \
+            .ci/server.jar \
+            build/extractor-published \
+            "${EXTRA[@]}"
+
+      - name: Require IE2 2.0.13 to expose the asynchronous Dust Extractor ticker
+        env:
+          SERVER: ${{ matrix.server }}
+          INFINITY_JAR: ${{ github.workspace }}/.ci/control/SF_InfinityExpansion2.0.13.jar
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXTRA=()
+          if [ "$SERVER" = paper-26.3 ]; then EXTRA=(.ci/paper.json); fi
+          set +e
+          python3 scripts/infinity_dust_runtime_probe.py \
+            .ci/core/Slimefun-Legacy4.1.74.jar \
+            .ci/networks/SF_Networks1.0.57.jar \
+            .ci/server.jar \
+            build/extractor-ie2-2.0.13 \
+            "${EXTRA[@]}"
+          STATUS=$?
+          set -e
+          test "$STATUS" -ne 0
+          grep -F 'DUST_EXTRACTOR_TICKER_ASYNC' \
+            build/extractor-ie2-2.0.13/plugins/infinity-dust-result.txt
+          echo 'NEGATIVE CONTROL PASS: IE2 2.0.13 exposes the asynchronous Dust Extractor ticker'
+
+      - name: Retain exact-pair evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: infinity-dust-published-${{ matrix.server }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            build/extractor-published/inputs.json
+            build/extractor-published/console.log
+            build/extractor-published/patch.log
+            build/extractor-published/plugins/infinity-dust-result.txt
+            build/extractor-ie2-2.0.13/inputs.json
+            build/extractor-ie2-2.0.13/console.log
+            build/extractor-ie2-2.0.13/patch.log
+            build/extractor-ie2-2.0.13/plugins/infinity-dust-result.txt
