@@ -11,7 +11,6 @@ import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
-import io.github.sefiraat.networks.utils.StackUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
@@ -31,6 +30,10 @@ import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+import java.util.logging.Level;
 
 @SuppressWarnings({"DuplicatedCode", "GrazieInspection"})
 public class NetworkVanillaPusher extends NetworkDirectional implements SoftCellBannable {
@@ -138,9 +141,9 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
         final int before = stack.getAmount();
         boolean moved = false;
         if (inventory instanceof FurnaceInventory furnace) {
-            moved = handleFurnace(stack, furnace);
+            moved = handleFurnace(stack, furnace, blockMenu.getLocation());
         } else if (inventory instanceof BrewerInventory brewer) {
-            moved = handleBrewingStand(stack, brewer);
+            moved = handleBrewingStand(stack, brewer, blockMenu.getLocation());
         } else if (wildChests && isChest) {
             sendDebugMessage(block.getLocation(), Lang.getString("messages.debug.wildchests-trigger-failed"));
         } else {
@@ -157,66 +160,265 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
         }
     }
 
-    private boolean handleFurnace(@NotNull ItemStack stack, @NotNull FurnaceInventory furnace) {
-        final ItemStack transfer = stack.clone();
+    private boolean handleFurnace(
+        @NotNull ItemStack stack,
+        @NotNull FurnaceInventory furnace,
+        @NotNull org.bukkit.Location location) {
+
         if (stack.getType().isFuel()
-            && (furnace.getFuel() == null || furnace.getFuel().getType() == Material.AIR)) {
-            furnace.setFuel(transfer);
-            if (StackUtils.itemsMatch(furnace.getFuel(), transfer, true, true)) {
-                stack.setAmount(0);
-                return true;
-            }
-        } else if (furnace.canSmelt(stack)
-            && (furnace.getSmelting() == null || furnace.getSmelting().getType() == Material.AIR)) {
-            furnace.setSmelting(transfer);
-            if (StackUtils.itemsMatch(furnace.getSmelting(), transfer, true, true)) {
-                stack.setAmount(0);
-                return true;
-            }
+            && isEmpty(furnace.getFuel())) {
+            return finishDestinationCommit(
+                commitIntoEmptyDestination(stack, furnace::getFuel, furnace::setFuel),
+                location,
+                "furnace fuel");
         }
+
+        if (furnace.canSmelt(stack)
+            && isEmpty(furnace.getSmelting())) {
+            return finishDestinationCommit(
+                commitIntoEmptyDestination(stack, furnace::getSmelting, furnace::setSmelting),
+                location,
+                "furnace input");
+        }
+
         return false;
     }
 
-    private boolean handleBrewingStand(@NotNull ItemStack stack, @NotNull BrewerInventory brewer) {
-        final ItemStack transfer = stack.clone();
+    private boolean handleBrewingStand(
+        @NotNull ItemStack stack,
+        @NotNull BrewerInventory brewer,
+        @NotNull org.bukkit.Location location) {
+
         if (stack.getType() == Material.BLAZE_POWDER) {
-            if (brewer.getFuel() == null || brewer.getFuel().getType() == Material.AIR) {
-                brewer.setFuel(transfer);
-                if (StackUtils.itemsMatch(brewer.getFuel(), transfer, true, true)) {
-                    stack.setAmount(0);
-                    return true;
-                }
-            } else if (brewer.getIngredient() == null || brewer.getIngredient().getType() == Material.AIR) {
-                brewer.setIngredient(transfer);
-                if (StackUtils.itemsMatch(brewer.getIngredient(), transfer, true, true)) {
-                    stack.setAmount(0);
-                    return true;
-                }
+            if (isEmpty(brewer.getFuel())) {
+                return finishDestinationCommit(
+                    commitIntoEmptyDestination(stack, brewer::getFuel, brewer::setFuel),
+                    location,
+                    "brewing fuel");
+            }
+
+            if (isEmpty(brewer.getIngredient())) {
+                return finishDestinationCommit(
+                    commitIntoEmptyDestination(stack, brewer::getIngredient, brewer::setIngredient),
+                    location,
+                    "brewing ingredient");
             }
         } else if (stack.getType() == Material.POTION
             || stack.getType() == Material.SPLASH_POTION
             || stack.getType() == Material.LINGERING_POTION) {
             for (int i = 0; i < 3; i++) {
-                final ItemStack stackInSlot = brewer.getContents()[i];
-                if (stackInSlot == null || stackInSlot.getType() == Material.AIR) {
-                    final ItemStack[] contents = brewer.getContents();
-                    contents[i] = transfer;
-                    brewer.setContents(contents);
-                    final ItemStack placed = brewer.getContents()[i];
-                    if (StackUtils.itemsMatch(placed, transfer, true, true)) {
-                        stack.setAmount(0);
+                final int bottleSlot = i;
+                if (isEmpty(brewer.getItem(bottleSlot))) {
+                    final DestinationCommitResult result = commitIntoEmptyDestination(
+                        stack,
+                        () -> brewer.getItem(bottleSlot),
+                        item -> brewer.setItem(bottleSlot, item));
+                    if (finishDestinationCommit(result, location, "brewing bottle slot " + bottleSlot)) {
                         return true;
                     }
                 }
             }
-        } else if (brewer.getIngredient() == null || brewer.getIngredient().getType() == Material.AIR) {
-            brewer.setIngredient(transfer);
-            if (StackUtils.itemsMatch(brewer.getIngredient(), transfer, true, true)) {
-                stack.setAmount(0);
-                return true;
+        } else if (isEmpty(brewer.getIngredient())) {
+            return finishDestinationCommit(
+                commitIntoEmptyDestination(stack, brewer::getIngredient, brewer::setIngredient),
+                location,
+                "brewing ingredient");
+        }
+
+        return false;
+    }
+
+    /**
+     * Commits a live pusher stack into an empty special inventory slot without leaving a duplicate
+     * when a Bukkit/third-party setter writes, normalizes, or throws before returning.
+     *
+     * <p>The destination is written from a detached transfer copy. A separate immutable snapshot is
+     * retained for exact amount+metadata readback so an in-place destination normalization cannot redefine
+     * what counts as a successful commit. The source is consumed only after that exact readback. A mismatched
+     * destination is rolled back to empty. If rollback cannot be verified and
+     * the destination remains non-empty (or cannot be read), the source is consumed conservatively:
+     * once a write may have survived, retaining the source would create a duplicate.</p>
+     */
+    static @NotNull DestinationCommitResult commitIntoEmptyDestination(
+        @NotNull ItemStack source,
+        @NotNull Supplier<ItemStack> destinationReader,
+        @NotNull Consumer<ItemStack> destinationWriter) {
+
+        if (isEmpty(source)) {
+            return DestinationCommitResult.NONE;
+        }
+
+        final ItemStack before;
+        try {
+            before = destinationReader.get();
+        } catch (RuntimeException | LinkageError readFailure) {
+            return new DestinationCommitResult(false, false, readFailure);
+        }
+        if (!isEmpty(before)) {
+            return DestinationCommitResult.NONE;
+        }
+
+        final ItemStack snapshot;
+        final ItemStack transfer;
+        try {
+            snapshot = source.clone();
+            if (snapshot == source || !exactlyMatches(source, snapshot)) {
+                return new DestinationCommitResult(
+                    false,
+                    false,
+                    new IllegalStateException(
+                        "Vanilla Pusher source clone changed item data or aliased the live source"));
+            }
+
+            /*
+             * Keep a second, detached expected snapshot. Some InventoryHolder implementations mutate
+             * the ItemStack object passed to their setter in place. Comparing readback with that same
+             * mutable object can falsely accept a normalized amount/metadata value and then clear the
+             * complete source stack. The destination receives transfer; snapshot remains immutable
+             * from the destination's perspective and is the commit identity.
+             */
+            transfer = snapshot.clone();
+            if (transfer == snapshot || !exactlyMatches(snapshot, transfer)) {
+                return new DestinationCommitResult(
+                    false,
+                    false,
+                    new IllegalStateException(
+                        "Vanilla Pusher transfer clone changed item data or aliased the commit snapshot"));
+            }
+        } catch (RuntimeException | LinkageError cloneFailure) {
+            return new DestinationCommitResult(false, false, cloneFailure);
+        }
+
+        Throwable failure = null;
+        try {
+            destinationWriter.accept(transfer);
+        } catch (RuntimeException | LinkageError writeFailure) {
+            failure = writeFailure;
+        }
+
+        boolean destinationKnown = true;
+        ItemStack current = null;
+        try {
+            current = destinationReader.get();
+        } catch (RuntimeException | LinkageError readFailure) {
+            failure = appendFailure(failure, readFailure);
+            destinationKnown = false;
+        }
+
+        if (destinationKnown && exactlyMatches(snapshot, current)) {
+            try {
+                source.setAmount(0);
+                return new DestinationCommitResult(true, false, failure);
+            } catch (RuntimeException | LinkageError sourceCommitFailure) {
+                failure = appendFailure(failure, sourceCommitFailure);
+                try {
+                    if (isEmpty(source)) {
+                        // The source mutation completed before the setter reported failure.
+                        return new DestinationCommitResult(true, false, failure);
+                    }
+                } catch (RuntimeException | LinkageError sourceReadFailure) {
+                    failure = appendFailure(failure, sourceReadFailure);
+                }
+                // Source is still present or unreadable. Fall through and roll the destination back.
             }
         }
-        return false;
+
+        if (destinationKnown && isEmpty(current)) {
+            return new DestinationCommitResult(false, false, failure);
+        }
+
+        // The setter left an unexpected/unknown state. Try to undo our write before touching the source.
+        try {
+            destinationWriter.accept(null);
+        } catch (RuntimeException | LinkageError rollbackFailure) {
+            failure = appendFailure(failure, rollbackFailure);
+        }
+
+        boolean rollbackKnown = true;
+        ItemStack afterRollback = null;
+        try {
+            afterRollback = destinationReader.get();
+        } catch (RuntimeException | LinkageError readFailure) {
+            failure = appendFailure(failure, readFailure);
+            rollbackKnown = false;
+        }
+
+        if (rollbackKnown && isEmpty(afterRollback)) {
+            return new DestinationCommitResult(false, false, failure);
+        }
+
+        // A non-empty/unknown destination may still contain the attempted transfer. Consume the source
+        // rather than knowingly allowing the same logical item to survive on both sides.
+        boolean sourceConsumed = false;
+        try {
+            source.setAmount(0);
+            sourceConsumed = true;
+        } catch (RuntimeException | LinkageError sourceCommitFailure) {
+            failure = appendFailure(failure, sourceCommitFailure);
+            try {
+                if (isEmpty(source)) {
+                    sourceConsumed = true;
+                }
+            } catch (RuntimeException | LinkageError sourceReadFailure) {
+                failure = appendFailure(failure, sourceReadFailure);
+            }
+
+            /*
+             * There is no independent non-deprecated in-place consume primitive: ItemStack#subtract
+             * delegates back to setAmount. If an exotic ItemStack rejects that write, retain the
+             * unresolved ambiguity and report it rather than falling back to deprecated setType(AIR).
+             */
+        }
+        if (failure == null) {
+            failure = new IllegalStateException("Vanilla Pusher destination could not be rolled back to empty");
+        }
+        if (!sourceConsumed) {
+            failure = appendFailure(
+                failure,
+                new IllegalStateException(
+                    "Vanilla Pusher could not consume the source after an unresolved destination commit"));
+        }
+        return new DestinationCommitResult(sourceConsumed, true, failure);
+    }
+
+    private boolean finishDestinationCommit(
+        @NotNull DestinationCommitResult result,
+        @NotNull org.bukkit.Location location,
+        @NotNull String destination) {
+
+        if (result.failure() != null) {
+            Networks.getInstance().getLogger().log(
+                result.ambiguous() ? Level.SEVERE : Level.WARNING,
+                result.ambiguous()
+                    ? "A Network Vanilla Pusher could not verify rollback for " + destination + " at " + location
+                        + "; the source was consumed to prevent a duplicate."
+                    : "A Network Vanilla Pusher encountered a destination write failure for " + destination + " at "
+                        + location + "; item conservation was reconciled.",
+                result.failure());
+        }
+        return result.moved();
+    }
+
+    private static boolean exactlyMatches(@NotNull ItemStack expected, @Nullable ItemStack actual) {
+        return actual != null
+            && actual.getAmount() == expected.getAmount()
+            && expected.isSimilar(actual);
+    }
+
+    private static boolean isEmpty(@Nullable ItemStack stack) {
+        return stack == null || stack.getType() == Material.AIR || stack.getAmount() <= 0;
+    }
+
+    private static @NotNull Throwable appendFailure(@Nullable Throwable existing, @NotNull Throwable next) {
+        if (existing == null) {
+            return next;
+        }
+        existing.addSuppressed(next);
+        return existing;
+    }
+
+    record DestinationCommitResult(boolean moved, boolean ambiguous, @Nullable Throwable failure) {
+        static final DestinationCommitResult NONE = new DestinationCommitResult(false, false, null);
     }
 
     @Override
