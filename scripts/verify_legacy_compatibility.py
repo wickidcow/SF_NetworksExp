@@ -238,13 +238,13 @@ require("extends RecipeChoice.ExactChoice" not in simple_recipe_choice,
         "SimpleRecipeChoice still extends final RecipeChoice.ExactChoice")
 require("implements RecipeChoice" in simple_recipe_choice, "SimpleRecipeChoice no longer implements RecipeChoice")
 # Public release metadata must move as one unit so JAR/plugin/workflow versions cannot drift.
-require('version = "1.0.57"' in build, "Gradle public version must remain 1.0.57")
-require('VERSION: "1.0.57"' in build_workflow
-        and 'OUTPUT_NAME: "SF_Networks1.0.57.jar"' in build_workflow,
-        "release workflow public version/JAR name must remain 1.0.57")
-require('VERSION: "1.0.57"' in compatibility_workflow
-        and 'OUTPUT_NAME: "SF_Networks1.0.57.jar"' in compatibility_workflow,
-        "compatibility workflow public version/JAR name must remain 1.0.57")
+require('version = "1.0.58"' in build, "Gradle public version must remain 1.0.58")
+require('VERSION: "1.0.58"' in build_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.58.jar"' in build_workflow,
+        "release workflow public version/JAR name must remain 1.0.58")
+require('VERSION: "1.0.58"' in compatibility_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.58.jar"' in compatibility_workflow,
+        "compatibility workflow public version/JAR name must remain 1.0.58")
 require("actions/upload-artifact@v7" in compatibility_workflow
         and "name: slimefun-legacy-core" in compatibility_workflow
         and "Slimefun-Legacy-Core.jar" in compatibility_workflow,
@@ -696,13 +696,40 @@ require("blockMenu.markDirty()" in vanilla_pusher and "handleFurnace" in vanilla
         and "handleBrewingStand" in vanilla_pusher,
         "vanilla cargo pusher persistence verification is missing")
 require("inventory instanceof CrafterInventory" in vanilla_pusher
-        and "InventoryUtil.addItem(holder.getInventory(), stack)" in vanilla_pusher
-        and "stack.getAmount() < before" in vanilla_pusher,
-        "vanilla cargo pusher partial-commit/Crafter protection is missing")
-require("final ItemStack transfer = stack.clone()" in vanilla_grabber
-        and "itemsMatch(committed, transfer, true, true)" in vanilla_grabber
-        and "inventory.setItem(sourceSlot, null)" in vanilla_grabber,
-        "vanilla cargo grabber clone-verify-commit protection is missing")
+        and "commitIntoStorageContents(" in vanilla_pusher
+        and "() -> blockMenu.getItemInSlot(INPUT_SLOT)" in vanilla_pusher
+        and "blockMenu.replaceExistingItem(INPUT_SLOT, item)" in vanilla_pusher
+        and "sourceChangedBeforeCommit" in vanilla_pusher
+        and "source slot changed before source-side commit" in vanilla_pusher
+        and "reconcileSourceRemainder(" in vanilla_pusher
+        and "sourceReaderHasExpectedRemainder(" in vanilla_pusher
+        and "inventory::getStorageContents" in vanilla_pusher
+        and "inventory::setStorageContents" in vanilla_pusher
+        and "detachedStorageClone(" in vanilla_pusher
+        and "storageExactlyMatches(" in vanilla_pusher
+        and "survivingInsertedAmount(" in vanilla_pusher
+        and "expectedRemainder = survivingInserted >= 0" in vanilla_pusher
+        and "InventoryUtil.addItem(holder.getInventory(), stack)" not in vanilla_pusher,
+        "vanilla cargo pusher ordinary-inventory path must bind to the live source slot and reconcile both sides transactionally")
+require("commitInventorySourceToOutput" in vanilla_grabber
+        and "sourceSnapshot = detachedExactClone" in vanilla_grabber
+        and "transfer = detachedExactClone(sourceSnapshot" in vanilla_grabber
+        and "exactlyMatches(sourceSnapshot, destinationCurrent)" in vanilla_grabber
+        and "sourceChangedBeforeCommit" in vanilla_grabber
+        and "source changed before source-side commit" in vanilla_grabber
+        and "the changed source was preserved" in vanilla_grabber
+        and "destinationAfterRollback = destinationReader.get()" in vanilla_grabber
+        and "sourceSnapshot.isSimilar(destinationAfterRollback)" in vanilla_grabber
+        and "expectedSourceRemainder = sourceSnapshot.getAmount() - survivingDestinationAmount" in vanilla_grabber
+        and "reconcileSourceRemainder(" in vanilla_grabber
+        and "sourceRemovalAttempted" in vanilla_grabber
+        and "isEmpty(current) && sourceRemovalAttempted" in vanilla_grabber
+        and "sourceWriter.accept(remainder)" in vanilla_grabber
+        and "sourceWriter.accept(null)" in vanilla_grabber
+        and "destinationWriter.accept(null)" in vanilla_grabber
+        and "source removal was attempted to prevent a duplicate" in vanilla_grabber
+        and "inventory.setItem(sourceSlot, null)" not in vanilla_grabber,
+        "vanilla cargo grabber must verify destination commits, preserve partial surviving amounts, and reconcile source removal failures")
 require("super(!Bukkit.isPrimaryThread())" in root_ready_event,
         "NetworkRootReadyEvent thread mode is not derived from the actual caller")
 require("block.getType() == Material.AIR" in network_controller

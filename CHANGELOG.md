@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.58 — vanilla inventory transaction integrity (release candidate)
+
+- Harden ordinary Network Vanilla Pusher inventory commits with detached destination snapshots plus a live pusher-source-slot guard. Destination callbacks can no longer commit against a stale source ItemStack reference; external source replacements are preserved and the destination is rolled back.
+- Retain the 1.0.57 furnace/brewing special-slot transaction safety, including immutable expected snapshots, exact readback, rollback verification, and conservative anti-duplication fallback.
+- Harden Network Vanilla Grabber source removal as a two-sided transaction. Exact destination readback precedes source removal, source replacements are never overwritten, and failed removals roll the destination back.
+- If grabber source removal applied but its immediate readback failed, a readable partial destination rollback now restores the exact complementary source remainder instead of silently losing items.
+- Preserve the 1.0.57 changed-source diagnostics: compensated menu conflicts identify machine ID, slot, change category, and before/after item identity/count without exposing display names, lore, or PDC payloads.
+- No routing order, transfer rates, item/research IDs, recipes, storage formats, Quantum routing policy, default line budgets, permissions, or WildChests behavior changes.
+
 ## 1.0.57 — controller integrity, craft atomicity and transfer hot-path follow-up (release candidate)
 
 - Resolve invalid multi-controller topologies deterministically. Preserve an established controller when exactly one side already owns a published root; otherwise use a stable block-coordinate tie-break. Revalidate both controllers and their loaded connection before delayed destructive cleanup.
