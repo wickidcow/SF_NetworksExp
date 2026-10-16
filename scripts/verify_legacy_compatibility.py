@@ -722,7 +722,7 @@ require('"recipe-aware-buffer-batches"' in abstract_network_pusher
         and "public static void resetRuntimeState()" in abstract_network_pusher
         and "RECIPE_BUFFER_BATCHES.clear()" in abstract_network_pusher
         and "FAILED_REQUEST_BACKOFF.clear()" in abstract_network_pusher
-        and "AbstractNetworkPusher.resetRuntimeState()" in networks
+        and "AbstractNetworkPusher.resetRuntimeState()" in networks_java
         and "MIN_BUFFERED_BATCHES = 1" in recipe_aware_pusher_planner
         and "MAX_BUFFERED_BATCHES = 64" in recipe_aware_pusher_planner
         and "stepBufferedBatches" in recipe_aware_pusher_planner,
