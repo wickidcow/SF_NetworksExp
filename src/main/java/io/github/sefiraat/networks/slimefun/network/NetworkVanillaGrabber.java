@@ -281,6 +281,7 @@ public class NetworkVanillaGrabber extends NetworkDirectional implements SoftCel
         }
 
         boolean sourceChangedBeforeCommit = false;
+        boolean sourceRemovalAttempted = false;
         if (destinationKnown && exactlyMatches(sourceSnapshot, destinationCurrent)) {
             ItemStack sourceBeforeCommit = null;
             try {
@@ -293,6 +294,7 @@ public class NetworkVanillaGrabber extends NetworkDirectional implements SoftCel
 
             if (!sourceChangedBeforeCommit) {
                 try {
+                    sourceRemovalAttempted = true;
                     sourceWriter.accept(null);
                 } catch (RuntimeException | LinkageError sourceWriteFailure) {
                     failure = appendFailure(failure, sourceWriteFailure);
@@ -394,6 +396,7 @@ public class NetworkVanillaGrabber extends NetworkDirectional implements SoftCel
                 sourceReader,
                 sourceWriter,
                 expectedSourceRemainder,
+                sourceRemovalAttempted,
                 failure);
 
             if (reconciled) {
@@ -441,6 +444,7 @@ public class NetworkVanillaGrabber extends NetworkDirectional implements SoftCel
         @NotNull Supplier<ItemStack> sourceReader,
         @NotNull Consumer<ItemStack> sourceWriter,
         int expectedAmount,
+        boolean sourceRemovalAttempted,
         @NotNull Throwable failure) {
 
         try {
@@ -461,6 +465,25 @@ public class NetworkVanillaGrabber extends NetworkDirectional implements SoftCel
                 && original.isSimilar(current)) {
                 return true;
             }
+
+            /*
+             * If this transaction already attempted source removal, an empty source can be our own
+             * successfully-applied write whose immediate readback failed. With a readable partial
+             * destination we know the exact complement that must be restored. Do not enable this
+             * recovery when source removal was never attempted: an externally emptied source must
+             * never be resurrected.
+             */
+            if (isEmpty(current) && sourceRemovalAttempted) {
+                final ItemStack remainder =
+                    detachedExactClone(original, "Vanilla Grabber source remainder after applied removal");
+                remainder.setAmount(expectedAmount);
+                sourceWriter.accept(remainder);
+                final ItemStack after = sourceReader.get();
+                return after != null
+                    && after.getAmount() == expectedAmount
+                    && original.isSimilar(after);
+            }
+
             if (!exactlyMatches(original, current)) {
                 return false;
             }
