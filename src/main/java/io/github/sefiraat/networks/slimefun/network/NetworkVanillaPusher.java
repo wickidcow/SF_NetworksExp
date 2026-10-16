@@ -3,7 +3,6 @@ package io.github.sefiraat.networks.slimefun.network;
 import com.balugaq.netex.api.enums.FeedbackType;
 import com.balugaq.netex.api.enums.MinecraftVersion;
 import com.balugaq.netex.api.interfaces.SoftCellBannable;
-import com.balugaq.netex.utils.InventoryUtil;
 import com.balugaq.netex.utils.Lang;
 import com.bgsoftware.wildchests.api.WildChestsAPI;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
@@ -11,6 +10,7 @@ import io.github.sefiraat.networks.NetworkStorage;
 import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.network.NodeDefinition;
 import io.github.sefiraat.networks.network.NodeType;
+import io.github.sefiraat.networks.utils.StackUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
@@ -138,7 +138,6 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
         sendDebugMessage(block.getLocation(), String.format(Lang.getString("messages.debug.wildchests"), wildChests));
         sendDebugMessage(block.getLocation(), String.format(Lang.getString("messages.debug.ischest"), isChest));
 
-        final int before = stack.getAmount();
         boolean moved = false;
         if (inventory instanceof FurnaceInventory furnace) {
             moved = handleFurnace(stack, furnace, blockMenu.getLocation());
@@ -147,11 +146,21 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
         } else if (wildChests && isChest) {
             sendDebugMessage(block.getLocation(), Lang.getString("messages.debug.wildchests-trigger-failed"));
         } else {
-            // Bukkit inventories may accept only part of a stack. Commit exactly the accepted amount and
-            // leave the live source remainder in the Networks pusher menu.
+            // Ordinary inventories may accept only part of a stack. Build the destination state on detached
+            // snapshots, commit it, verify exact readback, then reduce the live source by only the accepted amount.
             sendDebugMessage(block.getLocation(), Lang.getString("messages.debug.wildchests-trigger-success"));
-            InventoryUtil.addItem(holder.getInventory(), stack);
-            moved = stack.getAmount() < before;
+            moved = finishDestinationCommit(
+                commitIntoStorageContents(
+                    stack,
+                    () -> blockMenu.getItemInSlot(INPUT_SLOT),
+                    item -> {
+                        blockMenu.replaceExistingItem(INPUT_SLOT, item);
+                        blockMenu.markDirty();
+                    },
+                    inventory::getStorageContents,
+                    inventory::setStorageContents),
+                blockMenu.getLocation(),
+                "vanilla inventory");
         }
 
         if (moved) {
@@ -226,6 +235,410 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
         }
 
         return false;
+    }
+
+    /**
+     * Commits as much of a live pusher stack as fits into ordinary inventory storage using copy-on-write
+     * destination snapshots.
+     *
+     * <p>The planner preserves the historical ordering: fill every compatible partial stack first, then
+     * split the remainder across empty storage slots. Neither the live source nor the destination is mutated
+     * while planning. A detached desired snapshot is written, exact destination readback is required, and
+     * only then is the live source reduced by the accepted amount.</p>
+     *
+     * <p>If the destination write throws or normalizes data, the original storage snapshot is restored before
+     * preserving the source. If rollback cannot be verified but the surviving destination state is readable,
+     * the source is reduced by only the amount proven to remain there. An unreadable/unexplained destination
+     * falls back to the attempted accepted amount rather than knowingly retaining a duplicate.</p>
+     */
+    static @NotNull DestinationCommitResult commitIntoStorageContents(
+        @NotNull ItemStack source,
+        @NotNull Supplier<ItemStack[]> contentsReader,
+        @NotNull Consumer<ItemStack[]> contentsWriter) {
+
+        return commitIntoStorageContents(
+            source,
+            () -> source,
+            item -> {
+                if (item == null) {
+                    source.setAmount(0);
+                } else {
+                    if (!source.isSimilar(item)) {
+                        throw new IllegalStateException(
+                            "Vanilla Pusher object-bound source writer received a different item identity");
+                    }
+                    source.setAmount(item.getAmount());
+                }
+            },
+            contentsReader,
+            contentsWriter);
+    }
+
+    static @NotNull DestinationCommitResult commitIntoStorageContents(
+        @NotNull ItemStack liveSource,
+        @NotNull Supplier<ItemStack> sourceReader,
+        @NotNull Consumer<ItemStack> sourceWriter,
+        @NotNull Supplier<ItemStack[]> contentsReader,
+        @NotNull Consumer<ItemStack[]> contentsWriter) {
+
+        if (isEmpty(liveSource)) {
+            return DestinationCommitResult.NONE;
+        }
+
+        final ItemStack sourceSnapshot;
+        final ItemStack[] beforeSnapshot;
+        final ItemStack[] desiredSnapshot;
+        try {
+            final ItemStack currentSource = sourceReader.get();
+            if (isEmpty(currentSource) || !exactlyMatches(liveSource, currentSource)) {
+                return DestinationCommitResult.NONE;
+            }
+
+            sourceSnapshot = detachedExactClone(currentSource, "Vanilla Pusher source");
+            final ItemStack[] before = contentsReader.get();
+            if (before == null) {
+                return new DestinationCommitResult(
+                    false,
+                    false,
+                    new IllegalStateException("Vanilla Pusher destination returned null storage contents"));
+            }
+            beforeSnapshot = detachedStorageClone(before, "Vanilla Pusher destination baseline");
+            desiredSnapshot = detachedStorageClone(beforeSnapshot, "Vanilla Pusher destination plan");
+        } catch (RuntimeException | LinkageError setupFailure) {
+            return new DestinationCommitResult(false, false, setupFailure);
+        }
+
+        final int originalAmount = sourceSnapshot.getAmount();
+        int remaining = originalAmount;
+
+        try {
+            // Preserve InventoryUtil's ordering: fill all matching partial stacks first.
+            for (int slot = 0; slot < desiredSnapshot.length && remaining > 0; slot++) {
+                final ItemStack existing = desiredSnapshot[slot];
+                if (isEmpty(existing)
+                    || existing.getAmount() >= existing.getMaxStackSize()
+                    || !StackUtils.itemsMatch(existing, sourceSnapshot, true, false)) {
+                    continue;
+                }
+
+                final int handled = Math.min(existing.getMaxStackSize() - existing.getAmount(), remaining);
+                existing.setAmount(existing.getAmount() + handled);
+                remaining -= handled;
+            }
+
+            // Then split the remainder across empty storage slots.
+            for (int slot = 0; slot < desiredSnapshot.length && remaining > 0; slot++) {
+                if (!isEmpty(desiredSnapshot[slot])) {
+                    continue;
+                }
+
+                final int handled = Math.min(remaining, sourceSnapshot.getMaxStackSize());
+                final ItemStack placed = detachedExactClone(sourceSnapshot, "Vanilla Pusher empty-slot transfer");
+                placed.setAmount(handled);
+                desiredSnapshot[slot] = placed;
+                remaining -= handled;
+            }
+        } catch (RuntimeException | LinkageError planningFailure) {
+            return new DestinationCommitResult(false, false, planningFailure);
+        }
+
+        final int accepted = originalAmount - remaining;
+        if (accepted <= 0) {
+            return DestinationCommitResult.NONE;
+        }
+
+        final ItemStack[] writeContents;
+        try {
+            // Never give the destination our immutable expected readback snapshot.
+            writeContents = detachedStorageClone(desiredSnapshot, "Vanilla Pusher destination write");
+        } catch (RuntimeException | LinkageError cloneFailure) {
+            return new DestinationCommitResult(false, false, cloneFailure);
+        }
+
+        Throwable failure = null;
+        try {
+            contentsWriter.accept(writeContents);
+        } catch (RuntimeException | LinkageError writeFailure) {
+            failure = writeFailure;
+        }
+
+        boolean destinationKnown = true;
+        ItemStack[] current = null;
+        try {
+            current = contentsReader.get();
+        } catch (RuntimeException | LinkageError readFailure) {
+            failure = appendFailure(failure, readFailure);
+            destinationKnown = false;
+        }
+
+        boolean sourceChangedBeforeCommit = false;
+        if (destinationKnown && storageExactlyMatches(desiredSnapshot, current)) {
+            try {
+                sourceChangedBeforeCommit = !exactlyMatches(sourceSnapshot, sourceReader.get());
+            } catch (RuntimeException | LinkageError sourceReadFailure) {
+                failure = appendFailure(failure, sourceReadFailure);
+                sourceChangedBeforeCommit = true;
+            }
+
+            if (!sourceChangedBeforeCommit) {
+                try {
+                    sourceWriter.accept(remainderStack(sourceSnapshot, remaining, "Vanilla Pusher source commit"));
+                } catch (RuntimeException | LinkageError sourceCommitFailure) {
+                    failure = appendFailure(failure, sourceCommitFailure);
+                }
+
+                try {
+                    if (sourceReaderHasExpectedRemainder(sourceSnapshot, sourceReader, remaining)) {
+                        return new DestinationCommitResult(true, false, failure);
+                    }
+                    failure = appendFailure(
+                        failure,
+                        new IllegalStateException("Vanilla Pusher source did not retain the expected remainder"));
+                } catch (RuntimeException | LinkageError sourceReadFailure) {
+                    failure = appendFailure(failure, sourceReadFailure);
+                }
+            } else {
+                failure = appendFailure(
+                    failure,
+                    new IllegalStateException(
+                        "Vanilla Pusher source slot changed before source-side commit; refusing to overwrite it"));
+            }
+        } else if (destinationKnown && storageExactlyMatches(beforeSnapshot, current)) {
+            return new DestinationCommitResult(false, false, failure);
+        }
+
+        try {
+            contentsWriter.accept(detachedStorageClone(beforeSnapshot, "Vanilla Pusher rollback write"));
+        } catch (RuntimeException | LinkageError rollbackFailure) {
+            failure = appendFailure(failure, rollbackFailure);
+        }
+
+        boolean rollbackKnown = true;
+        ItemStack[] afterRollback = null;
+        try {
+            afterRollback = contentsReader.get();
+        } catch (RuntimeException | LinkageError readFailure) {
+            failure = appendFailure(failure, readFailure);
+            rollbackKnown = false;
+        }
+
+        if (rollbackKnown && storageExactlyMatches(beforeSnapshot, afterRollback)) {
+            if (sourceChangedBeforeCommit) {
+                // Compensation succeeded. Preserve the externally changed pusher source exactly.
+                return new DestinationCommitResult(false, false, failure);
+            }
+
+            final boolean restored = reconcileSourceRemainder(
+                sourceSnapshot, sourceReader, sourceWriter, originalAmount, failure);
+            if (restored) {
+                return new DestinationCommitResult(false, false, failure);
+            }
+            failure = appendFailure(
+                failure,
+                new IllegalStateException(
+                    "Vanilla Pusher rolled back the destination but could not restore the original source"));
+            return new DestinationCommitResult(false, true, failure);
+        }
+
+        if (failure == null) {
+            failure = new IllegalStateException("Vanilla Pusher inventory destination could not be rolled back");
+        }
+
+        if (sourceChangedBeforeCommit) {
+            failure = appendFailure(
+                failure,
+                new IllegalStateException(
+                    "Vanilla Pusher destination rollback remained unresolved after the source slot changed; "
+                        + "the external source replacement was preserved"));
+            return new DestinationCommitResult(false, true, failure);
+        }
+
+        int survivingInserted = -1;
+        if (rollbackKnown) {
+            try {
+                survivingInserted = survivingInsertedAmount(beforeSnapshot, afterRollback, sourceSnapshot);
+            } catch (RuntimeException | LinkageError countFailure) {
+                failure = appendFailure(failure, countFailure);
+            }
+        }
+
+        final int expectedRemainder = survivingInserted >= 0
+            ? originalAmount - survivingInserted
+            : remaining;
+
+        final boolean sourceReconciled = reconcileSourceRemainder(
+            sourceSnapshot, sourceReader, sourceWriter, expectedRemainder, failure);
+
+        if (!sourceReconciled) {
+            failure = appendFailure(
+                failure,
+                new IllegalStateException(
+                    "Vanilla Pusher could not reconcile the source after an unresolved inventory commit"));
+        }
+        return new DestinationCommitResult(sourceReconciled, true, failure);
+    }
+
+    private static boolean reconcileSourceRemainder(
+        @NotNull ItemStack original,
+        @NotNull Supplier<ItemStack> sourceReader,
+        @NotNull Consumer<ItemStack> sourceWriter,
+        int expectedAmount,
+        @NotNull Throwable failure) {
+
+        try {
+            if (sourceReaderHasExpectedRemainder(original, sourceReader, expectedAmount)) {
+                return true;
+            }
+
+            final ItemStack current = sourceReader.get();
+            if (!exactlyMatches(original, current)) {
+                return false;
+            }
+
+            sourceWriter.accept(remainderStack(original, expectedAmount, "Vanilla Pusher source remainder"));
+            return sourceReaderHasExpectedRemainder(original, sourceReader, expectedAmount);
+        } catch (RuntimeException | LinkageError reconciliationFailure) {
+            failure.addSuppressed(reconciliationFailure);
+            try {
+                return sourceReaderHasExpectedRemainder(original, sourceReader, expectedAmount);
+            } catch (RuntimeException | LinkageError readFailure) {
+                failure.addSuppressed(readFailure);
+                return false;
+            }
+        }
+    }
+
+    private static ItemStack remainderStack(
+        @NotNull ItemStack original,
+        int amount,
+        @NotNull String context) {
+
+        if (amount <= 0) {
+            return null;
+        }
+        final ItemStack remainder = detachedExactClone(original, context);
+        remainder.setAmount(amount);
+        return remainder;
+    }
+
+    private static boolean sourceReaderHasExpectedRemainder(
+        @NotNull ItemStack original,
+        @NotNull Supplier<ItemStack> sourceReader,
+        int expectedAmount) {
+
+        final ItemStack current = sourceReader.get();
+        if (expectedAmount <= 0) {
+            return isEmpty(current);
+        }
+        return current != null
+            && current.getAmount() == expectedAmount
+            && original.isSimilar(current);
+    }
+
+    /**
+     * Returns how many source items can be proven to have survived relative to the immutable
+     * destination baseline, or -1 when the post-rollback state contains an unexplained change.
+     */
+    static int survivingInsertedAmount(
+        ItemStack @NotNull [] baseline,
+        ItemStack @NotNull [] current,
+        @NotNull ItemStack source) {
+
+        if (baseline.length != current.length) {
+            return -1;
+        }
+
+        long inserted = 0L;
+        for (int slot = 0; slot < baseline.length; slot++) {
+            final ItemStack before = baseline[slot];
+            final ItemStack after = current[slot];
+
+            if (isEmpty(before)) {
+                if (isEmpty(after)) {
+                    continue;
+                }
+                if (!source.isSimilar(after) || after.getAmount() <= 0) {
+                    return -1;
+                }
+                inserted += after.getAmount();
+            } else {
+                if (isEmpty(after) || !before.isSimilar(after)) {
+                    return -1;
+                }
+
+                final int delta = after.getAmount() - before.getAmount();
+                if (delta < 0) {
+                    return -1;
+                }
+                if (delta > 0) {
+                    if (!StackUtils.itemsMatch(before, source, true, false)) {
+                        return -1;
+                    }
+                    inserted += delta;
+                }
+            }
+
+            if (inserted > source.getAmount()) {
+                return -1;
+            }
+        }
+        return (int) inserted;
+    }
+
+    private static @NotNull ItemStack detachedExactClone(
+        @NotNull ItemStack source,
+        @NotNull String context) {
+
+        final ItemStack clone = source.clone();
+        if (clone == source || !exactlyMatches(source, clone)) {
+            throw new IllegalStateException(context + " clone changed item data or aliased its source");
+        }
+        return clone;
+    }
+
+    private static ItemStack @NotNull [] detachedStorageClone(
+        ItemStack @NotNull [] source,
+        @NotNull String context) {
+
+        final ItemStack[] clone = new ItemStack[source.length];
+        for (int slot = 0; slot < source.length; slot++) {
+            final ItemStack stack = source[slot];
+            if (!isEmpty(stack)) {
+                clone[slot] = detachedExactClone(stack, context + " slot " + slot);
+            }
+        }
+        return clone;
+    }
+
+    private static boolean storageExactlyMatches(
+        ItemStack @NotNull [] expected,
+        ItemStack[] actual) {
+
+        if (actual == null || actual.length != expected.length) {
+            return false;
+        }
+        for (int slot = 0; slot < expected.length; slot++) {
+            final ItemStack expectedStack = expected[slot];
+            final ItemStack actualStack = actual[slot];
+            if (isEmpty(expectedStack) && isEmpty(actualStack)) {
+                continue;
+            }
+            if (isEmpty(expectedStack) || isEmpty(actualStack) || !exactlyMatches(expectedStack, actualStack)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean sourceHasExpectedRemainder(
+        @NotNull ItemStack original,
+        @NotNull ItemStack current,
+        int expectedAmount) {
+
+        if (expectedAmount <= 0) {
+            return isEmpty(current);
+        }
+        return current.getAmount() == expectedAmount && original.isSimilar(current);
     }
 
     /**
