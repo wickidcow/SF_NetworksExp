@@ -343,19 +343,23 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
                 return false;
             }
 
-            final ItemRequest request = new ItemRequest(ingredient.cache(), (int) scaledAmount);
-            requests[i] = request;
-            if (!root.contains(ingredient.cache(), request.getAmount())) {
-                sendFeedback(location, FeedbackType.NOT_ENOUGH_ITEMS_IN_NETWORK);
-                deferIdleAttempt(location, IDLE_TRANSIENT_TICKS);
-                return false;
-            }
+            requests[i] = new ItemRequest(ingredient.cache(), (int) scaledAmount);
         }
 
         /*
-         * NetworkRoot#contains is non-mutating, so the exact ItemRequest created for preflight can
-         * be reused for withdrawal. This halves ItemRequest/ItemStackCache allocation on successful
-         * Auto Crafter attempts while preserving the atomic preflight-before-commit behavior.
+         * Probe all aggregated ingredients in one traversal. A 3x3 blueprint can otherwise walk the
+         * same network up to nine times before the first withdrawal. The batched check remains
+         * non-mutating and does not change the later withdrawal order or rollback boundary.
+         */
+        if (!root.containsAll(requests)) {
+            sendFeedback(location, FeedbackType.NOT_ENOUGH_ITEMS_IN_NETWORK);
+            deferIdleAttempt(location, IDLE_TRANSIENT_TICKS);
+            return false;
+        }
+
+        /*
+         * The exact ItemRequests created for preflight can be reused for withdrawal. The batched
+         * availability check never mutates them.
          */
         final ItemStack[] fetcheds = new ItemStack[ingredientCount];
         for (int i = 0; i < ingredientCount; i++) {
