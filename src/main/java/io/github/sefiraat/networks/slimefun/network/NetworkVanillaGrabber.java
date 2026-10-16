@@ -279,22 +279,40 @@ public class NetworkVanillaGrabber extends NetworkDirectional implements SoftCel
             destinationKnown = false;
         }
 
+        boolean sourceChangedBeforeCommit = false;
         if (destinationKnown && exactlyMatches(sourceSnapshot, destinationCurrent)) {
+            ItemStack sourceBeforeCommit = null;
             try {
-                sourceWriter.accept(null);
-            } catch (RuntimeException | LinkageError sourceWriteFailure) {
-                failure = appendFailure(failure, sourceWriteFailure);
-            }
-
-            try {
-                if (isEmpty(sourceReader.get())) {
-                    // Source removers may report failure after applying the removal.
-                    return new GrabCommitResult(true, false, failure);
-                }
+                sourceBeforeCommit = sourceReader.get();
+                sourceChangedBeforeCommit = !exactlyMatches(sourceSnapshot, sourceBeforeCommit);
             } catch (RuntimeException | LinkageError sourceReadFailure) {
                 failure = appendFailure(failure, sourceReadFailure);
+                sourceChangedBeforeCommit = true;
             }
-            // Destination is committed but source removal was not verified. Roll back destination first.
+
+            if (!sourceChangedBeforeCommit) {
+                try {
+                    sourceWriter.accept(null);
+                } catch (RuntimeException | LinkageError sourceWriteFailure) {
+                    failure = appendFailure(failure, sourceWriteFailure);
+                }
+
+                try {
+                    if (isEmpty(sourceReader.get())) {
+                        // Source removers may report failure after applying the removal.
+                        return new GrabCommitResult(true, false, failure);
+                    }
+                } catch (RuntimeException | LinkageError sourceReadFailure) {
+                    failure = appendFailure(failure, sourceReadFailure);
+                }
+            } else {
+                failure = appendFailure(
+                    failure,
+                    new IllegalStateException(
+                        "Vanilla Grabber source changed before source-side commit; refusing to overwrite it"));
+            }
+            // Destination is committed but source removal was not verified (or the source changed). Roll back
+            // destination first. A changed source is never overwritten during reconciliation.
         } else if (destinationKnown && isEmpty(destinationCurrent)) {
             return new GrabCommitResult(false, false, failure);
         }
@@ -315,6 +333,11 @@ public class NetworkVanillaGrabber extends NetworkDirectional implements SoftCel
         }
 
         if (destinationRollbackKnown && isEmpty(destinationAfterRollback)) {
+            if (sourceChangedBeforeCommit) {
+                // Compensation succeeded. Preserve the externally changed source exactly as it is.
+                return new GrabCommitResult(false, false, failure);
+            }
+
             try {
                 final ItemStack sourceCurrent = sourceReader.get();
                 if (exactlyMatches(sourceSnapshot, sourceCurrent)) {
@@ -346,6 +369,15 @@ public class NetworkVanillaGrabber extends NetworkDirectional implements SoftCel
          */
         if (failure == null) {
             failure = new IllegalStateException("Vanilla Grabber destination could not be rolled back");
+        }
+
+        if (sourceChangedBeforeCommit) {
+            failure = appendFailure(
+                failure,
+                new IllegalStateException(
+                    "Vanilla Grabber destination rollback remained unresolved after the source changed; "
+                        + "the changed source was preserved"));
+            return new GrabCommitResult(false, true, failure);
         }
 
         if (destinationRollbackKnown
