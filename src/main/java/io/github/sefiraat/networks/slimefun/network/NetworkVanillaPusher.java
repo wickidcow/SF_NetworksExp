@@ -306,8 +306,21 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
         }
 
         if (destinationKnown && exactlyMatches(snapshot, current)) {
-            source.setAmount(0);
-            return new DestinationCommitResult(true, false, failure);
+            try {
+                source.setAmount(0);
+                return new DestinationCommitResult(true, false, failure);
+            } catch (RuntimeException | LinkageError sourceCommitFailure) {
+                failure = appendFailure(failure, sourceCommitFailure);
+                try {
+                    if (isEmpty(source)) {
+                        // The source mutation completed before the setter reported failure.
+                        return new DestinationCommitResult(true, false, failure);
+                    }
+                } catch (RuntimeException | LinkageError sourceReadFailure) {
+                    failure = appendFailure(failure, sourceReadFailure);
+                }
+                // Source is still present or unreadable. Fall through and roll the destination back.
+            }
         }
 
         if (destinationKnown && isEmpty(current)) {
@@ -336,11 +349,40 @@ public class NetworkVanillaPusher extends NetworkDirectional implements SoftCell
 
         // A non-empty/unknown destination may still contain the attempted transfer. Consume the source
         // rather than knowingly allowing the same logical item to survive on both sides.
-        source.setAmount(0);
+        boolean sourceConsumed = false;
+        try {
+            source.setAmount(0);
+            sourceConsumed = true;
+        } catch (RuntimeException | LinkageError sourceCommitFailure) {
+            failure = appendFailure(failure, sourceCommitFailure);
+            try {
+                if (isEmpty(source)) {
+                    sourceConsumed = true;
+                }
+            } catch (RuntimeException | LinkageError sourceReadFailure) {
+                failure = appendFailure(failure, sourceReadFailure);
+            }
+
+            if (!sourceConsumed) {
+                try {
+                    // Fallback for unusual ItemStack subclasses that reject amount writes.
+                    source.setType(Material.AIR);
+                    sourceConsumed = isEmpty(source);
+                } catch (RuntimeException | LinkageError sourceFallbackFailure) {
+                    failure = appendFailure(failure, sourceFallbackFailure);
+                }
+            }
+        }
         if (failure == null) {
             failure = new IllegalStateException("Vanilla Pusher destination could not be rolled back to empty");
         }
-        return new DestinationCommitResult(true, true, failure);
+        if (!sourceConsumed) {
+            failure = appendFailure(
+                failure,
+                new IllegalStateException(
+                    "Vanilla Pusher could not consume the source after an unresolved destination commit"));
+        }
+        return new DestinationCommitResult(sourceConsumed, true, failure);
     }
 
     private boolean finishDestinationCommit(
