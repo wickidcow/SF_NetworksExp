@@ -277,6 +277,7 @@ public class NetworkController extends NetworkObject {
         controllerCircuitBreaker.clearAll();
         INITIALIZED_CONTROLLERS.clear();
         DIRTY_CONTROLLERS.clear();
+        NetworkNode.clearPendingControllerRemovals();
         FULL_TOPOLOGY_REBUILDS.reset();
         FULL_TOPOLOGY_REBUILD_NANOS.reset();
         MAX_FULL_TOPOLOGY_REBUILD_NANOS.set(0L);
