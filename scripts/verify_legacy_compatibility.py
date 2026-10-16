@@ -701,6 +701,9 @@ require("commitInventorySourceToOutput" in vanilla_grabber
         and "sourceSnapshot = detachedExactClone" in vanilla_grabber
         and "transfer = detachedExactClone(sourceSnapshot" in vanilla_grabber
         and "exactlyMatches(sourceSnapshot, destinationCurrent)" in vanilla_grabber
+        and "sourceChangedBeforeCommit" in vanilla_grabber
+        and "source changed before source-side commit" in vanilla_grabber
+        and "the changed source was preserved" in vanilla_grabber
         and "destinationAfterRollback = destinationReader.get()" in vanilla_grabber
         and "sourceSnapshot.isSimilar(destinationAfterRollback)" in vanilla_grabber
         and "expectedSourceRemainder = sourceSnapshot.getAmount() - survivingDestinationAmount" in vanilla_grabber
