@@ -64,6 +64,23 @@ class NetworkTransferDiagnosticTest {
         }
     }
 
+    @Test
+    void brokenAddonStackCannotInterruptConflictDiagnostics() {
+        Location location = new Location(null, 9, 8, 7);
+        ItemStack before = stack(Material.IRON_INGOT, 8);
+        ItemStack broken = mock(ItemStack.class);
+        when(broken.getType()).thenThrow(new IllegalStateException("synthetic addon stack failure"));
+
+        try (MockedStatic<StorageCacheUtils> storage = mockStatic(StorageCacheUtils.class)) {
+            storage.when(() -> StorageCacheUtils.getSlimefunItem(location))
+                .thenThrow(new IllegalStateException("synthetic storage lookup failure"));
+
+            assertEquals(
+                "[machine=unknown, slot=6, change=diagnostic-error]",
+                NetworkTransferUtils.describeMenuSourceChange(location, 6, before, broken));
+        }
+    }
+
     private static ItemStack stack(Material material, int amount) {
         ItemStack stack = mock(ItemStack.class);
         when(stack.getType()).thenReturn(material);
