@@ -694,9 +694,10 @@ require("blockMenu.markDirty()" in vanilla_pusher and "handleFurnace" in vanilla
         and "handleBrewingStand" in vanilla_pusher,
         "vanilla cargo pusher persistence verification is missing")
 require("inventory instanceof CrafterInventory" in vanilla_pusher
-        and "InventoryUtil.addItem(holder.getInventory(), stack)" in vanilla_pusher
-        and "stack.getAmount() < before" in vanilla_pusher,
-        "vanilla cargo pusher partial-commit/Crafter protection is missing")
+        and "commitIntoStorageContents(" in vanilla_pusher
+        and "inventory::getStorageContents" in vanilla_pusher
+        and "inventory::setStorageContents" in vanilla_pusher,
+        "vanilla cargo pusher transactional partial-commit/Crafter protection is missing")
 require("final ItemStack transfer = stack.clone()" in vanilla_grabber
         and "itemsMatch(committed, transfer, true, true)" in vanilla_grabber
         and "inventory.setItem(sourceSlot, null)" in vanilla_grabber,
