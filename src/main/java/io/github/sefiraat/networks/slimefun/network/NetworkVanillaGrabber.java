@@ -358,8 +358,8 @@ public class NetworkVanillaGrabber extends NetworkDirectional implements SoftCel
             final int expectedSourceRemainder = sourceSnapshot.getAmount() - survivingDestinationAmount;
             final boolean reconciled = reconcileSourceRemainder(
                 sourceSnapshot,
-                liveSource,
                 sourceReader,
+                sourceWriter,
                 expectedSourceRemainder,
                 failure);
 
@@ -405,8 +405,8 @@ public class NetworkVanillaGrabber extends NetworkDirectional implements SoftCel
 
     private static boolean reconcileSourceRemainder(
         @NotNull ItemStack original,
-        @NotNull ItemStack liveSource,
         @NotNull Supplier<ItemStack> sourceReader,
+        @NotNull Consumer<ItemStack> sourceWriter,
         int expectedAmount,
         @NotNull Throwable failure) {
 
@@ -419,19 +419,22 @@ public class NetworkVanillaGrabber extends NetworkDirectional implements SoftCel
                 if (!exactlyMatches(original, current)) {
                     return false;
                 }
-                liveSource.setAmount(0);
+                sourceWriter.accept(null);
                 return isEmpty(sourceReader.get());
             }
 
-            if (current == null
-                || current.getAmount() != original.getAmount()
-                || !original.isSimilar(current)) {
-                return current != null
-                    && current.getAmount() == expectedAmount
-                    && original.isSimilar(current);
+            if (current != null
+                && current.getAmount() == expectedAmount
+                && original.isSimilar(current)) {
+                return true;
+            }
+            if (!exactlyMatches(original, current)) {
+                return false;
             }
 
-            liveSource.setAmount(expectedAmount);
+            final ItemStack remainder = detachedExactClone(original, "Vanilla Grabber source remainder");
+            remainder.setAmount(expectedAmount);
+            sourceWriter.accept(remainder);
             final ItemStack after = sourceReader.get();
             return after != null
                 && after.getAmount() == expectedAmount
