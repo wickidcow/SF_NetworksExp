@@ -494,9 +494,52 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
 
         final Location location = sourceMenu.getLocation();
         final int targetBudget = Math.max(0, config.maxTargetsPerTick);
+        final boolean fullLinePass = targetBudget <= 0 || targetBudget >= config.maxDistance;
 
-        if (targetBudget <= 0 || targetBudget >= config.maxDistance) {
+        /*
+         * Unlimited/full-distance bidirectional transfers used to bypass LinePassCache entirely,
+         * so push and grab performed the same StorageCacheUtils line walk twice in one server tick.
+         * Cursor state is irrelevant for a full pass; clear it first, then replay the push-discovered
+         * menus for grab when available. The cache remains stack-local to this tick and is never
+         * retained in a field or static map.
+         */
+        if (fullLinePass) {
             cursorMap.remove(location);
+
+            if (reusablePass != null
+                && reusablePass.matches(
+                    direction,
+                    config.maxDistance,
+                    0,
+                    targetBudget)) {
+                for (BlockMenu targetMenu : reusablePass.targets()) {
+                    consumer.accept(targetMenu);
+                }
+                return null;
+            }
+
+            if (captureLinePass) {
+                final List<BlockMenu> visitedTargets = new ArrayList<>(Math.max(0, config.maxDistance));
+                LineOperationUtil.doOperation(
+                    location,
+                    direction,
+                    config.maxDistance,
+                    false,
+                    false,
+                    (targetMenu) -> {
+                        visitedTargets.add(targetMenu);
+                        consumer.accept(targetMenu);
+                    });
+
+                return new LinePassCache(
+                    direction,
+                    config.maxDistance,
+                    0,
+                    targetBudget,
+                    visitedTargets,
+                    0);
+            }
+
             LineOperationUtil.doOperation(
                 location,
                 direction,

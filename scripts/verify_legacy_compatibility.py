@@ -547,11 +547,13 @@ require("record LinePassCache" in abstract_transfer
         and "GRAB_LINE_CURSOR_MAP.getOrDefault(location, 0)" in abstract_transfer
         and "sharedLinePass = tryPushItem(" in abstract_transfer
         and "limitQuantity,\n                            sharedLinePass);" in abstract_transfer
+        and "final boolean fullLinePass = targetBudget <= 0 || targetBudget >= config.maxDistance" in abstract_transfer
         and "reusablePass.matches(" in abstract_transfer
         and "for (BlockMenu targetMenu : reusablePass.targets())" in abstract_transfer
-        and "final List<BlockMenu> visitedTargets" in abstract_transfer
+        and abstract_transfer.count("final List<BlockMenu> visitedTargets") >= 2
+        and "new LinePassCache(\n                    direction,\n                    config.maxDistance,\n                    0,\n                    targetBudget" in abstract_transfer
         and "LINE_PASS_CACHE_MAP" not in abstract_transfer,
-        "bidirectional line transfers must reuse one validated traversal without retaining BlockMenu references")
+        "bidirectional line transfers must reuse one validated traversal for budgeted and full-line passes without retaining BlockMenu references")
 require("Map<Location, IdleState> IDLE_STATE_MAP = new ConcurrentHashMap<>()" in auto_crafter
         and "AtomicInteger misses" in auto_crafter
         and "AtomicInteger skipTicks" in auto_crafter
