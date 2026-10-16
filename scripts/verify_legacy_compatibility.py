@@ -708,6 +708,8 @@ require("commitInventorySourceToOutput" in vanilla_grabber
         and "sourceSnapshot.isSimilar(destinationAfterRollback)" in vanilla_grabber
         and "expectedSourceRemainder = sourceSnapshot.getAmount() - survivingDestinationAmount" in vanilla_grabber
         and "reconcileSourceRemainder(" in vanilla_grabber
+        and "sourceRemovalAttempted" in vanilla_grabber
+        and "isEmpty(current) && sourceRemovalAttempted" in vanilla_grabber
         and "sourceWriter.accept(remainder)" in vanilla_grabber
         and "sourceWriter.accept(null)" in vanilla_grabber
         and "destinationWriter.accept(null)" in vanilla_grabber
