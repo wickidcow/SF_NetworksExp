@@ -14,7 +14,8 @@ A delayed removal could also execute after the winner was broken or the connecti
 
 ## Change
 
-- Both discovery directions use one deterministic block-coordinate ordering and therefore select the same loser.
+- If exactly one conflicting controller already owns a published runtime root, preserve that established controller.
+- Otherwise both discovery directions use one deterministic block-coordinate ordering and therefore select the same loser.
 - A controller selected for removal stops publishing a temporary NetworkRoot while the removal is pending.
 - Multiple discovery edges and both tickers still coalesce onto one pending removal.
 - The delayed server-thread removal rechecks that both controllers still exist and remain connected in the loaded
