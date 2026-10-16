@@ -759,22 +759,31 @@ public final class NetworkTransferUtils {
         @NotNull ItemStack before,
         ItemStack after) {
 
-        String machineId = "unknown";
+        /*
+         * This method runs only after the strict source guard has already detected a conflict.
+         * Diagnostics are never allowed to interfere with the compensation path, including when a
+         * third-party ItemStack subclass throws from ordinary identity/metadata accessors.
+         */
         try {
-            final SlimefunItem machine = StorageCacheUtils.getSlimefunItem(location);
-            if (machine != null) {
-                machineId = machine.getId();
+            String machineId = "unknown";
+            try {
+                final SlimefunItem machine = StorageCacheUtils.getSlimefunItem(location);
+                if (machine != null) {
+                    machineId = machine.getId();
+                }
+            } catch (RuntimeException | LinkageError ignored) {
+                // Keep the generic machine id.
             }
-        } catch (RuntimeException | LinkageError ignored) {
-            // Diagnostics must never turn a compensated transfer conflict into a second failure.
-        }
 
-        return "[machine=" + machineId
-            + ", slot=" + slot
-            + ", change=" + describeStackChange(before, after)
-            + ", before=" + describeStack(before)
-            + ", after=" + describeStack(after)
-            + ']';
+            return "[machine=" + machineId
+                + ", slot=" + slot
+                + ", change=" + describeStackChange(before, after)
+                + ", before=" + describeStack(before)
+                + ", after=" + describeStack(after)
+                + ']';
+        } catch (RuntimeException | LinkageError diagnosticFailure) {
+            return "[machine=unknown, slot=" + slot + ", change=diagnostic-error]";
+        }
     }
 
     private static @NotNull String describeStackChange(@NotNull ItemStack before, ItemStack after) {
