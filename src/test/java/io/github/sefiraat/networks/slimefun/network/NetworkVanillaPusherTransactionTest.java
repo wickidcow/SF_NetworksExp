@@ -2,6 +2,7 @@ package io.github.sefiraat.networks.slimefun.network;
 
 import com.ytdd9527.networksexpansion.core.managers.ConfigManager;
 import io.github.sefiraat.networks.Networks;
+import io.github.sefiraat.networks.utils.StackUtils;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.junit.jupiter.api.BeforeAll;
@@ -34,6 +35,136 @@ class NetworkVanillaPusherTransactionTest {
             when(config.isSoftCellBan()).thenReturn(false);
             when(config.getSoftCellBanThreshold()).thenReturn(64);
             Class.forName(NetworkVanillaPusher.class.getName());
+        }
+    }
+
+    @Test
+    void ordinaryInventoryCommitPreservesPartialStackThenEmptySlotOrder() {
+        ItemStack source = mutableStack(Material.DIAMOND, 10, 64);
+        ItemStack partial = mutableStack(Material.DIAMOND, 60, 64);
+        AtomicReference<ItemStack[]> destination = new AtomicReference<>(new ItemStack[]{partial, null});
+
+        try (MockedStatic<StackUtils> stacks = mockStatic(StackUtils.class)) {
+            stacks.when(() -> StackUtils.itemsMatch(
+                org.mockito.ArgumentMatchers.any(ItemStack.class),
+                org.mockito.ArgumentMatchers.any(ItemStack.class),
+                org.mockito.ArgumentMatchers.eq(true),
+                org.mockito.ArgumentMatchers.eq(false))).thenAnswer(invocation -> {
+                    ItemStack left = invocation.getArgument(0);
+                    ItemStack right = invocation.getArgument(1);
+                    return left.getType() == right.getType();
+                });
+
+            var result = NetworkVanillaPusher.commitIntoStorageContents(
+                source,
+                destination::get,
+                destination::set);
+
+            assertTrue(result.moved());
+            assertFalse(result.ambiguous());
+            assertTrue(source.getAmount() == 0);
+            assertTrue(destination.get()[0].getAmount() == 64);
+            assertTrue(destination.get()[1].getAmount() == 6);
+        }
+    }
+
+    @Test
+    void ordinaryInventoryWriteThenThrowStillCommitsOnlyAcceptedAmount() {
+        ItemStack source = mutableStack(Material.IRON_INGOT, 10, 64);
+        ItemStack occupied = mutableStack(Material.DIAMOND, 64, 64);
+        ItemStack partial = mutableStack(Material.IRON_INGOT, 60, 64);
+        AtomicReference<ItemStack[]> destination = new AtomicReference<>(new ItemStack[]{partial, occupied});
+
+        try (MockedStatic<StackUtils> stacks = matchingByMaterial()) {
+            var result = NetworkVanillaPusher.commitIntoStorageContents(
+                source,
+                destination::get,
+                contents -> {
+                    destination.set(contents);
+                    throw new IllegalStateException("setter threw after storage commit");
+                });
+
+            assertTrue(result.moved());
+            assertFalse(result.ambiguous());
+            assertTrue(result.failure() instanceof IllegalStateException);
+            assertTrue(source.getAmount() == 6);
+            assertTrue(destination.get()[0].getAmount() == 64);
+            assertTrue(destination.get()[1].getAmount() == 64);
+        }
+    }
+
+    @Test
+    void ordinaryInventoryNormalizationRollsBackAndPreservesSource() {
+        ItemStack source = mutableStack(Material.GOLD_INGOT, 5, 64);
+        AtomicReference<ItemStack[]> destination = new AtomicReference<>(new ItemStack[]{null});
+        AtomicInteger writes = new AtomicInteger();
+
+        try (MockedStatic<StackUtils> stacks = matchingByMaterial()) {
+            var result = NetworkVanillaPusher.commitIntoStorageContents(
+                source,
+                destination::get,
+                contents -> {
+                    if (writes.getAndIncrement() == 0) {
+                        contents[0].setAmount(1);
+                        destination.set(contents);
+                    } else {
+                        destination.set(contents);
+                    }
+                });
+
+            assertFalse(result.moved());
+            assertFalse(result.ambiguous());
+            assertTrue(source.getAmount() == 5);
+            assertTrue(destination.get()[0] == null);
+            assertTrue(writes.get() == 2);
+        }
+    }
+
+    @Test
+    void ordinaryInventoryFailedRollbackConsumesOnlyAttemptedAmount() {
+        ItemStack source = mutableStack(Material.EMERALD, 10, 64);
+        ItemStack partial = mutableStack(Material.EMERALD, 60, 64);
+        AtomicReference<ItemStack[]> destination = new AtomicReference<>(new ItemStack[]{partial});
+        AtomicInteger writes = new AtomicInteger();
+
+        try (MockedStatic<StackUtils> stacks = matchingByMaterial()) {
+            var result = NetworkVanillaPusher.commitIntoStorageContents(
+                source,
+                destination::get,
+                contents -> {
+                    if (writes.getAndIncrement() == 0) {
+                        contents[0].setAmount(63);
+                        destination.set(contents);
+                    } else {
+                        throw new IllegalStateException("rollback refused");
+                    }
+                });
+
+            assertTrue(result.moved());
+            assertTrue(result.ambiguous());
+            assertTrue(source.getAmount() == 6);
+            assertTrue(destination.get()[0].getAmount() == 63);
+            assertTrue(writes.get() == 2);
+        }
+    }
+
+    @Test
+    void ordinaryInventoryWithNoCapacityDoesNotWriteOrMutateSource() {
+        ItemStack source = mutableStack(Material.DIAMOND, 4, 64);
+        ItemStack full = mutableStack(Material.DIAMOND, 64, 64);
+        AtomicReference<ItemStack[]> destination = new AtomicReference<>(new ItemStack[]{full});
+        AtomicInteger writes = new AtomicInteger();
+
+        try (MockedStatic<StackUtils> stacks = matchingByMaterial()) {
+            var result = NetworkVanillaPusher.commitIntoStorageContents(
+                source,
+                destination::get,
+                contents -> writes.incrementAndGet());
+
+            assertFalse(result.moved());
+            assertFalse(result.ambiguous());
+            assertTrue(source.getAmount() == 4);
+            assertTrue(writes.get() == 0);
         }
     }
 
@@ -252,6 +383,38 @@ class NetworkVanillaPusherTransactionTest {
         assertTrue(writes.get() == 0);
         verify(source, never()).clone();
         verify(source, never()).setAmount(0);
+    }
+
+    private static MockedStatic<StackUtils> matchingByMaterial() {
+        MockedStatic<StackUtils> stacks = mockStatic(StackUtils.class);
+        stacks.when(() -> StackUtils.itemsMatch(
+            org.mockito.ArgumentMatchers.any(ItemStack.class),
+            org.mockito.ArgumentMatchers.any(ItemStack.class),
+            org.mockito.ArgumentMatchers.eq(true),
+            org.mockito.ArgumentMatchers.eq(false))).thenAnswer(invocation -> {
+                ItemStack left = invocation.getArgument(0);
+                ItemStack right = invocation.getArgument(1);
+                return left != null && right != null && left.getType() == right.getType();
+            });
+        return stacks;
+    }
+
+    private static ItemStack mutableStack(Material type, int amount, int maxStackSize) {
+        AtomicInteger current = new AtomicInteger(amount);
+        ItemStack stack = mock(ItemStack.class);
+        when(stack.getType()).thenReturn(type);
+        when(stack.getAmount()).thenAnswer(invocation -> current.get());
+        when(stack.getMaxStackSize()).thenReturn(maxStackSize);
+        org.mockito.Mockito.doAnswer(invocation -> {
+            current.set(invocation.getArgument(0));
+            return null;
+        }).when(stack).setAmount(org.mockito.ArgumentMatchers.anyInt());
+        when(stack.isSimilar(org.mockito.ArgumentMatchers.any(ItemStack.class))).thenAnswer(invocation -> {
+            ItemStack other = invocation.getArgument(0);
+            return other != null && other.getType() == type;
+        });
+        when(stack.clone()).thenAnswer(invocation -> mutableStack(type, current.get(), maxStackSize));
+        return stack;
     }
 
     private static ItemStack exactTransferChain(ItemStack source, Material type, int amount) {
