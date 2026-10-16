@@ -236,9 +236,10 @@ public class NetworkNode {
     /**
      * Selects one controller to remove without depending on ticker/discovery order.
      *
-     * <p>Connected controllers necessarily share a world. The lower block coordinate tuple is retained and the
-     * higher tuple is removed. This stable rule matters only for an already-invalid multi-controller topology;
-     * normal player placement is rejected before the topology exists.</p>
+     * <p>Connected controllers necessarily share a world. When exactly one side already owns a published root,
+     * that established controller survives. If both or neither are established, the lower block-coordinate tuple
+     * is retained and the higher tuple is removed. These rules matter only for an already-invalid multi-controller
+     * topology; normal player placement is rejected before the topology exists.</p>
      */
     static @Nullable Location chooseControllerForRemoval(
         @NotNull Location firstController,
