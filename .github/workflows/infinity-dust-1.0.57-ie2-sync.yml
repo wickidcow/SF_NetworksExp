@@ -1,0 +1,162 @@
+name: Infinity Dust Extractor 1.0.57 + IE2 sync validation
+
+on:
+  push:
+    branches: ['validation/infinity-dust-1.0.57-ie2-sync-20261015']
+    paths:
+      - '.github/workflows/infinity-dust-1.0.57-ie2-sync.yml'
+      - 'tests/runtime/InfinityDustTransferProbe.java'
+      - 'scripts/prepare_infinity_dust_probe.py'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: infinity-dust-1-0-57-ie2-sync-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  extractor:
+    name: Real extractor / ${{ matrix.server }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 32
+    strategy:
+      fail-fast: false
+      matrix:
+        server: [purpur-1.21.11, paper-26.3]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - uses: actions/download-artifact@v8
+        with:
+          repository: wickidcow/SF_NetworksExp
+          run-id: 38839014290
+          github-token: ${{ github.token }}
+          name: SF_Networks1.0.57.jar
+          path: .ci/networks
+
+      - uses: actions/download-artifact@v8
+        with:
+          repository: wickidcow/SF_NetworksExp
+          run-id: 38839014290
+          github-token: ${{ github.token }}
+          name: slimefun-legacy-core
+          path: .ci/core
+
+      - name: Checkout exact reviewed IE2 producer fix
+        uses: actions/checkout@v6
+        with:
+          repository: wickidcow/SF_InfinityExpansion2
+          ref: 05f891781cb9eef5053e6a7f790102a8fb6a116e
+          path: .deps/InfinityExpansion2
+          persist-credentials: false
+
+      - name: Verify exact Networks/core and install the tested core for IE2 compilation
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '125a54605244f3ecaa2d873cca4dff7a78ff7772a445ad5d6f4c38f3603d57ab  .ci/networks/SF_Networks1.0.57.jar' | sha256sum --check
+          echo 'b35297f88d1acacd7f6de933605ae9cd7d7063a33c5b26f98573c3fbb734d376  .ci/core/Slimefun-Legacy-Core.jar' | sha256sum --check
+          DEST="$HOME/.m2/repository/com/github/slimefun/Slimefun/ALBION-SNAPSHOT"
+          mkdir -p "$DEST"
+          cp .ci/core/Slimefun-Legacy-Core.jar "$DEST/Slimefun-ALBION-SNAPSHOT.jar"
+          cat > "$DEST/Slimefun-ALBION-SNAPSHOT.pom" <<'POM'
+          <project xmlns="http://maven.apache.org/POM/4.0.0">
+            <modelVersion>4.0.0</modelVersion>
+            <groupId>com.github.slimefun</groupId>
+            <artifactId>Slimefun</artifactId>
+            <version>ALBION-SNAPSHOT</version>
+          </project>
+          POM
+
+      - name: Build exact IE2 synchronized HopperMachine candidate
+        working-directory: .deps/InfinityExpansion2
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew clean shadowJar --no-daemon --stacktrace --console=plain             -PpaperApiVersion=1.21.11-R0.1-SNAPSHOT             -PtargetJvm=21             -PbuildVersion=2.0.13             -PslimefunApiCoordinate=com.github.slimefun:Slimefun:ALBION-SNAPSHOT
+          test -s build/libs/SF_InfinityExpansion2.0.13.jar
+          mkdir -p "$GITHUB_WORKSPACE/.ci/ie2"
+          cp build/libs/SF_InfinityExpansion2.0.13.jar "$GITHUB_WORKSPACE/.ci/ie2/IE2-sync-candidate.jar"
+          sha256sum "$GITHUB_WORKSPACE/.ci/ie2/IE2-sync-candidate.jar"
+
+      - name: Download released IE2 asynchronous negative control
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 --max-time 120             https://github.com/wickidcow/SF_InfinityExpansion2/releases/download/v2.0.13/SF_InfinityExpansion2.0.13.jar             -o .ci/ie2/IE2-released-control.jar
+          echo 'a2f8a1ac7ada18c7a6cf774b09158e1567c6cace478bed10a160a897ce97198e  .ci/ie2/IE2-released-control.jar' | sha256sum --check
+          python3 scripts/prepare_infinity_dust_probe.py
+
+      - name: Pin actual server runtime
+        env:
+          SERVER: ${{ matrix.server }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$SERVER" = purpur-1.21.11 ]; then
+            curl -fLsS --retry 3 --max-time 180               https://api.purpurmc.org/v2/purpur/1.21.11/2568/download -o .ci/server.jar
+            echo 'ee199511bf0a970ee8459fe3a351703fec37293f00bc2de1c5cb746c7e4acc34  .ci/server.jar' | sha256sum --check
+          else
+            curl -fLsS --retry 3 --max-time 180               -H 'User-Agent: SF_NetworksExp-CI/1.0 (https://github.com/wickidcow/SF_NetworksExp)'               https://fill.papermc.io/v3/projects/paper/versions/26.3/builds -o .ci/paper-builds.json
+            python3 scripts/prepare_paper_26_3_runtime.py               .ci/paper-builds.json .ci/paper.json .ci/paper.url .ci/paper.sha256
+            curl -fLsS --retry 3 --max-time 360               -H 'User-Agent: SF_NetworksExp-CI/1.0 (https://github.com/wickidcow/SF_NetworksExp)'               "$(cat .ci/paper.url)" -o .ci/server.jar
+            printf '%s  .ci/server.jar\n' "$(cat .ci/paper.sha256)" | sha256sum --check
+          fi
+
+      - name: Require released IE2 2.0.13 to expose the asynchronous root cause
+        env:
+          SERVER: ${{ matrix.server }}
+          INFINITY_JAR: ${{ github.workspace }}/.ci/ie2/IE2-released-control.jar
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXTRA=()
+          if [ "$SERVER" = paper-26.3 ]; then EXTRA=(.ci/paper.json); fi
+          set +e
+          python3 scripts/infinity_dust_runtime_probe.py             .ci/core/Slimefun-Legacy-Core.jar             .ci/networks/SF_Networks1.0.57.jar             .ci/server.jar build/ie2-async-control "${EXTRA[@]}"
+          STATUS=$?
+          set -e
+          test "$STATUS" -ne 0
+          grep -F 'ASYNC_HOPPER_TICKER' build/ie2-async-control/plugins/infinity-dust-result.txt
+          echo 'NEGATIVE CONTROL PASS: released IE2 exposes asynchronous HopperMachine ticking'
+
+      - name: Run real extractor with IE2 synchronized producer and Networks 1.0.57
+        env:
+          SERVER: ${{ matrix.server }}
+          INFINITY_JAR: ${{ github.workspace }}/.ci/ie2/IE2-sync-candidate.jar
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXTRA=()
+          if [ "$SERVER" = paper-26.3 ]; then EXTRA=(.ci/paper.json); fi
+          python3 scripts/infinity_dust_runtime_probe.py             .ci/core/Slimefun-Legacy-Core.jar             .ci/networks/SF_Networks1.0.57.jar             .ci/server.jar build/ie2-sync-candidate "${EXTRA[@]}"
+          grep -F 'PASS:' build/ie2-sync-candidate/plugins/infinity-dust-result.txt
+          ! grep -F 'ASYNC_HOPPER_TICKER' build/ie2-sync-candidate/plugins/infinity-dust-result.txt
+
+      - name: Retain exact evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: infinity-dust-1.0.57-ie2-sync-${{ matrix.server }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            .ci/ie2/*.jar
+            build/ie2-async-control/inputs.json
+            build/ie2-async-control/console.log
+            build/ie2-async-control/patch.log
+            build/ie2-async-control/plugins/infinity-dust-result.txt
+            build/ie2-sync-candidate/inputs.json
+            build/ie2-sync-candidate/console.log
+            build/ie2-sync-candidate/patch.log
+            build/ie2-sync-candidate/plugins/infinity-dust-result.txt
