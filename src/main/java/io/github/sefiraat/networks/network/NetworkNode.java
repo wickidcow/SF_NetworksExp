@@ -132,8 +132,12 @@ public class NetworkNode {
                 // tickers discover each other in the same cycle they must choose the same loser; otherwise each
                 // side can queue deletion of the other and remove both controllers.
                 if (testType == NodeType.CONTROLLER && !testLocation.equals(this.root.nodePosition)) {
-                    final Location removalTarget =
-                        chooseControllerForRemoval(rootControllerLocation, testLocation);
+                    final Location otherControllerLocation = normalizeBlockLocation(testLocation);
+                    final Location removalTarget = chooseControllerForRemoval(
+                        rootControllerLocation,
+                        NetworkController.getNetworks().containsKey(rootControllerLocation),
+                        otherControllerLocation,
+                        NetworkController.getNetworks().containsKey(otherControllerLocation));
                     if (removalTarget != null) {
                         final Location survivor = removalTarget.equals(rootControllerLocation)
                             ? normalizeBlockLocation(testLocation)
@@ -239,6 +243,14 @@ public class NetworkNode {
     static @Nullable Location chooseControllerForRemoval(
         @NotNull Location firstController,
         @NotNull Location secondController) {
+        return chooseControllerForRemoval(firstController, false, secondController, false);
+    }
+
+    static @Nullable Location chooseControllerForRemoval(
+        @NotNull Location firstController,
+        boolean firstHasActiveRoot,
+        @NotNull Location secondController,
+        boolean secondHasActiveRoot) {
 
         final Location first = normalizeBlockLocation(firstController);
         final Location second = normalizeBlockLocation(secondController);
@@ -247,6 +259,13 @@ public class NetworkNode {
             return null;
         }
 
+        // Preserve an already-established network when exactly one controller owns a published root.
+        // This makes a newly introduced conflicting controller the loser without depending on tick order.
+        if (firstHasActiveRoot != secondHasActiveRoot) {
+            return firstHasActiveRoot ? second : first;
+        }
+
+        // If both or neither are established, use an order-independent coordinate tie-break.
         int comparison = Integer.compare(first.getBlockX(), second.getBlockX());
         if (comparison == 0) {
             comparison = Integer.compare(first.getBlockY(), second.getBlockY());
