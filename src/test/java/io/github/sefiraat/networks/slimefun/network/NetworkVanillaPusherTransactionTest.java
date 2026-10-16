@@ -148,7 +148,7 @@ class NetworkVanillaPusherTransactionTest {
     }
 
     @Test
-    void ordinaryInventoryFailedRollbackConsumesOnlyAttemptedAmount() {
+    void ordinaryInventoryFailedRollbackConsumesOnlyProvenSurvivingAmount() {
         ItemStack source = mutableStack(Material.EMERALD, 10, 64);
         ItemStack partial = mutableStack(Material.EMERALD, 60, 64);
         AtomicReference<ItemStack[]> destination = new AtomicReference<>(new ItemStack[]{partial});
@@ -169,9 +169,30 @@ class NetworkVanillaPusherTransactionTest {
 
             assertTrue(result.moved());
             assertTrue(result.ambiguous());
-            assertTrue(source.getAmount() == 6);
+            assertTrue(source.getAmount() == 7);
             assertTrue(destination.get()[0].getAmount() == 63);
+            assertTrue(source.getAmount() + (destination.get()[0].getAmount() - 60) == 10);
             assertTrue(writes.get() == 2);
+        }
+    }
+
+    @Test
+    void survivingInsertedAmountCountsOnlyExplainableSourceDeltas() {
+        ItemStack source = mutableStack(Material.DIAMOND, 10, 64);
+        ItemStack baselinePartial = mutableStack(Material.DIAMOND, 60, 64);
+        ItemStack currentPartial = mutableStack(Material.DIAMOND, 63, 64);
+        ItemStack currentEmptySlot = mutableStack(Material.DIAMOND, 2, 64);
+
+        try (MockedStatic<StackUtils> stacks = matchingByMaterial()) {
+            assertTrue(NetworkVanillaPusher.survivingInsertedAmount(
+                new ItemStack[]{baselinePartial, null},
+                new ItemStack[]{currentPartial, currentEmptySlot},
+                source) == 5);
+
+            assertTrue(NetworkVanillaPusher.survivingInsertedAmount(
+                new ItemStack[]{baselinePartial},
+                new ItemStack[]{mutableStack(Material.GOLD_INGOT, 63, 64)},
+                source) == -1);
         }
     }
 
