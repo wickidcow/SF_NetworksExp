@@ -867,6 +867,7 @@ require("commitIntoEmptyDestination" in vanilla_pusher
         and "destinationWriter.accept(null)" in vanilla_pusher
         and "actual.getAmount() == expected.getAmount()" in vanilla_pusher
         and "expected.isSimilar(actual)" in vanilla_pusher
+        and "transfer == source || !exactlyMatches(source, transfer)" in vanilla_pusher
         and "the source was consumed to prevent a duplicate" in vanilla_pusher
         and "furnace.setFuel(transfer)" not in vanilla_pusher
         and "furnace.setSmelting(transfer)" not in vanilla_pusher
