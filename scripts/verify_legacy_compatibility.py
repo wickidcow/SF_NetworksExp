@@ -862,6 +862,16 @@ require("public boolean canAccept(@NotNull ItemStack incoming)" in quantum_netwo
 require("World world = dropLocation.getWorld()" in transfer_utils
         and "no loaded world was" in transfer_utils,
         "last-resort transfer rollback can still clear an undropped remainder")
+require("commitIntoEmptyDestination" in vanilla_pusher
+        and "DestinationCommitResult" in vanilla_pusher
+        and "destinationWriter.accept(null)" in vanilla_pusher
+        and "actual.getAmount() == expected.getAmount()" in vanilla_pusher
+        and "expected.isSimilar(actual)" in vanilla_pusher
+        and "the source was consumed to prevent a duplicate" in vanilla_pusher
+        and "furnace.setFuel(transfer)" not in vanilla_pusher
+        and "furnace.setSmelting(transfer)" not in vanilla_pusher
+        and "brewer.setContents(contents)" not in vanilla_pusher,
+        "Vanilla Pusher furnace/brewing commits must verify or roll back destination writes before preserving the source")
 
 quantum_get_start = quantum_storage.find("public static ItemStack getItemStack")
 quantum_get_end = quantum_storage.find("public void", quantum_get_start + 1)
