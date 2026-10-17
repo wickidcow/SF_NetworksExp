@@ -39,6 +39,34 @@ public final class NetworkTransferUtils {
         RootRollbackSafetyHold.reset();
     }
 
+    /** Direct root APIs must observe the same controller quarantine as helper withdrawals. */
+    public static boolean isNetworkRootHeld(
+        @NotNull NetworkRoot root, @NotNull Location accessor) {
+        return RootRollbackSafetyHold.isHeld(root, accessor);
+    }
+
+    /**
+     * Storage adapters can write items before throwing without providing a receipt.
+     * Block all further network access after an unverified write or withdrawal.
+     * A controller rebuild is not proof that storage has been reconciled.
+     */
+    public static void quarantineUnverifiedNetworkRoot(
+        @NotNull NetworkRoot root,
+        @NotNull Location accessor,
+        @NotNull Material material,
+        int possiblyAffected,
+        @NotNull Throwable cause) {
+        RootRollbackSafetyHold.hold(root, accessor, material, possiblyAffected);
+        TransferAudit.recordFailure();
+        Networks.getInstance().getLogger().log(
+            java.util.logging.Level.SEVERE,
+            "Networks quarantined a controller after an unverified storage operation at "
+                + accessor + ". Up to " + possiblyAffected + " " + material
+                + " item(s) may require reconciliation. No automatic refund or world drop"
+                + " is authorized by this exception. Save logs and inspect storage before restarting.",
+            cause);
+    }
+
     /** Source-network rollback holds are read-only until a controlled restart. */
     public static int getHeldWithdrawalSourceCount() {
         return RootRollbackSafetyHold.count();
@@ -1006,6 +1034,11 @@ public final class NetworkTransferUtils {
         if (slot < 0 || slot >= sourceMenu.getSize() || limit <= 0) {
             return MenuDepositResult.NONE;
         }
+        // A quarantined controller must not turn a rejected network deposit
+        // into a clean zero-acceptance VOID event. Keep the source untouched.
+        if (RootRollbackSafetyHold.isHeld(root, accessor)) {
+            return MenuDepositResult.FAILED;
+        }
 
         final ItemStack source = sourceMenu.getItemInSlot(slot);
         if (source == null || source.getType().isAir() || source.getAmount() <= 0) {
@@ -1075,6 +1108,9 @@ public final class NetworkTransferUtils {
         try {
             sourceMenu.replaceExistingItem(slot, committedSource);
             sourceMenu.markDirty();
+            if (!sourceStillMatches(committedSource, sourceMenu.getItemInSlot(slot))) {
+                throw new IllegalStateException("Menu source setter returned without committing its exact remainder");
+            }
             return new MenuDepositResult(result.moved(), result.failed());
         } catch (RuntimeException | LinkageError exception) {
             try {
@@ -1155,6 +1191,9 @@ public final class NetworkTransferUtils {
                 return 0;
             }
             sourceInventory.setItem(slot, result.remainingStack());
+            if (!sourceStillMatches(result.remainingStack(), sourceInventory.getItem(slot))) {
+                throw new IllegalStateException("Inventory source setter returned without deducting the accepted items");
+            }
             return result.moved();
         } catch (RuntimeException | LinkageError exception) {
             try {
@@ -1202,6 +1241,9 @@ public final class NetworkTransferUtils {
                 return 0;
             }
             player.setItemOnCursor(orAir(result.remainingStack()));
+            if (!sourceStillMatches(result.remainingStack(), player.getItemOnCursor())) {
+                throw new IllegalStateException("Player cursor setter returned without deducting the accepted items");
+            }
             return result.moved();
         } catch (RuntimeException | LinkageError exception) {
             try {
@@ -1261,6 +1303,9 @@ public final class NetworkTransferUtils {
                 return 0;
             }
             source.setAmount(remaining == null ? 0 : remaining.getAmount());
+            if (!sourceStillMatches(remaining, source)) {
+                throw new IllegalStateException("Mutable source stack rejected the network deduction");
+            }
             return result.moved();
         } catch (RuntimeException | LinkageError exception) {
             try {
@@ -1327,10 +1372,15 @@ public final class NetworkTransferUtils {
             root.addItemStack0(accessor, offered);
         } catch (RuntimeException | LinkageError exception) {
             failed = true;
-            TransferAudit.recordFailure();
+            // The actual NetworkRoot entry point already recorded the failed
+            // adapter operation when it quarantined this controller. Do not
+            // count the same failure twice; mock/foreign roots still count here.
+            if (!RootRollbackSafetyHold.isHeld(root, accessor)) {
+                TransferAudit.recordFailure();
+            }
             Networks.getInstance().getLogger().log(
                 java.util.logging.Level.WARNING,
-                "A Networks deposit failed; reconciling the source stack with any items already accepted.",
+                "A Networks deposit failed; its reported remainder may be unverified and the root must remain quarantined.",
                 exception);
             // A destination can accept items before a later destination (or bookkeeping) fails.
             // The mutated offer is the remaining amount, so reconcile accepted items on failure too.
@@ -1384,6 +1434,13 @@ public final class NetworkTransferUtils {
             }
         }
         TransferAudit.recordDepositCompensation(committed, recovered);
+        if (committed > recovered) {
+            // This rollback could not prove that the entire network-side
+            // deposit was undone. Leaving this controller live would allow
+            // repeatedly contested source writes to continue indefinitely.
+            final Material material = template == null ? Material.BARRIER : template.getType();
+            RootRollbackSafetyHold.hold(root, accessor, material, committed - recovered);
+        }
         java.util.logging.Level level = recovered >= committed
             ? java.util.logging.Level.WARNING
             : java.util.logging.Level.SEVERE;

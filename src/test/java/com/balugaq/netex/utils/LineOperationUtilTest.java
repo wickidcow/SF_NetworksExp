@@ -20,6 +20,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.MockedStatic;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
@@ -76,6 +77,7 @@ class LineOperationUtilTest {
              MockedStatic<NetworkTransferUtils> transfers = mockStatic(NetworkTransferUtils.class)) {
             LineOperationUtil.grabItem(ACCESSOR, root, menu, mode, 64);
             transfers.verify(() -> NetworkTransferUtils.moveMenuSlotIntoNetwork(root, ACCESSOR, menu, 0, 64));
+            transfers.verify(() -> NetworkTransferUtils.isNetworkRootHeld(root, ACCESSOR));
             transfers.verifyNoMoreInteractions();
             verify(menu, never()).getItemInSlot(1);
             verify(menu, never()).replaceExistingItem(anyInt(), any());
@@ -95,6 +97,7 @@ class LineOperationUtilTest {
             transfers.verify(() -> NetworkTransferUtils.moveMenuSlotIntoNetwork(root, ACCESSOR, menu, 0, 64));
             transfers.verify(() -> NetworkTransferUtils.moveMenuSlotIntoNetwork(root, ACCESSOR, menu, 1, 64));
             transfers.verify(() -> NetworkTransferUtils.moveMenuSlotIntoNetwork(root, ACCESSOR, menu, 2, 54));
+            transfers.verify(() -> NetworkTransferUtils.isNetworkRootHeld(root, ACCESSOR));
             transfers.verifyNoMoreInteractions();
         }
     }
@@ -116,6 +119,7 @@ class LineOperationUtilTest {
                 transfers.verify(() -> NetworkTransferUtils.moveMenuSlotIntoNetworkAndVoidRemainder(
                     root, ACCESSOR, menu, current, 64));
             }
+            transfers.verify(() -> NetworkTransferUtils.isNetworkRootHeld(root, ACCESSOR));
             transfers.verifyNoMoreInteractions();
             // The checked helper owns intentional disposal; the caller must never perform a second clear.
             verify(menu, never()).replaceExistingItem(anyInt(), any());
@@ -136,6 +140,7 @@ class LineOperationUtilTest {
             LineOperationUtil.grabItem(ACCESSOR, root, menu, TransportMode.SPECIFIED_QUANTITY, 64);
             // 192 stored, keep 64; the historical reverse-slot order starts at slot 2.
             transfers.verify(() -> NetworkTransferUtils.moveMenuSlotIntoNetwork(root, ACCESSOR, menu, 2, 64));
+            transfers.verify(() -> NetworkTransferUtils.isNetworkRootHeld(root, ACCESSOR));
             transfers.verifyNoMoreInteractions();
         }
     }
@@ -198,6 +203,22 @@ class LineOperationUtilTest {
         assertNull(LineOperationUtil.requestNetworkItem(root, ACCESSOR, request, 0, null));
         assertNull(LineOperationUtil.requestNetworkItem(root, ACCESSOR, request, 0, null));
         verify(root, times(4)).getItemStack0(ACCESSOR, request);
+    }
+
+    @Test
+    void heldNetworkStopsBeforePhysicalDrawerSourceWithdrawal() {
+        ItemStack sample = mock(ItemStack.class);
+        try (MockedStatic<NetworkTransferUtils> transfers = mockStatic(NetworkTransferUtils.class)) {
+            transfers.when(() -> NetworkTransferUtils.isNetworkRootHeld(root, ACCESSOR)).thenReturn(true);
+
+            assertEquals(0, LineOperationUtil.moveDrawerItemIntoNetwork(
+                root, ACCESSOR, new Location(null, 4, 5, 6), sample, 8));
+
+            // The emergency root hold must stop before clone, menu, or storage access.
+            verify(sample, never()).clone();
+            verifyNoInteractions(menu);
+            verify(root, never()).addItemStack0(any(), any());
+        }
     }
 
     private MockedStatic<BlockMenuUtil> slots(int... values) {
