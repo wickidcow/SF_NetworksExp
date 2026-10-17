@@ -1,0 +1,83 @@
+name: Pin Paper 26.3 Build 194 (Staging Metadata)
+
+# One-time isolated integrity probe for the test server, not a release workflow.
+on:
+  push:
+    branches:
+      - test/paper-26-3-build194-native-20261016
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  paper194_metadata:
+    name: Verify official Paper 26.3 build 194 checksum
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Download build metadata from official PaperMC API
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p paper-metadata
+          curl --fail --location --silent --show-error --retry 3 \
+            --retry-all-errors --retry-delay 2 --max-time 100 \
+            -H "User-Agent: SF_NetworksExp-staging/1.0 (https://github.com/wickidcow/SF_NetworksExp)" \
+            "https://fill.papermc.io/v3/projects/paper/versions/26.3/builds" \
+            --output paper-metadata/paper-26.3-builds.json
+      - name: Select only official stable build 194 and show its SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+          from urllib.parse import urlparse
+
+          root = Path("paper-metadata")
+          data = json.loads((root / "paper-26.3-builds.json").read_text())
+          builds = data if isinstance(data, list) else data.get("builds", [])
+          exact = [item for item in builds if isinstance(item, dict) and item.get("id") == 194]
+          if len(exact) != 1:
+              raise SystemExit("Paper 26.3 build 194 unavailable or ambiguous")
+          entry = exact[0]
+          if entry.get("channel") != "STABLE":
+              raise SystemExit("Paper 26.3 build 194 is not marked STABLE")
+          download = entry.get("downloads", {}).get("server:default")
+          if not isinstance(download, dict):
+              raise SystemExit("Paper 26.3 build 194 has no default server JAR")
+          url = download.get("url", "")
+          host = urlparse(url).hostname
+          if urlparse(url).scheme != "https" or not host or (
+              host != "papermc.io" and not host.endswith(".papermc.io")
+          ):
+              raise SystemExit("Untrusted PaperMC download URL")
+          sha = download.get("checksums", {}).get("sha256", "")
+          if not isinstance(sha, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", sha):
+              raise SystemExit("Build 194 has no valid SHA-256")
+          normalized = {
+              "minecraft_version": "26.3",
+              "id": 194,
+              "channel": entry["channel"],
+              "downloads": {
+                  "server:default": {
+                      "url": url,
+                      "checksums": {"sha256": sha.lower()},
+                  }
+              },
+          }
+          (root / "paper-26.3-194.json").write_text(
+              json.dumps(normalized, indent=2) + "\n", encoding="utf-8"
+          )
+          print("VERIFIED OFFICIAL PAPER 26.3 BUILD 194 SHA-256: " + sha.lower())
+          print("No plugin release or Minecraft server was started by this metadata probe.")
+          PY
+      - name: Retain normalized PaperMC evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: paper-26-3-build194-official-metadata
+          path: paper-metadata/paper-26.3-194.json
+          retention-days: 14
+          if-no-files-found: error
