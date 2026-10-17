@@ -660,8 +660,13 @@ for method in [
     "movePlayerMainHandIntoNetwork",
 ]:
     require(method in transfer_utils, f"explicit transfer helper missing: {method}")
-require("replaceExistingItem(slot, result.remainingStack())" in transfer_utils,
-        "menu source-slot commit is missing")
+require("sourceMenu.replaceExistingItem(slot, committedSource)" in transfer_utils
+        and "sourceBeforeCommit = snapshotMenuSource(observedSource)" in transfer_utils
+        and "observedSource.getAmount() < originalSource.getAmount()" in transfer_utils
+        and "!originalSource.isSimilar(observedSource)" in transfer_utils
+        and "sourceBeforeCommit.getAmount() - originalSource.getAmount()" in transfer_utils
+        and "sourceMenu.replaceExistingItem(slot, sourceBeforeCommit)" in transfer_utils,
+        "menu source-slot growth-safe commit/recovery is missing")
 require("sourceInventory.setItem(slot, result.remainingStack())" in transfer_utils,
         "inventory source-slot commit is missing")
 require("player.setItemOnCursor" in transfer_utils, "cursor source commit is missing")
