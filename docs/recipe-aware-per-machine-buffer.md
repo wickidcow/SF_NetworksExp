@@ -8,7 +8,7 @@ Each placed Network Pusher, Network More Pusher, and Network Best Pusher can now
 without changing the menu layout:
 
 - **Left-click** the Recipe-Aware control: toggle Recipe-Aware mode.
-- **Right-click**: enter an exact batch target from 1 to 64, using the same chat-input pattern as Advanced Transfer amount controls.
+- **Right-click**: enter an exact whole-number batch target from 1 to 64. Expressions and units are not accepted.
 - **Shift-left**: decrease the batch target by one.
 - **Shift-right**: increase the batch target by one.
 - Quick adjustments wrap between 1 and 64.
