@@ -202,7 +202,47 @@ public final class PairedIE2StorageProbe extends JavaPlugin {
             require(total(menu) + delivered == TOTAL, "Conservation while draining restored storage");
         }
         require(delivered == TOTAL && total(menu) == 0, "Exactly 192 items recovered, no extra item");
-        finish("PASS: verify independent JVM restored and withdrew exactly " + delivered + " tagged items");
+        verifyUnassignedBalanceIsNotRelabelled(menu);
+        finish("PASS: verify independent JVM restored and withdrew exactly " + delivered
+            + " tagged items; synthetic unassigned balance was not relabelled");
+    }
+
+    @SuppressWarnings("unchecked")
+    private void verifyUnassignedBalanceIsNotRelabelled(BlockMenu menu) throws Exception {
+        // Separate fault injection AFTER completing the real 192-item ledger.
+        // Simulate a legacy positive counter with a missing template; these are
+        // not newly delivered items and must never adopt the next deposit's type.
+        var caches = (Map<Object, Object>) unit.getClass().getMethod("getCaches").invoke(unit);
+        Object key = caches.keySet().iterator().next();
+        Object healthy = caches.get(key);
+        Class<?> cacheType = healthy.getClass();
+        int capacity = ((Number) unit.getClass().getMethod("getCapacity").invoke(unit)).intValue();
+        Object orphan = cacheType.getConstructor(ItemStack.class, int.class, int.class, boolean.class)
+            .newInstance(null, 128, capacity, false);
+        int input = adapter.getInputSlots(unit)[0];
+        ItemStack originalInput = menu.getItemInSlot(input);
+        try {
+            caches.put(key, orphan);
+            menu.replaceExistingItem(input, sample(1));
+            require(menu.getPreset().getSlotsAccessedByItemTransport(
+                menu, ItemTransportFlow.INSERT, sample(1)).length == 0,
+                "Unassigned storage must not advertise insertable slots");
+            tick.invoke(unit, location().getBlock());
+            require(checked(menu.getItemInSlot(input)) == 1, "Unassigned balance must not consume physical input");
+            Object companion = unit.getClass().getField("Companion").get(null);
+            var inputItem = companion.getClass().getMethod(
+                "inputItem", BlockMenu.class, cacheType, ItemStack.class, int.class);
+            ItemStack offered = sample(1);
+            int accepted = ((Number) inputItem.invoke(companion, menu, orphan, offered, 1)).intValue();
+            require(accepted == 0 && offered.getAmount() == 1, "Direct storage input must also refuse relabelling");
+            require(((Number) cacheType.getMethod("getAmount").invoke(orphan)).intValue() == 128,
+                "Preserve the unresolved counter for investigation");
+            require(cacheType.getMethod("getItemStack").invoke(orphan) == null,
+                "Do not infer an arbitrary item identity for an unresolved balance");
+        } finally {
+            caches.put(key, healthy);
+            menu.replaceExistingItem(input, originalInput);
+        }
     }
 
     private NetworkRoot root() {
