@@ -267,6 +267,7 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
         NetworkController.getCrayons().clear();
         NetworkController.resetRuntimeSafety();
         AbstractNetworkPusher.resetRuntimeState();
+        NetworkTransferUtils.resetRuntimeSafety();
 
         if (localizationService != null) {
             getLogger().info(getLocalizationService().getString("messages.shutdown.saved-all-data"));

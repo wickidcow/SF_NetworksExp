@@ -80,6 +80,7 @@ class NetworkMenuWithdrawalIntegrityTest {
             if (networks != null) networks.close();
         } finally {
             TransferAudit.reset();
+            MenuTransferSafetyHold.reset();
             MockBukkit.unmock();
         }
     }
@@ -204,6 +205,29 @@ class NetworkMenuWithdrawalIntegrityTest {
         assertEquals(0, push(dust(8), 0));
         assertEquals(8, restored);
         verify(menu, never()).replaceExistingItem(anyInt(), nullable(ItemStack.class));
+    }
+
+    @Test
+    void ambiguousDestinationIsHeldUntilTheMenuIsReplaced() {
+        doAnswer(call -> {
+            slots.put(0, new ItemStack(Material.EMERALD, 8));
+            throw new IllegalStateException("unexpected machine replacement");
+        }).when(menu).replaceExistingItem(eq(0), nullable(ItemStack.class));
+
+        assertEquals(0, push(dust(8), 0));
+        assertTrue(MenuTransferSafetyHold.isHeld(menu));
+        assertEquals(1, MenuTransferSafetyHold.count());
+
+        // Even an already-withdrawn offer must be returned without writing the held menu.
+        assertEquals(0, push(dust(4), 0));
+        assertEquals(4, restored);
+        verify(menu, times(1)).replaceExistingItem(eq(0), nullable(ItemStack.class));
+
+        // A newly registered BlockMenu at the same location does not inherit the hold.
+        BlockMenu replacement = mock(BlockMenu.class);
+        when(replacement.getLocation()).thenReturn(accessor);
+        assertFalse(MenuTransferSafetyHold.isHeld(replacement));
+        assertEquals(0, MenuTransferSafetyHold.count());
     }
 
     @Test

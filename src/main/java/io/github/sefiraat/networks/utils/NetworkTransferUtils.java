@@ -32,6 +32,11 @@ public final class NetworkTransferUtils {
     private NetworkTransferUtils() {
     }
 
+    /** Clears safety holds only as part of controlled plugin lifecycle cleanup. */
+    public static void resetRuntimeSafety() {
+        MenuTransferSafetyHold.reset();
+    }
+
     /** Moves an item from a network into a Slimefun menu without silently losing a remainder. */
     public static int moveNetworkItemIntoMenu(
         @NotNull NetworkRoot root,
@@ -41,7 +46,8 @@ public final class NetworkTransferUtils {
         int limit,
         int @NotNull ... slots) {
 
-        if (template.getType() == Material.AIR || limit <= 0 || slots.length == 0) {
+        if (template.getType() == Material.AIR || limit <= 0 || slots.length == 0
+            || MenuTransferSafetyHold.isHeld(destination)) {
             return 0;
         }
 
@@ -72,6 +78,13 @@ public final class NetworkTransferUtils {
         int @NotNull ... slots) {
 
         if (withdrawnStack.getType() == Material.AIR || withdrawnStack.getAmount() <= 0) {
+            return 0;
+        }
+        // A second withdrawal may already be in flight when an earlier one trips
+        // the hold. Return it to the network without touching an unsafe menu.
+        if (MenuTransferSafetyHold.isHeld(destination)) {
+            rollbackNetworkWithdrawal(root, accessor, withdrawnStack,
+                destination.getLocation(), "menu transfer safety hold");
             return 0;
         }
 
@@ -126,11 +139,14 @@ public final class NetworkTransferUtils {
              * destination slots. Restoring an unproven amount here can mint a second copy.
              * Keep the transfer fail-closed and surface a severe, actionable alert.
              */
+            MenuTransferSafetyHold.hold(destination);
             Networks.getInstance().getLogger().log(
                 java.util.logging.Level.SEVERE,
                 "A Networks menu withdrawal cannot prove the destination state at "
                     + destination.getLocation() + ". The ambiguous withdrawal of " + withdrawn
-                    + " item(s) was NOT deposited back into the network to avoid duplication.",
+                    + " item(s) was NOT deposited back into the network to avoid duplication. "
+                    + "Further transfers into this menu are suspended until its menu is replaced "
+                    + "or Networks is restarted; inspect the machine and the addon that owns it.",
                 reconciliationFailure);
             return 0;
         }
