@@ -375,6 +375,36 @@ class NetworkTransferUtilsTest {
         assertEquals(0, TransferAudit.snapshot().failures());
     }
 
+    @ParameterizedTest
+    @EnumSource(value = SourceKind.class, names = {"MENU", "INVENTORY", "CURSOR", "MAIN_HAND"})
+    void silentSourceSetterRejectionCannotCreditNetworkAndKeepOriginalItems(SourceKind kind) {
+        doAnswer(call -> {
+            accept(call.getArgument(1), 7);
+            return null;
+        }).when(root).addItemStack0(eq(accessor), any(ItemStack.class));
+        when(root.getItemStack0(eq(accessor), any(ItemRequest.class))).thenAnswer(call -> {
+            ItemRequest request = call.getArgument(1);
+            int recovered = Math.min(accepted, request.getAmount());
+            accepted -= recovered;
+            return recovered == 0 ? null : customDiamond(recovered);
+        });
+
+        if (kind == SourceKind.MENU) {
+            doNothing().when(menu).replaceExistingItem(eq(SOURCE_SLOT), nullable(ItemStack.class));
+        } else if (kind == SourceKind.CURSOR) {
+            doNothing().when(player).setItemOnCursor(any(ItemStack.class));
+        } else {
+            doNothing().when(inventory).setItem(eq(SOURCE_SLOT), nullable(ItemStack.class));
+        }
+
+        assertEquals(0, transfer(kind, 64));
+        assertEquals(32, remaining(), "Rejected source write must not remove unrelated items");
+        assertEquals(0, accepted, "Accepted items must be compensated if source deduction did not occur");
+        assertEquals(7, TransferAudit.snapshot().depositCompensationRequested());
+        assertEquals(7, TransferAudit.snapshot().depositCompensationRetrieved());
+        assertConserved(32);
+    }
+
     @Test
     void successfulPartialDepositRetainsItsExistingBehavior() {
         doAnswer(call -> {

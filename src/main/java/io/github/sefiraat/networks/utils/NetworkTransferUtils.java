@@ -1103,6 +1103,9 @@ public final class NetworkTransferUtils {
         try {
             sourceMenu.replaceExistingItem(slot, committedSource);
             sourceMenu.markDirty();
+            if (!sourceStillMatches(committedSource, sourceMenu.getItemInSlot(slot))) {
+                throw new IllegalStateException("Menu source setter returned without committing its exact remainder");
+            }
             return new MenuDepositResult(result.moved(), result.failed());
         } catch (RuntimeException | LinkageError exception) {
             try {
@@ -1183,6 +1186,9 @@ public final class NetworkTransferUtils {
                 return 0;
             }
             sourceInventory.setItem(slot, result.remainingStack());
+            if (!sourceStillMatches(result.remainingStack(), sourceInventory.getItem(slot))) {
+                throw new IllegalStateException("Inventory source setter returned without deducting the accepted items");
+            }
             return result.moved();
         } catch (RuntimeException | LinkageError exception) {
             try {
@@ -1230,6 +1236,9 @@ public final class NetworkTransferUtils {
                 return 0;
             }
             player.setItemOnCursor(orAir(result.remainingStack()));
+            if (!sourceStillMatches(result.remainingStack(), player.getItemOnCursor())) {
+                throw new IllegalStateException("Player cursor setter returned without deducting the accepted items");
+            }
             return result.moved();
         } catch (RuntimeException | LinkageError exception) {
             try {
@@ -1289,6 +1298,9 @@ public final class NetworkTransferUtils {
                 return 0;
             }
             source.setAmount(remaining == null ? 0 : remaining.getAmount());
+            if (!sourceStillMatches(remaining, source)) {
+                throw new IllegalStateException("Mutable source stack rejected the network deduction");
+            }
             return result.moved();
         } catch (RuntimeException | LinkageError exception) {
             try {
