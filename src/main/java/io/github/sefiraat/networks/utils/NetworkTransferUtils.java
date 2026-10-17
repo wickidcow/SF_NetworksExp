@@ -93,7 +93,16 @@ public final class NetworkTransferUtils {
         return committed;
     }
 
-    /** Moves an item from a network into a player's storage inventory. */
+    /**
+     * Moves items from network storage into a player's storage inventory, accounting only for
+     * verifiable destination additions. The existing InventoryUtil keeps the same partial-stack
+     * and empty-slot insertion order; its mutable offer/remainder is not trusted as proof.
+     *
+     * <p>Some Inventory implementations write contents and then throw, or mutate an incoming
+     * ItemStack before failing. Refunding that mutable offer directly could duplicate items
+     * that already reached a player's inventory. Conversely, pre-commit array mutations
+     * followed by a rejected setter could silently destroy withdrawn items.</p>
+     */
     public static int moveNetworkItemIntoPlayerInventory(
         @NotNull NetworkRoot root,
         @NotNull Location accessor,
@@ -105,37 +114,204 @@ public final class NetworkTransferUtils {
             return 0;
         }
 
-        final int requestAmount = Math.min(limit, getInventoryInsertCapacity(player.getInventory(), template));
+        final Inventory inventory = player.getInventory();
+        final int requestAmount = Math.min(limit, getInventoryInsertCapacity(inventory, template));
+        if (requestAmount <= 0) {
+            return 0;
+        }
+
+        // Snapshot BEFORE withdrawing: storage callbacks can modify the player's inventory
+        // during the network operation. If that happens, refuse a stale destination commit.
+        final ItemStack[] before;
+        try {
+            before = snapshotInventoryStorage(inventory);
+        } catch (RuntimeException | LinkageError exception) {
+            TransferAudit.recordFailure();
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.WARNING,
+                "A Networks player inventory could not be snapshotted; no items were withdrawn.",
+                exception);
+            return 0;
+        }
+
         final ItemStack retrieved = withdraw(root, accessor, template, requestAmount);
         if (retrieved == null) {
             return 0;
         }
 
-        final int withdrawn = retrieved.getAmount();
-        final Map<Integer, ItemStack> remainders;
+        final ItemStack sourceSnapshot;
+        final ItemStack offered;
+        final int withdrawn = validAmount(retrieved);
         try {
-            remainders = InventoryUtil.addItem(player, retrieved);
+            if (withdrawn > requestAmount) {
+                throw new IllegalStateException("A network withdrew more than the requested inventory capacity");
+            }
+            sourceSnapshot = snapshotMenuSource(retrieved);
+            if (!StackUtils.itemsMatch(template, sourceSnapshot, true, false)) {
+                throw new IllegalStateException("The network returned an unexpected inventory item identity");
+            }
+            offered = snapshotMenuSource(sourceSnapshot);
         } catch (RuntimeException | LinkageError exception) {
             TransferAudit.recordFailure();
-            rollbackNetworkWithdrawal(
-                root, accessor, retrieved, player.getLocation(), "player inventory transfer exception");
+            rollbackNetworkWithdrawal(root, accessor, retrieved, player.getLocation(),
+                "player inventory withdrawal preparation");
             Networks.getInstance().getLogger().log(
                 java.util.logging.Level.WARNING,
-                "A Networks player-inventory transfer failed while committing; the withdrawn stack was rolled back.",
+                "A Networks player-inventory withdrawal could not be prepared without changing the item.",
                 exception);
             return 0;
         }
 
-        int remainderAmount = 0;
-        for (ItemStack remainder : remainders.values()) {
-            remainderAmount += validAmount(remainder);
-            if (validAmount(remainder) > 0) {
-                rollbackNetworkWithdrawal(root, accessor, remainder, player.getLocation(), "player inventory transfer");
+        try {
+            if (!sameInventoryStorage(before, inventory.getStorageContents())) {
+                TransferAudit.recordFailure();
+                rollbackNetworkWithdrawal(root, accessor, sourceSnapshot, player.getLocation(),
+                    "player inventory changed before commit");
+                Networks.getInstance().getLogger().warning(
+                    "A Networks player inventory changed during withdrawal; the withdrawn items were returned.");
+                return 0;
+            }
+        } catch (RuntimeException | LinkageError exception) {
+            TransferAudit.recordFailure();
+            rollbackNetworkWithdrawal(root, accessor, sourceSnapshot, player.getLocation(),
+                "player inventory pre-commit read failure");
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.WARNING,
+                "A Networks player inventory became unreadable before commit; withdrawn items were returned.",
+                exception);
+            return 0;
+        }
+
+        Throwable insertionFailure = null;
+        try {
+            InventoryUtil.addItem(player, offered);
+        } catch (RuntimeException | LinkageError exception) {
+            insertionFailure = exception;
+        }
+
+        final int committed;
+        try {
+            committed = countVerifiedInventoryAddition(
+                before, inventory.getStorageContents(), sourceSnapshot, withdrawn);
+        } catch (RuntimeException | LinkageError verificationFailure) {
+            TransferAudit.recordFailure();
+            if (insertionFailure != null) {
+                verificationFailure.addSuppressed(insertionFailure);
+            }
+            // Destination state is ambiguous. Refunding all withdrawn items here might
+            // duplicate a stack already accepted by a third-party inventory writer.
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.SEVERE,
+                "A Networks player-inventory withdrawal of " + withdrawn + " item(s) could not be "
+                    + "reconciled at " + player.getLocation() + ". No ambiguous amount was "
+                    + "refunded. Inspect this inventory before manually recovering items.",
+                verificationFailure);
+            return 0;
+        }
+
+        if (insertionFailure != null) {
+            TransferAudit.recordFailure();
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.WARNING,
+                "A Networks player inventory insertion failed after accepting " + committed
+                    + " of " + withdrawn + " item(s); returning only the verified remainder.",
+                insertionFailure);
+        }
+
+        if (committed > 0) {
+            TransferAudit.recordWithdrawalCommitted(committed);
+        }
+        final int uncommitted = withdrawn - committed;
+        if (uncommitted > 0) {
+            sourceSnapshot.setAmount(uncommitted);
+            rollbackNetworkWithdrawal(root, accessor, sourceSnapshot, player.getLocation(),
+                "player inventory observed remainder");
+        }
+        return committed;
+    }
+
+    /**
+     * Copy each storage slot exactly without retaining live Bukkit ItemStack references.
+     * This also works around SlimefunItemStack subclasses whose clone() rebuilds metadata.
+     */
+    private static @NotNull ItemStack[] snapshotInventoryStorage(@NotNull Inventory inventory) {
+        final ItemStack[] live = inventory.getStorageContents();
+        if (live == null) {
+            throw new IllegalStateException("Storage inventory contents were unavailable");
+        }
+        final ItemStack[] snapshot = new ItemStack[live.length];
+        for (int i = 0; i < live.length; i++) {
+            if (validAmount(live[i]) > 0) {
+                snapshot[i] = snapshotMenuSource(live[i]);
             }
         }
-        final int committed = Math.max(0, withdrawn - remainderAmount);
-        TransferAudit.recordWithdrawalCommitted(committed);
-        return committed;
+        return snapshot;
+    }
+
+    /** A withdrawal callback must not replace or change existing player stacks before insertion. */
+    private static boolean sameInventoryStorage(
+        ItemStack @NotNull [] before,
+        ItemStack[] current) {
+        if (current == null || current.length != before.length) {
+            return false;
+        }
+        for (int i = 0; i < before.length; i++) {
+            if (!sourceStillMatches(before[i], current[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Count real added items, not mutable offer remainder. A replaced/reduced/normalized
+     * unrelated slot is ambiguous and must not authorize an optimistic network refund.
+     */
+    private static int countVerifiedInventoryAddition(
+        ItemStack @NotNull [] before,
+        ItemStack[] current,
+        @NotNull ItemStack offered,
+        int withdrawn) {
+        if (current == null || current.length != before.length) {
+            throw new IllegalStateException("The player's inventory layout changed during transfer");
+        }
+
+        long inserted = 0L;
+        for (int slot = 0; slot < before.length; slot++) {
+            final ItemStack original = before[slot];
+            final ItemStack observed = current[slot];
+            final int originalAmount = validAmount(original);
+            final int observedAmount = validAmount(observed);
+
+            if (originalAmount == 0) {
+                if (observedAmount > 0) {
+                    if (!offered.isSimilar(observed)) {
+                        throw new IllegalStateException(
+                            "An empty inventory slot received another item during transfer: " + slot);
+                    }
+                    inserted += observedAmount;
+                }
+            } else {
+                if (observedAmount == 0
+                    || observedAmount < originalAmount
+                    || !original.isSimilar(observed)) {
+                    throw new IllegalStateException("An existing inventory slot changed identity: " + slot);
+                }
+                if (observedAmount > originalAmount) {
+                    // InventoryUtil.addItem uses this exact matching policy for partial stacks.
+                    if (!StackUtils.itemsMatch(original, offered, true, false)) {
+                        throw new IllegalStateException(
+                            "A different item was added to an unrelated inventory slot: " + slot);
+                    }
+                    inserted += observedAmount - originalAmount;
+                }
+            }
+
+            if (inserted > withdrawn) {
+                throw new IllegalStateException("Player inventory gained more than the network withdrew");
+            }
+        }
+        return (int) inserted;
     }
 
     /**
