@@ -22,3 +22,6 @@ server-wide `recipe_buffer_batches` default, preserving current behavior.
 
 This changes only the Recipe-Aware target buffer. Template interpretation, routing order, transfer backoff, destination
 slot discovery, item IDs, recipes, saved network data, and normal non-Recipe-Aware pusher behavior are unchanged.
+
+
+Chat-entered values are committed only if the same pusher menu is still registered at the original block location. If the machine was broken or replaced while the player was typing, the stale prompt is refused and cannot write block data into the replacement.
