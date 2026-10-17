@@ -51,6 +51,7 @@ class NetworkRollbackExceptionSafetyTest {
     @AfterEach
     void tearDown() {
         try {
+            NetworkTransferUtils.resetRuntimeSafety();
             TransferAudit.reset();
             if (networks != null) {
                 networks.close();
@@ -128,6 +129,27 @@ class NetworkRollbackExceptionSafetyTest {
         assertEquals(10, TransferAudit.snapshot().outstandingRollbackItems());
         assertEquals(0, TransferAudit.snapshot().rollbackReinserted());
         assertEquals(0, TransferAudit.snapshot().safetyDropped());
+    }
+
+    @Test
+    void ambiguousStorageRollbackBlocksRepeatWithdrawalsUntilRootReplacement() {
+        doThrow(new IllegalStateException("source adapter failed after write"))
+            .when(root).addItemStack0(eq(accessor), any(ItemStack.class));
+
+        rollback(diamond(10));
+        assertEquals(1, NetworkTransferUtils.getHeldWithdrawalSourceCount());
+        assertTrue(NetworkTransferUtils.getHeldWithdrawalSourceSummaries(5).getFirst()
+            .contains("possibly-unreconciled=10xDIAMOND"));
+
+        org.bukkit.entity.Player player = mock(org.bukkit.entity.Player.class);
+        when(player.getItemOnCursor()).thenReturn(null);
+        assertEquals(0, NetworkTransferUtils.moveNetworkItemOntoCursor(
+            root, accessor, player, diamond(1), 3));
+        verify(root, never()).getItemStack0(any(), any());
+
+        NetworkRoot replacementRoot = mock(NetworkRoot.class);
+        assertFalse(RootRollbackSafetyHold.isHeld(replacementRoot, accessor));
+        assertEquals(0, NetworkTransferUtils.getHeldWithdrawalSourceCount());
     }
 
     @Test

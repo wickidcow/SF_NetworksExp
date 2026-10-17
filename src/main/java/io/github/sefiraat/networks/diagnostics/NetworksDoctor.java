@@ -21,6 +21,7 @@ import io.github.sefiraat.networks.slimefun.network.NetworkQuantumStorage;
 import io.github.sefiraat.networks.utils.ChunkWarmupQueue;
 import io.github.sefiraat.networks.utils.FailureCircuitBreaker;
 import io.github.sefiraat.networks.utils.TopologyDirtyQueue;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.sefiraat.networks.utils.TransferAudit;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import org.bukkit.Bukkit;
@@ -242,6 +243,16 @@ public final class NetworksDoctor {
                 + DataStorage.getRecoveryEntryCount() + " unapplied amount update(s)");
         }
         TransferAudit.Snapshot transfer = TransferAudit.snapshot();
+        if (NetworkTransferUtils.getHeldWithdrawalSourceCount() > 0) {
+            issues++;
+            // Do not hide critical source locations behind the ordinary sample cap.
+            details.add("Unsafe source-network rollback(s): "
+                + NetworkTransferUtils.getHeldWithdrawalSourceCount()
+                + " accessor(s) held; inspect storage adapters before resetting Networks.");
+            for (String held : NetworkTransferUtils.getHeldWithdrawalSourceSummaries(5)) {
+                details.add("Held withdrawal source: " + held);
+            }
+        }
         if (transfer.outstandingRollbackItems() > 0 || transfer.uncompensatedDepositItems() > 0) {
             issues++;
             addSample(details, "Transfer compensation is incomplete: rollback="
@@ -281,7 +292,8 @@ public final class NetworksDoctor {
             + " committed, deposits=" + transfer.depositCommitted() + '/' + transfer.depositOffered()
             + " committed, rollback outstanding=" + transfer.outstandingRollbackItems()
             + ", deposit compensation outstanding=" + transfer.uncompensatedDepositItems()
-            + ", safety-dropped=" + transfer.safetyDropped() + ", failures=" + transfer.failures());
+            + ", safety-dropped=" + transfer.safetyDropped() + ", failures=" + transfer.failures()
+            + ", held-withdrawal-sources=" + NetworkTransferUtils.getHeldWithdrawalSourceCount());
         if (unloaded > 0L) {
             details.add("Skipped " + unloaded + " entries in unloaded chunks; Doctor never force-loads chunks");
         }

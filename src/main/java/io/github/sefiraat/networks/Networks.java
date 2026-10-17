@@ -24,6 +24,7 @@ import io.github.sefiraat.networks.managers.SupportedPluginManager;
 import io.github.sefiraat.networks.slimefun.network.AdminDebuggable;
 import io.github.sefiraat.networks.slimefun.network.NetworkController;
 import io.github.sefiraat.networks.slimefun.network.NetworkObject;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.sefiraat.networks.utils.TransferAudit;
 import io.github.thebusybiscuit.slimefun4.api.SlimefunAddon;
 import io.github.thebusybiscuit.slimefun4.core.guide.options.SlimefunGuideSettings;
@@ -265,6 +266,7 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
         NetworkController.getRecordFlow().clear();
         NetworkController.getCrayons().clear();
         NetworkController.resetRuntimeSafety();
+        NetworkTransferUtils.resetRuntimeSafety();
 
         if (localizationService != null) {
             getLogger().info(getLocalizationService().getString("messages.shutdown.saved-all-data"));

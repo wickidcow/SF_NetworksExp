@@ -32,6 +32,20 @@ public final class NetworkTransferUtils {
     private NetworkTransferUtils() {
     }
 
+    /** Clear runtime source holds only during orderly plugin lifecycle cleanup. */
+    public static void resetRuntimeSafety() {
+        RootRollbackSafetyHold.reset();
+    }
+
+    public static int getHeldWithdrawalSourceCount() {
+        return RootRollbackSafetyHold.count();
+    }
+
+    /** Admin-safe incident summaries contain no player identity, lore, or persistent data. */
+    public static @NotNull java.util.List<String> getHeldWithdrawalSourceSummaries(int limit) {
+        return RootRollbackSafetyHold.describe(limit);
+    }
+
     /** Moves an item from a network into a Slimefun menu without silently losing a remainder. */
     public static int moveNetworkItemIntoMenu(
         @NotNull NetworkRoot root,
@@ -256,6 +270,16 @@ public final class NetworkTransferUtils {
         }
 
         final int beforeRollback = remainder.getAmount();
+        // An earlier ambiguous refund may have suspended this root/accessor.
+        // No network insertion is attempted here, so this *new* remainder can
+        // still use the known-unaccepted world-drop fallback without duplication.
+        if (RootRollbackSafetyHold.isHeld(root, accessor)) {
+            TransferAudit.recordRollback(beforeRollback, 0);
+            dropLossPreventionRemainder(remainder, fallbackLocation,
+                operation + " (source withdrawal hold)", beforeRollback);
+            return;
+        }
+
         final ItemStack beforeIdentity;
         try {
             beforeIdentity = snapshotMenuSource(remainder);
@@ -293,6 +317,7 @@ public final class NetworkTransferUtils {
             root.addItemStack0(accessor, remainder);
         } catch (RuntimeException | LinkageError storageFailure) {
             TransferAudit.recordFailure();
+            RootRollbackSafetyHold.hold(root, accessor, beforeIdentity.getType(), beforeRollback);
             // A throwing adapter may have already written all, some, or none of
             // the offered stack. The mutated ItemStack amount is NOT a receipt.
             TransferAudit.recordRollback(beforeRollback, 0);
@@ -316,6 +341,7 @@ public final class NetworkTransferUtils {
             }
         } catch (RuntimeException | LinkageError verificationFailure) {
             TransferAudit.recordFailure();
+            RootRollbackSafetyHold.hold(root, accessor, beforeIdentity.getType(), beforeRollback);
             TransferAudit.recordRollback(beforeRollback, 0);
             Networks.getInstance().getLogger().log(
                 java.util.logging.Level.SEVERE,
@@ -688,7 +714,9 @@ public final class NetworkTransferUtils {
         @NotNull ItemStack template,
         int amount) {
 
-        if (amount <= 0) {
+        if (amount <= 0 || RootRollbackSafetyHold.isHeld(root, accessor)) {
+            // Do not keep withdrawing items from a root whose previous refund is
+            // still ambiguous. This prevents repeated loss/duplication incidents.
             return null;
         }
         TransferAudit.recordWithdrawalAttempt(amount);
