@@ -53,7 +53,17 @@ public final class NetworkTransferUtils {
         return commitNetworkWithdrawal(root, accessor, destination, retrieved, slots);
     }
 
-    /** Commits an already-withdrawn stack into a Slimefun menu and rolls back every remainder. */
+    /**
+     * Commits a network withdrawal into a Slimefun menu. The offered ItemStack is mutable and
+     * BlockMenuUtil.pushItem() can write a slot before its setter throws. Never use the offered
+     * remainder alone to decide how much to restore to the source network: that can duplicate
+     * the items already installed in a destination slot.
+     *
+     * <p>Instead, snapshot the exact destination before writing and count only verified
+     * additions after the write, including write-then-throw and silent setter rejection.
+     * A changed/unreadable destination fails closed: do not blindly re-deposit items whose
+     * destination state is unknown.</p>
+     */
     public static int commitNetworkWithdrawal(
         @NotNull NetworkRoot root,
         @NotNull Location accessor,
@@ -61,36 +71,153 @@ public final class NetworkTransferUtils {
         @NotNull ItemStack withdrawnStack,
         int @NotNull ... slots) {
 
-        if (withdrawnStack.getType() == Material.AIR || withdrawnStack.getAmount() <= 0 || slots.length == 0) {
+        if (withdrawnStack.getType() == Material.AIR || withdrawnStack.getAmount() <= 0) {
             return 0;
         }
 
         final int withdrawn = withdrawnStack.getAmount();
-        final ItemStack remainder;
+        final ItemStack exactSource;
+        final Map<Integer, ItemStack> before = new java.util.LinkedHashMap<>();
+
         try {
-            remainder = BlockMenuUtil.pushItem(destination, withdrawnStack, slots);
-        } catch (RuntimeException | LinkageError exception) {
+            exactSource = snapshotMenuSource(withdrawnStack);
+            for (int slot : slots) {
+                if (slot < 0 || slot >= destination.getSize() || before.containsKey(slot)) {
+                    continue;
+                }
+                final ItemStack current = destination.getItemInSlot(slot);
+                before.put(slot, validAmount(current) == 0 ? null : snapshotMenuSource(current));
+            }
+        } catch (RuntimeException | LinkageError snapshotFailure) {
             TransferAudit.recordFailure();
-            rollbackNetworkWithdrawal(
-                root, accessor, withdrawnStack, destination.getLocation(), "menu transfer exception");
+            rollbackNetworkWithdrawal(root, accessor, withdrawnStack,
+                destination.getLocation(), "menu transfer preflight");
             Networks.getInstance().getLogger().log(
                 java.util.logging.Level.WARNING,
-                "A Networks menu transfer failed while committing; the withdrawn stack was rolled back.",
-                exception);
+                "A Networks menu destination could not be snapshotted; no destination writes were attempted.",
+                snapshotFailure);
             return 0;
         }
 
-        final int remainderAmount = validAmount(remainder);
-        final int committed = Math.max(0, withdrawn - remainderAmount);
+        if (before.isEmpty()) {
+            rollbackNetworkWithdrawal(root, accessor, exactSource, destination.getLocation(), "menu transfer no slots");
+            return 0;
+        }
+
+        Throwable writeFailure = null;
+        int claimedRemainder = -1;
+        try {
+            final ItemStack remainder = BlockMenuUtil.pushItem(destination, withdrawnStack, slots);
+            claimedRemainder = validAmount(remainder);
+        } catch (RuntimeException | LinkageError exception) {
+            writeFailure = exception;
+        }
+
+        final int committed;
+        try {
+            committed = countVerifiedMenuAddition(destination, before, exactSource, withdrawn);
+        } catch (RuntimeException | LinkageError reconciliationFailure) {
+            TransferAudit.recordFailure();
+            if (writeFailure != null) {
+                reconciliationFailure.addSuppressed(writeFailure);
+            }
+            /*
+             * An asynchronous producer or a broken menu setter may have replaced one of the
+             * destination slots. Restoring an unproven amount here can mint a second copy.
+             * Keep the transfer fail-closed and surface a severe, actionable alert.
+             */
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.SEVERE,
+                "A Networks menu withdrawal cannot prove the destination state at "
+                    + destination.getLocation() + ". The ambiguous withdrawal of " + withdrawn
+                    + " item(s) was NOT deposited back into the network to avoid duplication.",
+                reconciliationFailure);
+            return 0;
+        }
+
+        if (writeFailure != null) {
+            TransferAudit.recordFailure();
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.WARNING,
+                "A Networks menu insertion threw after accepting " + committed + " of " + withdrawn
+                    + " item(s); only the verified remainder will be rolled back.",
+                writeFailure);
+        } else if (claimedRemainder != withdrawn - committed) {
+            TransferAudit.recordFailure();
+            Networks.getInstance().getLogger().warning(
+                "A Networks menu insertion reported a different remainder than its destination holds at "
+                    + destination.getLocation() + "; restoring only the verified remainder.");
+        }
+
         if (committed > 0) {
-            destination.markDirty();
+            try {
+                destination.markDirty();
+            } catch (RuntimeException | LinkageError dirtyFailure) {
+                TransferAudit.recordFailure();
+                Networks.getInstance().getLogger().log(
+                    java.util.logging.Level.WARNING,
+                    "A Networks destination could not be marked dirty after its "
+                        + committed + " accepted item(s). The committed items will not be duplicated.",
+                    dirtyFailure);
+            }
             TransferAudit.recordWithdrawalCommitted(committed);
         }
 
-        if (remainderAmount > 0) {
-            rollbackNetworkWithdrawal(root, accessor, remainder, destination.getLocation(), "menu transfer");
+        final int uncommitted = withdrawn - committed;
+        if (uncommitted > 0) {
+            exactSource.setAmount(uncommitted);
+            rollbackNetworkWithdrawal(root, accessor, exactSource,
+                destination.getLocation(), "menu transfer verified remainder");
         }
+
         return committed;
+    }
+
+    /**
+     * Counts only items proven to have been added to the offered input slots.
+     * Any externally replaced or reduced slot is ambiguous: it is unsafe to
+     * credit it as our insertion or blindly return the whole source withdrawal.
+     */
+    private static int countVerifiedMenuAddition(
+        @NotNull BlockMenu destination,
+        @NotNull Map<Integer, ItemStack> before,
+        @NotNull ItemStack offered,
+        int withdrawn) {
+
+        long added = 0;
+        for (Map.Entry<Integer, ItemStack> entry : before.entrySet()) {
+            final int slot = entry.getKey();
+            final ItemStack previous = entry.getValue();
+            final ItemStack current = destination.getItemInSlot(slot);
+            final int priorAmount = validAmount(previous);
+            final int currentAmount = validAmount(current);
+
+            if (priorAmount == 0) {
+                if (currentAmount > 0) {
+                    if (!offered.isSimilar(current)) {
+                        throw new IllegalStateException("A menu insertion replaced an empty slot with another item: "
+                            + slot);
+                    }
+                    added += currentAmount;
+                }
+            } else {
+                if (currentAmount == 0 || !previous.isSimilar(current) || currentAmount < priorAmount) {
+                    throw new IllegalStateException("A menu input changed while a withdrawal was being committed: "
+                        + slot);
+                }
+                if (currentAmount > priorAmount) {
+                    if (!offered.isSimilar(previous)) {
+                        throw new IllegalStateException("An unrelated menu input increased during insertion: " + slot);
+                    }
+                    added += currentAmount - priorAmount;
+                }
+            }
+
+            if (added > withdrawn) {
+                throw new IllegalStateException("Destination gained more items than the network withdrew");
+            }
+        }
+        return (int) added;
     }
 
     /** Moves an item from a network into a player's storage inventory. */
