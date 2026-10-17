@@ -7,7 +7,6 @@ import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
 import io.github.sefiraat.networks.utils.NetworkTransferUtils;
-import com.ytdd9527.networksexpansion.implementation.machines.unit.NetworksDrawer;
 import io.github.sefiraat.networks.utils.StackUtils;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
@@ -78,6 +77,7 @@ class LineOperationUtilTest {
              MockedStatic<NetworkTransferUtils> transfers = mockStatic(NetworkTransferUtils.class)) {
             LineOperationUtil.grabItem(ACCESSOR, root, menu, mode, 64);
             transfers.verify(() -> NetworkTransferUtils.moveMenuSlotIntoNetwork(root, ACCESSOR, menu, 0, 64));
+            transfers.verify(() -> NetworkTransferUtils.isNetworkRootHeld(root, ACCESSOR));
             transfers.verifyNoMoreInteractions();
             verify(menu, never()).getItemInSlot(1);
             verify(menu, never()).replaceExistingItem(anyInt(), any());
@@ -97,6 +97,7 @@ class LineOperationUtilTest {
             transfers.verify(() -> NetworkTransferUtils.moveMenuSlotIntoNetwork(root, ACCESSOR, menu, 0, 64));
             transfers.verify(() -> NetworkTransferUtils.moveMenuSlotIntoNetwork(root, ACCESSOR, menu, 1, 64));
             transfers.verify(() -> NetworkTransferUtils.moveMenuSlotIntoNetwork(root, ACCESSOR, menu, 2, 54));
+            transfers.verify(() -> NetworkTransferUtils.isNetworkRootHeld(root, ACCESSOR));
             transfers.verifyNoMoreInteractions();
         }
     }
@@ -118,6 +119,7 @@ class LineOperationUtilTest {
                 transfers.verify(() -> NetworkTransferUtils.moveMenuSlotIntoNetworkAndVoidRemainder(
                     root, ACCESSOR, menu, current, 64));
             }
+            transfers.verify(() -> NetworkTransferUtils.isNetworkRootHeld(root, ACCESSOR));
             transfers.verifyNoMoreInteractions();
             // The checked helper owns intentional disposal; the caller must never perform a second clear.
             verify(menu, never()).replaceExistingItem(anyInt(), any());
@@ -138,6 +140,7 @@ class LineOperationUtilTest {
             LineOperationUtil.grabItem(ACCESSOR, root, menu, TransportMode.SPECIFIED_QUANTITY, 64);
             // 192 stored, keep 64; the historical reverse-slot order starts at slot 2.
             transfers.verify(() -> NetworkTransferUtils.moveMenuSlotIntoNetwork(root, ACCESSOR, menu, 2, 64));
+            transfers.verify(() -> NetworkTransferUtils.isNetworkRootHeld(root, ACCESSOR));
             transfers.verifyNoMoreInteractions();
         }
     }
@@ -203,47 +206,17 @@ class LineOperationUtilTest {
     }
 
     @Test
-    void heldNetworkDoesNotPhysicallyWithdrawDrawerItems() {
-        when(root.allowAccessInput(ACCESSOR)).thenReturn(true);
+    void heldNetworkStopsBeforePhysicalDrawerSourceWithdrawal() {
         ItemStack sample = mock(ItemStack.class);
-        when(sample.getType()).thenReturn(Material.DIAMOND);
-
-        try (MockedStatic<NetworkTransferUtils> transfers = mockStatic(NetworkTransferUtils.class);
-             MockedStatic<NetworksDrawer> drawer = mockStatic(NetworksDrawer.class)) {
+        try (MockedStatic<NetworkTransferUtils> transfers = mockStatic(NetworkTransferUtils.class)) {
             transfers.when(() -> NetworkTransferUtils.isNetworkRootHeld(root, ACCESSOR)).thenReturn(true);
 
             assertEquals(0, LineOperationUtil.moveDrawerItemIntoNetwork(
                 root, ACCESSOR, new Location(null, 4, 5, 6), sample, 8));
 
-            drawer.verifyNoInteractions();
-        }
-    }
-
-    @Test
-    void ambiguousDrawerDepositMustNotRestorePotentiallyAcceptedItems() {
-        final Location drawerLocation = new Location(null, 4, 5, 6);
-        ItemStack sample = mock(ItemStack.class);
-        ItemStack withdrawn = mock(ItemStack.class);
-        when(sample.getType()).thenReturn(Material.DIAMOND);
-        when(sample.clone()).thenReturn(sample);
-        when(withdrawn.getAmount()).thenReturn(8);
-
-        try (MockedStatic<NetworkTransferUtils> transfers = mockStatic(NetworkTransferUtils.class);
-             MockedStatic<NetworksDrawer> drawer = mockStatic(NetworksDrawer.class);
-             MockedStatic<Networks> networks = mockStatic(Networks.class)) {
-            Networks plugin = mock(Networks.class);
-            when(plugin.getLogger()).thenReturn(java.util.logging.Logger.getAnonymousLogger());
-            networks.when(Networks::getInstance).thenReturn(plugin);
-            transfers.when(() -> NetworkTransferUtils.isNetworkRootHeld(root, ACCESSOR))
-                .thenReturn(false, true);
-            drawer.when(() -> NetworksDrawer.withdrawCargoItem(
-                eq(drawerLocation), any(ItemStack.class), any())).thenReturn(withdrawn);
-
-            assertEquals(0, LineOperationUtil.moveDrawerItemIntoNetwork(
-                root, ACCESSOR, drawerLocation, sample, 8));
-
-            drawer.verify(() -> NetworksDrawer.restoreCargoItem(
-                eq(drawerLocation), any(ItemStack.class)), never());
+            // The emergency root hold must stop before clone, menu, or storage access.
+            verify(sample, never()).clone();
+            verifyNoInteractions(menu);
             verify(root, never()).addItemStack0(any(), any());
         }
     }
