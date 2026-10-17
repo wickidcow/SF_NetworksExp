@@ -185,6 +185,23 @@ class NetworkMenuWithdrawalIntegrityTest {
     }
 
     @Test
+    void persistentDirtyFailureQuarantinesTheMachineWithoutRefundingCommittedItems() {
+        doThrow(new IllegalStateException("cannot mark machine dirty"))
+            .when(menu).markDirty();
+
+        assertEquals(8, push(dust(8), 0));
+        assertEquals(8, quantity(0));
+        assertEquals(0, restored);
+        assertTrue(MenuTransferSafetyHold.isHeld(menu));
+        assertEquals(1, MenuTransferSafetyHold.count());
+
+        // Subsequent offers are safely returned to the network without another insertion.
+        assertEquals(0, push(dust(3), 0));
+        assertEquals(3, restored);
+        assertEquals(8, quantity(0));
+    }
+
+    @Test
     void noValidDestinationSlotReturnsTheEntireStack() {
         assertEquals(0, push(dust(8), -1, 55));
         assertEquals(8, restored);

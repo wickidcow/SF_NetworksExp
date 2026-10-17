@@ -181,10 +181,16 @@ public final class NetworkTransferUtils {
                 destination.markDirty();
             } catch (RuntimeException | LinkageError dirtyFailure) {
                 TransferAudit.recordFailure();
+                // The in-memory insertion was verified, but a failed dirty mark
+                // may prevent persistence. Do not expose this destination to
+                // further withdrawals until its state is inspected.
+                MenuTransferSafetyHold.hold(destination, exactSource.getType(), committed);
                 Networks.getInstance().getLogger().log(
-                    java.util.logging.Level.WARNING,
+                    java.util.logging.Level.SEVERE,
                     "A Networks destination could not be marked dirty after its "
-                        + committed + " accepted item(s). The committed items will not be duplicated.",
+                        + committed + " accepted item(s) at " + destination.getLocation()
+                        + ". The accepted items were not refunded (to prevent duplication),"
+                        + " and further transfers into this menu have been suspended.",
                     dirtyFailure);
             }
             TransferAudit.recordWithdrawalCommitted(committed);

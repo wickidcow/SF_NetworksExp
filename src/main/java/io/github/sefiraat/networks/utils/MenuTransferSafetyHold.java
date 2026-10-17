@@ -57,13 +57,18 @@ final class MenuTransferSafetyHold {
     }
 
     static void hold(@NotNull BlockMenu menu, @NotNull Material material, int possibleUnreconciled) {
-        HELD.putIfAbsent(
-            BlockKey.of(menu.getLocation()),
-            new HeldMenu(
+        HELD.compute(BlockKey.of(menu.getLocation()), (key, existing) -> {
+            // Preserve the first incident for a still-held menu; never allow a
+            // stale incident to mask a new ambiguous write to a different menu.
+            if (existing != null && existing.menu() == menu) {
+                return existing;
+            }
+            return new HeldMenu(
                 menu,
                 material,
                 Math.max(0, possibleUnreconciled),
-                System.currentTimeMillis()));
+                System.currentTimeMillis());
+        });
     }
 
     static int count() {

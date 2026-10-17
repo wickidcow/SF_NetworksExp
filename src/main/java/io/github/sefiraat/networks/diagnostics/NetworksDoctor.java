@@ -250,11 +250,13 @@ public final class NetworksDoctor {
         }
         if (NetworkTransferUtils.getHeldMenuDestinationCount() > 0) {
             issues++;
-            addSample(details, "Unverifiable destination transfer(s): "
+            // Critical transfer holds must not be hidden by the ordinary
+            // SAMPLE_LIMIT if unrelated registry warnings already filled it.
+            details.add("Unverifiable destination transfer(s): "
                 + NetworkTransferUtils.getHeldMenuDestinationCount()
                 + " menu(s) held. Inspect these machines before replacing or restarting them.");
             for (String hold : NetworkTransferUtils.getHeldMenuDestinationSummaries(5)) {
-                addSample(details, "Held destination: " + hold);
+                details.add("Held destination: " + hold);
             }
         }
 
