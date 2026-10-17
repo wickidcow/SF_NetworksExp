@@ -168,7 +168,13 @@ class NetworkMenuWithdrawalIntegrityTest {
 
     @Test
     void afterCommitDirtyFailureDoesNotRestoreAlreadyInsertedItems() {
-        doThrow(new IllegalStateException("cannot mark dirty")).when(menu).markDirty();
+        AtomicInteger dirtyCalls = new AtomicInteger();
+        doAnswer(call -> {
+            if (dirtyCalls.incrementAndGet() == 1) {
+                throw new IllegalStateException("first markDirty applied too late");
+            }
+            return null;
+        }).when(menu).markDirty();
 
         assertEquals(8, push(dust(8), 0));
         assertEquals(8, quantity(0));
