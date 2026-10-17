@@ -177,6 +177,36 @@ class NetworkPlayerInventoryWithdrawalTest {
     }
 
     @Test
+    void matchingItemsInsertedByWithdrawalCallbackAreNotBlindlyRefunded() {
+        when(root.getItemStack0(eq(accessor), any(ItemRequest.class))).thenAnswer(call -> {
+            storage[0] = diamond(8);
+            return diamond(8);
+        });
+
+        assertEquals(0, move(8));
+        assertEquals(8, stored());
+        assertEquals(0, returned, "Callback-delivered items must not be duplicated");
+        verify(inventory, never()).setStorageContents(any(ItemStack[].class));
+        assertEquals(1, TransferAudit.snapshot().failures());
+    }
+
+    @Test
+    void unreadableInventoryBeforeCommitFailsClosed() {
+        AtomicInteger reads = new AtomicInteger();
+        when(inventory.getStorageContents()).thenAnswer(call -> {
+            if (reads.incrementAndGet() >= 3) {
+                throw new IllegalStateException("Pre-commit storage read failed");
+            }
+            return detached(storage);
+        });
+
+        assertEquals(0, move(8));
+        assertEquals(0, returned);
+        verify(inventory, never()).setStorageContents(any(ItemStack[].class));
+        assertEquals(1, TransferAudit.snapshot().failures());
+    }
+
+    @Test
     void unrelatedDestinationReplacementIsAmbiguousAndIsNotBlindlyRefunded() {
         doAnswer(call -> {
             storage[0] = new ItemStack(Material.EMERALD, 4);

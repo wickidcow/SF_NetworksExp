@@ -163,21 +163,34 @@ public final class NetworkTransferUtils {
         }
 
         try {
-            if (!sameInventoryStorage(before, inventory.getStorageContents())) {
+            final ItemStack[] current = inventory.getStorageContents();
+            if (!sameInventoryStorage(before, current)) {
                 TransferAudit.recordFailure();
-                rollbackNetworkWithdrawal(root, accessor, sourceSnapshot, player.getLocation(),
-                    "player inventory changed before commit");
-                Networks.getInstance().getLogger().warning(
-                    "A Networks player inventory changed during withdrawal; the withdrawn items were returned.");
+                if (mayContainWithrawnItemIncrease(before, current, sourceSnapshot)) {
+                    // A network withdrawal callback may itself have inserted the same item.
+                    // Refunding all withdrawn items without checking that possibility can mint
+                    // an identical second copy before we ever call InventoryUtil.addItem.
+                    Networks.getInstance().getLogger().severe(
+                        "A Networks player inventory gained a potentially withdrawn item before "
+                            + "its normal insertion at " + player.getLocation()
+                            + ". The ambiguous withdrawal was NOT refunded; inspect this inventory.");
+                } else {
+                    rollbackNetworkWithdrawal(root, accessor, sourceSnapshot, player.getLocation(),
+                        "player inventory changed before commit");
+                    Networks.getInstance().getLogger().warning(
+                        "A Networks player inventory changed during withdrawal without gaining "
+                            + "the requested item; the uncommitted stack was returned.");
+                }
                 return 0;
             }
         } catch (RuntimeException | LinkageError exception) {
             TransferAudit.recordFailure();
-            rollbackNetworkWithdrawal(root, accessor, sourceSnapshot, player.getLocation(),
-                "player inventory pre-commit read failure");
+            // We cannot prove whether a callback installed the requested item
+            // when even its pre-commit destination readback fails.
             Networks.getInstance().getLogger().log(
-                java.util.logging.Level.WARNING,
-                "A Networks player inventory became unreadable before commit; withdrawn items were returned.",
+                java.util.logging.Level.SEVERE,
+                "A Networks player inventory became unreadable after withdrawal at "
+                    + player.getLocation() + ". No potentially duplicated item was refunded.",
                 exception);
             return 0;
         }
@@ -261,6 +274,31 @@ public final class NetworkTransferUtils {
             }
         }
         return true;
+    }
+
+    /**
+     * Detect a source-identical gain before our own inventory write. A missing/reshaped
+     * inventory is also ambiguous, so no optimistic refund is authorized.
+     */
+    private static boolean mayContainWithrawnItemIncrease(
+        ItemStack @NotNull [] before,
+        ItemStack[] current,
+        @NotNull ItemStack withdrawn) {
+        if (current == null || current.length != before.length) {
+            return true;
+        }
+        for (int slot = 0; slot < before.length; slot++) {
+            final ItemStack after = current[slot];
+            if (validAmount(after) <= 0) {
+                continue;
+            }
+            if (StackUtils.itemsMatch(withdrawn, after, true, false)
+                && (validAmount(after) > validAmount(before[slot])
+                    || (validAmount(before[slot]) > 0 && !before[slot].isSimilar(after)))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
