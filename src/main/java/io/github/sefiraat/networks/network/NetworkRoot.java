@@ -18,6 +18,7 @@ import io.github.mooy1.infinityexpansion.items.storage.StorageUnit;
 import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.network.barrel.FluffyBarrel;
 import io.github.sefiraat.networks.network.barrel.InfinityBarrel;
+import io.github.sefiraat.networks.network.barrel.LegacyInfinityExpansionBarrel;
 import io.github.sefiraat.networks.network.barrel.NetworkStorage;
 import io.github.sefiraat.networks.network.stackcaches.BarrelIdentity;
 import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
@@ -936,12 +937,12 @@ public class NetworkRoot extends NetworkNode {
 
             if (request.getAmount() <= preserveAmount) {
                 stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
-                fetched.setAmount(fetched.getAmount() - request.getAmount());
+                consumeVerifiedBarrelSource(barrelIdentity, fetched, request.getAmount());
                 return stackToReturn;
             } else {
                 stackToReturn.setAmount(stackToReturn.getAmount() + preserveAmount);
                 request.receiveAmount(preserveAmount);
-                fetched.setAmount(fetched.getAmount() - preserveAmount);
+                consumeVerifiedBarrelSource(barrelIdentity, fetched, preserveAmount);
             }
         }
 
@@ -1837,6 +1838,47 @@ public class NetworkRoot extends NetworkNode {
     }
 
     /**
+     * The original Infinity and reflected legacy Infinity adapters expose a raw
+     * machine output ItemStack. Some menu implementations return a defensive
+     * copy, so mutating the returned value is NOT proof that storage lost items.
+     *
+     * Other barrel adapters (Quantum, Fluffy, IE2) already debit their own
+     * backing store in requestItem(); their returned ItemStack is only a receipt
+     * that the caller reduces as part of existing accounting.
+     */
+    private static void consumeVerifiedBarrelSource(
+        @NotNull BarrelIdentity barrel,
+        @NotNull ItemStack returned,
+        int amount) {
+        if (amount <= 0) {
+            return;
+        }
+
+        if (barrel instanceof InfinityBarrel || barrel instanceof LegacyInfinityExpansionBarrel) {
+            final BlockMenu liveMenu = StorageCacheUtils.getMenu(barrel.getLocation());
+            if (liveMenu == null) {
+                throw new IllegalStateException("Infinity output menu unavailable during withdrawal");
+            }
+            final int[] outputSlots = barrel.getOutputSlot();
+            if (outputSlots.length != 1) {
+                throw new IllegalStateException("Infinity storage output-slot layout changed");
+            }
+
+            final int slot = outputSlots[0];
+            final ItemStack current = liveMenu.getItemInSlot(slot);
+            if (current == null || current.getType().isAir()
+                || current.getAmount() != returned.getAmount()
+                || !returned.isSimilar(current)) {
+                throw new IllegalStateException("Infinity output changed before authoritative debit");
+            }
+
+            consumeVerifiedMenuSource(liveMenu, slot, current, amount);
+        } else {
+            returned.setAmount(returned.getAmount() - amount);
+        }
+    }
+
+    /**
      * Menu APIs owned by other Slimefun cores/addons may return a defensive
      * ItemStack copy. Mutating that copy is NOT evidence items were consumed.
      * Authoritatively replace the exact source slot and read it back before
@@ -2139,7 +2181,7 @@ public class NetworkRoot extends NetworkNode {
                         uncontrolAccessOutput(accessor);
                         // Netex - Reduce end
                         stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
-                        fetched.setAmount(fetched.getAmount() - request.getAmount());
+                        consumeVerifiedBarrelSource(barrelIdentity, fetched, request.getAmount());
                         // Netex - Record start
                         tryRecord(accessor, request);
                         // Netex - Record end
@@ -2147,7 +2189,7 @@ public class NetworkRoot extends NetworkNode {
                     } else {
                         stackToReturn.setAmount(stackToReturn.getAmount() + preserveAmount);
                         request.receiveAmount(preserveAmount);
-                        fetched.setAmount(fetched.getAmount() - preserveAmount);
+                        consumeVerifiedBarrelSource(barrelIdentity, fetched, preserveAmount);
                     }
                     // </editor-fold>
                 } else {
@@ -2245,7 +2287,7 @@ public class NetworkRoot extends NetworkNode {
                 uncontrolAccessOutput(accessor);
                 // Netex - Reduce end
                 stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
-                fetched.setAmount(fetched.getAmount() - request.getAmount());
+                consumeVerifiedBarrelSource(barrelIdentity, fetched, request.getAmount());
                 // Netex - Record start
                 tryRecord(accessor, request);
                 // Netex - Record end
@@ -2253,7 +2295,7 @@ public class NetworkRoot extends NetworkNode {
             } else {
                 stackToReturn.setAmount(stackToReturn.getAmount() + preserveAmount);
                 request.receiveAmount(preserveAmount);
-                fetched.setAmount(fetched.getAmount() - preserveAmount);
+                consumeVerifiedBarrelSource(barrelIdentity, fetched, preserveAmount);
             }
             // </editor-fold>
         }
