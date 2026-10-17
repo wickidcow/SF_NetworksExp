@@ -37,6 +37,11 @@ public final class NetworkTransferUtils {
         MenuTransferSafetyHold.reset();
     }
 
+    /** Read-only visibility for Networks Doctor. Holds must not be cleared by auto-repair. */
+    public static int getHeldMenuDestinationCount() {
+        return MenuTransferSafetyHold.count();
+    }
+
     /** Moves an item from a network into a Slimefun menu without silently losing a remainder. */
     public static int moveNetworkItemIntoMenu(
         @NotNull NetworkRoot root,
