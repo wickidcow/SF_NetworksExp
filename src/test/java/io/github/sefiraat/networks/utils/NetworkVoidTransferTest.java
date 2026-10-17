@@ -97,6 +97,7 @@ class NetworkVoidTransferTest {
             try {
                 if (networks != null) networks.close();
             } finally {
+                NetworkTransferUtils.resetRuntimeSafety();
                 TransferAudit.reset();
                 MockBukkit.unmock();
             }
@@ -262,6 +263,8 @@ class NetworkVoidTransferTest {
         assertSame(external, source.get());
         assertEquals(4, accepted); // A failed rollback is not falsely reported as conservation.
         assertEquals(0, TransferAudit.snapshot().depositCompensationRetrieved());
+        assertEquals(1, NetworkTransferUtils.getHeldWithdrawalSourceCount(),
+            "An incompletely compensated network must stay quarantined");
         assertPassStopped();
         verify(menu, never()).replaceExistingItem(anyInt(), nullable(ItemStack.class));
     }

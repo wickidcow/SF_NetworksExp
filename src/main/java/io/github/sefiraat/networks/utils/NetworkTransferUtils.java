@@ -1417,6 +1417,13 @@ public final class NetworkTransferUtils {
             }
         }
         TransferAudit.recordDepositCompensation(committed, recovered);
+        if (committed > recovered) {
+            // This rollback could not prove that the entire network-side
+            // deposit was undone. Leaving this controller live would allow
+            // repeatedly contested source writes to continue indefinitely.
+            final Material material = template == null ? Material.BARRIER : template.getType();
+            RootRollbackSafetyHold.hold(root, accessor, material, committed - recovered);
+        }
         java.util.logging.Level level = recovered >= committed
             ? java.util.logging.Level.WARNING
             : java.util.logging.Level.SEVERE;
