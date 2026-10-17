@@ -543,13 +543,28 @@ public class LineOperationUtil {
             return;
         }
 
+        // The preset is fixed for this BlockMenu's lifetime. Cache only within this
+        // synchronous target pass; do not cache menus/slot routing across ticks.
+        Boolean targetIsDrawer = null;
         for (int i = 0; i < templates.size(); i++) {
-            ItemStack template = templates.get(i);
+            final ItemStack template = templates.get(i);
             if (template == null || template.getType() == Material.AIR) {
                 continue;
             }
 
-            pushItem(accessor, root, blockMenu, template, i, transportMode, limitQuantity, availabilityMemo);
+            // A confirmed source miss should not trigger an item-aware target
+            // classification at all. Preserve one skip event per memo entry.
+            if (availabilityMemo != null && availabilityMemo.shouldSkip(i)) {
+                if (!root.allowAccessOutput(accessor)) {
+                    break;
+                }
+                continue;
+            }
+            if (targetIsDrawer == null) {
+                targetIsDrawer = isNetworksDrawerMenu(blockMenu);
+            }
+            pushItemInternal(accessor, root, blockMenu, template, i, transportMode,
+                limitQuantity, availabilityMemo, targetIsDrawer, true);
 
             // A failed request above may have crossed the existing miss threshold.
             if (!root.allowAccessOutput(accessor)) {
@@ -574,13 +589,26 @@ public class LineOperationUtil {
             return;
         }
 
+        Boolean targetIsDrawer = null;
         for (int i = 0; i < templates.length; i++) {
             final ItemStack template = templates[i];
             if (template == null || template.getType() == Material.AIR) {
                 continue;
             }
 
-            pushItem(accessor, root, blockMenu, template, i, transportMode, limitQuantity, availabilityMemo);
+            // A confirmed source miss should not trigger an item-aware target
+            // classification at all. Preserve one skip event per memo entry.
+            if (availabilityMemo != null && availabilityMemo.shouldSkip(i)) {
+                if (!root.allowAccessOutput(accessor)) {
+                    break;
+                }
+                continue;
+            }
+            if (targetIsDrawer == null) {
+                targetIsDrawer = isNetworksDrawerMenu(blockMenu);
+            }
+            pushItemInternal(accessor, root, blockMenu, template, i, transportMode,
+                limitQuantity, availabilityMemo, targetIsDrawer, true);
 
             if (!root.allowAccessOutput(accessor)) {
                 break;
@@ -619,7 +647,23 @@ public class LineOperationUtil {
         @NotNull TransportMode transportMode,
         int limitQuantity,
         @Nullable PushAvailabilityMemo availabilityMemo) {
-        if (availabilityMemo != null && availabilityMemo.shouldSkip(itemIndex)) {
+        pushItemInternal(accessor, root, blockMenu, template, itemIndex,
+            transportMode, limitQuantity, availabilityMemo, null, false);
+    }
+
+    /** A null hint preserves the public single-template probe; non-null is pass-local only. */
+    private static void pushItemInternal(
+        @NotNull Location accessor,
+        @NotNull NetworkRoot root,
+        @NotNull BlockMenu blockMenu,
+        @NotNull ItemStack template,
+        int itemIndex,
+        @NotNull TransportMode transportMode,
+        int limitQuantity,
+        @Nullable PushAvailabilityMemo availabilityMemo,
+        @Nullable Boolean knownDrawer,
+        boolean memoAlreadyChecked) {
+        if (!memoAlreadyChecked && availabilityMemo != null && availabilityMemo.shouldSkip(itemIndex)) {
             return;
         }
         if (!root.allowAccessOutput(accessor)) {
@@ -630,7 +674,7 @@ public class LineOperationUtil {
             ? new ItemRequest(template, template.getMaxStackSize())
             : availabilityMemo.requestFor(itemIndex, template);
 
-        if (isNetworksDrawerMenu(blockMenu)) {
+        if (knownDrawer != null ? knownDrawer : isNetworksDrawerMenu(blockMenu)) {
             pushDrawerItem(
                 accessor,
                 root,
@@ -663,6 +707,11 @@ public class LineOperationUtil {
                                 freeSpace += availableSpace;
                             }
                         }
+                    }
+                    // The request is already fully covered by earlier slots.
+                    // Keep all authoritative slots for commit verification.
+                    if (freeSpace >= limitQuantity) {
+                        break;
                     }
                 }
                 if (freeSpace <= 0) {
@@ -794,6 +843,9 @@ public class LineOperationUtil {
                                     }
                                 }
                             }
+                            if (freeSpace >= limitQuantity) {
+                                break;
+                            }
                         }
                         if (freeSpace <= 0) {
                             return;
@@ -822,6 +874,10 @@ public class LineOperationUtil {
                     if (itemStack != null && itemStack.getType() != Material.AIR) {
                         if (StackUtils.itemsMatch(itemRequest, itemStack)) {
                             existingCount += itemStack.getAmount();
+                            if (existingCount >= limitQuantity) {
+                                // Nothing to withdraw: later slots can only raise this total.
+                                return;
+                            }
                         }
                     }
                 }
