@@ -130,6 +130,14 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
                 player.sendMessage(ChatColors.color(
                     "&eEnter the Recipe-Aware batch target (1-" + RecipeAwarePusherPlanner.MAX_BUFFERED_BATCHES + ")"));
                 ChatUtils.awaitInput(player, input -> {
+                    final BlockMenu liveMenu = getCurrentRecipeAwareMenu(location, blockMenu);
+                    if (liveMenu == null) {
+                        RECIPE_BUFFER_BATCHES.remove(location);
+                        player.sendMessage(ChatColors.color(
+                            "&cThat Network Pusher is no longer available."));
+                        return;
+                    }
+
                     try {
                         final int value = Calculator.calculate(input).intValueExact();
                         if (!RecipeAwarePusherPlanner.isValidBufferedBatches(value)) {
@@ -146,13 +154,10 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
                                 "&aRecipe-Aware batch target set to &b" + value + "&a."));
                         }
 
-                        final BlockMenu menu = StorageCacheUtils.getMenu(location);
-                        if (menu != null) {
-                            menu.replaceExistingItem(
-                                modeSlot,
-                                createRecipeAwareModeStack(location, isRecipeAware(menu)));
-                            menu.open(player);
-                        }
+                        liveMenu.replaceExistingItem(
+                            modeSlot,
+                            createRecipeAwareModeStack(location, isRecipeAware(liveMenu)));
+                        liveMenu.open(player);
                     } catch (NumberFormatException | ArithmeticException exception) {
                         player.sendMessage(ChatColors.color(
                             "&cEnter a whole number between "
@@ -160,10 +165,7 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
                                 + " and "
                                 + RecipeAwarePusherPlanner.MAX_BUFFERED_BATCHES
                                 + "."));
-                        final BlockMenu menu = StorageCacheUtils.getMenu(location);
-                        if (menu != null) {
-                            menu.open(player);
-                        }
+                        liveMenu.open(player);
                     }
                 });
                 return false;
@@ -175,6 +177,18 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
             blockMenu.replaceExistingItem(modeSlot, createRecipeAwareModeStack(location, next));
             return false;
         });
+    }
+
+    private @Nullable BlockMenu getCurrentRecipeAwareMenu(
+        @NotNull Location location,
+        @NotNull BlockMenu expectedMenu) {
+
+        if (!StorageCacheUtils.isBlock(location, getId())) {
+            return null;
+        }
+
+        final BlockMenu liveMenu = StorageCacheUtils.getMenu(location);
+        return liveMenu == expectedMenu ? liveMenu : null;
     }
 
     private int getRecipeAwareModeSlot() {
@@ -231,8 +245,16 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
             }
         }
 
-        if (RECIPE_BUFFER_BATCHES.putIfAbsent(location.clone(), value) == null
-            && (raw == null || !Integer.toString(value).equals(raw))) {
+        RECIPE_BUFFER_BATCHES.putIfAbsent(location.clone(), value);
+
+        /*
+         * An unset machine inherits the server-wide item setting. Do not materialize that fallback
+         * into block data just because the machine ticked or its menu was viewed; otherwise a later
+         * server-wide config change would stop applying to machines the player never customized.
+         * Only repair an existing malformed/out-of-range stored override here. Explicit player
+         * adjustments are persisted by setRecipeBufferBatches(...).
+         */
+        if (raw != null && !Integer.toString(value).equals(raw)) {
             StorageCacheUtils.setData(location, RECIPE_BUFFER_BATCHES_KEY, Integer.toString(value));
         }
         return RECIPE_BUFFER_BATCHES.getOrDefault(location, value);
