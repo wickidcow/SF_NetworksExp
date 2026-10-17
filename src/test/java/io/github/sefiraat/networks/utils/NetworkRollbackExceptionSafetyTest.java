@@ -148,6 +148,12 @@ class NetworkRollbackExceptionSafetyTest {
         verify(root, never()).getItemStack0(any(), any());
 
         NetworkRoot replacementRoot = mock(NetworkRoot.class);
+        // Graph rebuilds can reuse the original physical storage. A different
+        // root object is NOT evidence an ambiguous refund was reconciled.
+        assertTrue(RootRollbackSafetyHold.isHeld(replacementRoot, accessor));
+        assertEquals(1, NetworkTransferUtils.getHeldWithdrawalSourceCount());
+
+        NetworkTransferUtils.resetRuntimeSafety(); // controlled plugin shutdown
         assertFalse(RootRollbackSafetyHold.isHeld(replacementRoot, accessor));
         assertEquals(0, NetworkTransferUtils.getHeldWithdrawalSourceCount());
     }

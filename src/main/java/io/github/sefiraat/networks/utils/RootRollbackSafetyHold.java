@@ -16,8 +16,9 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * Fail-closed source-specific circuit breaker for an ambiguous storage refund.
- * A new root object at the same accessor may recover; an existing broken root
- * may not silently resume until a controlled plugin restart.
+ * Root replacement is NOT proof the underlying storage accepted or rejected
+ * an ambiguous refund. Holds remain until controlled plugin shutdown/restart,
+ * after an operator investigates the affected storage and logs.
  */
 final class RootRollbackSafetyHold {
     private static final ConcurrentMap<BlockKey, HeldRoot> HELD = new ConcurrentHashMap<>();
@@ -29,27 +30,19 @@ final class RootRollbackSafetyHold {
         if (HELD.isEmpty()) {
             return false;
         }
-        final BlockKey key = BlockKey.of(accessor);
-        final HeldRoot held = HELD.get(key);
-        if (held == null) {
-            return false;
-        }
-        if (held.root() == root) {
-            return true;
-        }
-        // Rebuilt roots are a separate storage topology, so stale holds must
-        // not disable a legitimate newly constructed controller indefinitely.
-        HELD.remove(key, held);
-        return false;
+        // A different NetworkRoot object may point to the same underlying
+        // barrel/cell data. It is NOT a verified recovery or refund receipt.
+        // Never auto-clear the hold merely because the root object changed.
+        return HELD.containsKey(BlockKey.of(accessor));
     }
 
     static void hold(
         @NotNull NetworkRoot root, @NotNull Location accessor,
         @NotNull Material material, int possibleAmount) {
-        HELD.compute(BlockKey.of(accessor), (key, old) ->
-            old != null && old.root() == root
-                ? old
-                : new HeldRoot(root, material, Math.max(0, possibleAmount), System.currentTimeMillis()));
+        // Preserve the first incident, even if the graph rebuilt and a new
+        // NetworkRoot instance later reported another ambiguous storage write.
+        HELD.putIfAbsent(BlockKey.of(accessor),
+            new HeldRoot(root, material, Math.max(0, possibleAmount), System.currentTimeMillis()));
     }
 
     static int count() {
