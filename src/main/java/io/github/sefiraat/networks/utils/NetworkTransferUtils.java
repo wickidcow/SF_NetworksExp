@@ -693,7 +693,11 @@ public final class NetworkTransferUtils {
         return committed;
     }
 
-    /** Moves items between two independent network roots with rollback to the source root. */
+    /**
+     * Moves items between independent network roots. A target storage adapter can install
+     * some/all items and then throw before decrementing the offered stack. That exception
+     * is NOT evidence the destination accepted nothing: never refund an unverified offer.
+     */
     public static int moveNetworkItemBetweenRoots(
         @NotNull NetworkRoot source,
         @NotNull Location sourceAccessor,
@@ -711,27 +715,80 @@ public final class NetworkTransferUtils {
             return 0;
         }
 
-        final int withdrawn = retrieved.getAmount();
-        // A rollback/forwarding operation must not be rejected merely because the target was accessed earlier
-        // in the same tick by another transport node.
+        final int withdrawn = validAmount(retrieved);
+        final ItemStack exactSource;
+        final ItemStack offered;
         try {
-            target.uncontrolAccessInput(targetAccessor);
-            target.addItemStack0(targetAccessor, retrieved);
-        } catch (RuntimeException | LinkageError exception) {
+            exactSource = snapshotMenuSource(retrieved);
+            offered = snapshotMenuSource(exactSource);
+        } catch (RuntimeException | LinkageError copyFailure) {
+            // No destination write has occurred; a source refund is unambiguous.
             TransferAudit.recordFailure();
-            rollbackNetworkWithdrawal(
-                source, sourceAccessor, retrieved, sourceAccessor, "network-to-network transfer exception");
-            Networks.getInstance().getLogger().log(
-                java.util.logging.Level.WARNING,
-                "A Networks root-to-root transfer failed while committing; the withdrawn stack was rolled back.",
-                exception);
+            rollbackNetworkWithdrawal(source, sourceAccessor, retrieved,
+                sourceAccessor, "network-to-network offer preflight");
+            Networks.getInstance().getLogger().log(java.util.logging.Level.WARNING,
+                "A Networks root-to-root offer could not be copied exactly. No target write was attempted.",
+                copyFailure);
             return 0;
         }
-        final int remainder = validAmount(retrieved);
-        final int committed = Math.max(0, withdrawn - remainder);
+
+        try {
+            // The target accessor may be rate-limited by another transport in the same tick.
+            // This access reset occurs BEFORE the target storage write, so failure here
+            // cannot mean that this transaction was accepted by target storage.
+            target.uncontrolAccessInput(targetAccessor);
+        } catch (RuntimeException | LinkageError accessFailure) {
+            TransferAudit.recordFailure();
+            rollbackNetworkWithdrawal(source, sourceAccessor, exactSource, sourceAccessor,
+                "network-to-network target access preflight");
+            Networks.getInstance().getLogger().log(java.util.logging.Level.WARNING,
+                "A Networks target accessor could not be reset. No target item insertion was attempted.",
+                accessFailure);
+            return 0;
+        }
+
+        try {
+            target.addItemStack0(targetAccessor, offered);
+        } catch (RuntimeException | LinkageError writeFailure) {
+            // The target could have already accepted the entire offer even if 'offered'
+            // still reports the original count. An automatic source refund can duplicate it.
+            TransferAudit.recordFailure();
+            RootRollbackSafetyHold.hold(source, sourceAccessor, exactSource.getType(), withdrawn);
+            Networks.getInstance().getLogger().log(java.util.logging.Level.SEVERE,
+                "A Networks root-to-root destination write at " + targetAccessor
+                    + " threw after withdrawing up to " + withdrawn + " item(s) at " + sourceAccessor
+                    + ". Destination acceptance is UNKNOWN. NO item was refunded or world-dropped."
+                    + " All source-controller withdrawals are held until this incident is investigated.",
+                writeFailure);
+            return 0;
+        }
+
+        final int remaining;
+        try {
+            remaining = validAmount(offered);
+            if (remaining > withdrawn
+                || (remaining > 0 && !exactSource.isSimilar(offered))) {
+                throw new IllegalStateException("Target altered the returned item identity or inflated the remainder");
+            }
+        } catch (RuntimeException | LinkageError readbackFailure) {
+            TransferAudit.recordFailure();
+            RootRollbackSafetyHold.hold(source, sourceAccessor, exactSource.getType(), withdrawn);
+            Networks.getInstance().getLogger().log(java.util.logging.Level.SEVERE,
+                "A Networks root-to-root destination returned an unverified remainder at "
+                    + targetAccessor + ". NO unverified amount was refunded or dropped."
+                    + " All source-controller withdrawals are held until investigation.",
+                readbackFailure);
+            return 0;
+        }
+
+        final int committed = withdrawn - remaining;
         TransferAudit.recordWithdrawalCommitted(committed);
-        if (remainder > 0) {
-            rollbackNetworkWithdrawal(source, sourceAccessor, retrieved, sourceAccessor, "network-to-network transfer");
+        if (remaining > 0) {
+            // The target completed normally and provided an identity-preserving remainder.
+            // Refund from the detached original item, not from its mutable target offer.
+            exactSource.setAmount(remaining);
+            rollbackNetworkWithdrawal(source, sourceAccessor, exactSource,
+                sourceAccessor, "network-to-network verified remainder");
         }
         return committed;
     }
