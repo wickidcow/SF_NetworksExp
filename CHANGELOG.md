@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.0.59 — recipe buffering and transaction integrity
+
+- Add opt-in Recipe-Aware buffering for Network, More and Best Pushers, with per-machine targets of 1–64 recipe batches and bounded numeric chat settings.
+- Reserve space for missing ingredient types before filling multiple batches. Presence must be in a physical input accepted for that item; output/display copies and rejected inputs cannot unlock extra buffering. Discovery checks at most four present types per tick and keeps the existing four-request transfer budget.
+- Verify Slimefun menu, player inventory and cursor writes by readback. Compensate only verified uncommitted quantities and hold affected controllers or destinations after ambiguous failures instead of automatically refunding or dropping potentially accepted items.
+- Reconcile same-item producer growth during menu deposits, preserving newly generated output in normal and VOID modes. Keep changed-source and failed persistence compensation safeguards active. Use InfinityExpansion2 2.0.14 for its separate Dust Extractor synchronization fix.
+- Preserve all 289 registered Slimefun item IDs, recipes, storage formats, routing preferences and Java 21 universal JAR compatibility.
+- Gate publication on Legacy/United/Gugu compatibility, the strict universal build, Purpur 1.21.11 probes, Paper 26.3 source compilation and native Paper builds 176/194, including independent JVM Quantum Storage restart checks. Publish the exact tested JAR as `SF_Networks1.0.59.jar`; existing release assets are never replaced.
+
+The checks cover the exercised transfer and persistence paths. They do not establish server-wide TPS gains or certify every third-party storage adapter. Large recipes whose remaining inputs cannot be verified within the bounded discovery budget retain a conservative one-batch cap until verified.
+
+## 1.0.59-rc2 — combined transaction and recipe-balancing staging (not published)
+
+- Preserve rc1's Recipe-Aware per-machine 1–64 batch buffering, verified Slimefun menu insertion, and network-to-cursor/player-inventory readback safeguards.
+- Prevent ambiguous source-network rollback attempts from silently world-dropping potentially accepted items. Quarantine all accessors of the affected network controller/root and report incidents in Networks Doctor. Controller rebuilds do not automatically clear these holds.
+- In opt-in multi-template Recipe-Aware mode, limit represented ingredients to one recipe batch while another template type is absent from the target menu. Maintain the target machine's authoritative input slots.
+- Extend regression tests for write-then-throw source refunds, ongoing safety holds and missing-ingredient fairness.
+- Independently run the exact rc2 JAR and the same Slimefun Legacy core against SHA-256-pinned Paper 26.3 build 194; verify native manager behavior and Quantum persistence across clean JVM restarts.
+- Preserve existing 289 Slimefun IDs, recipes, saved data formats, input/output routing rules and Java 21 bytecode.
+- Give this combined candidate a unique `SF_Networks1.0.59-rc2.jar` identity and disable automatic release publication for -rc builds.
+
+**Draft only.** Exact native Paper/Purpur CI plus representative IE2, Supreme/shared-slot crafting and /sf tick top comparison remain release gates. The public stable release remains 1.0.58.
+
 ## 1.0.59-rc1 — development staging candidate (not published)
 
 - Combine the recipe-aware Network, More and Best Pusher template buffering and per-machine 1–64 batch targets with bounded, numeric-only chat settings.
@@ -541,3 +564,4 @@ This release hardens known code paths but does not claim that every third-party 
 - Update Lombok to 1.18.46 for current JDK compatibility.
 - Replace inheritance from Paper's now-final `RecipeChoice.ExactChoice` with a composition-based `RecipeChoice` implementation.
 - Add permanent verifier checks for the Java 21 compile lane and recipe-choice compatibility.
+

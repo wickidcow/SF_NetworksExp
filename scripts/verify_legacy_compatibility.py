@@ -238,16 +238,49 @@ require("extends RecipeChoice.ExactChoice" not in simple_recipe_choice,
         "SimpleRecipeChoice still extends final RecipeChoice.ExactChoice")
 require("implements RecipeChoice" in simple_recipe_choice, "SimpleRecipeChoice no longer implements RecipeChoice")
 # Public release metadata must move as one unit so JAR/plugin/workflow versions cannot drift.
-require(public_version == "1.0.59-rc1", "staging candidate must retain the 1.0.59-rc1 version")
-require('version = "1.0.59-rc1"' in build, "staging Gradle version must remain 1.0.59-rc1")
-require('VERSION: "1.0.59-rc1"' in build_workflow
-        and 'OUTPUT_NAME: "SF_Networks1.0.59-rc1.jar"' in build_workflow,
-        "staging workflow version/JAR name must remain 1.0.59-rc1")
-require('VERSION: "1.0.59-rc1"' in compatibility_workflow
-        and 'OUTPUT_NAME: "SF_Networks1.0.59-rc1.jar"' in compatibility_workflow,
-        "staging compatibility version/JAR name must remain 1.0.59-rc1")
+require(public_version == "1.0.59", "stable release version must be 1.0.59")
+require('version = "1.0.59"' in build, "stable Gradle version must be 1.0.59")
+require('VERSION: "1.0.59"' in build_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.59.jar"' in build_workflow,
+        "stable workflow version/JAR name must be 1.0.59")
+require('VERSION: "1.0.59"' in compatibility_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.59.jar"' in compatibility_workflow,
+        "stable compatibility version/JAR name must be 1.0.59")
 require("!contains(env.VERSION, '-rc')" in build_workflow,
-        "staging RC builds must never publish a release even on manual/tag events")
+        "RC builds must never publish a release even on manual/tag events")
+release_definition = yaml.safe_load(build_workflow)
+release_jobs = release_definition.get("jobs", {})
+publish_job = release_jobs.get("publish", {})
+required_release_jobs = {
+    "compatibility", "paper26_3_compile", "build", "paper26_3_runtime", "paper26_3_194_runtime",
+}
+require(required_release_jobs <= set(publish_job.get("needs", [])),
+        "publication must wait for all three-core, build/Purpur and native Paper gates")
+require(all(not release_jobs.get(name, {}).get("if") for name in
+            ("paper26_3_compile", "paper26_3_runtime", "paper26_3_194_runtime")),
+        "native Paper and source gates must also execute on stable publication events")
+publish_condition = publish_job.get("if", "")
+require("github.repository == 'wickidcow/SF_NetworksExp'" in publish_condition
+        and "github.event_name == 'push'" in publish_condition
+        and "github.event.repository.default_branch" in publish_condition
+        and "startsWith(github.ref, 'refs/tags/v')" in publish_condition
+        and "always()" not in publish_condition,
+        "publication must require successful gates and the canonical master/tag context")
+require(release_definition.get("permissions", {}).get("contents") == "read"
+        and publish_job.get("permissions", {}).get("contents") == "write",
+        "only the final publication job may request repository write permission")
+publish_commands = "\n".join(step.get("run", "") for step in publish_job.get("steps", []))
+require('test "$GITHUB_REF_NAME" = "v${VERSION}"' in publish_commands
+        and 'gh release create "$TAG" "dist/$OUTPUT_NAME"' in publish_commands
+        and '--target "$GITHUB_SHA"' in publish_commands
+        and '--notes-file "docs/releases/${VERSION}.md"' in publish_commands,
+        "publication must validate the tag and use the exact tested revision/JAR and release notes")
+require("--clobber" not in build_workflow and "delete-asset" not in build_workflow,
+        "existing published release assets must remain immutable")
+require(not any("gh release create" in step.get("run", "")
+                for name, job in release_jobs.items() if name != "publish"
+                for step in job.get("steps", [])),
+        "a build job must never publish before downstream runtime checks")
 require("actions/upload-artifact@v7" in compatibility_workflow
         and "name: slimefun-legacy-core" in compatibility_workflow
         and "Slimefun-Legacy-Core.jar" in compatibility_workflow,
@@ -660,8 +693,13 @@ for method in [
     "movePlayerMainHandIntoNetwork",
 ]:
     require(method in transfer_utils, f"explicit transfer helper missing: {method}")
-require("replaceExistingItem(slot, result.remainingStack())" in transfer_utils,
-        "menu source-slot commit is missing")
+require("sourceMenu.replaceExistingItem(slot, committedSource)" in transfer_utils
+        and "sourceBeforeCommit = snapshotMenuSource(observedSource)" in transfer_utils
+        and "observedSource.getAmount() < originalSource.getAmount()" in transfer_utils
+        and "!originalSource.isSimilar(observedSource)" in transfer_utils
+        and "sourceBeforeCommit.getAmount() - originalSource.getAmount()" in transfer_utils
+        and "sourceMenu.replaceExistingItem(slot, sourceBeforeCommit)" in transfer_utils,
+        "menu source-slot growth-safe commit/recovery is missing")
 require("sourceInventory.setItem(slot, result.remainingStack())" in transfer_utils,
         "inventory source-slot commit is missing")
 require("player.setItemOnCursor" in transfer_utils, "cursor source commit is missing")
@@ -1251,3 +1289,4 @@ print(
     f"Networks 1.0 Legacy verification passed: {len(current_ids)} item IDs, three-core matrix, "
     "Java 21, Paper 1.21.11, transaction safety, persistence recovery, controller hardening, and IE2 storage integration."
 )
+

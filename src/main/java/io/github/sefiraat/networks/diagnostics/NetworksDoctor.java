@@ -243,6 +243,16 @@ public final class NetworksDoctor {
                 + DataStorage.getRecoveryEntryCount() + " unapplied amount update(s)");
         }
         TransferAudit.Snapshot transfer = TransferAudit.snapshot();
+        if (NetworkTransferUtils.getHeldWithdrawalSourceCount() > 0) {
+            issues++;
+            // Always show safety incidents even when ordinary samples are full.
+            details.add("Unsafe source-network rollback(s): "
+                + NetworkTransferUtils.getHeldWithdrawalSourceCount()
+                + " network root(s) held. Inspect physical storage before restarting.");
+            for (String held : NetworkTransferUtils.getHeldWithdrawalSourceSummaries(5)) {
+                details.add("Held withdrawal source: " + held);
+            }
+        }
         if (transfer.outstandingRollbackItems() > 0 || transfer.uncompensatedDepositItems() > 0) {
             issues++;
             addSample(details, "Transfer compensation is incomplete: rollback="
@@ -294,7 +304,8 @@ public final class NetworksDoctor {
             + " committed, rollback outstanding=" + transfer.outstandingRollbackItems()
             + ", deposit compensation outstanding=" + transfer.uncompensatedDepositItems()
             + ", safety-dropped=" + transfer.safetyDropped() + ", failures=" + transfer.failures()
-            + ", held-machine-destinations=" + NetworkTransferUtils.getHeldMenuDestinationCount());
+            + ", held-machine-destinations=" + NetworkTransferUtils.getHeldMenuDestinationCount()
+            + ", held-withdrawal-sources=" + NetworkTransferUtils.getHeldWithdrawalSourceCount());
         if (unloaded > 0L) {
             details.add("Skipped " + unloaded + " entries in unloaded chunks; Doctor never force-loads chunks");
         }

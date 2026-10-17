@@ -36,6 +36,17 @@ public final class NetworkTransferUtils {
     /** Clears safety holds only as part of controlled plugin lifecycle cleanup. */
     public static void resetRuntimeSafety() {
         MenuTransferSafetyHold.reset();
+        RootRollbackSafetyHold.reset();
+    }
+
+    /** Source-network rollback holds are read-only until a controlled restart. */
+    public static int getHeldWithdrawalSourceCount() {
+        return RootRollbackSafetyHold.count();
+    }
+
+    /** Coarse root-accessor details intentionally omit players, lore and PDC data. */
+    public static @NotNull List<String> getHeldWithdrawalSourceSummaries(int limit) {
+        return RootRollbackSafetyHold.describe(limit);
     }
 
     /** Read-only visibility for Networks Doctor. Holds must not be cleared by auto-repair. */
@@ -682,7 +693,11 @@ public final class NetworkTransferUtils {
         return committed;
     }
 
-    /** Moves items between two independent network roots with rollback to the source root. */
+    /**
+     * Moves items between independent network roots. A target storage adapter can install
+     * some/all items and then throw before decrementing the offered stack. That exception
+     * is NOT evidence the destination accepted nothing: never refund an unverified offer.
+     */
     public static int moveNetworkItemBetweenRoots(
         @NotNull NetworkRoot source,
         @NotNull Location sourceAccessor,
@@ -700,34 +715,93 @@ public final class NetworkTransferUtils {
             return 0;
         }
 
-        final int withdrawn = retrieved.getAmount();
-        // A rollback/forwarding operation must not be rejected merely because the target was accessed earlier
-        // in the same tick by another transport node.
+        final int withdrawn = validAmount(retrieved);
+        final ItemStack exactSource;
+        final ItemStack offered;
         try {
-            target.uncontrolAccessInput(targetAccessor);
-            target.addItemStack0(targetAccessor, retrieved);
-        } catch (RuntimeException | LinkageError exception) {
+            exactSource = snapshotMenuSource(retrieved);
+            offered = snapshotMenuSource(exactSource);
+        } catch (RuntimeException | LinkageError copyFailure) {
+            // No destination write has occurred; a source refund is unambiguous.
             TransferAudit.recordFailure();
-            rollbackNetworkWithdrawal(
-                source, sourceAccessor, retrieved, sourceAccessor, "network-to-network transfer exception");
-            Networks.getInstance().getLogger().log(
-                java.util.logging.Level.WARNING,
-                "A Networks root-to-root transfer failed while committing; the withdrawn stack was rolled back.",
-                exception);
+            rollbackNetworkWithdrawal(source, sourceAccessor, retrieved,
+                sourceAccessor, "network-to-network offer preflight");
+            Networks.getInstance().getLogger().log(java.util.logging.Level.WARNING,
+                "A Networks root-to-root offer could not be copied exactly. No target write was attempted.",
+                copyFailure);
             return 0;
         }
-        final int remainder = validAmount(retrieved);
-        final int committed = Math.max(0, withdrawn - remainder);
+
+        try {
+            // The target accessor may be rate-limited by another transport in the same tick.
+            // This access reset occurs BEFORE the target storage write, so failure here
+            // cannot mean that this transaction was accepted by target storage.
+            target.uncontrolAccessInput(targetAccessor);
+        } catch (RuntimeException | LinkageError accessFailure) {
+            TransferAudit.recordFailure();
+            rollbackNetworkWithdrawal(source, sourceAccessor, exactSource, sourceAccessor,
+                "network-to-network target access preflight");
+            Networks.getInstance().getLogger().log(java.util.logging.Level.WARNING,
+                "A Networks target accessor could not be reset. No target item insertion was attempted.",
+                accessFailure);
+            return 0;
+        }
+
+        try {
+            target.addItemStack0(targetAccessor, offered);
+        } catch (RuntimeException | LinkageError writeFailure) {
+            // The target could have already accepted the entire offer even if 'offered'
+            // still reports the original count. An automatic source refund can duplicate it.
+            TransferAudit.recordFailure();
+            RootRollbackSafetyHold.hold(source, sourceAccessor, exactSource.getType(), withdrawn);
+            Networks.getInstance().getLogger().log(java.util.logging.Level.SEVERE,
+                "A Networks root-to-root destination write at " + targetAccessor
+                    + " threw after withdrawing up to " + withdrawn + " item(s) at " + sourceAccessor
+                    + ". Destination acceptance is UNKNOWN. NO item was refunded or world-dropped."
+                    + " All source-controller withdrawals are held until this incident is investigated.",
+                writeFailure);
+            return 0;
+        }
+
+        final int remaining;
+        try {
+            remaining = validAmount(offered);
+            if (remaining > withdrawn
+                || (remaining > 0 && !exactSource.isSimilar(offered))) {
+                throw new IllegalStateException("Target altered the returned item identity or inflated the remainder");
+            }
+        } catch (RuntimeException | LinkageError readbackFailure) {
+            TransferAudit.recordFailure();
+            RootRollbackSafetyHold.hold(source, sourceAccessor, exactSource.getType(), withdrawn);
+            Networks.getInstance().getLogger().log(java.util.logging.Level.SEVERE,
+                "A Networks root-to-root destination returned an unverified remainder at "
+                    + targetAccessor + ". NO unverified amount was refunded or dropped."
+                    + " All source-controller withdrawals are held until investigation.",
+                readbackFailure);
+            return 0;
+        }
+
+        final int committed = withdrawn - remaining;
         TransferAudit.recordWithdrawalCommitted(committed);
-        if (remainder > 0) {
-            rollbackNetworkWithdrawal(source, sourceAccessor, retrieved, sourceAccessor, "network-to-network transfer");
+        if (remaining > 0) {
+            // The target completed normally and provided an identity-preserving remainder.
+            // Refund from the detached original item, not from its mutable target offer.
+            exactSource.setAmount(remaining);
+            rollbackNetworkWithdrawal(source, sourceAccessor, exactSource,
+                sourceAccessor, "network-to-network verified remainder");
         }
         return committed;
     }
 
     /**
-     * Returns a previously withdrawn stack to its source network. Any final remainder is dropped in-world so
-     * a full or externally modified network cannot silently destroy items.
+     * Returns a withdrawn stack to its source network. Only a normally completed, identity-preserving
+     * network insertion can authorize a world drop of the unaccepted remainder.
+     *
+     * <p>A storage adapter may accept an item and then throw without decrementing the offered
+     * ItemStack. The previous catch clause proceeded to the safety-drop path, minting another
+     * physical copy of an item that might already be in network storage. Such failures are
+     * fundamentally ambiguous without a storage-level receipt: fail closed, preserve the live
+     * offer for diagnostics and record an outstanding rollback instead of dropping it.</p>
      */
     public static void rollbackNetworkWithdrawal(
         @NotNull NetworkRoot root,
@@ -741,23 +815,92 @@ public final class NetworkTransferUtils {
         }
 
         final int beforeRollback = remainder.getAmount();
-        try {
-            root.uncontrolAccessInput(accessor);
-            root.addItemStack0(accessor, remainder);
-        } catch (RuntimeException | LinkageError exception) {
-            TransferAudit.recordFailure();
-            Networks.getInstance().getLogger().log(
-                java.util.logging.Level.SEVERE,
-                "A Networks rollback failed while reinserting into its source network; using the safety-drop path.",
-                exception);
-        }
-        final int afterRollback = validAmount(remainder);
-        TransferAudit.recordRollback(beforeRollback, Math.max(0, beforeRollback - afterRollback));
-        if (afterRollback <= 0) {
+        // An earlier ambiguous refund may have suspended this root/accessor.
+        // No network insertion is attempted here, so this *new* remainder can
+        // still use the known-unaccepted world-drop fallback without duplication.
+        if (RootRollbackSafetyHold.isHeld(root, accessor)) {
+            TransferAudit.recordRollback(beforeRollback, 0);
+            dropLossPreventionRemainder(remainder, fallbackLocation,
+                operation + " (source withdrawal hold)", beforeRollback);
             return;
         }
 
-        dropLossPreventionRemainder(remainder, fallbackLocation, operation, beforeRollback);
+        final ItemStack beforeIdentity;
+        try {
+            beforeIdentity = snapshotMenuSource(remainder);
+        } catch (RuntimeException | LinkageError snapshotFailure) {
+            TransferAudit.recordFailure();
+            // No destination write was attempted. Preserve existing safe-drop fallback
+            // for a source item that cannot be copied, rather than silently discarding it.
+            TransferAudit.recordRollback(beforeRollback, 0);
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.SEVERE,
+                "A Networks " + operation + " rollback could not snapshot its source item before"
+                    + " network insertion at " + fallbackLocation + ". No network write was attempted.",
+                snapshotFailure);
+            dropLossPreventionRemainder(remainder, fallbackLocation, operation, beforeRollback);
+            return;
+        }
+
+        try {
+            root.uncontrolAccessInput(accessor);
+        } catch (RuntimeException | LinkageError accessFailure) {
+            TransferAudit.recordFailure();
+            // Access-reset failed before the storage insertion was invoked, so no
+            // ambiguous write could have happened in this rollback attempt.
+            TransferAudit.recordRollback(beforeRollback, 0);
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.SEVERE,
+                "A Networks " + operation + " rollback could not reset its network access at "
+                    + fallbackLocation + ". No network item insertion was attempted.",
+                accessFailure);
+            dropLossPreventionRemainder(remainder, fallbackLocation, operation, beforeRollback);
+            return;
+        }
+
+        try {
+            root.addItemStack0(accessor, remainder);
+        } catch (RuntimeException | LinkageError storageFailure) {
+            TransferAudit.recordFailure();
+            RootRollbackSafetyHold.hold(root, accessor, beforeIdentity.getType(), beforeRollback);
+            // A throwing adapter may have already written all, some, or none of
+            // the offered stack. The mutated ItemStack amount is NOT a receipt.
+            TransferAudit.recordRollback(beforeRollback, 0);
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.SEVERE,
+                "A Networks " + operation + " rollback of up to " + beforeRollback
+                    + " " + beforeIdentity.getType() + " item(s) at " + fallbackLocation
+                    + " encountered a source-network write exception. The accepted amount"
+                    + " is unverified; NO item was world-dropped or automatically refunded."
+                    + " Preserve this location, server log and storage state for investigation.",
+                storageFailure);
+            return;
+        }
+
+        final int afterRollback;
+        try {
+            afterRollback = validAmount(remainder);
+            if (afterRollback > beforeRollback
+                || (afterRollback > 0 && !beforeIdentity.isSimilar(remainder))) {
+                throw new IllegalStateException("Network rollback changed the offered item identity or increased it");
+            }
+        } catch (RuntimeException | LinkageError verificationFailure) {
+            TransferAudit.recordFailure();
+            RootRollbackSafetyHold.hold(root, accessor, beforeIdentity.getType(), beforeRollback);
+            TransferAudit.recordRollback(beforeRollback, 0);
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.SEVERE,
+                "A Networks " + operation + " rollback could not verify the offered item's"
+                    + " identity/count after a network insertion at " + fallbackLocation
+                    + ". No unverified remainder was world-dropped; investigate storage.",
+                verificationFailure);
+            return;
+        }
+
+        TransferAudit.recordRollback(beforeRollback, beforeRollback - afterRollback);
+        if (afterRollback > 0) {
+            dropLossPreventionRemainder(remainder, fallbackLocation, operation, beforeRollback);
+        }
     }
 
     /** Returns the number of matching items a menu can accept in the supplied transport slots. */
@@ -887,37 +1030,58 @@ public final class NetworkTransferUtils {
             return result.failed() ? MenuDepositResult.FAILED : MenuDepositResult.NONE;
         }
 
-        // Keep the clear inside the source-commit boundary. A second, unconditional caller-side
-        // write could erase an external replacement after compensation or a failed source write.
-        final ItemStack committedSource = voidRemainder && !result.failed() ? null : result.remainingStack();
+        // A producing machine may add more of the SAME item during addItemStack0's callbacks.
+        // Its newly generated output is not part of our detached offer. Preserve that increase
+        // while removing exactly the amount already accepted by the network. A changed identity
+        // or a decrease remains ambiguous and fails closed without touching the source menu.
+        final ItemStack sourceBeforeCommit;
+        final ItemStack committedSource;
+        ItemStack observedSource = null;
         try {
-            // The detached network offer can trigger callbacks before we commit this source slot.
-            // Check even zero-acceptance offers before intentionally discarding their remainder.
-            final ItemStack currentSource = sourceMenu.getItemInSlot(slot);
-            if (!sourceStillMatches(originalSource, currentSource)) {
-                final String sourceContext =
-                    describeMenuSourceChange(sourceMenu.getLocation(), slot, originalSource, currentSource);
-                compensateCommittedDeposit(root, accessor, originalSource, result.moved(),
-                    sourceMenu.getLocation(), "changed menu source " + sourceContext,
-                    new IllegalStateException(
-                        "The menu input changed during the network deposit " + sourceContext));
-                return MenuDepositResult.FAILED;
+            observedSource = sourceMenu.getItemInSlot(slot);
+            if (observedSource == null
+                || observedSource.getAmount() < originalSource.getAmount()
+                || !originalSource.isSimilar(observedSource)) {
+                throw new IllegalStateException("The menu input changed during the network deposit "
+                    + describeMenuSourceChange(sourceMenu.getLocation(), slot, originalSource, observedSource));
             }
-            if (voidRemainder && !result.failed()) {
-                sourceMenu.replaceExistingItem(slot, null);
+
+            sourceBeforeCommit = snapshotMenuSource(observedSource);
+            // A clean VOID offer discards only the ORIGINAL output, never new production.
+            // Failed offers may have accepted some items but may not void the remainder.
+            final int remaining = voidRemainder && !result.failed()
+                ? sourceBeforeCommit.getAmount() - originalSource.getAmount()
+                : sourceBeforeCommit.getAmount() - result.moved();
+            if (remaining < 0) {
+                throw new IllegalStateException("Negative reconciled menu source amount");
+            }
+            if (remaining == 0) {
+                committedSource = null;
             } else {
-                sourceMenu.replaceExistingItem(slot, result.remainingStack());
+                committedSource = snapshotMenuSource(sourceBeforeCommit);
+                committedSource.setAmount(remaining);
             }
+        } catch (RuntimeException | LinkageError sourceFailure) {
+            final String sourceContext =
+                describeMenuSourceChange(sourceMenu.getLocation(), slot, originalSource, observedSource);
+            compensateCommittedDeposit(root, accessor, originalSource, result.moved(),
+                sourceMenu.getLocation(), "changed menu source " + sourceContext, sourceFailure);
+            return MenuDepositResult.FAILED;
+        }
+
+        // Source updates and dirty marking form one commit boundary. A write-then-throw
+        // must restore the latest verified source (including any newly generated output),
+        // not the stale pre-offer snapshot. Never restore over another plugin's replacement.
+        try {
+            sourceMenu.replaceExistingItem(slot, committedSource);
             sourceMenu.markDirty();
             return new MenuDepositResult(result.moved(), result.failed());
         } catch (RuntimeException | LinkageError exception) {
             try {
                 ItemStack current = sourceMenu.getItemInSlot(slot);
-                // A failed write may have already installed our remainder or VOID clear. Restore
-                // only if the slot still contains our original or our partially committed state.
-                if (sourceStillMatches(originalSource, current)
+                if (sourceStillMatches(sourceBeforeCommit, current)
                     || sourceStillMatches(committedSource, current)) {
-                    sourceMenu.replaceExistingItem(slot, originalSource);
+                    sourceMenu.replaceExistingItem(slot, sourceBeforeCommit);
                     sourceMenu.markDirty();
                 }
             } catch (RuntimeException | LinkageError restorationFailure) {
@@ -1116,7 +1280,9 @@ public final class NetworkTransferUtils {
         @NotNull ItemStack template,
         int amount) {
 
-        if (amount <= 0) {
+        if (amount <= 0 || RootRollbackSafetyHold.isHeld(root, accessor)) {
+            // An earlier ambiguous refund through this accessor must be resolved
+            // before any further network withdrawals can be attempted.
             return null;
         }
         TransferAudit.recordWithdrawalAttempt(amount);
