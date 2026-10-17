@@ -764,6 +764,7 @@ public class NetworkRoot extends NetworkNode {
         if (controller != null && NetworkTransferUtils.isNetworkRootHeld(this, controller)) {
             return null;
         }
+        try {
         ItemStack stackToReturn = null;
 
         if (request.getAmount() <= 0) {
@@ -966,6 +967,15 @@ public class NetworkRoot extends NetworkNode {
         }
 
         return stackToReturn;
+        } catch (RuntimeException | LinkageError failure) {
+            if (controller != null) {
+                final ItemStack requested = request.getItemStack();
+                final Material affected = requested == null ? Material.BARRIER : requested.getType();
+                NetworkTransferUtils.quarantineUnverifiedNetworkRoot(
+                    this, controller, affected, Math.max(0, request.getAmount()), failure);
+            }
+            throw failure;
+        }
     }
 
     public static void addAmount(Map<ItemStack, Long> all, ItemStack key, @Nullable ItemStack item) {
@@ -1450,6 +1460,9 @@ public class NetworkRoot extends NetworkNode {
         if (controller != null && NetworkTransferUtils.isNetworkRootHeld(this, controller)) {
             return;
         }
+        final Material offeredMaterial = incoming.getType();
+        final int offeredAmount = incoming.getAmount();
+        try {
         if (StackUtils.isBlacklisted(incoming)) {
             return;
         }
@@ -1508,6 +1521,13 @@ public class NetworkRoot extends NetworkNode {
             if (incoming.getAmount() == 0) {
                 return;
             }
+        }
+        } catch (RuntimeException | LinkageError failure) {
+            if (controller != null) {
+                NetworkTransferUtils.quarantineUnverifiedNetworkRoot(
+                    this, controller, offeredMaterial, Math.max(0, offeredAmount), failure);
+            }
+            throw failure;
         }
     }
 
