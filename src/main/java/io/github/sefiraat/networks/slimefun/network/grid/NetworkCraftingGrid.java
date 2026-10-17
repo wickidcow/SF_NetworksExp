@@ -5,6 +5,7 @@ import com.balugaq.netex.api.helpers.SupportedCraftingTableRecipes;
 import com.balugaq.netex.utils.BlockMenuUtil;
 import com.balugaq.netex.utils.Lang;
 import io.github.sefiraat.networks.NetworkStorage;
+import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.events.NetworkCraftEvent;
 import io.github.sefiraat.networks.network.GridItemRequest;
 import io.github.sefiraat.networks.network.NetworkRoot;
@@ -227,6 +228,9 @@ public class NetworkCraftingGrid extends AbstractGrid {
         }
 
         final NetworkRoot root = definition.getNode().getRoot();
+        if (NetworkTransferUtils.isNetworkRootHeld(root, menu.getLocation())) {
+            return;
+        }
         final ItemStack[] displayedRecipe = snapshotRecipe(menu);
         ItemStack[] consumptionRecipe = displayedRecipe;
 
@@ -275,6 +279,9 @@ public class NetworkCraftingGrid extends AbstractGrid {
         if (!hasExactIngredients(menu, consumptionRecipe)) {
             return;
         }
+        if (NetworkTransferUtils.isNetworkRootHeld(root, menu.getLocation())) {
+            return;
+        }
 
         final ItemStack outputBefore;
         try {
@@ -299,28 +306,22 @@ public class NetworkCraftingGrid extends AbstractGrid {
                     menu, CRAFT_ITEMS[slotIndex], required);
             }
         } catch (RuntimeException | LinkageError exception) {
-            Networks.getInstance().getLogger().log(java.util.logging.Level.SEVERE,
-                "Network Crafting Grid input debit became unverified at " + menu.getLocation()
-                    + ". No crafted output was granted. Investigate this menu before retrying.",
-                exception);
+            NetworkTransferUtils.quarantineUnverifiedNetworkRoot(
+                root, menu.getLocation(), eventOutput.getType(), eventOutput.getAmount(), exception);
             return;
         }
 
         // The crafted item is newly manufactured; it is NOT a withdrawal from
-        // the root. The old rollbackNetworkWithdrawal(outputRemainder) could
-        // reinsert a full item even if a destination setter had already written
-        // a partial/complete output before throwing.
+        // the root. A speculative refund could insert a second item even if a
+        // destination setter already wrote a partial/complete output before failing.
         try {
             BlockMenuUtil.pushItem(menu, eventOutput.clone(), CRAFT_OUTPUT_SLOT);
             GridCraftingCommitGuard.verifyExactOutputAddition(
                 menu, CRAFT_OUTPUT_SLOT, outputBefore, eventOutput);
             menu.markDirty();
         } catch (RuntimeException | LinkageError exception) {
-            Networks.getInstance().getLogger().log(java.util.logging.Level.SEVERE,
-                "Network Crafting Grid output write became unverified at " + menu.getLocation()
-                    + ". No speculative crafted remainder was deposited or dropped."
-                    + " Investigate the input/output contents before retrying.",
-                exception);
+            NetworkTransferUtils.quarantineUnverifiedNetworkRoot(
+                root, menu.getLocation(), eventOutput.getType(), eventOutput.getAmount(), exception);
             return;
         }
         root.refreshRootItems();
