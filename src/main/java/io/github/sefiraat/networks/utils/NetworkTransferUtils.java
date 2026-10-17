@@ -139,8 +139,13 @@ public final class NetworkTransferUtils {
     }
 
     /**
-     * Withdraws directly onto the player's cursor. This is used by both classic and new-style grids and
-     * preserves the existing cursor stack rather than replacing it optimistically.
+     * Withdraws onto a player's cursor with observed-destination accounting.
+     *
+     * <p>A Bukkit cursor setter may apply an item and then throw. The old exception
+     * handler refunded the mutable withdrawal without checking the cursor, which
+     * could mint an additional network copy. Keep a detached withdrawal snapshot,
+     * write a separate cursor stack, and reconcile only additions observed after
+     * the setter returns or fails.</p>
      */
     public static int moveNetworkItemOntoCursor(
         @NotNull NetworkRoot root,
@@ -153,42 +158,150 @@ public final class NetworkTransferUtils {
             return 0;
         }
 
-        final ItemStack cursor = player.getItemOnCursor();
+        final ItemStack originalCursor;
         final int capacity;
-        if (cursor == null || cursor.getType() == Material.AIR) {
-            capacity = template.getMaxStackSize();
-        } else if (StackUtils.itemsMatch(cursor, template)) {
-            capacity = Math.max(0, cursor.getMaxStackSize() - cursor.getAmount());
-        } else {
+        try {
+            final ItemStack current = player.getItemOnCursor();
+            if (validAmount(current) == 0) {
+                originalCursor = null;
+                capacity = template.getMaxStackSize();
+            } else {
+                if (!StackUtils.itemsMatch(current, template)) {
+                    return 0;
+                }
+                originalCursor = snapshotMenuSource(current);
+                capacity = Math.max(0, current.getMaxStackSize() - current.getAmount());
+            }
+        } catch (RuntimeException | LinkageError exception) {
+            TransferAudit.recordFailure();
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.WARNING,
+                "A Networks cursor could not be read before withdrawal. No items were withdrawn.",
+                exception);
             return 0;
         }
 
+        if (capacity <= 0) {
+            return 0;
+        }
         final ItemStack retrieved = withdraw(root, accessor, template, Math.min(limit, capacity));
         if (retrieved == null) {
             return 0;
         }
 
-        final int moved = retrieved.getAmount();
+        final int withdrawn = validAmount(retrieved);
+        final ItemStack frozenWithdrawal;
+        final ItemStack desiredCursor;
+        final ItemStack toWrite;
         try {
-            if (cursor == null || cursor.getType() == Material.AIR) {
-                player.setItemOnCursor(retrieved);
-            } else {
-                final ItemStack combined = cursor.clone();
-                combined.setAmount(cursor.getAmount() + moved);
-                player.setItemOnCursor(combined);
-                retrieved.setAmount(0);
+            if (withdrawn > capacity) {
+                throw new IllegalStateException("A network returned more items than the cursor can hold");
             }
-            TransferAudit.recordWithdrawalCommitted(moved);
-            return moved;
+            frozenWithdrawal = snapshotMenuSource(retrieved);
+            if (originalCursor == null) {
+                desiredCursor = snapshotMenuSource(frozenWithdrawal);
+            } else {
+                if (!StackUtils.itemsMatch(originalCursor, frozenWithdrawal)) {
+                    throw new IllegalStateException("A network returned an incompatible cursor item");
+                }
+                desiredCursor = snapshotMenuSource(originalCursor);
+                desiredCursor.setAmount(originalCursor.getAmount() + withdrawn);
+            }
+            toWrite = snapshotMenuSource(desiredCursor);
         } catch (RuntimeException | LinkageError exception) {
             TransferAudit.recordFailure();
-            rollbackNetworkWithdrawal(root, accessor, retrieved, player.getLocation(), "cursor transfer exception");
+            rollbackNetworkWithdrawal(root, accessor, retrieved, player.getLocation(),
+                "cursor withdrawal preparation");
             Networks.getInstance().getLogger().log(
                 java.util.logging.Level.WARNING,
-                "A Networks cursor transfer failed while committing; the withdrawn stack was rolled back.",
+                "A Networks cursor withdrawal could not be prepared exactly. The item was returned to storage.",
                 exception);
             return 0;
         }
+
+        // Root callbacks may interact with the player inventory before source withdrawal finishes.
+        // Never overwrite another plugin's cursor replacement with our stale snapshot.
+        try {
+            if (!sourceStillMatches(originalCursor, player.getItemOnCursor())) {
+                TransferAudit.recordFailure();
+                rollbackNetworkWithdrawal(root, accessor, frozenWithdrawal, player.getLocation(),
+                    "cursor changed before destination write");
+                Networks.getInstance().getLogger().warning(
+                    "A Networks cursor changed during withdrawal; the uncommitted items were returned.");
+                return 0;
+            }
+        } catch (RuntimeException | LinkageError exception) {
+            TransferAudit.recordFailure();
+            rollbackNetworkWithdrawal(root, accessor, frozenWithdrawal, player.getLocation(),
+                "cursor pre-commit read failure");
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.WARNING,
+                "A Networks cursor changed or became unreadable before its write; items were returned.",
+                exception);
+            return 0;
+        }
+
+        Throwable writeFailure = null;
+        try {
+            player.setItemOnCursor(toWrite);
+        } catch (RuntimeException | LinkageError exception) {
+            writeFailure = exception;
+        }
+
+        final int committed;
+        try {
+            final ItemStack actual = player.getItemOnCursor();
+            final int afterCount = validAmount(actual);
+            final int beforeCount = validAmount(originalCursor);
+            if (sourceStillMatches(desiredCursor, actual)) {
+                committed = withdrawn;
+            } else if (sourceStillMatches(originalCursor, actual)) {
+                committed = 0;
+            } else if (actual != null
+                && afterCount >= beforeCount
+                && afterCount <= beforeCount + withdrawn
+                && (originalCursor == null
+                    ? frozenWithdrawal.isSimilar(actual)
+                    : originalCursor.isSimilar(actual))) {
+                committed = afterCount - beforeCount;
+            } else {
+                throw new IllegalStateException("Cursor identity or amount changed during a network withdrawal");
+            }
+        } catch (RuntimeException | LinkageError verificationFailure) {
+            TransferAudit.recordFailure();
+            if (writeFailure != null) {
+                verificationFailure.addSuppressed(writeFailure);
+            }
+            // This is deliberately fail-closed: the setter might have installed
+            // the item, so returning an unverified withdrawal could duplicate it.
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.SEVERE,
+                "A Networks cursor withdrawal of " + withdrawn + " item(s) could not be reconciled for "
+                    + player.getUniqueId() + ". No ambiguous amount was refunded to storage. "
+                    + "Inspect the player's cursor and inventory before attempting recovery.",
+                verificationFailure);
+            return 0;
+        }
+
+        if (writeFailure != null) {
+            TransferAudit.recordFailure();
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.WARNING,
+                "A Networks cursor setter threw after accepting " + committed + " of " + withdrawn
+                    + " item(s); only the verified remainder will be returned.",
+                writeFailure);
+        }
+
+        if (committed > 0) {
+            TransferAudit.recordWithdrawalCommitted(committed);
+        }
+        final int remainder = withdrawn - committed;
+        if (remainder > 0) {
+            frozenWithdrawal.setAmount(remainder);
+            rollbackNetworkWithdrawal(root, accessor, frozenWithdrawal, player.getLocation(),
+                "cursor observed remainder");
+        }
+        return committed;
     }
 
     /** Moves items between two independent network roots with rollback to the source root. */
