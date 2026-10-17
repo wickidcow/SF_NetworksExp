@@ -296,6 +296,33 @@ class NetworkVoidTransferTest {
     }
 
     @Test
+    void heldNetworkCannotVoidAProducingMachineOutput() {
+        RootRollbackSafetyHold.hold(root, accessor, Material.DIAMOND, 4);
+
+        var result = NetworkTransferUtils.moveMenuSlotIntoNetworkAndVoidRemainder(
+            root, accessor, menu, SLOT, 64);
+
+        assertTrue(result.failed(), "Quarantine is a failed transfer, not permission for VOID");
+        assertEquals(0, result.moved());
+        assertEquals(16, remaining());
+        assertSame(original, source.get());
+        verify(root, never()).addItemStack0(any(), any());
+        verify(menu, never()).replaceExistingItem(anyInt(), nullable(ItemStack.class));
+    }
+
+    @Test
+    void heldNetworkStopsLineVoidBeforeSourceSlotAccess() {
+        RootRollbackSafetyHold.hold(root, accessor, Material.DIAMOND, 4);
+
+        LineOperationUtil.grabItem(accessor, root, menu, TransportMode.VOID, 64);
+
+        assertSame(original, source.get());
+        verify(menu, never()).getItemInSlot(anyInt());
+        verify(menu, never()).replaceExistingItem(anyInt(), nullable(ItemStack.class));
+        verify(root, never()).addItemStack0(any(), any());
+    }
+
+    @Test
     void ordinaryMenuTransfersDoNotVoidTheirRemainder() {
         acceptNormally(4);
         assertEquals(4, NetworkTransferUtils.moveMenuSlotIntoNetwork(root, accessor, menu, SLOT, 64));

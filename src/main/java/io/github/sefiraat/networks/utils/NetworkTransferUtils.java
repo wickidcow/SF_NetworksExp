@@ -1034,6 +1034,11 @@ public final class NetworkTransferUtils {
         if (slot < 0 || slot >= sourceMenu.getSize() || limit <= 0) {
             return MenuDepositResult.NONE;
         }
+        // A quarantined controller must not turn a rejected network deposit
+        // into a clean zero-acceptance VOID event. Keep the source untouched.
+        if (RootRollbackSafetyHold.isHeld(root, accessor)) {
+            return MenuDepositResult.FAILED;
+        }
 
         final ItemStack source = sourceMenu.getItemInSlot(slot);
         if (source == null || source.getType().isAir() || source.getAmount() <= 0) {

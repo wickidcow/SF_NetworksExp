@@ -355,6 +355,12 @@ public class LineOperationUtil {
         @NotNull BlockMenu blockMenu,
         @NotNull TransportMode transportMode,
         int limitQuantity) {
+        // Stop source inspection and VOID cleanup while an earlier network
+        // transaction remains unverified. No more items may be consumed.
+        if (NetworkTransferUtils.isNetworkRootHeld(root, accessor)) {
+            return;
+        }
+
         // These modes have never withdrawn from target menus. Avoid item-aware slot discovery,
         // which can perform recipe scans in other addons even when the grab phase does nothing.
         if (transportMode == TransportMode.NULL_ONLY
@@ -1045,7 +1051,9 @@ public class LineOperationUtil {
         @NotNull Location storageLocation,
         @NotNull ItemStack sample,
         int requested) {
-        if (requested <= 0) {
+        // The drawer physically debits its own storage before Networks tries
+        // to accept the detached offer. Never debit while the root is held.
+        if (requested <= 0 || NetworkTransferUtils.isNetworkRootHeld(root, accessor)) {
             return 0;
         }
 
@@ -1058,6 +1066,18 @@ public class LineOperationUtil {
 
         final int moved = NetworkTransferUtils.moveStackReferenceIntoNetwork(root, accessor, withdrawn);
         if (withdrawn.getAmount() > 0) {
+            if (NetworkTransferUtils.isNetworkRootHeld(root, accessor)) {
+                // A destination adapter may have written items and then thrown
+                // without decrementing the detached offer. Returning it to the
+                // drawer would create a second physical copy. Keep the root held
+                // and require an operator to reconcile the uncertain amount.
+                Networks.getInstance().getLogger().severe(
+                    "A Networks drawer withdrawal at " + storageLocation
+                        + " became unverified during network deposit. Up to "
+                        + withdrawn.getAmount() + " item(s) were NOT automatically restored"
+                        + " or dropped. The controller remains quarantined for investigation.");
+                return moved;
+            }
             final ItemStack unrestored = NetworksDrawer.restoreCargoItem(storageLocation, withdrawn);
             if (unrestored != null && unrestored.getAmount() > 0) {
                 final Location dropLocation = storageLocation.clone().add(0.5, 0.5, 0.5);

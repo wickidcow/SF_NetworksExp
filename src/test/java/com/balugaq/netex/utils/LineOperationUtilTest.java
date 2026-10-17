@@ -7,6 +7,7 @@ import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
 import io.github.sefiraat.networks.utils.NetworkTransferUtils;
+import com.ytdd9527.networksexpansion.implementation.machines.unit.NetworksDrawer;
 import io.github.sefiraat.networks.utils.StackUtils;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
@@ -198,6 +199,52 @@ class LineOperationUtilTest {
         assertNull(LineOperationUtil.requestNetworkItem(root, ACCESSOR, request, 0, null));
         assertNull(LineOperationUtil.requestNetworkItem(root, ACCESSOR, request, 0, null));
         verify(root, times(4)).getItemStack0(ACCESSOR, request);
+    }
+
+    @Test
+    void heldNetworkDoesNotPhysicallyWithdrawDrawerItems() {
+        when(root.allowAccessInput(ACCESSOR)).thenReturn(true);
+        ItemStack sample = mock(ItemStack.class);
+        when(sample.getType()).thenReturn(Material.DIAMOND);
+
+        try (MockedStatic<NetworkTransferUtils> transfers = mockStatic(NetworkTransferUtils.class);
+             MockedStatic<NetworksDrawer> drawer = mockStatic(NetworksDrawer.class)) {
+            transfers.when(() -> NetworkTransferUtils.isNetworkRootHeld(root, ACCESSOR)).thenReturn(true);
+
+            assertEquals(0, LineOperationUtil.moveDrawerItemIntoNetwork(
+                root, ACCESSOR, new Location(null, 4, 5, 6), sample, 8));
+
+            drawer.verifyNoInteractions();
+        }
+    }
+
+    @Test
+    void ambiguousDrawerDepositMustNotRestorePotentiallyAcceptedItems() {
+        final Location drawerLocation = new Location(null, 4, 5, 6);
+        ItemStack sample = mock(ItemStack.class);
+        ItemStack withdrawn = mock(ItemStack.class);
+        when(sample.getType()).thenReturn(Material.DIAMOND);
+        when(sample.clone()).thenReturn(sample);
+        when(withdrawn.getAmount()).thenReturn(8);
+
+        try (MockedStatic<NetworkTransferUtils> transfers = mockStatic(NetworkTransferUtils.class);
+             MockedStatic<NetworksDrawer> drawer = mockStatic(NetworksDrawer.class);
+             MockedStatic<Networks> networks = mockStatic(Networks.class)) {
+            Networks plugin = mock(Networks.class);
+            when(plugin.getLogger()).thenReturn(java.util.logging.Logger.getAnonymousLogger());
+            networks.when(Networks::getInstance).thenReturn(plugin);
+            transfers.when(() -> NetworkTransferUtils.isNetworkRootHeld(root, ACCESSOR))
+                .thenReturn(false, true);
+            drawer.when(() -> NetworksDrawer.withdrawCargoItem(
+                eq(drawerLocation), any(ItemStack.class), any())).thenReturn(withdrawn);
+
+            assertEquals(0, LineOperationUtil.moveDrawerItemIntoNetwork(
+                root, ACCESSOR, drawerLocation, sample, 8));
+
+            drawer.verify(() -> NetworksDrawer.restoreCargoItem(
+                eq(drawerLocation), any(ItemStack.class)), never());
+            verify(root, never()).addItemStack0(any(), any());
+        }
     }
 
     private MockedStatic<BlockMenuUtil> slots(int... values) {
