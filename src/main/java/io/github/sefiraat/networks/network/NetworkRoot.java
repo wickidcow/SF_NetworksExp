@@ -893,13 +893,13 @@ public class NetworkRoot extends NetworkNode {
             if (request.getAmount() <= itemStack.getAmount()) {
                 // We can't take more than this stack. Level to request amount, remove items and then return
                 stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
-                consumeVerifiedMenuSource(blockMenu, slot, itemStack, request.getAmount());
+                consumeVerifiedMenuSource(blockMenu, slots[0], itemStack, request.getAmount());
                 return stackToReturn;
             } else {
                 // We can take more than what is here, consume before trying to take more
                 stackToReturn.setAmount(stackToReturn.getAmount() + itemStack.getAmount());
                 request.receiveAmount(itemStack.getAmount());
-                consumeVerifiedMenuSource(blockMenu, slot, itemStack, itemStack.getAmount());
+                consumeVerifiedMenuSource(blockMenu, slots[0], itemStack, itemStack.getAmount());
             }
         }
 
@@ -2052,7 +2052,7 @@ public class NetworkRoot extends NetworkNode {
                 // Netex - Reduce end
                 // We can't take more than this stack. Level to request amount, remove items and then return
                 stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
-                consumeVerifiedMenuSource(blockMenu, slot, itemStack, request.getAmount());
+                consumeVerifiedMenuSource(blockMenu, slots[0], itemStack, request.getAmount());
                 // Netex - Record start
                 tryRecord(accessor, request);
                 // Netex - Record end
@@ -2061,7 +2061,7 @@ public class NetworkRoot extends NetworkNode {
                 // We can take more than what is here, consume before trying to take more
                 stackToReturn.setAmount(stackToReturn.getAmount() + itemStack.getAmount());
                 request.receiveAmount(itemStack.getAmount());
-                consumeVerifiedMenuSource(blockMenu, slot, itemStack, itemStack.getAmount());
+                consumeVerifiedMenuSource(blockMenu, slots[0], itemStack, itemStack.getAmount());
             }
         }
 
