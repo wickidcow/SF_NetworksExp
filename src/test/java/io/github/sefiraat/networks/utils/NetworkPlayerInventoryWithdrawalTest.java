@@ -193,7 +193,7 @@ class NetworkPlayerInventoryWithdrawalTest {
     void unreadablePostWriteInventoryDoesNotTriggerAnOptimisticRefund() {
         AtomicInteger calls = new AtomicInteger();
         when(inventory.getStorageContents()).thenAnswer(call -> {
-            if (calls.incrementAndGet() >= 4) {
+            if (calls.incrementAndGet() >= 5) {
                 throw new IllegalStateException("Unverifiable destination readback");
             }
             return detached(storage);
