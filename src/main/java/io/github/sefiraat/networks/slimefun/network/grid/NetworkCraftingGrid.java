@@ -269,27 +269,60 @@ public class NetworkCraftingGrid extends AbstractGrid {
             return;
         }
 
-        // Consume every exact ingredient before creating the output.
-        for (int slotIndex = 0; slotIndex < CRAFT_ITEMS.length; slotIndex++) {
-            ItemStack required = slotIndex < consumptionRecipe.length ? consumptionRecipe[slotIndex] : null;
-            if (required == null || required.getType() == Material.AIR || required.getAmount() <= 0) {
-                continue;
-            }
-            BlockMenuUtil.consumeItem(menu, CRAFT_ITEMS[slotIndex], Math.max(1, required.getAmount()), true);
+        // Event handlers are permitted to inspect and modify menus. A preflight
+        // before NetworkCraftEvent is not sufficient evidence that the recipe
+        // still exists after its callbacks have returned.
+        if (!hasExactIngredients(menu, consumptionRecipe)) {
+            return;
         }
 
-        final ItemStack outputRemainder = BlockMenuUtil.pushItem(menu, eventOutput.clone(), CRAFT_OUTPUT_SLOT);
-        if (outputRemainder != null
-            && outputRemainder.getType() != Material.AIR
-            && outputRemainder.getAmount() > 0) {
-            NetworkTransferUtils.rollbackNetworkWithdrawal(
-                root,
-                menu.getLocation(),
-                outputRemainder,
-                menu.getLocation(),
-                "classic crafting-grid output commit");
+        final ItemStack outputBefore;
+        try {
+            outputBefore = GridCraftingCommitGuard.snapshot(menu.getItemInSlot(CRAFT_OUTPUT_SLOT));
+        } catch (RuntimeException | LinkageError exception) {
+            Networks.getInstance().getLogger().log(java.util.logging.Level.SEVERE,
+                "Network Crafting Grid could not snapshot its output; no recipe inputs were consumed at "
+                    + menu.getLocation(), exception);
+            return;
         }
-        menu.markDirty();
+
+        // Do not create the crafted item until EVERY exact ingredient was
+        // deducted from its authoritative menu slot. A copied getItemInSlot()
+        // result or silently ignored consumption must never mint crafting output.
+        try {
+            for (int slotIndex = 0; slotIndex < CRAFT_ITEMS.length; slotIndex++) {
+                ItemStack required = slotIndex < consumptionRecipe.length ? consumptionRecipe[slotIndex] : null;
+                if (required == null || required.getType() == Material.AIR || required.getAmount() <= 0) {
+                    continue;
+                }
+                GridCraftingCommitGuard.consumeVerified(
+                    menu, CRAFT_ITEMS[slotIndex], required);
+            }
+        } catch (RuntimeException | LinkageError exception) {
+            Networks.getInstance().getLogger().log(java.util.logging.Level.SEVERE,
+                "Network Crafting Grid input debit became unverified at " + menu.getLocation()
+                    + ". No crafted output was granted. Investigate this menu before retrying.",
+                exception);
+            return;
+        }
+
+        // The crafted item is newly manufactured; it is NOT a withdrawal from
+        // the root. The old rollbackNetworkWithdrawal(outputRemainder) could
+        // reinsert a full item even if a destination setter had already written
+        // a partial/complete output before throwing.
+        try {
+            BlockMenuUtil.pushItem(menu, eventOutput.clone(), CRAFT_OUTPUT_SLOT);
+            GridCraftingCommitGuard.verifyExactOutputAddition(
+                menu, CRAFT_OUTPUT_SLOT, outputBefore, eventOutput);
+            menu.markDirty();
+        } catch (RuntimeException | LinkageError exception) {
+            Networks.getInstance().getLogger().log(java.util.logging.Level.SEVERE,
+                "Network Crafting Grid output write became unverified at " + menu.getLocation()
+                    + ". No speculative crafted remainder was deposited or dropped."
+                    + " Investigate the input/output contents before retrying.",
+                exception);
+            return;
+        }
         root.refreshRootItems();
 
         // Refill only empty ingredient slots with the same exact recipe ingredient.
