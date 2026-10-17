@@ -206,7 +206,11 @@ public final class NetworkTransferUtils {
                         + slot);
                 }
                 if (currentAmount > priorAmount) {
-                    if (!offered.isSimilar(previous)) {
+                    // Slimefun transport can intentionally merge stacks using the configured
+                    // StackUtils matching policy (for example, lore-insensitive recipes).
+                    // The pre-existing stack must retain its *exact* identity across the write,
+                    // but the offer need only match the same policy pushItem itself used.
+                    if (!StackUtils.itemsMatch(offered, previous)) {
                         throw new IllegalStateException("An unrelated menu input increased during insertion: " + slot);
                     }
                     added += currentAmount - priorAmount;
