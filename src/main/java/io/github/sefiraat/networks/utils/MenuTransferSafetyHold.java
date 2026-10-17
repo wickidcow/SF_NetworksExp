@@ -1,52 +1,105 @@
 package io.github.sefiraat.networks.utils;
 
+import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Fail-closed destination hold when a third-party menu makes insertion results
- * unverifiable. Repeated retries must not silently withdraw or lose more items.
- *
- * <p>The hold is tied to the exact BlockMenu instance, not just its coordinates.
- * Replacing/breaking the machine creates a different menu, which clears the old
- * hold on the next transfer. A controlled Networks restart also clears holds.</p>
+ * Stops repeated network withdrawals after a foreign menu produces an
+ * unverifiable insertion result. Only an authoritative replacement registered
+ * in Slimefun (or a plugin restart) can release the safety hold.
  */
 final class MenuTransferSafetyHold {
 
-    private static final ConcurrentMap<BlockKey, BlockMenu> HELD = new ConcurrentHashMap<>();
+    private static final ConcurrentMap<BlockKey, HeldMenu> HELD = new ConcurrentHashMap<>();
 
     private MenuTransferSafetyHold() {
     }
 
     static boolean isHeld(@NotNull BlockMenu menu) {
+        // No record allocation or StorageCache lookup in the common success case.
+        if (HELD.isEmpty()) {
+            return false;
+        }
+
         final BlockKey key = BlockKey.of(menu.getLocation());
-        final BlockMenu held = HELD.get(key);
-        if (held == menu) {
+        final HeldMenu incident = HELD.get(key);
+        if (incident == null) {
+            return false;
+        }
+        if (incident.menu() == menu) {
             return true;
         }
-        if (held != null) {
-            // A recreated menu at the same block is a new destination instance.
-            HELD.remove(key, held);
+
+        // BlockMenu identity alone is not proof of a replaced block: temporary
+        // wrappers may refer to the same live machine. Clear the hold only if
+        // Slimefun's canonical menu registry confirms the replacement.
+        try {
+            if (StorageCacheUtils.getMenu(menu.getLocation()) == menu) {
+                HELD.remove(key, incident);
+                return false;
+            }
+        } catch (RuntimeException | LinkageError ignored) {
+            // Keep the machine held when registry verification itself fails.
         }
-        return false;
+        return true;
     }
 
-    static void hold(@NotNull BlockMenu menu) {
-        HELD.put(BlockKey.of(menu.getLocation()), menu);
+    static void hold(@NotNull BlockMenu menu, @NotNull Material material, int possibleUnreconciled) {
+        HELD.putIfAbsent(
+            BlockKey.of(menu.getLocation()),
+            new HeldMenu(
+                menu,
+                material,
+                Math.max(0, possibleUnreconciled),
+                System.currentTimeMillis()));
     }
 
     static int count() {
         return HELD.size();
     }
 
+    static @NotNull List<String> describe(@SuppressWarnings("SameParameterValue") int limit) {
+        if (limit <= 0 || HELD.isEmpty()) {
+            return List.of();
+        }
+
+        final List<String> lines = new ArrayList<>(Math.min(limit, HELD.size()));
+        for (Map.Entry<BlockKey, HeldMenu> entry : HELD.entrySet()) {
+            final BlockKey key = entry.getKey();
+            final HeldMenu hold = entry.getValue();
+            lines.add(
+                "world=" + (key.worldId() == null ? "unknown" : key.worldId())
+                    + " x=" + key.x() + " y=" + key.y() + " z=" + key.z()
+                    + ", possible-unreconciled=" + hold.possibleUnreconciled() + "x" + hold.material()
+                    + ", first-seen=" + Instant.ofEpochMilli(hold.firstSeenEpochMilli()));
+            if (lines.size() >= limit) {
+                break;
+            }
+        }
+        return List.copyOf(lines);
+    }
+
     static void reset() {
         HELD.clear();
+    }
+
+    private record HeldMenu(
+        @NotNull BlockMenu menu,
+        @NotNull Material material,
+        int possibleUnreconciled,
+        long firstSeenEpochMilli) {
     }
 
     private record BlockKey(@Nullable UUID worldId, int x, int y, int z) {

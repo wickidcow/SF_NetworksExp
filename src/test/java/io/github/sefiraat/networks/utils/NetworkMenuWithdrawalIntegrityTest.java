@@ -1,6 +1,7 @@
 package io.github.sefiraat.networks.utils;
 
 import com.balugaq.netex.api.enums.MinecraftVersion;
+import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import com.ytdd9527.networksexpansion.core.managers.ConfigManager;
 import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.network.NetworkRoot;
@@ -226,7 +227,16 @@ class NetworkMenuWithdrawalIntegrityTest {
         // A newly registered BlockMenu at the same location does not inherit the hold.
         BlockMenu replacement = mock(BlockMenu.class);
         when(replacement.getLocation()).thenReturn(accessor);
-        assertFalse(MenuTransferSafetyHold.isHeld(replacement));
+
+        // A different wrapper object is not proof that the block was replaced.
+        assertTrue(MenuTransferSafetyHold.isHeld(replacement));
+        assertEquals(1, MenuTransferSafetyHold.count());
+        assertTrue(MenuTransferSafetyHold.describe(5).getFirst().contains("possible-unreconciled=8xGLOWSTONE_DUST"));
+
+        try (MockedStatic<StorageCacheUtils> storage = mockStatic(StorageCacheUtils.class)) {
+            storage.when(() -> StorageCacheUtils.getMenu(accessor)).thenReturn(replacement);
+            assertFalse(MenuTransferSafetyHold.isHeld(replacement));
+        }
         assertEquals(0, MenuTransferSafetyHold.count());
     }
 

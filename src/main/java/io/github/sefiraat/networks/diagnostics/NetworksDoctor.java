@@ -248,6 +248,15 @@ public final class NetworksDoctor {
             addSample(details, "Transfer compensation is incomplete: rollback="
                 + transfer.outstandingRollbackItems() + ", deposit=" + transfer.uncompensatedDepositItems());
         }
+        if (NetworkTransferUtils.getHeldMenuDestinationCount() > 0) {
+            issues++;
+            addSample(details, "Unverifiable destination transfer(s): "
+                + NetworkTransferUtils.getHeldMenuDestinationCount()
+                + " menu(s) held. Inspect these machines before replacing or restarting them.");
+            for (String hold : NetworkTransferUtils.getHeldMenuDestinationSummaries(5)) {
+                addSample(details, "Held destination: " + hold);
+            }
+        }
 
         addRuntimeDetails(details);
         details.add("Registry: " + nodeCount + " nodes across "

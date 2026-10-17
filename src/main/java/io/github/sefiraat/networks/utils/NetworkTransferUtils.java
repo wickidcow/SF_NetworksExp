@@ -17,6 +17,7 @@ import org.bukkit.inventory.ItemStack;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -40,6 +41,11 @@ public final class NetworkTransferUtils {
     /** Read-only visibility for Networks Doctor. Holds must not be cleared by auto-repair. */
     public static int getHeldMenuDestinationCount() {
         return MenuTransferSafetyHold.count();
+    }
+
+    /** Details are intentionally coarse: no player data, lore, or PDC values. */
+    public static @NotNull List<String> getHeldMenuDestinationSummaries(int limit) {
+        return MenuTransferSafetyHold.describe(limit);
     }
 
     /** Moves an item from a network into a Slimefun menu without silently losing a remainder. */
@@ -144,7 +150,7 @@ public final class NetworkTransferUtils {
              * destination slots. Restoring an unproven amount here can mint a second copy.
              * Keep the transfer fail-closed and surface a severe, actionable alert.
              */
-            MenuTransferSafetyHold.hold(destination);
+            MenuTransferSafetyHold.hold(destination, exactSource.getType(), withdrawn);
             Networks.getInstance().getLogger().log(
                 java.util.logging.Level.SEVERE,
                 "A Networks menu withdrawal cannot prove the destination state at "
