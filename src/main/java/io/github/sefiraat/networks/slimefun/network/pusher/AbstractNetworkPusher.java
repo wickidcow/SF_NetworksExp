@@ -37,6 +37,7 @@ import org.bukkit.Particle;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -113,6 +114,12 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
         final boolean enabled = isRecipeAware(blockMenu);
         blockMenu.replaceExistingItem(modeSlot, createRecipeAwareModeStack(location, enabled));
         blockMenu.addMenuClickHandler(modeSlot, (player, slot, itemStack, clickAction) -> {
+            // An admin or another addon can replace a block while its old menu is still open.
+            // Never write per-machine settings through a stale menu, for any click type.
+            if (getCurrentRecipeAwareMenu(location, blockMenu) == null) {
+                player.sendMessage(ChatColors.color("&cThat Network Pusher is no longer available."));
+                return false;
+            }
             if (clickAction.isShiftClicked()) {
                 final int delta = clickAction.isRightClicked() ? 1 : -1;
                 final int next = RecipeAwarePusherPlanner.stepBufferedBatches(
@@ -264,8 +271,16 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
         final int valid = RecipeAwarePusherPlanner.sanitizeBufferedBatches(
             value,
             DEFAULT_RECIPE_BUFFER_BATCHES);
-        RECIPE_BUFFER_BATCHES.put(location.clone(), valid);
+        // Only advertise the new runtime value after block persistence succeeds.
         StorageCacheUtils.setData(location, RECIPE_BUFFER_BATCHES_KEY, Integer.toString(valid));
+        RECIPE_BUFFER_BATCHES.put(location.clone(), valid);
+    }
+
+    @Override
+    public void onPlace(@NotNull BlockPlaceEvent event) {
+        // Reuse of the same location must not inherit an older machine's cached target.
+        RECIPE_BUFFER_BATCHES.remove(event.getBlock().getLocation());
+        super.onPlace(event);
     }
 
     @Override
