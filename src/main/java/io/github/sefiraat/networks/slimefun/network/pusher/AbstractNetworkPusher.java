@@ -334,11 +334,13 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
         final int requestCount = requests.size();
         final int attemptBudget = Math.min(MAX_UNIQUE_REQUESTS_PER_TICK, requestCount);
 
-        // Recipe-Aware shared-input machines can fill slots with the first ingredient
-        // before a different ingredient has any stack present. This one-pass scan
-        // runs ONLY with multiple templates in opt-in Recipe-Aware mode.
-        final boolean[] represented = recipeAware && requestCount > 1
-            ? findRepresentedRecipeIngredients(targetMenu, requests)
+        // Presence must be in a physical input accepted for that exact item. Display
+        // and output stacks do not reserve the missing ingredient's input capacity.
+        final int[] recipeInputSlots = recipeAware && requestCount > 1
+            ? getRecipeInputSlots(targetMenu)
+            : null;
+        final boolean[] represented = recipeInputSlots != null
+            ? findRepresentedRecipeIngredients(targetMenu, requests, recipeInputSlots)
             : null;
         int unrepresented = 0;
         if (represented != null) {
@@ -383,6 +385,13 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
             final int transferAmount;
             if (recipeAware) {
                 final int existing = countMatchingItems(targetMenu, template, slots);
+                // The normal transfer discovery can confirm a type left unverified by
+                // the bounded presence scan without another item-aware routing call.
+                if (represented != null && !represented[requestIndex] && existing > 0
+                    && isRecipeIngredientPresent(targetMenu, template, recipeInputSlots, slots)) {
+                    represented[requestIndex] = true;
+                    unrepresented--;
+                }
                 final int insertCapacity =
                     NetworkTransferUtils.getMenuInsertCapacity(targetMenu, template, slots);
                 final boolean peerMissing = represented != null
@@ -482,36 +491,88 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
     }
 
     /**
-     * One destination pass finds all recipe ingredient types already represented.
-     * No extra item-aware transport discovery is done for More/Best Pusher templates.
-     * This is a conservative presence heuristic, not a recipe validity check.
+     * Read the physical input declaration once. Item-aware null queries are not a
+     * substitute: Supreme legitimately returns no recipe slots for a null item.
      */
-    private static boolean @NotNull [] findRepresentedRecipeIngredients(
-        @NotNull BlockMenu targetMenu,
-        @NotNull List<PushRequest> requests) {
+    static int @NotNull [] getRecipeInputSlots(@NotNull BlockMenu targetMenu) {
+        try {
+            final int[] slots = targetMenu.getPreset()
+                .getSlotsAccessedByItemTransport(ItemTransportFlow.INSERT);
+            return slots == null ? new int[0] : slots;
+        } catch (RuntimeException | AbstractMethodError | NoSuchMethodError ignored) {
+            return new int[0];
+        }
+    }
 
-        final boolean[] represented = new boolean[requests.size()];
-        int missing = requests.size();
-        for (int slot = 0, size = targetMenu.getSize(); slot < size && missing > 0; slot++) {
+    /**
+     * Confirm at most four physically present types with their item-aware input
+     * permission. Unknown types remain missing; never rediscover all 9/12 templates.
+     * Every transfer still obtains fresh routing rather than reusing these snapshots.
+     */
+    static boolean @NotNull [] findRepresentedRecipeIngredients(
+        @NotNull BlockMenu targetMenu,
+        @NotNull List<PushRequest> requests,
+        int @NotNull [] inputSlots) {
+
+        final boolean[] candidates = new boolean[requests.size()];
+        for (int slot : inputSlots) {
+            if (slot < 0 || slot >= targetMenu.getSize()) {
+                continue;
+            }
             final ItemStack existing = targetMenu.getItemInSlot(slot);
-            if (existing == null || existing.getType() == Material.AIR
-                || existing.getAmount() <= 0) {
+            if (existing == null || existing.getType() == Material.AIR || existing.getAmount() <= 0) {
                 continue;
             }
             for (int i = 0; i < requests.size(); i++) {
-                if (represented[i]) {
-                    continue;
-                }
-                final ItemStack template = requests.get(i).template;
-                if (template.getType() == existing.getType()
-                    && StackUtils.itemsMatch(template, existing)) {
-                    represented[i] = true;
-                    missing--;
+                if (!candidates[i] && StackUtils.itemsMatch(requests.get(i).template, existing)) {
+                    candidates[i] = true;
                     break;
                 }
             }
         }
+
+        final boolean[] represented = new boolean[requests.size()];
+        int checked = 0;
+        for (int i = 0; i < requests.size() && checked < MAX_UNIQUE_REQUESTS_PER_TICK; i++) {
+            if (!candidates[i]) {
+                continue;
+            }
+            checked++;
+            final ItemStack template = requests.get(i).template;
+            final int[] itemSlots = BlockMenuUtil.getSafeTransportSlots(
+                targetMenu, ItemTransportFlow.INSERT, template);
+            represented[i] = isRecipeIngredientPresent(targetMenu, template, inputSlots, itemSlots);
+        }
         return represented;
+    }
+
+    static boolean isRecipeIngredientPresent(
+        @NotNull BlockMenu targetMenu,
+        @NotNull ItemStack template,
+        int @NotNull [] inputSlots,
+        int @NotNull [] itemSlots) {
+
+        for (int slot : inputSlots) {
+            if (slot < 0 || slot >= targetMenu.getSize()) {
+                continue;
+            }
+            boolean accepted = false;
+            for (int itemSlot : itemSlots) {
+                if (slot == itemSlot) {
+                    accepted = true;
+                    break;
+                }
+            }
+            if (!accepted) {
+                continue;
+            }
+            final ItemStack existing = targetMenu.getItemInSlot(slot);
+            if (existing != null && existing.getType() != Material.AIR && existing.getAmount() > 0
+                && StackUtils.itemsMatch(template, existing)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static int countMatchingItems(
@@ -608,11 +669,11 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
         return sum >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) sum;
     }
 
-    private static final class PushRequest {
+    static final class PushRequest {
         private final ItemStack template;
         private int amount;
 
-        private PushRequest(@NotNull ItemStack template, int amount) {
+        PushRequest(@NotNull ItemStack template, int amount) {
             this.template = template;
             this.amount = amount;
         }
