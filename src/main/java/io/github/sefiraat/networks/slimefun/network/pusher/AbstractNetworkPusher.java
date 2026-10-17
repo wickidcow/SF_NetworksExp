@@ -333,6 +333,21 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
          */
         final int requestCount = requests.size();
         final int attemptBudget = Math.min(MAX_UNIQUE_REQUESTS_PER_TICK, requestCount);
+
+        // Recipe-Aware shared-input machines can fill slots with the first ingredient
+        // before a different ingredient has any stack present. This one-pass scan
+        // runs ONLY with multiple templates in opt-in Recipe-Aware mode.
+        final boolean[] represented = recipeAware && requestCount > 1
+            ? findRepresentedRecipeIngredients(targetMenu, requests)
+            : null;
+        int unrepresented = 0;
+        if (represented != null) {
+            for (boolean present : represented) {
+                if (!present) {
+                    unrepresented++;
+                }
+            }
+        }
         final long rotationSeed = sourceBlock.getWorld().getGameTime() * MAX_UNIQUE_REQUESTS_PER_TICK
             + sourceBlock.getX() * 31L
             + sourceBlock.getY() * 17L
@@ -344,7 +359,8 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
         int attempted = 0;
         boolean movedAny = false;
         for (int offset = 0; offset < requestCount && attempted < attemptBudget; offset++) {
-            final PushRequest request = requests.get((startIndex + offset) % requestCount);
+            final int requestIndex = (startIndex + offset) % requestCount;
+            final PushRequest request = requests.get(requestIndex);
             final ItemStack template = request.template;
             final PushRequestKey requestKey = createRequestKey(sourceBlock, targetBlock, template);
 
@@ -369,11 +385,14 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
                 final int existing = countMatchingItems(targetMenu, template, slots);
                 final int insertCapacity =
                     NetworkTransferUtils.getMenuInsertCapacity(targetMenu, template, slots);
-                transferAmount = RecipeAwarePusherPlanner.calculateTransferAmount(
+                final boolean peerMissing = represented != null
+                    && unrepresented > (represented[requestIndex] ? 0 : 1);
+                transferAmount = RecipeAwarePusherPlanner.calculateFairTransferAmount(
                     request.amount,
                     getRecipeBufferBatches(blockMenu.getLocation()),
                     existing,
-                    insertCapacity);
+                    insertCapacity,
+                    peerMissing);
 
                 if (transferAmount <= 0) {
                     FAILED_REQUEST_BACKOFF.remove(requestKey);
@@ -394,6 +413,10 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
             if (moved > 0) {
                 FAILED_REQUEST_BACKOFF.remove(requestKey);
                 movedAny = true;
+                if (represented != null && !represented[requestIndex]) {
+                    represented[requestIndex] = true;
+                    unrepresented--;
+                }
             } else {
                 recordFailure(requestKey, now);
             }
@@ -456,6 +479,39 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
         }
 
         return requests;
+    }
+
+    /**
+     * One destination pass finds all recipe ingredient types already represented.
+     * No extra item-aware transport discovery is done for More/Best Pusher templates.
+     * This is a conservative presence heuristic, not a recipe validity check.
+     */
+    private static boolean @NotNull [] findRepresentedRecipeIngredients(
+        @NotNull BlockMenu targetMenu,
+        @NotNull List<PushRequest> requests) {
+
+        final boolean[] represented = new boolean[requests.size()];
+        int missing = requests.size();
+        for (int slot = 0, size = targetMenu.getSize(); slot < size && missing > 0; slot++) {
+            final ItemStack existing = targetMenu.getItemInSlot(slot);
+            if (existing == null || existing.getType() == Material.AIR
+                || existing.getAmount() <= 0) {
+                continue;
+            }
+            for (int i = 0; i < requests.size(); i++) {
+                if (represented[i]) {
+                    continue;
+                }
+                final ItemStack template = requests.get(i).template;
+                if (template.getType() == existing.getType()
+                    && StackUtils.itemsMatch(template, existing)) {
+                    represented[i] = true;
+                    missing--;
+                    break;
+                }
+            }
+        }
+        return represented;
     }
 
     private static int countMatchingItems(
