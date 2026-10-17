@@ -4,6 +4,10 @@ import com.balugaq.netex.api.enums.MinecraftVersion;
 import com.ytdd9527.networksexpansion.core.managers.ConfigManager;
 import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.network.NetworkRoot;
+import io.github.sefiraat.networks.network.NodeType;
+import io.github.sefiraat.networks.network.stackcaches.BarrelIdentity;
+import java.util.LinkedHashSet;
+import java.util.List;
 import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -56,6 +60,37 @@ class NetworkRootIncidentContainmentTest {
         } finally {
             MockBukkit.unmock();
         }
+    }
+
+    @Test
+    void partialAdapterWriteThenThrowQuarantinesControllerBeforeAnotherTransfer() {
+        final NetworkRoot actual = spy(new NetworkRoot(controller, NodeType.CONTROLLER, 100));
+        final BarrelIdentity firstStorage = mock(BarrelIdentity.class);
+        final BarrelIdentity brokenStorage = mock(BarrelIdentity.class);
+        doReturn(new LinkedHashSet<>(List.of(firstStorage, brokenStorage)))
+            .when(actual).getInputAbleBarrels();
+        when(firstStorage.getLocation()).thenReturn(new Location(null, 600, 65, 700));
+        when(brokenStorage.getLocation()).thenReturn(new Location(null, 601, 65, 700));
+        when(firstStorage.canAccept(any(ItemStack.class))).thenReturn(true);
+        doAnswer(call -> {
+            ItemStack offered = call.getArgument(0);
+            offered.setAmount(offered.getAmount() - 4);
+            return null;
+        }).when(firstStorage).depositItemStack(any(ItemStack.class));
+        when(brokenStorage.canAccept(any(ItemStack.class)))
+            .thenThrow(new IllegalStateException("Injected storage failure after accepting four"));
+
+        ItemStack offer = new ItemStack(Material.DIAMOND, 8);
+        assertThrows(IllegalStateException.class, () -> actual.addItemStack0(first, offer));
+        assertEquals(4, offer.getAmount(), "Partial accepted amount must remain observable");
+        assertTrue(NetworkTransferUtils.isNetworkRootHeld(actual, second));
+
+        ItemStack rejected = new ItemStack(Material.DIAMOND, 8);
+        actual.addItemStack0(second, rejected);
+        assertEquals(8, rejected.getAmount());
+        assertNull(actual.getItemStack0(second, new ItemRequest(
+            new ItemStack(Material.DIAMOND, 1), 8)));
+        verify(firstStorage, times(1)).depositItemStack(any(ItemStack.class));
     }
 
     @Test
