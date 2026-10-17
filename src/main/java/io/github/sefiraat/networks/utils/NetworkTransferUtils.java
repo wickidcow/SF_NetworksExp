@@ -1355,10 +1355,15 @@ public final class NetworkTransferUtils {
             root.addItemStack0(accessor, offered);
         } catch (RuntimeException | LinkageError exception) {
             failed = true;
-            TransferAudit.recordFailure();
+            // The actual NetworkRoot entry point already recorded the failed
+            // adapter operation when it quarantined this controller. Do not
+            // count the same failure twice; mock/foreign roots still count here.
+            if (!RootRollbackSafetyHold.isHeld(root, accessor)) {
+                TransferAudit.recordFailure();
+            }
             Networks.getInstance().getLogger().log(
                 java.util.logging.Level.WARNING,
-                "A Networks deposit failed; reconciling the source stack with any items already accepted.",
+                "A Networks deposit failed; its reported remainder may be unverified and the root must remain quarantined.",
                 exception);
             // A destination can accept items before a later destination (or bookkeeping) fails.
             // The mutated offer is the remaining amount, so reconcile accepted items on failure too.

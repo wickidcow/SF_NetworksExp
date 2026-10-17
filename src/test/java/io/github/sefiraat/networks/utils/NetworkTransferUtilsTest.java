@@ -108,6 +108,9 @@ class NetworkTransferUtilsTest {
     void tearDown() {
         try {
             clearAccessHistory();
+            // A real root's write-then-throw circuit breaker must not leak
+            // between independent parameterized test fixtures.
+            NetworkTransferUtils.resetRuntimeSafety();
             TransferAudit.reset();
         } finally {
             try {
