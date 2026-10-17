@@ -1,6 +1,5 @@
 package io.github.sefiraat.networks.slimefun.network.pusher;
 
-import com.balugaq.netex.api.algorithm.Calculator;
 import com.balugaq.netex.api.enums.FeedbackType;
 import com.balugaq.netex.api.helpers.Icon;
 import com.balugaq.netex.api.interfaces.SoftCellBannable;
@@ -149,7 +148,7 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
                     }
 
                     try {
-                        final int value = Calculator.calculate(input).intValueExact();
+                        final int value = RecipeAwarePusherPlanner.parseBufferedBatches(input);
                         if (!RecipeAwarePusherPlanner.isValidBufferedBatches(value)) {
                             player.sendMessage(ChatColors.color(
                                 "&cEnter a whole number between "
@@ -168,7 +167,7 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
                             modeSlot,
                             createRecipeAwareModeStack(location, isRecipeAware(liveMenu)));
                         liveMenu.open(player);
-                    } catch (NumberFormatException | ArithmeticException exception) {
+                    } catch (NumberFormatException exception) {
                         player.sendMessage(ChatColors.color(
                             "&cEnter a whole number between "
                                 + RecipeAwarePusherPlanner.MIN_BUFFERED_BATCHES
