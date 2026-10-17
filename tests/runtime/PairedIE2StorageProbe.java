@@ -55,7 +55,8 @@ public final class PairedIE2StorageProbe extends JavaPlugin {
                 unit = Slimefun.getRegistry().getAllSlimefunItems().stream()
                     .filter(item -> item.getClass().getName().equals(InfinityExpansion2Integration.STORAGE_UNIT_CLASS))
                     .sorted(Comparator.comparing(SlimefunItem::getId)).findFirst().orElseThrow();
-                require(adapter.isStorageUnit(unit), "Networks must recognize the registered IE2 storage");
+                require(adapter.isStorageUnit(unit), "Networks must recognize the registered IE2 storage: "
+                    + adapter.getDiscoveryDiagnostic());
                 var ticker = (BlockTicker) unit.getClass().getMethod("getBlockTicker").invoke(unit);
                 require(ticker != null && ticker.isSynchronized(), "IE2 storage ticker must be synchronized");
                 tick = unit.getClass().getDeclaredMethod("tick", Block.class);
@@ -87,8 +88,16 @@ public final class PairedIE2StorageProbe extends JavaPlugin {
         location().getBlock().setType(unit.getItem().getType());
         var data = controller.createBlock(location(), unit.getId());
         if (StorageCacheUtils.getMenu(location()) == null) controller.loadBlockData(data);
-        var menu = StorageCacheUtils.getMenu(location());
-        require(menu != null && !menu.hasViewer(), "Create the real IE2 menu without opening its GUI");
+        // BlockMenuPreset.newInstance(Location) schedules the owning callback.
+        // Merely constructing the menu does not make the addon's cache ready.
+        awaitInitializedStorage(true);
+    }
+
+    private void seedTransfers(BlockMenu menu) throws Exception {
+        var controller = Slimefun.getDatabaseManager().getBlockDataController();
+        var data = StorageCacheUtils.getBlock(location());
+        require(data != null && !menu.hasViewer(), "Initialize the real IE2 menu without opening its GUI");
+        require(total(menu) == 0, "Seed starts with an empty initialized storage");
         var staging = buffer();
         var root = root();
         long introduced = 0;
@@ -144,21 +153,31 @@ public final class PairedIE2StorageProbe extends JavaPlugin {
         controller.getChunkDataAsync(location().getChunk()).whenComplete((chunk, error) ->
             Bukkit.getScheduler().runTask(this, () -> {
                 if (error != null) { fail(error); return; }
-                new BukkitRunnable() {
-                    int attempts;
-                    @Override public void run() {
-                        try {
-                            var data = StorageCacheUtils.getBlock(location());
-                            var menu = StorageCacheUtils.getMenu(location());
-                            if (data != null && data.isDataLoaded() && menu != null) {
-                                cancel(); verify(menu);
-                            } else if (++attempts >= 160) {
-                                cancel(); throw new AssertionError("Persisted IE2 block/menu did not load");
-                            }
-                        } catch (Throwable failure) { cancel(); fail(failure); }
-                    }
-                }.runTaskTimer(PairedIE2StorageProbe.this, 1L, 5L);
+                awaitInitializedStorage(false);
             }));
+    }
+
+    private void awaitInitializedStorage(boolean seedPhase) {
+        new BukkitRunnable() {
+            int attempts;
+            @Override public void run() {
+                try {
+                    var data = StorageCacheUtils.getBlock(location());
+                    var menu = StorageCacheUtils.getMenu(location());
+                    var caches = (Map<?, ?>) unit.getClass().getMethod("getCaches").invoke(unit);
+                    if (data != null && data.isDataLoaded() && menu != null && !caches.isEmpty()) {
+                        require(caches.size() == 1, "Exactly one initialized fixture cache is required");
+                        cancel();
+                        if (seedPhase) seedTransfers(menu);
+                        else verify(menu);
+                    } else if (++attempts >= 160) {
+                        cancel();
+                        throw new AssertionError("IE2 menu/cache initialization did not complete; cache count="
+                            + caches.size() + ", menu=" + (menu != null));
+                    }
+                } catch (Throwable failure) { cancel(); fail(failure); }
+            }
+        }.runTaskTimer(this, 1L, 5L);
     }
 
     private void verify(BlockMenu menu) throws Exception {
