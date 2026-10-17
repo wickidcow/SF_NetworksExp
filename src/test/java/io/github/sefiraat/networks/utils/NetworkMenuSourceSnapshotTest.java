@@ -173,7 +173,7 @@ class NetworkMenuSourceSnapshotTest {
         doAnswer(call -> {
             accept(call.getArgument(1), amount);
             // Simulates an IE generator producing four new items during the transfer.
-            source.set(new RebuildingDustStack(dust(20)));
+            source.get().setAmount(20);
             return null;
         }).when(root).addItemStack0(eq(accessor), any(ItemStack.class));
 
@@ -202,7 +202,7 @@ class NetworkMenuSourceSnapshotTest {
     void partialNetworkFailureWithProductionDoesNotVoidNewOutput() {
         doAnswer(call -> {
             accept(call.getArgument(1), 4);
-            source.set(new RebuildingDustStack(dust(20)));
+            source.get().setAmount(20);
             throw new IllegalStateException("Injected partial destination failure");
         }).when(root).addItemStack0(eq(accessor), any(ItemStack.class));
 
