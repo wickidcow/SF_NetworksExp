@@ -9,6 +9,7 @@ import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
 import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.sefiraat.networks.utils.StackUtils;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
+import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -18,11 +19,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.MockedConstruction;
 import org.mockito.MockedStatic;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.*;
 
@@ -198,6 +203,86 @@ class LineOperationUtilTest {
         assertNull(LineOperationUtil.requestNetworkItem(root, ACCESSOR, request, 0, null));
         assertNull(LineOperationUtil.requestNetworkItem(root, ACCESSOR, request, 0, null));
         verify(root, times(4)).getItemStack0(ACCESSOR, request);
+    }
+
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void multiTemplatePushClassifiesEachTargetOnlyOnce(boolean array) {
+        when(root.allowAccessOutput(ACCESSOR)).thenReturn(true);
+        final BlockMenuPreset preset = mock(BlockMenuPreset.class);
+        when(menu.getPreset()).thenReturn(preset);
+        ItemStack template = stack(1);
+        when(template.getMaxStackSize()).thenReturn(64);
+
+        try (MockedConstruction<ItemRequest> constructors = mockConstruction(ItemRequest.class);
+             MockedStatic<BlockMenuUtil> slotResolver = mockStatic(BlockMenuUtil.class)) {
+            slotResolver.when(() -> BlockMenuUtil.getSafeTransportSlots(
+                menu, ItemTransportFlow.INSERT, template)).thenReturn(new int[0]);
+
+            if (array) {
+                LineOperationUtil.pushItem(ACCESSOR, root, menu,
+                    new ItemStack[]{template, null, template, template},
+                    TransportMode.NONE, 64, new LineOperationUtil.PushAvailabilityMemo(4));
+            } else {
+                LineOperationUtil.pushItem(ACCESSOR, root, menu,
+                    java.util.Arrays.asList(template, null, template, template),
+                    TransportMode.NONE, 64, new LineOperationUtil.PushAvailabilityMemo(4));
+            }
+
+            assertEquals(3, constructors.constructed().size());
+            verify(preset, times(1)).getSlimefunItem();
+            slotResolver.verify(() -> BlockMenuUtil.getSafeTransportSlots(
+                menu, ItemTransportFlow.INSERT, template), times(3));
+            verify(root, never()).getItemStack0(any(), any());
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = TransportMode.class, names = {"NONE", "LAZY"})
+    void capacityScanStopsOnceEarlierSlotsCoverQuantity(TransportMode mode) {
+        when(root.allowAccessOutput(ACCESSOR)).thenReturn(true);
+        ItemStack template = stack(1);
+        when(template.getMaxStackSize()).thenReturn(64);
+
+        try (MockedConstruction<ItemRequest> constructors = mockConstruction(
+                ItemRequest.class, (mock, context) -> when(mock.getAmount()).thenReturn(64));
+             MockedStatic<BlockMenuUtil> slotResolver = mockStatic(BlockMenuUtil.class)) {
+            slotResolver.when(() -> BlockMenuUtil.getSafeTransportSlots(
+                menu, ItemTransportFlow.INSERT, template)).thenReturn(new int[]{0, 1, 2});
+
+            LineOperationUtil.pushItem(ACCESSOR, root, menu, template, 0, mode, 64, null);
+
+            verify(menu, never()).getItemInSlot(1);
+            verify(menu, never()).getItemInSlot(2);
+            verify(root, times(1)).getItemStack0(eq(ACCESSOR), any(ItemRequest.class));
+        }
+    }
+
+    @Test
+    void satisfiedSpecifiedQuantitySkipsRemainingSlotsAndNetworkWithdrawal() {
+        when(root.allowAccessOutput(ACCESSOR)).thenReturn(true);
+        ItemStack template = stack(1);
+        when(template.getMaxStackSize()).thenReturn(64);
+        ItemStack existing = stack(64);
+        when(menu.getItemInSlot(0)).thenReturn(existing);
+
+        try (MockedConstruction<ItemRequest> constructors = mockConstruction(ItemRequest.class);
+             MockedStatic<BlockMenuUtil> slotResolver = mockStatic(BlockMenuUtil.class);
+             MockedStatic<StackUtils> stackMatching = mockStatic(StackUtils.class)) {
+            slotResolver.when(() -> BlockMenuUtil.getSafeTransportSlots(
+                menu, ItemTransportFlow.INSERT, template)).thenReturn(new int[]{0, 1, 2});
+            stackMatching.when(() -> StackUtils.itemsMatch(
+                any(ItemRequest.class), eq(existing))).thenReturn(true);
+
+            LineOperationUtil.pushItem(ACCESSOR, root, menu, template, 0,
+                TransportMode.SPECIFIED_QUANTITY, 64, null);
+
+            verify(menu, times(1)).getItemInSlot(0);
+            verify(menu, never()).getItemInSlot(1);
+            verify(menu, never()).getItemInSlot(2);
+            verify(root, never()).getItemStack0(any(), any());
+        }
     }
 
     private MockedStatic<BlockMenuUtil> slots(int... values) {
