@@ -552,11 +552,19 @@ public class LineOperationUtil {
                 continue;
             }
 
+            // A confirmed source miss should not trigger an item-aware target
+            // classification at all. Preserve one skip event per memo entry.
+            if (availabilityMemo != null && availabilityMemo.shouldSkip(i)) {
+                if (!root.allowAccessOutput(accessor)) {
+                    break;
+                }
+                continue;
+            }
             if (targetIsDrawer == null) {
                 targetIsDrawer = isNetworksDrawerMenu(blockMenu);
             }
             pushItemInternal(accessor, root, blockMenu, template, i, transportMode,
-                limitQuantity, availabilityMemo, targetIsDrawer);
+                limitQuantity, availabilityMemo, targetIsDrawer, true);
 
             // A failed request above may have crossed the existing miss threshold.
             if (!root.allowAccessOutput(accessor)) {
@@ -588,11 +596,19 @@ public class LineOperationUtil {
                 continue;
             }
 
+            // A confirmed source miss should not trigger an item-aware target
+            // classification at all. Preserve one skip event per memo entry.
+            if (availabilityMemo != null && availabilityMemo.shouldSkip(i)) {
+                if (!root.allowAccessOutput(accessor)) {
+                    break;
+                }
+                continue;
+            }
             if (targetIsDrawer == null) {
                 targetIsDrawer = isNetworksDrawerMenu(blockMenu);
             }
             pushItemInternal(accessor, root, blockMenu, template, i, transportMode,
-                limitQuantity, availabilityMemo, targetIsDrawer);
+                limitQuantity, availabilityMemo, targetIsDrawer, true);
 
             if (!root.allowAccessOutput(accessor)) {
                 break;
@@ -632,7 +648,7 @@ public class LineOperationUtil {
         int limitQuantity,
         @Nullable PushAvailabilityMemo availabilityMemo) {
         pushItemInternal(accessor, root, blockMenu, template, itemIndex,
-            transportMode, limitQuantity, availabilityMemo, null);
+            transportMode, limitQuantity, availabilityMemo, null, false);
     }
 
     /** A null hint preserves the public single-template probe; non-null is pass-local only. */
@@ -645,8 +661,9 @@ public class LineOperationUtil {
         @NotNull TransportMode transportMode,
         int limitQuantity,
         @Nullable PushAvailabilityMemo availabilityMemo,
-        @Nullable Boolean knownDrawer) {
-        if (availabilityMemo != null && availabilityMemo.shouldSkip(itemIndex)) {
+        @Nullable Boolean knownDrawer,
+        boolean memoAlreadyChecked) {
+        if (!memoAlreadyChecked && availabilityMemo != null && availabilityMemo.shouldSkip(itemIndex)) {
             return;
         }
         if (!root.allowAccessOutput(accessor)) {

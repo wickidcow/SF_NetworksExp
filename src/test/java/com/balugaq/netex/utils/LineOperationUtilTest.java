@@ -239,6 +239,33 @@ class LineOperationUtilTest {
     }
 
     @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void unavailableTemplatesDoNotInspectAnyTargetMenu(boolean array) {
+        when(root.allowAccessOutput(ACCESSOR)).thenReturn(true);
+        final var memo = new LineOperationUtil.PushAvailabilityMemo(2);
+        final ItemRequest request = request(64);
+
+        // A real empty response confirms the missing ingredient for this pass.
+        assertNull(LineOperationUtil.requestNetworkItem(root, ACCESSOR, request, 0, memo));
+        assertNull(LineOperationUtil.requestNetworkItem(root, ACCESSOR, request, 1, memo));
+        clearInvocations(root);
+        final long skippedBefore = LineOperationUtil.getPushSourceMissSkipCount();
+        ItemStack template = stack(1);
+
+        if (array) {
+            LineOperationUtil.pushItem(ACCESSOR, root, menu,
+                new ItemStack[]{template, template}, TransportMode.NONE, 64, memo);
+        } else {
+            LineOperationUtil.pushItem(ACCESSOR, root, menu,
+                java.util.List.of(template, template), TransportMode.NONE, 64, memo);
+        }
+
+        assertEquals(skippedBefore + 2L, LineOperationUtil.getPushSourceMissSkipCount());
+        verifyNoInteractions(menu);
+        verify(root, never()).getItemStack0(any(), any());
+    }
+
+    @ParameterizedTest
     @EnumSource(value = TransportMode.class, names = {"NONE", "LAZY"})
     void capacityScanStopsOnceEarlierSlotsCoverQuantity(TransportMode mode) {
         when(root.allowAccessOutput(ACCESSOR)).thenReturn(true);
