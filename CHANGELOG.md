@@ -3,7 +3,7 @@
 ## 1.0.59-rc2 — combined transaction and recipe-balancing staging (not published)
 
 - Preserve rc1's Recipe-Aware per-machine 1–64 batch buffering, verified Slimefun menu insertion, and network-to-cursor/player-inventory readback safeguards.
-- Prevent ambiguous source-network rollback attempts from silently world-dropping potentially accepted items. Quarantine unsafe accessor withdrawals and report incidents in Networks Doctor. Controller rebuilds do not automatically clear these holds.
+- Prevent ambiguous source-network rollback attempts from silently world-dropping potentially accepted items. Quarantine all accessors of the affected network controller/root and report incidents in Networks Doctor. Controller rebuilds do not automatically clear these holds.
 - In opt-in multi-template Recipe-Aware mode, limit represented ingredients to one recipe batch while another template type is absent from the target menu. Maintain the target machine's authoritative input slots.
 - Extend regression tests for write-then-throw source refunds, ongoing safety holds and missing-ingredient fairness.
 - Independently run the exact rc2 JAR and the same Slimefun Legacy core against SHA-256-pinned Paper 26.3 build 194; verify native manager behavior and Quantum persistence across clean JVM restarts.

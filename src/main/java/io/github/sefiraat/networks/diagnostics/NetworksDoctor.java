@@ -248,7 +248,7 @@ public final class NetworksDoctor {
             // Always show safety incidents even when ordinary samples are full.
             details.add("Unsafe source-network rollback(s): "
                 + NetworkTransferUtils.getHeldWithdrawalSourceCount()
-                + " accessor(s) held. Inspect physical storage before restarting.");
+                + " network root(s) held. Inspect physical storage before restarting.");
             for (String held : NetworkTransferUtils.getHeldWithdrawalSourceSummaries(5)) {
                 details.add("Held withdrawal source: " + held);
             }

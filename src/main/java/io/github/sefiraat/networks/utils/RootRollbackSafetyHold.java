@@ -15,7 +15,8 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Fail-closed source-specific circuit breaker for an ambiguous storage refund.
+ * Fail-closed network-wide circuit breaker for an ambiguous storage refund.
+ * Every accessor of a controller shares the same source-root hold.
  * Root replacement is NOT proof the underlying storage accepted or rejected
  * an ambiguous refund. Holds remain until controlled plugin shutdown/restart,
  * after an operator investigates the affected storage and logs.
@@ -33,7 +34,7 @@ final class RootRollbackSafetyHold {
         // A different NetworkRoot object may point to the same underlying
         // barrel/cell data. It is NOT a verified recovery or refund receipt.
         // Never auto-clear the hold merely because the root object changed.
-        return HELD.containsKey(BlockKey.of(accessor));
+        return HELD.containsKey(keyFor(root, accessor));
     }
 
     static void hold(
@@ -41,8 +42,9 @@ final class RootRollbackSafetyHold {
         @NotNull Material material, int possibleAmount) {
         // Preserve the first incident, even if the graph rebuilt and a new
         // NetworkRoot instance later reported another ambiguous storage write.
-        HELD.putIfAbsent(BlockKey.of(accessor),
-            new HeldRoot(root, material, Math.max(0, possibleAmount), System.currentTimeMillis()));
+        HELD.putIfAbsent(keyFor(root, accessor),
+            new HeldRoot(root, BlockKey.of(accessor), material,
+                Math.max(0, possibleAmount), System.currentTimeMillis()));
     }
 
     static int count() {
@@ -60,6 +62,9 @@ final class RootRollbackSafetyHold {
             result.add(
                 "world=" + (key.worldId() == null ? "unknown" : key.worldId())
                     + " x=" + key.x() + " y=" + key.y() + " z=" + key.z()
+                    + ", first-accessor="
+                    + held.firstAccessor().x() + "," + held.firstAccessor().y()
+                    + "," + held.firstAccessor().z()
                     + ", possibly-unreconciled=" + held.possibleAmount() + "x" + held.material()
                     + ", first-seen=" + Instant.ofEpochMilli(held.since()));
             if (result.size() >= limit) {
@@ -73,8 +78,22 @@ final class RootRollbackSafetyHold {
         HELD.clear();
     }
 
+    /** Prefer the stable controller position so separate accessors share one circuit breaker. */
+    private static @NotNull BlockKey keyFor(@NotNull NetworkRoot root, @NotNull Location accessor) {
+        try {
+            final Location controller = root.getNodePosition();
+            if (controller != null) {
+                return BlockKey.of(controller);
+            }
+        } catch (RuntimeException | LinkageError ignored) {
+            // Some optional addon or unfinished network may lack controller metadata.
+        }
+        return BlockKey.of(accessor);
+    }
+
     private record HeldRoot(
         @NotNull NetworkRoot root,
+        @NotNull BlockKey firstAccessor,
         @NotNull Material material,
         int possibleAmount,
         long since) {

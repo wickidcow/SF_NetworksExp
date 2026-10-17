@@ -159,6 +159,28 @@ class NetworkRollbackExceptionSafetyTest {
     }
 
     @Test
+    void ambiguousRefundFreezesEveryAccessorOfTheSameNetworkController() {
+        Location controller = new Location(null, 300, 64, -500);
+        Location secondary = new Location(null, 400, 70, -600);
+        when(root.getNodePosition()).thenReturn(controller);
+        doThrow(new IllegalStateException("controller storage wrote then failed"))
+            .when(root).addItemStack0(eq(accessor), any(ItemStack.class));
+
+        rollback(diamond(10));
+        assertEquals(1, NetworkTransferUtils.getHeldWithdrawalSourceCount());
+        assertTrue(RootRollbackSafetyHold.isHeld(root, accessor));
+        assertTrue(RootRollbackSafetyHold.isHeld(root, secondary));
+        assertTrue(NetworkTransferUtils.getHeldWithdrawalSourceSummaries(5).getFirst()
+            .contains("first-accessor=321,65,-872"));
+
+        org.bukkit.entity.Player player = mock(org.bukkit.entity.Player.class);
+        when(player.getItemOnCursor()).thenReturn(null);
+        assertEquals(0, NetworkTransferUtils.moveNetworkItemOntoCursor(
+            root, secondary, player, diamond(1), 5));
+        verify(root, never()).getItemStack0(eq(secondary), any());
+    }
+
+    @Test
     void linkageErrorsAtStorageBoundaryFailClosedToo() {
         doThrow(new NoSuchMethodError("foreign adapter mismatch"))
             .when(root).addItemStack0(eq(accessor), any(ItemStack.class));
