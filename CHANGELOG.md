@@ -6,6 +6,7 @@
 - Prevent ambiguous source-network rollback attempts from silently world-dropping potentially accepted items. Quarantine unsafe accessor withdrawals and report incidents in Networks Doctor. Controller rebuilds do not automatically clear these holds.
 - In opt-in multi-template Recipe-Aware mode, limit represented ingredients to one recipe batch while another template type is absent from the target menu. Maintain the target machine's authoritative input slots.
 - Extend regression tests for write-then-throw source refunds, ongoing safety holds and missing-ingredient fairness.
+- Independently run the exact rc2 JAR and the same Slimefun Legacy core against SHA-256-pinned Paper 26.3 build 194; verify native manager behavior and Quantum persistence across clean JVM restarts.
 - Preserve existing 289 Slimefun IDs, recipes, saved data formats, input/output routing rules and Java 21 bytecode.
 - Give this combined candidate a unique `SF_Networks1.0.59-rc2.jar` identity and disable automatic release publication for -rc builds.
 
