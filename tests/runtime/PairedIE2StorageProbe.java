@@ -8,6 +8,8 @@ import io.github.sefiraat.networks.network.stackcaches.BarrelIdentity;
 import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -202,6 +204,7 @@ public final class PairedIE2StorageProbe extends JavaPlugin {
             require(total(menu) + delivered == TOTAL, "Conservation while draining restored storage");
         }
         require(delivered == TOTAL && total(menu) == 0, "Exactly 192 items recovered, no extra item");
+        getLogger().info("Verified unopened storage template and recovered exactly " + delivered + " tagged items after restart.");
         verifyUnassignedBalanceIsNotRelabelled(menu);
         finish("PASS: verify independent JVM restored and withdrew exactly " + delivered
             + " tagged items; synthetic unassigned balance was not relabelled");
@@ -230,10 +233,17 @@ public final class PairedIE2StorageProbe extends JavaPlugin {
             tick.invoke(unit, location().getBlock());
             require(checked(menu.getItemInSlot(input)) == 1, "Unassigned balance must not consume physical input");
             Object companion = unit.getClass().getField("Companion").get(null);
-            var inputItem = companion.getClass().getMethod(
-                "inputItem", BlockMenu.class, cacheType, ItemStack.class, int.class);
+            // Class.getMethod enumerates the companion's unrelated optional HUD
+            // signatures. Resolve only the required public descriptor instead.
+            var inputItem = MethodHandles.publicLookup().findVirtual(companion.getClass(), "inputItem",
+                MethodType.methodType(int.class, BlockMenu.class, cacheType, ItemStack.class, int.class));
             ItemStack offered = sample(1);
-            int accepted = ((Number) inputItem.invoke(companion, menu, orphan, offered, 1)).intValue();
+            final int accepted;
+            try {
+                accepted = ((Number) inputItem.invokeWithArguments(companion, menu, orphan, offered, 1)).intValue();
+            } catch (Throwable failure) {
+                throw new IllegalStateException("Exact IE2 input invocation failed", failure);
+            }
             require(accepted == 0 && offered.getAmount() == 1, "Direct storage input must also refuse relabelling");
             require(((Number) cacheType.getMethod("getAmount").invoke(orphan)).intValue() == 128,
                 "Preserve the unresolved counter for investigation");
