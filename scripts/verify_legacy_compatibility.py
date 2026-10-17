@@ -238,13 +238,16 @@ require("extends RecipeChoice.ExactChoice" not in simple_recipe_choice,
         "SimpleRecipeChoice still extends final RecipeChoice.ExactChoice")
 require("implements RecipeChoice" in simple_recipe_choice, "SimpleRecipeChoice no longer implements RecipeChoice")
 # Public release metadata must move as one unit so JAR/plugin/workflow versions cannot drift.
-require('version = "1.0.58"' in build, "Gradle public version must remain 1.0.58")
-require('VERSION: "1.0.58"' in build_workflow
-        and 'OUTPUT_NAME: "SF_Networks1.0.58.jar"' in build_workflow,
-        "release workflow public version/JAR name must remain 1.0.58")
-require('VERSION: "1.0.58"' in compatibility_workflow
-        and 'OUTPUT_NAME: "SF_Networks1.0.58.jar"' in compatibility_workflow,
-        "compatibility workflow public version/JAR name must remain 1.0.58")
+require(public_version == "1.0.59-rc1", "staging candidate must retain the 1.0.59-rc1 version")
+require('version = "1.0.59-rc1"' in build, "staging Gradle version must remain 1.0.59-rc1")
+require('VERSION: "1.0.59-rc1"' in build_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.59-rc1.jar"' in build_workflow,
+        "staging workflow version/JAR name must remain 1.0.59-rc1")
+require('VERSION: "1.0.59-rc1"' in compatibility_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.59-rc1.jar"' in compatibility_workflow,
+        "staging compatibility version/JAR name must remain 1.0.59-rc1")
+require("!contains(env.VERSION, '-rc')" in build_workflow,
+        "staging RC builds must never publish a release even on manual/tag events")
 require("actions/upload-artifact@v7" in compatibility_workflow
         and "name: slimefun-legacy-core" in compatibility_workflow
         and "Slimefun-Legacy-Core.jar" in compatibility_workflow,
