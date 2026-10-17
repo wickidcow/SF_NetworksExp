@@ -66,6 +66,9 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
     private static final String RECIPE_AWARE_KEY = "recipe-aware";
     private static final String RECIPE_BUFFER_BATCHES_KEY = "recipe-aware-buffer-batches";
     private static final int DEFAULT_RECIPE_BUFFER_BATCHES = 8;
+    // Zero means a machine has no override. Read the current server setting on demand so
+    // a configuration reload still reaches existing, non-customized pushers.
+    private static final int INHERIT_RECIPE_BUFFER_BATCHES = 0;
     private static final Map<Location, Integer> RECIPE_BUFFER_BATCHES = new ConcurrentHashMap<>();
 
     private static final int NORTH_SLOT = 11;
@@ -233,15 +236,19 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
 
     private int getRecipeBufferBatches(@NotNull Location location) {
         final Integer cached = RECIPE_BUFFER_BATCHES.get(location);
-        if (cached != null) {
+        if (cached != null && cached != INHERIT_RECIPE_BUFFER_BATCHES) {
             return cached;
         }
 
         final int fallback = RecipeAwarePusherPlanner.sanitizeBufferedBatches(
             recipeBufferBatches.getValue(),
             DEFAULT_RECIPE_BUFFER_BATCHES);
+        if (cached != null) {
+            return fallback;
+        }
+
         final String raw = StorageCacheUtils.getData(location, RECIPE_BUFFER_BATCHES_KEY);
-        int value = fallback;
+        int value = INHERIT_RECIPE_BUFFER_BATCHES;
         if (raw != null) {
             try {
                 value = RecipeAwarePusherPlanner.sanitizeBufferedBatches(
@@ -252,19 +259,14 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
             }
         }
 
-        RECIPE_BUFFER_BATCHES.putIfAbsent(location.clone(), value);
-
-        /*
-         * An unset machine inherits the server-wide item setting. Do not materialize that fallback
-         * into block data just because the machine ticked or its menu was viewed; otherwise a later
-         * server-wide config change would stop applying to machines the player never customized.
-         * Only repair an existing malformed/out-of-range stored override here. Explicit player
-         * adjustments are persisted by setRecipeBufferBatches(...).
-         */
+        // Repair only malformed *stored overrides*. Never persist the inherited server
+        // setting; leaving it unset allows future server-wide configuration changes.
         if (raw != null && !Integer.toString(value).equals(raw)) {
             StorageCacheUtils.setData(location, RECIPE_BUFFER_BATCHES_KEY, Integer.toString(value));
         }
-        return RECIPE_BUFFER_BATCHES.getOrDefault(location, value);
+        RECIPE_BUFFER_BATCHES.putIfAbsent(location.clone(), value);
+        final int effective = RECIPE_BUFFER_BATCHES.getOrDefault(location, value);
+        return effective == INHERIT_RECIPE_BUFFER_BATCHES ? fallback : effective;
     }
 
     private static void setRecipeBufferBatches(@NotNull Location location, int value) {
