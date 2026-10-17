@@ -100,13 +100,32 @@ final class GridCraftingCommitGuard {
                 throw new IllegalStateException("Crafting ingredient amount was not debited exactly");
             }
         } else if (!empty(after)) {
-            if (before.isSimilar(after) || after.getAmount() != 1) {
-                throw new IllegalStateException("Fully consumed crafting ingredient still exists");
+            // A different name/lore on the same item is not a consumption
+            // receipt. Only the established one-item container replacement
+            // forms authorize a nonempty fully-consumed source slot.
+            final Material container = containerRemainder(before.getType());
+            if (before.getAmount() != 1 || after.getAmount() != 1
+                || container == null || after.getType() != container) {
+                throw new IllegalStateException("Fully consumed ingredient has an unverified replacement");
             }
         }
         menu.markDirty();
         verifyUnchanged(menu, slot, after);
         return after;
+    }
+
+    private static @Nullable Material containerRemainder(@NotNull Material consumed) {
+        // Matches the conventional container forms supported by the existing
+        // Networks consume helper. Do not invent receipts for opaque virtual
+        // items; those require an independently verified addon integration.
+        return switch (consumed) {
+            case WATER_BUCKET, LAVA_BUCKET, MILK_BUCKET, COD_BUCKET, SALMON_BUCKET,
+                 PUFFERFISH_BUCKET, TROPICAL_FISH_BUCKET, AXOLOTL_BUCKET,
+                 POWDER_SNOW_BUCKET, TADPOLE_BUCKET -> Material.BUCKET;
+            case POTION, SPLASH_POTION, LINGERING_POTION, HONEY_BOTTLE, DRAGON_BREATH -> Material.GLASS_BOTTLE;
+            case MUSHROOM_STEW, BEETROOT_SOUP, RABBIT_STEW, SUSPICIOUS_STEW -> Material.BOWL;
+            default -> null;
+        };
     }
 
     private static void requireIngredient(@Nullable ItemStack supplied, @NotNull ItemStack required) {
