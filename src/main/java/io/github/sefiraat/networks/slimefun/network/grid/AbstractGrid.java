@@ -555,9 +555,27 @@ public abstract class AbstractGrid extends NetworkObject {
         @Nullable ItemStack itemStack,
         ClickAction action,
         @NotNull BlockMenu blockMenu) {
-        if (itemStack != null && itemStack.getType() != Material.AIR && !StackUtils.isBlacklisted(itemStack)) {
-            NetworkTransferUtils.moveStackReferenceIntoNetwork(root, blockMenu.getLocation(), itemStack);
+        // This legacy callback receives a clicked/display ItemStack, NOT an
+        // authoritative player inventory slot. A plugin may pass a detached
+        // copy; decrementing that copy would leave the actual player inventory
+        // untouched while minting a second copy inside network storage.
+        //
+        // Preserve valid cursor deposits through the source-verified helper.
+        // Player inventory shift-clicks are handled by the exact-slot handler
+        // in NetworkGrid/NetworkCraftingGrid; do not guess a source slot here.
+        if (itemStack == null || itemStack.getType().isAir() || StackUtils.isBlacklisted(itemStack)) {
+            return;
         }
+
+        final ItemStack authoritativeCursor = player.getItemOnCursor();
+        if (authoritativeCursor == null
+            || authoritativeCursor.getType().isAir()
+            || authoritativeCursor.getAmount() <= 0
+            || !authoritativeCursor.isSimilar(itemStack)) {
+            return;
+        }
+
+        NetworkTransferUtils.movePlayerCursorIntoNetwork(root, blockMenu.getLocation(), player);
     }
 
     @SuppressWarnings("deprecation")
