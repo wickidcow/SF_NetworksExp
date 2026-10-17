@@ -3,8 +3,6 @@ package networksprobe;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import io.github.sefiraat.networks.integrations.infinityexpansion2.InfinityExpansion2Integration;
 import io.github.sefiraat.networks.network.NetworkRoot;
-import io.github.sefiraat.networks.network.NodeType;
-import io.github.sefiraat.networks.network.stackcaches.BarrelIdentity;
 import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
@@ -15,7 +13,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.Map;
-import java.util.Set;
 import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
@@ -37,6 +34,7 @@ public final class PairedIE2StorageProbe extends JavaPlugin {
     private static final String OWNER = "paired-storage-owner";
     private SlimefunItem unit;
     private InfinityExpansion2Integration adapter;
+    private PairedIE2Topology topology;
     private Method tick;
     private String phase;
 
@@ -64,7 +62,8 @@ public final class PairedIE2StorageProbe extends JavaPlugin {
                 tick = unit.getClass().getDeclaredMethod("tick", Block.class);
                 tick.setAccessible(true);
                 location().getWorld().getChunkAt(location()).load();
-                if ("seed".equals(phase)) seed();
+                topology = new PairedIE2Topology(location());
+                if ("seed".equals(phase)) { topology.create(); seed(); }
                 else if ("verify".equals(phase)) restore();
                 else throw new IllegalStateException("Unknown phase: " + phase);
             } catch (Throwable failure) { fail(failure); }
@@ -102,6 +101,7 @@ public final class PairedIE2StorageProbe extends JavaPlugin {
         require(total(menu) == 0, "Seed starts with an empty initialized storage");
         var staging = buffer();
         var root = root();
+        require(topology.resolve() == root, "Unchanged controller ticks must reuse the published root");
         long introduced = 0;
         for (int batch = 0; batch < 3; batch++) {
             staging.replaceExistingItem(0, sample(64));
@@ -126,6 +126,13 @@ public final class PairedIE2StorageProbe extends JavaPlugin {
             tick.invoke(unit, location().getBlock());
             require(total(menu) == TOTAL && count(staging.getItemInSlot(0)) == 0, "Round-trip conservation");
         }
+        // Both monitors touch the same storage. Production discovery, cached
+        // reuse and a genuine controller rebuild must never double its count.
+        require(topology.resolve() == root, "Stable topology must reuse its root after transfers");
+        topology.verifyView(root, sample(1), TOTAL);
+        root = topology.rebuild(root);
+        topology.verifyView(root, sample(1), TOTAL);
+        require(total(menu) == TOTAL, "Topology rebuild must not alter physical/cache quantities");
         var wrong = sample(5);
         wrong.editMeta(meta -> meta.getPersistentDataContainer().set(
             new NamespacedKey("networkstest", "paired_owner"), PersistentDataType.STRING, "other-owner"));
@@ -145,7 +152,8 @@ public final class PairedIE2StorageProbe extends JavaPlugin {
                 if (error != null) { fail(error); return; }
                 try {
                     location().getWorld().save();
-                    finish("PASS: seed real IE2 storage roundtrips=24 total=" + TOTAL + " no-viewer=true");
+                    finish("PASS: seed real IE2 storage roundtrips=24 total=" + TOTAL
+                        + " no-viewer=true topology=controller+2-monitors deduplicated=true rebuilt=true");
                 } catch (Throwable failure) { fail(failure); }
             }));
     }
@@ -167,14 +175,15 @@ public final class PairedIE2StorageProbe extends JavaPlugin {
                     var data = StorageCacheUtils.getBlock(location());
                     var menu = StorageCacheUtils.getMenu(location());
                     var caches = (Map<?, ?>) unit.getClass().getMethod("getCaches").invoke(unit);
-                    if (data != null && data.isDataLoaded() && menu != null && !caches.isEmpty()) {
+                    if (data != null && data.isDataLoaded() && menu != null && !caches.isEmpty()
+                        && topology.ready()) {
                         require(caches.size() == 1, "Exactly one initialized fixture cache is required");
                         cancel();
                         if (seedPhase) seedTransfers(menu);
                         else verify(menu);
                     } else if (++attempts >= 160) {
                         cancel();
-                        throw new AssertionError("IE2 menu/cache initialization did not complete; cache count="
+                        throw new AssertionError("IE2 menu/cache or real Networks topology did not initialize; cache count="
                             + caches.size() + ", menu=" + (menu != null));
                     }
                 } catch (Throwable failure) { cancel(); fail(failure); }
@@ -191,6 +200,8 @@ public final class PairedIE2StorageProbe extends JavaPlugin {
         var assigned = (ItemStack) cache.getClass().getMethod("getItemStack").invoke(cache);
         require(assigned != null && sample(1).isSimilar(assigned), "Nonempty cache retains its item template after restart");
         var root = root();
+        topology.verifyView(root, sample(1), TOTAL);
+        require(topology.resolve() == root, "Restored unchanged topology must also reuse its root");
         var staging = buffer();
         int delivered = 0;
         for (int batch = 0; batch < 3; batch++) {
@@ -206,7 +217,7 @@ public final class PairedIE2StorageProbe extends JavaPlugin {
         require(delivered == TOTAL && total(menu) == 0, "Exactly 192 items recovered, no extra item");
         getLogger().info("Verified unopened storage template and recovered exactly " + delivered + " tagged items after restart.");
         verifyUnassignedBalanceIsNotRelabelled(menu);
-        finish("PASS: verify independent JVM restored and withdrew exactly " + delivered
+        finish("PASS: verify independent JVM rediscovered controller+2-monitors and withdrew exactly " + delivered
             + " tagged items; synthetic unassigned balance was not relabelled");
     }
 
@@ -255,20 +266,7 @@ public final class PairedIE2StorageProbe extends JavaPlugin {
         }
     }
 
-    private NetworkRoot root() {
-        return new NetworkRoot(location().clone().add(2, 0, 0), NodeType.CONTROLLER, 100) {
-            @Override public Set<BarrelIdentity> getInputAbleBarrels() { return Set.of(barrel()); }
-            @Override public Set<BarrelIdentity> getOutputAbleBarrels() { return Set.of(barrel()); }
-        };
-    }
-
-    private BarrelIdentity barrel() {
-        try {
-            var barrel = adapter.getBarrel(location(), unit, true);
-            require(barrel != null, "Actual IE2 adapter must create a storage identity");
-            return barrel;
-        } catch (ReflectiveOperationException failure) { throw new IllegalStateException(failure); }
-    }
+    private NetworkRoot root() { return topology.resolve(); }
 
     private Object cache() throws ReflectiveOperationException {
         var caches = (Map<?, ?>) unit.getClass().getMethod("getCaches").invoke(unit);
@@ -297,7 +295,7 @@ public final class PairedIE2StorageProbe extends JavaPlugin {
     private static int count(ItemStack item) { return item == null || item.getType().isAir() ? 0 : item.getAmount(); }
 
     private BlockMenu buffer() {
-        var where = location().clone().add(1, 0, 0);
+        var where = location().clone().add(3, 0, 3);
         var preset = new BlockMenuPreset("PAIRED_IE2_BUFFER", "Disposable transfer buffer") {
             @Override public void init() { setSize(9); }
             @Override public boolean canOpen(Block block, Player player) { return false; }

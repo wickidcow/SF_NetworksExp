@@ -2,7 +2,8 @@
 """Run real Networks + IE2 candidate JARs in two disposable Purpur JVMs.
 
 No production world is accepted. A new directory and a pinned server hash
-are mandatory. This fixture is not a player-click, full-topology or TPS test.
+are mandatory. A small real controller/monitor topology is exercised; this
+fixture is not a player-click, crash-consistency or TPS benchmark.
 """
 from __future__ import annotations
 
@@ -93,7 +94,8 @@ def main() -> None:
     classes = work / "probe-classes"
     classpath = os.pathsep.join(map(str, [core, networks, *sorted((work / "libraries").rglob("*.jar"))]))
     subprocess.run([javac, "--release", "21", "-cp", classpath, "-d", str(classes),
-                    str(ROOT / "tests/runtime/PairedIE2StorageProbe.java")], check=True)
+                    str(ROOT / "tests/runtime/PairedIE2StorageProbe.java"),
+                    str(ROOT / "tests/runtime/PairedIE2Topology.java")], check=True)
     with zipfile.ZipFile(plugins / "PairedIE2StorageProbe.jar", "w") as archive:
         for compiled in sorted(classes.rglob("*.class")):
             archive.write(compiled, compiled.relative_to(classes))
@@ -109,7 +111,7 @@ def main() -> None:
     manifest = {**revisions, "core_sha256": digest(core), "networks_sha256": digest(networks),
                 "ie2_sha256": digest(ie2), "server_sha256": digest(server), "mojang_sha256": expected,
                 "server": "Purpur 1.21.11 build 2568", "separate_jvms": True,
-                "fixture_routing": "real root with explicit IE2 barrel set; not full topology discovery"}
+                "fixture_routing": "physical controller and two monitors; production adjacency and storage discovery; no barrel overrides"}
     manifest_file = work / "inputs.json"
     manifest_file.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     seed_pid = phase(java, server, work, "seed")
@@ -118,7 +120,7 @@ def main() -> None:
         raise SystemExit("Independent JVM identifiers were expected")
     manifest.update(seed_pid=seed_pid, verify_pid=verify_pid, result="PASS")
     manifest_file.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    print("PASS: paired Networks/IE2 storage conservation and two-JVM reload", flush=True)
+    print("PASS: paired Networks/IE2 discovered storage conservation and two-JVM reload", flush=True)
 
 
 if __name__ == "__main__":
