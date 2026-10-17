@@ -222,6 +222,17 @@ public class NetworkCraftingGrid extends AbstractGrid {
     }
 
     private void tryCraft(@NotNull BlockMenu menu, @NotNull Player player) {
+        if (!GridCraftingCommitGuard.tryEnter(menu)) {
+            return;
+        }
+        try {
+            craftOnce(menu, player);
+        } finally {
+            GridCraftingCommitGuard.exit(menu);
+        }
+    }
+
+    private void craftOnce(@NotNull BlockMenu menu, @NotNull Player player) {
         final NodeDefinition definition = NetworkStorage.getNode(menu.getLocation());
         if (definition == null || definition.getNode() == null) {
             return;
@@ -273,9 +284,7 @@ public class NetworkCraftingGrid extends AbstractGrid {
             return;
         }
 
-        // Event handlers are permitted to inspect and modify menus. A preflight
-        // before NetworkCraftEvent is not sufficient evidence that the recipe
-        // still exists after its callbacks have returned.
+        // Event callbacks may modify either the recipe or the controller state.
         if (!hasExactIngredients(menu, consumptionRecipe)) {
             return;
         }
@@ -284,8 +293,13 @@ public class NetworkCraftingGrid extends AbstractGrid {
         }
 
         final ItemStack outputBefore;
+        final ItemStack plannedOutput;
         try {
             outputBefore = GridCraftingCommitGuard.snapshot(menu.getItemInSlot(CRAFT_OUTPUT_SLOT));
+            plannedOutput = GridCraftingCommitGuard.snapshot(eventOutput);
+            if (plannedOutput == null) {
+                return;
+            }
         } catch (RuntimeException | LinkageError exception) {
             Networks.getInstance().getLogger().log(java.util.logging.Level.SEVERE,
                 "Network Crafting Grid could not snapshot its output; no recipe inputs were consumed at "
@@ -293,35 +307,31 @@ public class NetworkCraftingGrid extends AbstractGrid {
             return;
         }
 
-        // Do not create the crafted item until EVERY exact ingredient was
-        // deducted from its authoritative menu slot. A copied getItemInSlot()
-        // result or silently ignored consumption must never mint crafting output.
+        final ItemStack[] ingredientRemainders;
         try {
-            for (int slotIndex = 0; slotIndex < CRAFT_ITEMS.length; slotIndex++) {
-                ItemStack required = slotIndex < consumptionRecipe.length ? consumptionRecipe[slotIndex] : null;
-                if (required == null || required.getType() == Material.AIR || required.getAmount() <= 0) {
-                    continue;
-                }
-                GridCraftingCommitGuard.consumeVerified(
-                    menu, CRAFT_ITEMS[slotIndex], required);
-            }
+            // Preflight the full matrix, consume it and recheck every debit.
+            // A later ingredient callback must not undo an earlier debit.
+            ingredientRemainders = GridCraftingCommitGuard.consumeVerified(menu, CRAFT_ITEMS, consumptionRecipe);
+            GridCraftingCommitGuard.verifyUnchanged(menu, CRAFT_OUTPUT_SLOT, outputBefore);
         } catch (RuntimeException | LinkageError exception) {
             NetworkTransferUtils.quarantineUnverifiedNetworkRoot(
-                root, menu.getLocation(), eventOutput.getType(), eventOutput.getAmount(), exception);
+                root, menu.getLocation(), plannedOutput.getType(), plannedOutput.getAmount(), exception);
             return;
         }
 
-        // The crafted item is newly manufactured; it is NOT a withdrawal from
-        // the root. A speculative refund could insert a second item even if a
-        // destination setter already wrote a partial/complete output before failing.
+        // Newly manufactured output is not a network withdrawal. Never create
+        // an additional speculative refund after an uncertain menu write.
         try {
-            BlockMenuUtil.pushItem(menu, eventOutput.clone(), CRAFT_OUTPUT_SLOT);
+            BlockMenuUtil.pushItem(menu, plannedOutput.clone(), CRAFT_OUTPUT_SLOT);
             GridCraftingCommitGuard.verifyExactOutputAddition(
-                menu, CRAFT_OUTPUT_SLOT, outputBefore, eventOutput);
+                menu, CRAFT_OUTPUT_SLOT, outputBefore, plannedOutput);
             menu.markDirty();
+            GridCraftingCommitGuard.verifyExactOutputAddition(
+                menu, CRAFT_OUTPUT_SLOT, outputBefore, plannedOutput);
+            GridCraftingCommitGuard.verifyRecipeRemainders(menu, CRAFT_ITEMS, ingredientRemainders);
         } catch (RuntimeException | LinkageError exception) {
             NetworkTransferUtils.quarantineUnverifiedNetworkRoot(
-                root, menu.getLocation(), eventOutput.getType(), eventOutput.getAmount(), exception);
+                root, menu.getLocation(), plannedOutput.getType(), plannedOutput.getAmount(), exception);
             return;
         }
         root.refreshRootItems();
@@ -396,16 +406,24 @@ public class NetworkCraftingGrid extends AbstractGrid {
     }
 
     private void tryReturnItems(@NotNull BlockMenu menu) {
-        // Get node and, if it doesn't exist - escape
-        final NodeDefinition definition = NetworkStorage.getNode(menu.getLocation());
+        if (!GridCraftingCommitGuard.tryEnter(menu)) {
+            return;
+        }
+        try {
+            returnItemsOnce(menu);
+        } finally {
+            GridCraftingCommitGuard.exit(menu);
+        }
+    }
 
+    private void returnItemsOnce(@NotNull BlockMenu menu) {
+        final NodeDefinition definition = NetworkStorage.getNode(menu.getLocation());
         if (definition == null || definition.getNode() == null) {
             return;
         }
 
         for (int recipeSlot : CRAFT_ITEMS) {
             final ItemStack stack = menu.getItemInSlot(recipeSlot);
-
             if (stack == null || stack.getType() == Material.AIR) {
                 continue;
             }
