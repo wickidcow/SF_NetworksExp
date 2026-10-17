@@ -1046,8 +1046,11 @@ require("size() >= THRESHOLD" in smart_crafting,
         "Smart Crafting Grid entity threshold comparison is reversed")
 require("findRecipe" in recipe_registry and "Math.max(input.length, recipe.length)" in recipe_registry,
         "exact full-matrix recipe matching is missing")
-require("Consume every exact ingredient before creating the output" in crafting_grid,
-        "classic Crafting Grid atomic consume-before-output path is missing")
+require("GridCraftingCommitGuard.consumeVerified" in crafting_grid
+        and "GridCraftingCommitGuard.verifyExactOutputAddition" in crafting_grid
+        and "if (!hasExactIngredients(menu, consumptionRecipe))" in crafting_grid
+        and "rollbackNetworkWithdrawal" not in crafting_grid,
+        "classic Crafting Grid verified ingredient/output transaction is missing")
 require("Consume the complete exact matrix before adding the result" in crafting_grid_new,
         "new Crafting Grid atomic multi-craft path is missing")
 require("returnItems(root, fetcheds, blockMenu)" in auto_crafter,
