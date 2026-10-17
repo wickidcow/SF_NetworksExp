@@ -39,6 +39,34 @@ public final class NetworkTransferUtils {
         RootRollbackSafetyHold.reset();
     }
 
+    /** Direct root APIs must observe the same controller quarantine as helper withdrawals. */
+    public static boolean isNetworkRootHeld(
+        @NotNull NetworkRoot root, @NotNull Location accessor) {
+        return RootRollbackSafetyHold.isHeld(root, accessor);
+    }
+
+    /**
+     * Storage adapters can write items before throwing without providing a receipt.
+     * Block all further network access after an unverified write or withdrawal.
+     * A controller rebuild is not proof that storage has been reconciled.
+     */
+    public static void quarantineUnverifiedNetworkRoot(
+        @NotNull NetworkRoot root,
+        @NotNull Location accessor,
+        @NotNull Material material,
+        int possiblyAffected,
+        @NotNull Throwable cause) {
+        RootRollbackSafetyHold.hold(root, accessor, material, possiblyAffected);
+        TransferAudit.recordFailure();
+        Networks.getInstance().getLogger().log(
+            java.util.logging.Level.SEVERE,
+            "Networks quarantined a controller after an unverified storage operation at "
+                + accessor + ". Up to " + possiblyAffected + " " + material
+                + " item(s) may require reconciliation. No automatic refund or world drop"
+                + " is authorized by this exception. Save logs and inspect storage before restarting.",
+            cause);
+    }
+
     /** Source-network rollback holds are read-only until a controlled restart. */
     public static int getHeldWithdrawalSourceCount() {
         return RootRollbackSafetyHold.count();

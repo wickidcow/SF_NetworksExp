@@ -66,7 +66,7 @@ public final class InfinityExpansion2Barrel extends BarrelIdentity {
             return received <= 0 ? null : StackUtils.getAsQuantity(target, received);
         } catch (RuntimeException | LinkageError exception) {
             Networks.getSupportedPluginManager().disableOptionalIntegration("InfinityExpansion2", exception);
-            return null;
+            throw new IllegalStateException("InfinityExpansion2 output withdrawal is unverified", exception);
         }
     }
 
@@ -91,6 +91,7 @@ public final class InfinityExpansion2Barrel extends BarrelIdentity {
             }
         } catch (RuntimeException | LinkageError exception) {
             Networks.getSupportedPluginManager().disableOptionalIntegration("InfinityExpansion2", exception);
+            throw new IllegalStateException("InfinityExpansion2 deposit acceptance is unverified", exception);
         }
     }
 

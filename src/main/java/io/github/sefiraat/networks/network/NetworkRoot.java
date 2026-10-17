@@ -29,6 +29,7 @@ import io.github.sefiraat.networks.slimefun.network.NetworkGreedyBlock;
 import io.github.sefiraat.networks.slimefun.network.NetworkPowerNode;
 import io.github.sefiraat.networks.slimefun.network.NetworkQuantumStorage;
 import io.github.sefiraat.networks.utils.StackUtils;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.ncbpfluffybear.fluffymachines.items.Barrel;
 import lombok.Getter;
@@ -759,6 +760,10 @@ public class NetworkRoot extends NetworkNode {
     @Deprecated(forRemoval = true)
     @Nullable
     public ItemStack getItemStack(@NotNull ItemRequest request) {
+        final Location controller = getNodePosition();
+        if (controller != null && NetworkTransferUtils.isNetworkRootHeld(this, controller)) {
+            return null;
+        }
         ItemStack stackToReturn = null;
 
         if (request.getAmount() <= 0) {
@@ -1441,6 +1446,10 @@ public class NetworkRoot extends NetworkNode {
             "This method is deprecated and will be removed in the future. Use addItemStack0(Location, ItemStack) instead.")
     @Deprecated(forRemoval = true)
     public void addItemStack(@NotNull ItemStack incoming) {
+        final Location controller = getNodePosition();
+        if (controller != null && NetworkTransferUtils.isNetworkRootHeld(this, controller)) {
+            return;
+        }
         if (StackUtils.isBlacklisted(incoming)) {
             return;
         }
@@ -1808,6 +1817,10 @@ public class NetworkRoot extends NetworkNode {
     }
 
     public ItemStack getItemStack0(@NotNull Location accessor, @NotNull ItemRequest request) {
+        if (NetworkTransferUtils.isNetworkRootHeld(this, accessor)) {
+            return null;
+        }
+        try {
         ItemStack stackToReturn = null;
 
         if (request.getAmount() <= 0) {
@@ -2210,6 +2223,13 @@ public class NetworkRoot extends NetworkNode {
         // Netex - Record end
 
         return stackToReturn;
+        } catch (RuntimeException | LinkageError unverifiedWithdrawal) {
+            final ItemStack requested = request.getItemStack();
+            final Material affected = requested == null ? Material.BARRIER : requested.getType();
+            NetworkTransferUtils.quarantineUnverifiedNetworkRoot(
+                this, accessor, affected, Math.max(0, request.getAmount()), unverifiedWithdrawal);
+            throw unverifiedWithdrawal;
+        }
     }
 
     public void addItem(@NotNull Location accessor, @NotNull ItemStack incoming) {
@@ -2237,6 +2257,12 @@ public class NetworkRoot extends NetworkNode {
     }
 
     public void addItemStack0(@NotNull Location accessor, @NotNull ItemStack incoming) {
+        if (NetworkTransferUtils.isNetworkRootHeld(this, accessor)) {
+            return;
+        }
+        final Material offeredMaterial = incoming.getType();
+        final int originallyOffered = incoming.getAmount();
+        try {
         if (!allowAccessInput(accessor)) {
             FeedbackSendable.sendFeedback0(accessor, FeedbackType.ROOT_LIMITING_ACCESS_INPUT);
             return;
@@ -2479,6 +2505,11 @@ public class NetworkRoot extends NetworkNode {
         // Netex - Record start
         tryRecord(accessor, beforeItemStack, incoming.getAmount());
         // Netex - Record end
+        } catch (RuntimeException | LinkageError unverifiedDeposit) {
+            NetworkTransferUtils.quarantineUnverifiedNetworkRoot(
+                this, accessor, offeredMaterial, Math.max(0, originallyOffered), unverifiedDeposit);
+            throw unverifiedDeposit;
+        }
     }
 
     public Map<Location, BarrelIdentity> getMapInputAbleBarrels() {
