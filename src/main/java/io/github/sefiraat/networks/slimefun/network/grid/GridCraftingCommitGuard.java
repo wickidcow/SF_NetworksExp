@@ -1,5 +1,6 @@
 package io.github.sefiraat.networks.slimefun.network.grid;
 
+import io.github.sefiraat.networks.utils.StackUtils;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
@@ -109,8 +110,11 @@ final class GridCraftingCommitGuard {
     }
 
     private static void requireIngredient(@Nullable ItemStack supplied, @NotNull ItemStack required) {
+        // Eligibility must match NetworkCraftingGrid.hasExactIngredients and
+        // the existing recipe engine. Receipt checks use the actual physical
+        // source snapshot, not the possibly less-strict recipe template.
         if (required.getAmount() <= 0 || empty(supplied)
-            || supplied.getAmount() < required.getAmount() || !supplied.isSimilar(required)) {
+            || supplied.getAmount() < required.getAmount() || !StackUtils.itemsMatch(supplied, required)) {
             throw new IllegalStateException("Required crafting ingredient changed before consumption");
         }
     }

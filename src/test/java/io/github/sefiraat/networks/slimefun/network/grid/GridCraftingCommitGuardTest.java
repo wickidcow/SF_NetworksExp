@@ -1,12 +1,18 @@
 package io.github.sefiraat.networks.slimefun.network.grid;
 
+import com.balugaq.netex.api.enums.MinecraftVersion;
+import com.ytdd9527.networksexpansion.core.managers.ConfigManager;
+import io.github.sefiraat.networks.Networks;
+import io.github.sefiraat.networks.utils.StackUtils;
 import java.util.concurrent.atomic.AtomicReference;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 import org.mockbukkit.mockbukkit.MockBukkit;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -22,10 +28,19 @@ class GridCraftingCommitGuardTest {
     private final AtomicReference<ItemStack> second = new AtomicReference<>();
     private final AtomicReference<ItemStack> result = new AtomicReference<>();
     private BlockMenu menu;
+    private MockedStatic<Networks> networks;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws ClassNotFoundException {
         MockBukkit.mock();
+        networks = mockStatic(Networks.class);
+        Networks plugin = mock(Networks.class);
+        ConfigManager config = mock(ConfigManager.class);
+        networks.when(Networks::getInstance).thenReturn(plugin);
+        networks.when(Networks::getConfigManager).thenReturn(config);
+        when(plugin.getMCVersion()).thenReturn(MinecraftVersion.UNKNOWN);
+        when(config.useBukkitItemComparison()).thenReturn(true);
+        Class.forName(StackUtils.class.getName());
         menu = mock(BlockMenu.class);
         when(menu.getSize()).thenReturn(9);
         ingredient.set(new ItemStack(Material.STONE, 4));
@@ -36,8 +51,12 @@ class GridCraftingCommitGuardTest {
 
     @AfterEach
     void tearDown() {
-        GridCraftingCommitGuard.exit(menu);
-        MockBukkit.unmock();
+        try {
+            if (menu != null) GridCraftingCommitGuard.exit(menu);
+            if (networks != null) networks.close();
+        } finally {
+            MockBukkit.unmock();
+        }
     }
 
     @Test
@@ -194,6 +213,37 @@ class GridCraftingCommitGuardTest {
         result.set(new ItemStack(Material.DIAMOND, 16));
         assertThrows(IllegalStateException.class,
             () -> GridCraftingCommitGuard.verifyUnchanged(menu, OUTPUT, expected));
+    }
+
+    @Test
+    void recipeEquivalenceDoesNotRequireErasingOriginalItemMetadata() {
+        ItemStack required = new ItemStack(Material.STONE, 2);
+        ItemStack physical = ingredient.get();
+        var meta = physical.getItemMeta();
+        meta.displayName(Component.text("Retain the player's item identity"));
+        physical.setItemMeta(meta);
+        assertFalse(physical.isSimilar(required));
+        debitFirst();
+        try (MockedStatic<StackUtils> matching = mockStatic(StackUtils.class)) {
+            matching.when(() -> StackUtils.itemsMatch(any(ItemStack.class), eq(required))).thenReturn(true);
+            assertDoesNotThrow(() -> GridCraftingCommitGuard.consumeVerified(menu, INGREDIENT, required));
+        }
+        assertEquals(2, ingredient.get().getAmount());
+        assertEquals(meta, ingredient.get().getItemMeta());
+    }
+
+    @Test
+    void permissiveRecipeMatchingNeverWeakensPhysicalDebitIdentity() {
+        ItemStack required = new ItemStack(Material.STONE, 2);
+        doAnswer(invocation -> {
+            ingredient.set(new ItemStack(Material.EMERALD, 2));
+            return null;
+        }).when(menu).consumeItem(INGREDIENT, 2, true);
+        try (MockedStatic<StackUtils> matching = mockStatic(StackUtils.class)) {
+            matching.when(() -> StackUtils.itemsMatch(any(ItemStack.class), eq(required))).thenReturn(true);
+            assertThrows(IllegalStateException.class,
+                () -> GridCraftingCommitGuard.consumeVerified(menu, INGREDIENT, required));
+        }
     }
 
     private void debitFirst() {
