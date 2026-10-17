@@ -746,6 +746,9 @@ require('"recipe-aware-buffer-batches"' in abstract_network_pusher
         and "getRecipeBufferBatches(blockMenu.getLocation())" in abstract_network_pusher
         and "control.setAmount(bufferedBatches)" in abstract_network_pusher
         and "RECIPE_BUFFER_BATCHES.putIfAbsent(location.clone(), value)" in abstract_network_pusher
+        and "StorageCacheUtils.isBlock(location, getId())" in abstract_network_pusher
+        and "liveMenu == expectedMenu ? liveMenu : null" in abstract_network_pusher
+        and "if (raw != null && !Integer.toString(value).equals(raw))" in abstract_network_pusher
         and "RECIPE_BUFFER_BATCHES.remove(event.getBlock().getLocation())" in abstract_network_pusher
         and "public static void resetRuntimeState()" in abstract_network_pusher
         and "RECIPE_BUFFER_BATCHES.clear()" in abstract_network_pusher
