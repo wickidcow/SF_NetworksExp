@@ -567,11 +567,9 @@ public abstract class AbstractGrid extends NetworkObject {
             return;
         }
 
-        final ItemStack authoritativeCursor = player.getItemOnCursor();
-        if (authoritativeCursor == null
-            || authoritativeCursor.getType().isAir()
-            || authoritativeCursor.getAmount() <= 0
-            || !authoritativeCursor.isSimilar(itemStack)) {
+        // A displayed/shift-clicked item is only a hint; the cursor is the
+        // actual source that the verified helper can read back and commit.
+        if (!GridCursorSourceGuard.matchesLiveCursor(itemStack, player.getItemOnCursor())) {
             return;
         }
 
