@@ -1,22 +1,23 @@
-name: Pin Paper 26.3 Build 194 (Staging Metadata)
+name: Native Paper 26.3 Build 194 Staging
 
-# One-time isolated integrity probe for the test server, not a release workflow.
+# Isolated compatibility verification. Does not publish, tag, or deploy plugin JARs.
 on:
   push:
     branches:
       - test/paper-26-3-build194-native-20261016
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  paper194_metadata:
-    name: Verify official Paper 26.3 build 194 checksum
+  verify_official_build:
+    name: Verify official PaperMC build 194 SHA-256
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Download build metadata from official PaperMC API
+      - name: Check out staging scripts
+        uses: actions/checkout@v6
+      - name: Fetch official Paper build metadata
         shell: bash
         run: |
           set -euo pipefail
@@ -25,59 +26,105 @@ jobs:
             --retry-all-errors --retry-delay 2 --max-time 100 \
             -H "User-Agent: SF_NetworksExp-staging/1.0 (https://github.com/wickidcow/SF_NetworksExp)" \
             "https://fill.papermc.io/v3/projects/paper/versions/26.3/builds" \
-            --output paper-metadata/paper-26.3-builds.json
-      - name: Select only official stable build 194 and show its SHA-256
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json
-          import re
-          from pathlib import Path
-          from urllib.parse import urlparse
-
-          root = Path("paper-metadata")
-          data = json.loads((root / "paper-26.3-builds.json").read_text())
-          builds = data if isinstance(data, list) else data.get("builds", [])
-          exact = [item for item in builds if isinstance(item, dict) and item.get("id") == 194]
-          if len(exact) != 1:
-              raise SystemExit("Paper 26.3 build 194 unavailable or ambiguous")
-          entry = exact[0]
-          if entry.get("channel") != "STABLE":
-              raise SystemExit("Paper 26.3 build 194 is not marked STABLE")
-          download = entry.get("downloads", {}).get("server:default")
-          if not isinstance(download, dict):
-              raise SystemExit("Paper 26.3 build 194 has no default server JAR")
-          url = download.get("url", "")
-          host = urlparse(url).hostname
-          if urlparse(url).scheme != "https" or not host or (
-              host != "papermc.io" and not host.endswith(".papermc.io")
-          ):
-              raise SystemExit("Untrusted PaperMC download URL")
-          sha = download.get("checksums", {}).get("sha256", "")
-          if not isinstance(sha, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", sha):
-              raise SystemExit("Build 194 has no valid SHA-256")
-          normalized = {
-              "minecraft_version": "26.3",
-              "id": 194,
-              "channel": entry["channel"],
-              "downloads": {
-                  "server:default": {
-                      "url": url,
-                      "checksums": {"sha256": sha.lower()},
-                  }
-              },
-          }
-          (root / "paper-26.3-194.json").write_text(
-              json.dumps(normalized, indent=2) + "\n", encoding="utf-8"
-          )
-          print("VERIFIED OFFICIAL PAPER 26.3 BUILD 194 SHA-256: " + sha.lower())
-          print("No plugin release or Minecraft server was started by this metadata probe.")
-          PY
-      - name: Retain normalized PaperMC evidence
+            --output paper-metadata/builds.json
+          python3 scripts/prepare_paper_26_3_194_runtime.py \
+            paper-metadata/builds.json \
+            paper-metadata/paper-26.3-194.json \
+            paper-metadata/paper-26.3-194.url \
+            paper-metadata/paper-26.3-194.sha256
+          test "$(cat paper-metadata/paper-26.3-194.sha256)" = "5fac0b6937b7aecea1b5b40e6a992f7b0802e4271413be35a6913d30df960784"
+      - name: Keep normalized official metadata
         uses: actions/upload-artifact@v7
         with:
           name: paper-26-3-build194-official-metadata
-          path: paper-metadata/paper-26.3-194.json
-          retention-days: 14
+          path: paper-metadata/paper-26.3-194.*
           if-no-files-found: error
+          retention-days: 14
+
+  native_runtime_194:
+    name: Paper 26.3 build 194 native manager and Quantum restart
+    needs: verify_official_build
+    runs-on: ubuntu-latest
+    timeout-minutes: 32
+    steps:
+      - name: Check out Networks staging code
+        uses: actions/checkout@v6
+      - name: Download official pinned build 194 metadata
+        uses: actions/download-artifact@v8
+        with:
+          name: paper-26-3-build194-official-metadata
+          path: .ci/paper194-meta
+      - name: Download exact green Slimefun Legacy JAR from RC run 1286
+        uses: actions/download-artifact@v8
+        with:
+          name: slimefun-legacy-core
+          path: .ci/release-core
+          repository: wickidcow/SF_NetworksExp
+          run-id: 38992781543
+          github-token: ${{ github.token }}
+      - name: Download exact green Networks 1.0.59-rc1 JAR from RC run 1286
+        uses: actions/download-artifact@v8
+        with:
+          name: SF_Networks1.0.59-rc1.jar
+          path: .ci/networks-candidate
+          repository: wickidcow/SF_NetworksExp
+          run-id: 38992781543
+          github-token: ${{ github.token }}
+      - name: Use Java 25 for native Paper 26.3 runtime
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+      - name: Download verified Paper build 194 and validate candidate identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s .ci/release-core/Slimefun-Legacy-Core.jar
+          test -s .ci/networks-candidate/SF_Networks1.0.59-rc1.jar
+          echo "3e5655cad883fa0d2cf20bb44074955ded57762d2d76675837682edbb95982b2  .ci/networks-candidate/SF_Networks1.0.59-rc1.jar" | sha256sum --check
+          test "$(cat .ci/paper194-meta/paper-26.3-194.sha256)" = "5fac0b6937b7aecea1b5b40e6a992f7b0802e4271413be35a6913d30df960784"
+          curl --fail --location --silent --show-error --retry 3 \
+            --retry-all-errors --retry-delay 2 --max-time 360 \
+            -H "User-Agent: SF_NetworksExp-staging/1.0 (https://github.com/wickidcow/SF_NetworksExp)" \
+            "$(cat .ci/paper194-meta/paper-26.3-194.url)" \
+            --output .ci/paper-26.3-194.jar
+          echo "5fac0b6937b7aecea1b5b40e6a992f7b0802e4271413be35a6913d30df960784  .ci/paper-26.3-194.jar" | sha256sum --check
+      - name: Native Paper 26.3 build 194 managers and Quantum conservation probe
+        timeout-minutes: 11
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/crafter_manager_runtime_probe_194.py \
+            .ci/release-core/Slimefun-Legacy-Core.jar \
+            .ci/networks-candidate/SF_Networks1.0.59-rc1.jar \
+            .ci/paper-26.3-194.jar \
+            build/paper-26.3-194-runtime \
+            .ci/paper194-meta/paper-26.3-194.json
+      - name: Check saved Quantum Storage across two separate Paper build 194 JVM processes
+        timeout-minutes: 12
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/quantum_restart_runtime_probe_194.py \
+            .ci/release-core/Slimefun-Legacy-Core.jar \
+            .ci/networks-candidate/SF_Networks1.0.59-rc1.jar \
+            .ci/paper-26.3-194.jar \
+            build/paper-26.3-194-restart \
+            .ci/paper194-meta/paper-26.3-194.json
+      - name: Retain native test evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: networks-paper-26-3-build194-native-evidence
+          path: |
+            build/paper-26.3-194-runtime/inputs.json
+            build/paper-26.3-194-runtime/patch.log
+            build/paper-26.3-194-runtime/server-console.log
+            build/paper-26.3-194-restart/inputs.json
+            build/paper-26.3-194-restart/patch.log
+            build/paper-26.3-194-restart/seed-console.log
+            build/paper-26.3-194-restart/verify-console.log
+            build/paper-26.3-194-restart/seed-result.txt
+            build/paper-26.3-194-restart/verify-result.txt
+          if-no-files-found: warn
+          retention-days: 14
