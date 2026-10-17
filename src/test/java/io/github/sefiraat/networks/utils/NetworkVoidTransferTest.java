@@ -197,6 +197,39 @@ class NetworkVoidTransferTest {
         verify(menu, times(1)).replaceExistingItem(SLOT, null);
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void voidSourceWriteFailurePreservesNewlyProducedItems(boolean dirtyFailure) {
+        doAnswer(call -> {
+            accept(call.getArgument(1), 4);
+            source.set(diamond(20));
+            return null;
+        }).when(root).addItemStack0(eq(accessor), any(ItemStack.class));
+        AtomicBoolean failOnce = new AtomicBoolean(true);
+        if (dirtyFailure) {
+            doAnswer(call -> {
+                if (failOnce.getAndSet(false)) throw new IllegalStateException("Injected dirty failure");
+                return null;
+            }).when(menu).markDirty();
+        } else {
+            doAnswer(call -> {
+                source.set(call.getArgument(1));
+                if (failOnce.getAndSet(false)) throw new IllegalStateException("Injected write-then-throw");
+                return null;
+            }).when(menu).replaceExistingItem(eq(SLOT), nullable(ItemStack.class));
+        }
+
+        var result = NetworkTransferUtils.moveMenuSlotIntoNetworkAndVoidRemainder(root, accessor, menu, SLOT, 64);
+
+        assertTrue(result.failed());
+        assertEquals(0, result.moved());
+        assertEquals(0, accepted);
+        // The verified pre-commit output was 16 original + 4 newly generated.
+        assertEquals(20, remaining());
+        assertEquals(4, TransferAudit.snapshot().depositCompensationRequested());
+        assertEquals(4, TransferAudit.snapshot().depositCompensationRetrieved());
+    }
+
     @Test
     void failedWriterMustNotRestoreOrClearAThirdPartyReplacement() {
         acceptNormally(4);

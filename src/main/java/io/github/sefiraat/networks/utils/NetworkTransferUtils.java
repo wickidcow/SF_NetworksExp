@@ -973,37 +973,58 @@ public final class NetworkTransferUtils {
             return result.failed() ? MenuDepositResult.FAILED : MenuDepositResult.NONE;
         }
 
-        // Keep the clear inside the source-commit boundary. A second, unconditional caller-side
-        // write could erase an external replacement after compensation or a failed source write.
-        final ItemStack committedSource = voidRemainder && !result.failed() ? null : result.remainingStack();
+        // A producing machine may add more of the SAME item during addItemStack0's callbacks.
+        // Its newly generated output is not part of our detached offer. Preserve that increase
+        // while removing exactly the amount already accepted by the network. A changed identity
+        // or a decrease remains ambiguous and fails closed without touching the source menu.
+        final ItemStack sourceBeforeCommit;
+        final ItemStack committedSource;
+        ItemStack observedSource = null;
         try {
-            // The detached network offer can trigger callbacks before we commit this source slot.
-            // Check even zero-acceptance offers before intentionally discarding their remainder.
-            final ItemStack currentSource = sourceMenu.getItemInSlot(slot);
-            if (!sourceStillMatches(originalSource, currentSource)) {
-                final String sourceContext =
-                    describeMenuSourceChange(sourceMenu.getLocation(), slot, originalSource, currentSource);
-                compensateCommittedDeposit(root, accessor, originalSource, result.moved(),
-                    sourceMenu.getLocation(), "changed menu source " + sourceContext,
-                    new IllegalStateException(
-                        "The menu input changed during the network deposit " + sourceContext));
-                return MenuDepositResult.FAILED;
+            observedSource = sourceMenu.getItemInSlot(slot);
+            if (observedSource == null
+                || observedSource.getAmount() < originalSource.getAmount()
+                || !originalSource.isSimilar(observedSource)) {
+                throw new IllegalStateException("The menu input changed during the network deposit "
+                    + describeMenuSourceChange(sourceMenu.getLocation(), slot, originalSource, observedSource));
             }
-            if (voidRemainder && !result.failed()) {
-                sourceMenu.replaceExistingItem(slot, null);
+
+            sourceBeforeCommit = snapshotMenuSource(observedSource);
+            // A clean VOID offer discards only the ORIGINAL output, never new production.
+            // Failed offers may have accepted some items but may not void the remainder.
+            final int remaining = voidRemainder && !result.failed()
+                ? sourceBeforeCommit.getAmount() - originalSource.getAmount()
+                : sourceBeforeCommit.getAmount() - result.moved();
+            if (remaining < 0) {
+                throw new IllegalStateException("Negative reconciled menu source amount");
+            }
+            if (remaining == 0) {
+                committedSource = null;
             } else {
-                sourceMenu.replaceExistingItem(slot, result.remainingStack());
+                committedSource = snapshotMenuSource(sourceBeforeCommit);
+                committedSource.setAmount(remaining);
             }
+        } catch (RuntimeException | LinkageError sourceFailure) {
+            final String sourceContext =
+                describeMenuSourceChange(sourceMenu.getLocation(), slot, originalSource, observedSource);
+            compensateCommittedDeposit(root, accessor, originalSource, result.moved(),
+                sourceMenu.getLocation(), "changed menu source " + sourceContext, sourceFailure);
+            return MenuDepositResult.FAILED;
+        }
+
+        // Source updates and dirty marking form one commit boundary. A write-then-throw
+        // must restore the latest verified source (including any newly generated output),
+        // not the stale pre-offer snapshot. Never restore over another plugin's replacement.
+        try {
+            sourceMenu.replaceExistingItem(slot, committedSource);
             sourceMenu.markDirty();
             return new MenuDepositResult(result.moved(), result.failed());
         } catch (RuntimeException | LinkageError exception) {
             try {
                 ItemStack current = sourceMenu.getItemInSlot(slot);
-                // A failed write may have already installed our remainder or VOID clear. Restore
-                // only if the slot still contains our original or our partially committed state.
-                if (sourceStillMatches(originalSource, current)
+                if (sourceStillMatches(sourceBeforeCommit, current)
                     || sourceStillMatches(committedSource, current)) {
-                    sourceMenu.replaceExistingItem(slot, originalSource);
+                    sourceMenu.replaceExistingItem(slot, sourceBeforeCommit);
                     sourceMenu.markDirty();
                 }
             } catch (RuntimeException | LinkageError restorationFailure) {

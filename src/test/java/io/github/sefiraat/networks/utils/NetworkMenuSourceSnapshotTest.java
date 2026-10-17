@@ -167,6 +167,56 @@ class NetworkMenuSourceSnapshotTest {
         verify(menu, never()).replaceExistingItem(anyInt(), nullable(ItemStack.class));
     }
 
+    @ParameterizedTest
+    @CsvSource({"false,0", "false,4", "false,16", "true,0", "true,4", "true,16"})
+    void producingMachineCanGrowIdenticalOutputDuringDeposit(boolean voidMode, int amount) {
+        doAnswer(call -> {
+            accept(call.getArgument(1), amount);
+            // Simulates an IE generator producing four new items during the transfer.
+            source.set(new RebuildingDustStack(dust(20)));
+            return null;
+        }).when(root).addItemStack0(eq(accessor), any(ItemStack.class));
+
+        int moved;
+        if (voidMode) {
+            var result = NetworkTransferUtils.moveMenuSlotIntoNetworkAndVoidRemainder(root, accessor, menu, SLOT, 64);
+            assertFalse(result.failed());
+            moved = result.moved();
+        } else {
+            moved = NetworkTransferUtils.moveMenuSlotIntoNetwork(root, accessor, menu, SLOT, 64);
+        }
+
+        assertEquals(amount, moved);
+        assertEquals(amount, accepted);
+        // VOID may discard only the original unaccepted output, never the extra four.
+        assertEquals(voidMode ? 4 : 20 - amount, remaining());
+        assertEquals(20, remaining() + accepted + (voidMode ? 16 - amount : 0));
+        assertOriginalMetadata(source.get());
+        if (amount > 0 || voidMode) verify(menu).markDirty();
+        else verify(menu, never()).markDirty();
+        assertEquals(0, TransferAudit.snapshot().depositCompensationRequested());
+        verify(root, never()).getItemStack0(any(), any());
+    }
+
+    @Test
+    void partialNetworkFailureWithProductionDoesNotVoidNewOutput() {
+        doAnswer(call -> {
+            accept(call.getArgument(1), 4);
+            source.set(new RebuildingDustStack(dust(20)));
+            throw new IllegalStateException("Injected partial destination failure");
+        }).when(root).addItemStack0(eq(accessor), any(ItemStack.class));
+
+        var result = NetworkTransferUtils.moveMenuSlotIntoNetworkAndVoidRemainder(root, accessor, menu, SLOT, 64);
+
+        assertTrue(result.failed());
+        assertEquals(4, result.moved());
+        assertEquals(4, accepted);
+        assertEquals(16, remaining());
+        assertEquals(20, remaining() + accepted);
+        assertOriginalMetadata(source.get());
+        assertEquals(0, TransferAudit.snapshot().depositCompensationRequested());
+    }
+
     @Test
     void failedPartialDepositKeepsTheOriginalMetadataOnItsRemainder() {
         doAnswer(call -> {
