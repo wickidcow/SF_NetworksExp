@@ -1445,6 +1445,377 @@ public class NetworkRoot extends NetworkNode {
         reason =
             "This method is deprecated and will be removed in the future. Use addItemStack0(Location, ItemStack) instead.")
     @Deprecated(forRemoval = true)
+    public void addItemStack(@NotNull ItemStack incoming) {
+        final Location controller = getNodePosition();
+        if (controller != null && NetworkTransferUtils.isNetworkRootHeld(this, controller)) {
+            return;
+        }
+        if (StackUtils.isBlacklisted(incoming)) {
+            return;
+        }
+
+        for (BlockMenu blockMenu : getAdvancedGreedyBlockMenus()) {
+            final ItemStack template = blockMenu.getItemInSlot(AdvancedGreedyBlock.TEMPLATE_SLOT);
+
+            if (template == null || template.getType() == Material.AIR || !StackUtils.itemsMatch(incoming, template)) {
+                continue;
+            }
+
+            blockMenu.markDirty();
+            BlockMenuUtil.pushItem(blockMenu, incoming, ADVANCED_GREEDY_BLOCK_AVAILABLE_SLOTS);
+            // Given we have found a match, it doesn't matter if the item moved or not, we will not bring it in
+            return;
+        }
+
+        // Run for matching greedy blocks
+        for (BlockMenu blockMenu : getGreedyBlockMenus()) {
+            final ItemStack template = blockMenu.getItemInSlot(NetworkGreedyBlock.TEMPLATE_SLOT);
+
+            if (template == null || template.getType() == Material.AIR || !StackUtils.itemsMatch(incoming, template)) {
+                continue;
+            }
+
+            blockMenu.markDirty();
+            BlockMenuUtil.pushItem(blockMenu, incoming, GREEDY_BLOCK_AVAILABLE_SLOTS[0]);
+            // Given we have found a match, it doesn't matter if the item moved or not, we will not bring it in
+            return;
+        }
+
+        // Run for matching barrels
+        for (BarrelIdentity barrelIdentity : getInputAbleBarrels()) {
+            if (barrelIdentity.canAccept(incoming)) {
+                barrelIdentity.depositItemStack(incoming);
+
+                // All distributed, can escape
+                if (incoming.getAmount() == 0) {
+                    return;
+                }
+            }
+        }
+
+        for (StorageUnitData cache : getInputAbleCargoStorageUnitDatas().keySet()) {
+            cache.depositItemStack(incoming, true);
+
+            if (incoming.getAmount() == 0) {
+                return;
+            }
+        }
+
+        for (BlockMenu blockMenu : getCellMenus()) {
+            if (!isRealCell(blockMenu)) continue;
+            blockMenu.markDirty();
+            BlockMenuUtil.pushItem(blockMenu, incoming, CELL_AVAILABLE_SLOTS);
+            if (incoming.getAmount() == 0) {
+                return;
+            }
+        }
+    }
+
+    @Override
+    public long retrieveBlockCharge() {
+        return 0;
+    }
+
+    public void addRootPower(long power) {
+        this.rootPower += power;
+    }
+
+    public void removeRootPower(long power) {
+        if (power <= 0) {
+            return;
+        }
+
+        long removed = 0L;
+        for (Location node : powerNodes) {
+            final SlimefunItem item = StorageCacheUtils.getSlimefunItem(node);
+            if (item instanceof NetworkPowerNode powerNode) {
+                final long charge = powerNode.getChargeLong(node);
+                if (charge <= 0L) {
+                    continue;
+                }
+                final long toRemove = Math.min(power - removed, charge);
+                powerNode.removeCharge(node, toRemove);
+                // Keep the cached total aligned with the amount actually removed from this node.
+                // Subtracting the whole request for every contributing node can drive rootPower negative.
+                this.rootPower = Math.max(0L, this.rootPower - toRemove);
+                removed = removed + toRemove;
+            }
+            if (removed >= power) {
+                return;
+            }
+        }
+    }
+
+    @Warning(
+        reason =
+            "This method is deprecated and will be removed in the future. Use getItemStacks0(Location, List<ItemRequest>) instead.")
+    @Deprecated(forRemoval = true)
+    @NotNull
+    public List<ItemStack> getItemStacks(@NotNull List<ItemRequest> itemRequests) {
+        List<ItemStack> retrievedItems = new ArrayList<>();
+
+        for (ItemRequest request : itemRequests) {
+            ItemStack retrieved = getItemStack(request);
+            if (retrieved != null) {
+                retrievedItems.add(retrieved);
+            }
+        }
+        return retrievedItems;
+    }
+
+    @NotNull
+    public List<ItemStack> getItemStacks0(@NotNull Location location, @NotNull List<ItemRequest> itemRequests) {
+        List<ItemStack> retrievedItems = new ArrayList<>();
+        for (ItemRequest request : itemRequests) {
+            ItemStack retrieved = getItemStack0(location, request);
+            if (retrieved != null) {
+                retrievedItems.add(retrieved);
+            }
+        }
+        return retrievedItems;
+    }
+
+    @NotNull
+    public List<BarrelIdentity> getBarrels(
+        @NotNull Predicate<BarrelIdentity> filter,
+        NetworkRootLocateStorageEvent.Strategy strategy,
+        boolean includeEmpty) {
+
+        final Set<Location> directionalMonitors = new HashSet<>();
+        directionalMonitors.addAll(this.inputOnlyMonitors);
+        directionalMonitors.addAll(this.outputOnlyMonitors);
+
+        final List<BarrelIdentity> barrelSet = new ArrayList<>();
+        for (Location testLocation : collectMonitorStorageTargets(directionalMonitors, true)) {
+            final BarrelIdentity supportedBarrel = getBarrel(testLocation, includeEmpty);
+            if (supportedBarrel != null && filter.test(supportedBarrel)) {
+                barrelSet.add(supportedBarrel);
+            }
+        }
+
+        NetworkRootLocateStorageEvent event =
+            new NetworkRootLocateStorageEvent(this, StorageType.BARREL, strategy, Bukkit.isPrimaryThread());
+        Bukkit.getPluginManager().callEvent(event);
+        return barrelSet;
+    }
+
+    @NotNull
+    public Map<StorageUnitData, Location> getCargoStorageUnitDatas(
+        NetworkRootLocateStorageEvent.Strategy strategy, boolean includeEmpty) {
+        final Map<StorageUnitData, Location> dataSet = new HashMap<>();
+
+        final Set<Location> directionalMonitors = new HashSet<>();
+        directionalMonitors.addAll(this.inputOnlyMonitors);
+        directionalMonitors.addAll(this.outputOnlyMonitors);
+        for (Location testLocation : collectMonitorStorageTargets(directionalMonitors, true)) {
+            final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(testLocation);
+
+            if (slimefunItem instanceof NetworksDrawer) {
+                final StorageUnitData data = getCargoStorageUnitData(testLocation);
+                if (data != null) {
+                    dataSet.put(data, testLocation);
+                }
+            }
+        }
+
+        NetworkRootLocateStorageEvent event =
+            new NetworkRootLocateStorageEvent(this, StorageType.DRAWER, strategy, Bukkit.isPrimaryThread());
+        Bukkit.getPluginManager().callEvent(event);
+        return dataSet;
+    }
+
+    @NotNull
+    public Set<BarrelIdentity> getInputAbleBarrels() {
+        if (this.inputAbleBarrels != null) {
+            return this.inputAbleBarrels;
+        }
+
+        final Set<BarrelIdentity> barrelSet = ConcurrentHashMap.newKeySet();
+
+        for (Location testLocation : collectMonitorStorageTargets(this.inputOnlyMonitors, true)) {
+            final BarrelIdentity supportedBarrel = getBarrel(testLocation, true);
+            if (supportedBarrel != null) {
+                barrelSet.add(supportedBarrel);
+            }
+        }
+
+        this.inputAbleBarrels = barrelSet;
+        this.mapInputAbleBarrels = new ConcurrentHashMap<>();
+        for (BarrelIdentity storage : barrelSet) {
+            this.mapInputAbleBarrels.put(storage.getLocation(), storage);
+        }
+        NetworkRootLocateStorageEvent event =
+            new NetworkRootLocateStorageEvent(this, StorageType.BARREL, true, false, Bukkit.isPrimaryThread());
+        Bukkit.getPluginManager().callEvent(event);
+        return barrelSet;
+    }
+
+    @NotNull
+    public Set<BarrelIdentity> getOutputAbleBarrels() {
+
+        if (this.outputAbleBarrels != null) {
+            return this.outputAbleBarrels;
+        }
+
+        final Set<BarrelIdentity> barrelSet = ConcurrentHashMap.newKeySet();
+
+        for (Location testLocation : collectMonitorStorageTargets(this.outputOnlyMonitors, true)) {
+            final BarrelIdentity supportedBarrel = getBarrel(testLocation, false);
+            if (supportedBarrel != null) {
+                barrelSet.add(supportedBarrel);
+            }
+        }
+
+        this.outputAbleBarrels = barrelSet;
+        this.mapOutputAbleBarrels = new ConcurrentHashMap<>();
+        for (BarrelIdentity storage : barrelSet) {
+            this.mapOutputAbleBarrels.put(storage.getLocation(), storage);
+        }
+        NetworkRootLocateStorageEvent event =
+            new NetworkRootLocateStorageEvent(this, StorageType.BARREL, false, true, Bukkit.isPrimaryThread());
+        Bukkit.getPluginManager().callEvent(event);
+        return barrelSet;
+    }
+
+    @NotNull
+    public Map<StorageUnitData, Location> getInputAbleCargoStorageUnitDatas() {
+        if (this.inputAbleCargoStorageUnitDatas != null) {
+            return this.inputAbleCargoStorageUnitDatas;
+        }
+
+        final Map<StorageUnitData, Location> dataSet = new ConcurrentHashMap<>();
+
+        for (Location testLocation : collectMonitorStorageTargets(this.inputOnlyMonitors, true)) {
+            final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(testLocation);
+
+            if (slimefunItem instanceof NetworksDrawer) {
+                final StorageUnitData data = getCargoStorageUnitData(testLocation);
+                if (data != null) {
+                    dataSet.put(data, testLocation);
+                }
+            }
+        }
+
+        this.inputAbleCargoStorageUnitDatas = dataSet;
+        this.mapInputAbleCargoStorageUnits = new ConcurrentHashMap<>();
+        for (Map.Entry<StorageUnitData, Location> entry : dataSet.entrySet()) {
+            mapInputAbleCargoStorageUnits.put(entry.getValue(), entry.getKey());
+        }
+        NetworkRootLocateStorageEvent event =
+            new NetworkRootLocateStorageEvent(this, StorageType.DRAWER, true, false, Bukkit.isPrimaryThread());
+        Bukkit.getPluginManager().callEvent(event);
+        return dataSet;
+    }
+
+    @NotNull
+    public Map<StorageUnitData, Location> getOutputAbleCargoStorageUnitDatas() {
+        if (this.outputAbleCargoStorageUnitDatas != null) {
+            return this.outputAbleCargoStorageUnitDatas;
+        }
+
+        final Map<StorageUnitData, Location> dataSet = new ConcurrentHashMap<>();
+
+        for (Location testLocation : collectMonitorStorageTargets(this.outputOnlyMonitors, true)) {
+            final SlimefunItem slimefunItem = StorageCacheUtils.getSlimefunItem(testLocation);
+
+            if (slimefunItem instanceof NetworksDrawer) {
+                final StorageUnitData data = getCargoStorageUnitData(testLocation);
+                if (data != null) {
+                    dataSet.put(data, testLocation);
+                }
+            }
+        }
+
+        this.outputAbleCargoStorageUnitDatas = dataSet;
+        this.mapOutputAbleCargoStorageUnits = new ConcurrentHashMap<>();
+        for (Map.Entry<StorageUnitData, Location> entry : dataSet.entrySet()) {
+            mapOutputAbleCargoStorageUnits.put(entry.getValue(), entry.getKey());
+        }
+        NetworkRootLocateStorageEvent event =
+            new NetworkRootLocateStorageEvent(this, StorageType.DRAWER, false, true, Bukkit.isPrimaryThread());
+        Bukkit.getPluginManager().callEvent(event);
+        return dataSet;
+    }
+
+    /**
+     * Returns storage-derived views to the same lazy state as a newly created root.
+     *
+     * <p>Stable controller ticks reuse the topology object graph, so they invalidate these
+     * derived views instead of eagerly rebuilding or copying the full network. The next real
+     * storage operation reconstructs only the views it needs.</p>
+     */
+    public void invalidateRootItems() {
+        this.barrels = null;
+        this.cargoStorageUnitDatas = null;
+        this.inputAbleBarrels = null;
+        this.outputAbleBarrels = null;
+        this.inputAbleCargoStorageUnitDatas = null;
+        this.outputAbleCargoStorageUnitDatas = null;
+        this.mapInputAbleBarrels = null;
+        this.mapOutputAbleBarrels = null;
+        this.mapInputAbleCargoStorageUnits = null;
+        this.mapOutputAbleCargoStorageUnits = null;
+        this.allItemsView = null;
+    }
+
+    public boolean refreshRootItems() {
+        invalidateRootItems();
+
+        getBarrels();
+        getCargoStorageUnitDatas();
+        getInputAbleBarrels();
+        getOutputAbleBarrels();
+        getInputAbleCargoStorageUnitDatas();
+        getOutputAbleCargoStorageUnitDatas();
+        return true;
+    }
+
+    @Nullable
+    public BarrelIdentity accessInputAbleBarrel(Location barrelLocation) {
+        return getMapInputAbleBarrels().get(barrelLocation);
+    }
+
+    @Nullable
+    public BarrelIdentity accessOutputAbleBarrel(Location barrelLocation) {
+        return getMapOutputAbleBarrels().get(barrelLocation);
+    }
+
+    @Nullable
+    public StorageUnitData accessInputAbleDrawerData(Location drawerLocation) {
+        return accessInputAbleCargoStorageUnitData(drawerLocation);
+    }
+
+    @Nullable
+    public StorageUnitData accessOutputAbleDrawerData(Location drawerLocation) {
+        return accessOutputAbleCargoStorageUnitData(drawerLocation);
+    }
+
+    @Nullable
+    public StorageUnitData accessInputAbleCargoStorageUnitData(Location storageUnitLocation) {
+        return getMapInputAbleCargoStorageUnits().get(storageUnitLocation);
+    }
+
+    @Nullable
+    public StorageUnitData accessOutputAbleCargoStorageUnitData(Location storageUnitLocation) {
+        return getMapOutputAbleCargoStorageUnits().get(storageUnitLocation);
+    }
+
+    @Nullable
+    public ItemStack requestItem(@NotNull Location accessor, @NotNull ItemRequest request) {
+        return getItemStack0(accessor, request);
+    }
+
+    @Nullable
+    public ItemStack requestItem(@NotNull Location accessor, @NotNull ItemStack itemStack) {
+        return requestItem(accessor, new ItemRequest(itemStack, itemStack.getAmount()));
+    }
+
+    public void tryRecord(@NotNull Location accessor, @NotNull ItemRequest request) {
+        if (recordFlow && itemFlowRecord != null) {
+            itemFlowRecord.addAction(accessor, request);
+        }
+    }
+
     /**
      * Menu APIs owned by other Slimefun cores/addons may return a defensive
      * ItemStack copy. Mutating that copy is NOT evidence items were consumed.
