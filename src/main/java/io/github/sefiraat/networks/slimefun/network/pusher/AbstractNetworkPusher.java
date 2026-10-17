@@ -18,6 +18,8 @@ import io.github.thebusybiscuit.slimefun4.api.items.ItemSetting;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.items.settings.IntRangeSetting;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
+import io.github.thebusybiscuit.slimefun4.libraries.dough.common.ChatColors;
+import io.github.thebusybiscuit.slimefun4.utils.ChatUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -28,10 +30,13 @@ import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -58,7 +63,12 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
     private static final AtomicInteger BACKOFF_PRUNE_COUNTER = new AtomicInteger();
 
     private static final String RECIPE_AWARE_KEY = "recipe-aware";
+    private static final String RECIPE_BUFFER_BATCHES_KEY = "recipe-aware-buffer-batches";
     private static final int DEFAULT_RECIPE_BUFFER_BATCHES = 8;
+    // Zero means a machine has no override. Read the current server setting on demand so
+    // a configuration reload still reaches existing, non-customized pushers.
+    private static final int INHERIT_RECIPE_BUFFER_BATCHES = 0;
+    private static final Map<Location, Integer> RECIPE_BUFFER_BATCHES = new ConcurrentHashMap<>();
 
     private static final int NORTH_SLOT = 11;
     private static final int SOUTH_SLOT = 29;
@@ -102,15 +112,92 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
             return;
         }
 
+        final Location location = blockMenu.getLocation();
         final boolean enabled = isRecipeAware(blockMenu);
-        blockMenu.replaceExistingItem(modeSlot, createRecipeAwareModeStack(enabled));
+        blockMenu.replaceExistingItem(modeSlot, createRecipeAwareModeStack(location, enabled));
         blockMenu.addMenuClickHandler(modeSlot, (player, slot, itemStack, clickAction) -> {
+            // An admin or another addon can replace a block while its old menu is still open.
+            // Never write per-machine settings through a stale menu, for any click type.
+            if (getCurrentRecipeAwareMenu(location, blockMenu) == null) {
+                player.sendMessage(ChatColors.color("&cThat Network Pusher is no longer available."));
+                return false;
+            }
+            if (clickAction.isShiftClicked()) {
+                final int delta = clickAction.isRightClicked() ? 1 : -1;
+                final int next = RecipeAwarePusherPlanner.stepBufferedBatches(
+                    getRecipeBufferBatches(location),
+                    delta);
+                setRecipeBufferBatches(location, next);
+                clearBackoffForSource(location);
+                blockMenu.replaceExistingItem(
+                    modeSlot,
+                    createRecipeAwareModeStack(location, isRecipeAware(blockMenu)));
+                return false;
+            }
+
+            if (clickAction.isRightClicked()) {
+                player.sendMessage(ChatColors.color(
+                    "&eEnter the Recipe-Aware batch target (1-" + RecipeAwarePusherPlanner.MAX_BUFFERED_BATCHES + ")"));
+                ChatUtils.awaitInput(player, input -> {
+                    final BlockMenu liveMenu = getCurrentRecipeAwareMenu(location, blockMenu);
+                    if (liveMenu == null) {
+                        RECIPE_BUFFER_BATCHES.remove(location);
+                        player.sendMessage(ChatColors.color(
+                            "&cThat Network Pusher is no longer available."));
+                        return;
+                    }
+
+                    try {
+                        final int value = RecipeAwarePusherPlanner.parseBufferedBatches(input);
+                        if (!RecipeAwarePusherPlanner.isValidBufferedBatches(value)) {
+                            player.sendMessage(ChatColors.color(
+                                "&cEnter a whole number between "
+                                    + RecipeAwarePusherPlanner.MIN_BUFFERED_BATCHES
+                                    + " and "
+                                    + RecipeAwarePusherPlanner.MAX_BUFFERED_BATCHES
+                                    + "."));
+                        } else {
+                            setRecipeBufferBatches(location, value);
+                            clearBackoffForSource(location);
+                            player.sendMessage(ChatColors.color(
+                                "&aRecipe-Aware batch target set to &b" + value + "&a."));
+                        }
+
+                        liveMenu.replaceExistingItem(
+                            modeSlot,
+                            createRecipeAwareModeStack(location, isRecipeAware(liveMenu)));
+                        liveMenu.open(player);
+                    } catch (NumberFormatException exception) {
+                        player.sendMessage(ChatColors.color(
+                            "&cEnter a whole number between "
+                                + RecipeAwarePusherPlanner.MIN_BUFFERED_BATCHES
+                                + " and "
+                                + RecipeAwarePusherPlanner.MAX_BUFFERED_BATCHES
+                                + "."));
+                        liveMenu.open(player);
+                    }
+                });
+                return false;
+            }
+
             final boolean next = !isRecipeAware(blockMenu);
-            StorageCacheUtils.setData(blockMenu.getLocation(), RECIPE_AWARE_KEY, Boolean.toString(next));
-            clearBackoffForSource(blockMenu.getLocation());
-            blockMenu.replaceExistingItem(modeSlot, createRecipeAwareModeStack(next));
+            StorageCacheUtils.setData(location, RECIPE_AWARE_KEY, Boolean.toString(next));
+            clearBackoffForSource(location);
+            blockMenu.replaceExistingItem(modeSlot, createRecipeAwareModeStack(location, next));
             return false;
         });
+    }
+
+    private @Nullable BlockMenu getCurrentRecipeAwareMenu(
+        @NotNull Location location,
+        @NotNull BlockMenu expectedMenu) {
+
+        if (!StorageCacheUtils.isBlock(location, getId())) {
+            return null;
+        }
+
+        final BlockMenu liveMenu = StorageCacheUtils.getMenu(location);
+        return liveMenu == expectedMenu ? liveMenu : null;
     }
 
     private int getRecipeAwareModeSlot() {
@@ -118,23 +205,89 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
         return slots == null || slots.length == 0 ? -1 : slots[0];
     }
 
-    private @NotNull ItemStack createRecipeAwareModeStack(boolean enabled) {
-        final int bufferedBatches = recipeBufferBatches.getValue();
-        return new CustomItemStack(
+    private @NotNull ItemStack createRecipeAwareModeStack(
+        @NotNull Location location,
+        boolean enabled) {
+
+        final int bufferedBatches = getRecipeBufferBatches(location);
+        final ItemStack control = new CustomItemStack(
             enabled ? Material.CRAFTING_TABLE : Material.HOPPER,
             enabled ? "&aRecipe-Aware Mode: ON" : "&7Recipe-Aware Mode: OFF",
             "",
             "&fOFF: template items use normal pusher behavior.",
             "&fON: duplicate template slots and template stack amounts",
             "&fdefine the ingredient quantities for one recipe.",
-            "&fThe pusher keeps up to &b" + bufferedBatches + " &frecipe batches",
+            "&fBatch target: &b" + bufferedBatches,
+            "&fThe pusher keeps up to that many recipe batches",
             "&fbuffered in the target's valid input slots.",
             "",
-            "&eClick to toggle.");
+            "&eLeft-click: toggle Recipe-Aware mode",
+            "&eRight-click: enter an exact batch target",
+            "&eShift-left: -1 batch",
+            "&eShift-right: +1 batch");
+        control.setAmount(bufferedBatches);
+        return control;
     }
 
     private static boolean isRecipeAware(@NotNull BlockMenu blockMenu) {
         return Boolean.parseBoolean(StorageCacheUtils.getData(blockMenu.getLocation(), RECIPE_AWARE_KEY));
+    }
+
+    private int getRecipeBufferBatches(@NotNull Location location) {
+        final Integer cached = RECIPE_BUFFER_BATCHES.get(location);
+        if (cached != null && cached != INHERIT_RECIPE_BUFFER_BATCHES) {
+            return cached;
+        }
+
+        final int fallback = RecipeAwarePusherPlanner.sanitizeBufferedBatches(
+            recipeBufferBatches.getValue(),
+            DEFAULT_RECIPE_BUFFER_BATCHES);
+        if (cached != null) {
+            return fallback;
+        }
+
+        final String raw = StorageCacheUtils.getData(location, RECIPE_BUFFER_BATCHES_KEY);
+        int value = INHERIT_RECIPE_BUFFER_BATCHES;
+        if (raw != null) {
+            try {
+                value = RecipeAwarePusherPlanner.sanitizeBufferedBatches(
+                    Integer.parseInt(raw),
+                    fallback);
+            } catch (NumberFormatException ignored) {
+                value = fallback;
+            }
+        }
+
+        // Repair only malformed *stored overrides*. Never persist the inherited server
+        // setting; leaving it unset allows future server-wide configuration changes.
+        if (raw != null && !Integer.toString(value).equals(raw)) {
+            StorageCacheUtils.setData(location, RECIPE_BUFFER_BATCHES_KEY, Integer.toString(value));
+        }
+        RECIPE_BUFFER_BATCHES.putIfAbsent(location.clone(), value);
+        final int effective = RECIPE_BUFFER_BATCHES.getOrDefault(location, value);
+        return effective == INHERIT_RECIPE_BUFFER_BATCHES ? fallback : effective;
+    }
+
+    private static void setRecipeBufferBatches(@NotNull Location location, int value) {
+        final int valid = RecipeAwarePusherPlanner.sanitizeBufferedBatches(
+            value,
+            DEFAULT_RECIPE_BUFFER_BATCHES);
+        // Only advertise the new runtime value after block persistence succeeds.
+        StorageCacheUtils.setData(location, RECIPE_BUFFER_BATCHES_KEY, Integer.toString(valid));
+        RECIPE_BUFFER_BATCHES.put(location.clone(), valid);
+    }
+
+    @Override
+    public void onPlace(@NotNull BlockPlaceEvent event) {
+        // Reuse of the same location must not inherit an older machine's cached target.
+        RECIPE_BUFFER_BATCHES.remove(event.getBlock().getLocation());
+        super.onPlace(event);
+    }
+
+    @Override
+    protected void onBreak(@NotNull BlockBreakEvent event) {
+        RECIPE_BUFFER_BATCHES.remove(event.getBlock().getLocation());
+        super.onBreak(event);
     }
 
     private void tryPushItem(@NotNull BlockMenu blockMenu) {
@@ -218,7 +371,7 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
                     NetworkTransferUtils.getMenuInsertCapacity(targetMenu, template, slots);
                 transferAmount = RecipeAwarePusherPlanner.calculateTransferAmount(
                     request.amount,
-                    recipeBufferBatches.getValue(),
+                    getRecipeBufferBatches(blockMenu.getLocation()),
                     existing,
                     insertCapacity);
 
@@ -328,6 +481,12 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
             }
         }
         return (int) count;
+    }
+
+    public static void resetRuntimeState() {
+        RECIPE_BUFFER_BATCHES.clear();
+        FAILED_REQUEST_BACKOFF.clear();
+        BACKOFF_PRUNE_COUNTER.set(0);
     }
 
     private static void clearBackoffForSource(@NotNull org.bukkit.Location location) {

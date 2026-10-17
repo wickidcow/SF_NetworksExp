@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.59-rc1 — development staging candidate (not published)
+
+- Combine the recipe-aware Network, More and Best Pusher template buffering and per-machine 1–64 batch targets with bounded, numeric-only chat settings.
+- Verify destination menu additions after insertion callbacks, partial writes or exceptions; compensate only the provably uncommitted remainder. Quarantine destinations with unverifiable writes or persistence failures and report affected machines in Networks Doctor.
+- Use observed player cursor and inventory contents to reconcile successful, rejected and partially committed network withdrawals; preserve existing item identities and historical partial-stack/empty-slot order.
+- Preserve the separate InfinityExpansion2 2.0.14 HopperMachine synchronization fix; source-change detection and compensation remain active for other asynchronous producers.
+- Preserve all 289 registered Slimefun item IDs, recipes, saved-world/database layout, Quantum behavior, routing preferences, transfer limits and Java 21 bytecode.
+- Label the test JAR `SF_Networks1.0.59-rc1.jar` so it cannot be mistaken for the public 1.0.58 asset. Publishing from the RC workflow is explicitly disabled even for manual and tag triggers.
+
+**Not a stable release:** CI success does not certify all third-party storage adapters, ambiguous rollback compensation, network-to-network transfer atomicity, live recipe-batch fairness or AlbionMC server TPS. Validate Paper 26.3, IE2 machines and busy Pushers on a copied server before requesting release.
+
 ## 1.0.58 — vanilla inventory transaction integrity (release candidate)
 
 - Harden ordinary Network Vanilla Pusher inventory commits with detached destination snapshots plus a live pusher-source-slot guard. Destination callbacks can no longer commit against a stale source ItemStack reference; external source replacements are preserved and the destination is rolled back.

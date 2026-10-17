@@ -22,6 +22,7 @@ import io.github.sefiraat.networks.utils.ChunkWarmupQueue;
 import io.github.sefiraat.networks.utils.FailureCircuitBreaker;
 import io.github.sefiraat.networks.utils.TopologyDirtyQueue;
 import io.github.sefiraat.networks.utils.TransferAudit;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -247,6 +248,17 @@ public final class NetworksDoctor {
             addSample(details, "Transfer compensation is incomplete: rollback="
                 + transfer.outstandingRollbackItems() + ", deposit=" + transfer.uncompensatedDepositItems());
         }
+        if (NetworkTransferUtils.getHeldMenuDestinationCount() > 0) {
+            issues++;
+            // Critical transfer holds must not be hidden by the ordinary
+            // SAMPLE_LIMIT if unrelated registry warnings already filled it.
+            details.add("Unverifiable destination transfer(s): "
+                + NetworkTransferUtils.getHeldMenuDestinationCount()
+                + " menu(s) held. Inspect these machines before replacing or restarting them.");
+            for (String hold : NetworkTransferUtils.getHeldMenuDestinationSummaries(5)) {
+                details.add("Held destination: " + hold);
+            }
+        }
 
         addRuntimeDetails(details);
         details.add("Registry: " + nodeCount + " nodes across "
@@ -281,7 +293,8 @@ public final class NetworksDoctor {
             + " committed, deposits=" + transfer.depositCommitted() + '/' + transfer.depositOffered()
             + " committed, rollback outstanding=" + transfer.outstandingRollbackItems()
             + ", deposit compensation outstanding=" + transfer.uncompensatedDepositItems()
-            + ", safety-dropped=" + transfer.safetyDropped() + ", failures=" + transfer.failures());
+            + ", safety-dropped=" + transfer.safetyDropped() + ", failures=" + transfer.failures()
+            + ", held-machine-destinations=" + NetworkTransferUtils.getHeldMenuDestinationCount());
         if (unloaded > 0L) {
             details.add("Skipped " + unloaded + " entries in unloaded chunks; Doctor never force-loads chunks");
         }

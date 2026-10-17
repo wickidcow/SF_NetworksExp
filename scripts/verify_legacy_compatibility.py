@@ -98,6 +98,8 @@ networks_drawer = read("src/main/java/com/ytdd9527/networksexpansion/implementat
 fluffy_barrel = read("src/main/java/io/github/sefiraat/networks/network/barrel/FluffyBarrel.java")
 root_ready_event = read("src/main/java/com/balugaq/netex/api/events/NetworkRootReadyEvent.java")
 network_controller = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkController.java")
+abstract_network_pusher = read("src/main/java/io/github/sefiraat/networks/slimefun/network/pusher/AbstractNetworkPusher.java")
+recipe_aware_pusher_planner = read("src/main/java/io/github/sefiraat/networks/slimefun/network/pusher/RecipeAwarePusherPlanner.java")
 network_monitor = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkMonitor.java")
 quantum_cache = read("src/main/java/io/github/sefiraat/networks/network/stackcaches/QuantumCache.java")
 quantum_workbench = read("src/main/java/io/github/sefiraat/networks/slimefun/network/NetworkQuantumWorkbench.java")
@@ -236,13 +238,16 @@ require("extends RecipeChoice.ExactChoice" not in simple_recipe_choice,
         "SimpleRecipeChoice still extends final RecipeChoice.ExactChoice")
 require("implements RecipeChoice" in simple_recipe_choice, "SimpleRecipeChoice no longer implements RecipeChoice")
 # Public release metadata must move as one unit so JAR/plugin/workflow versions cannot drift.
-require('version = "1.0.58"' in build, "Gradle public version must remain 1.0.58")
-require('VERSION: "1.0.58"' in build_workflow
-        and 'OUTPUT_NAME: "SF_Networks1.0.58.jar"' in build_workflow,
-        "release workflow public version/JAR name must remain 1.0.58")
-require('VERSION: "1.0.58"' in compatibility_workflow
-        and 'OUTPUT_NAME: "SF_Networks1.0.58.jar"' in compatibility_workflow,
-        "compatibility workflow public version/JAR name must remain 1.0.58")
+require(public_version == "1.0.59-rc1", "staging candidate must retain the 1.0.59-rc1 version")
+require('version = "1.0.59-rc1"' in build, "staging Gradle version must remain 1.0.59-rc1")
+require('VERSION: "1.0.59-rc1"' in build_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.59-rc1.jar"' in build_workflow,
+        "staging workflow version/JAR name must remain 1.0.59-rc1")
+require('VERSION: "1.0.59-rc1"' in compatibility_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.59-rc1.jar"' in compatibility_workflow,
+        "staging compatibility version/JAR name must remain 1.0.59-rc1")
+require("!contains(env.VERSION, '-rc')" in build_workflow,
+        "staging RC builds must never publish a release even on manual/tag events")
 require("actions/upload-artifact@v7" in compatibility_workflow
         and "name: slimefun-legacy-core" in compatibility_workflow
         and "Slimefun-Legacy-Core.jar" in compatibility_workflow,
@@ -737,6 +742,28 @@ require("NetworkRoot previous = NETWORKS.put(location, candidate);" in network_c
         and "FailureCircuitBreaker.FailureSnapshot recoverySnapshot" in network_controller
         and "FailureCircuitBreaker.FailureSnapshot previous =" not in network_controller,
         "controller rebuild success handling reuses the previous local variable name")
+require('"recipe-aware-buffer-batches"' in abstract_network_pusher
+        and "ChatUtils.awaitInput(player" in abstract_network_pusher
+        and "RecipeAwarePusherPlanner.parseBufferedBatches(input)" in abstract_network_pusher
+        and "raw.length() > 16" in recipe_aware_pusher_planner
+        and "Only decimal digits are allowed" in recipe_aware_pusher_planner
+        and "clickAction.isShiftClicked()" in abstract_network_pusher
+        and "getRecipeBufferBatches(blockMenu.getLocation())" in abstract_network_pusher
+        and "control.setAmount(bufferedBatches)" in abstract_network_pusher
+        and "RECIPE_BUFFER_BATCHES.putIfAbsent(location.clone(), value)" in abstract_network_pusher
+        and "StorageCacheUtils.isBlock(location, getId())" in abstract_network_pusher
+        and "liveMenu == expectedMenu ? liveMenu : null" in abstract_network_pusher
+        and "if (raw != null && !Integer.toString(value).equals(raw))" in abstract_network_pusher
+        and "RECIPE_BUFFER_BATCHES.remove(event.getBlock().getLocation())" in abstract_network_pusher
+        and "public static void resetRuntimeState()" in abstract_network_pusher
+        and "RECIPE_BUFFER_BATCHES.clear()" in abstract_network_pusher
+        and "FAILED_REQUEST_BACKOFF.clear()" in abstract_network_pusher
+        and "AbstractNetworkPusher.resetRuntimeState()" in networks_java
+        and "MIN_BUFFERED_BATCHES = 1" in recipe_aware_pusher_planner
+        and "MAX_BUFFERED_BATCHES = 64" in recipe_aware_pusher_planner
+        and "stepBufferedBatches" in recipe_aware_pusher_planner,
+        "Recipe-Aware pusher batch target must be persisted per machine and player-adjustable")
+
 require("candidate = cachedRoot;" in network_controller
         and "refreshStableRoot(candidate, location)" in network_controller
         and "STABLE_ROOT_REUSES.increment()" in network_controller
