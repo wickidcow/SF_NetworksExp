@@ -97,6 +97,7 @@ class NetworkVoidTransferTest {
             try {
                 if (networks != null) networks.close();
             } finally {
+                NetworkTransferUtils.resetRuntimeSafety();
                 TransferAudit.reset();
                 MockBukkit.unmock();
             }
@@ -262,6 +263,8 @@ class NetworkVoidTransferTest {
         assertSame(external, source.get());
         assertEquals(4, accepted); // A failed rollback is not falsely reported as conservation.
         assertEquals(0, TransferAudit.snapshot().depositCompensationRetrieved());
+        assertEquals(1, NetworkTransferUtils.getHeldWithdrawalSourceCount(),
+            "An incompletely compensated network must stay quarantined");
         assertPassStopped();
         verify(menu, never()).replaceExistingItem(anyInt(), nullable(ItemStack.class));
     }
@@ -290,6 +293,33 @@ class NetworkVoidTransferTest {
         assertSame(original, source.get());
         verify(root, never()).addItemStack0(any(), any());
         verify(menu, never()).replaceExistingItem(anyInt(), nullable(ItemStack.class));
+    }
+
+    @Test
+    void heldNetworkCannotVoidAProducingMachineOutput() {
+        RootRollbackSafetyHold.hold(root, accessor, Material.DIAMOND, 4);
+
+        var result = NetworkTransferUtils.moveMenuSlotIntoNetworkAndVoidRemainder(
+            root, accessor, menu, SLOT, 64);
+
+        assertTrue(result.failed(), "Quarantine is a failed transfer, not permission for VOID");
+        assertEquals(0, result.moved());
+        assertEquals(16, remaining());
+        assertSame(original, source.get());
+        verify(root, never()).addItemStack0(any(), any());
+        verify(menu, never()).replaceExistingItem(anyInt(), nullable(ItemStack.class));
+    }
+
+    @Test
+    void heldNetworkStopsLineVoidBeforeSourceSlotAccess() {
+        RootRollbackSafetyHold.hold(root, accessor, Material.DIAMOND, 4);
+
+        LineOperationUtil.grabItem(accessor, root, menu, TransportMode.VOID, 64);
+
+        assertSame(original, source.get());
+        verify(menu, never()).getItemInSlot(anyInt());
+        verify(menu, never()).replaceExistingItem(anyInt(), nullable(ItemStack.class));
+        verify(root, never()).addItemStack0(any(), any());
     }
 
     @Test

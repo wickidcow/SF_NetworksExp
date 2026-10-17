@@ -5,6 +5,7 @@ import com.balugaq.netex.api.helpers.SupportedCraftingTableRecipes;
 import com.balugaq.netex.utils.BlockMenuUtil;
 import com.balugaq.netex.utils.Lang;
 import io.github.sefiraat.networks.NetworkStorage;
+import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.events.NetworkCraftEvent;
 import io.github.sefiraat.networks.network.GridItemRequest;
 import io.github.sefiraat.networks.network.NetworkRoot;
@@ -221,12 +222,26 @@ public class NetworkCraftingGrid extends AbstractGrid {
     }
 
     private void tryCraft(@NotNull BlockMenu menu, @NotNull Player player) {
+        if (!GridCraftingCommitGuard.tryEnter(menu)) {
+            return;
+        }
+        try {
+            craftOnce(menu, player);
+        } finally {
+            GridCraftingCommitGuard.exit(menu);
+        }
+    }
+
+    private void craftOnce(@NotNull BlockMenu menu, @NotNull Player player) {
         final NodeDefinition definition = NetworkStorage.getNode(menu.getLocation());
         if (definition == null || definition.getNode() == null) {
             return;
         }
 
         final NetworkRoot root = definition.getNode().getRoot();
+        if (NetworkTransferUtils.isNetworkRootHeld(root, menu.getLocation())) {
+            return;
+        }
         final ItemStack[] displayedRecipe = snapshotRecipe(menu);
         ItemStack[] consumptionRecipe = displayedRecipe;
 
@@ -269,27 +284,56 @@ public class NetworkCraftingGrid extends AbstractGrid {
             return;
         }
 
-        // Consume every exact ingredient before creating the output.
-        for (int slotIndex = 0; slotIndex < CRAFT_ITEMS.length; slotIndex++) {
-            ItemStack required = slotIndex < consumptionRecipe.length ? consumptionRecipe[slotIndex] : null;
-            if (required == null || required.getType() == Material.AIR || required.getAmount() <= 0) {
-                continue;
-            }
-            BlockMenuUtil.consumeItem(menu, CRAFT_ITEMS[slotIndex], Math.max(1, required.getAmount()), true);
+        // Event callbacks may modify either the recipe or the controller state.
+        if (!hasExactIngredients(menu, consumptionRecipe)) {
+            return;
+        }
+        if (NetworkTransferUtils.isNetworkRootHeld(root, menu.getLocation())) {
+            return;
         }
 
-        final ItemStack outputRemainder = BlockMenuUtil.pushItem(menu, eventOutput.clone(), CRAFT_OUTPUT_SLOT);
-        if (outputRemainder != null
-            && outputRemainder.getType() != Material.AIR
-            && outputRemainder.getAmount() > 0) {
-            NetworkTransferUtils.rollbackNetworkWithdrawal(
-                root,
-                menu.getLocation(),
-                outputRemainder,
-                menu.getLocation(),
-                "classic crafting-grid output commit");
+        final ItemStack outputBefore;
+        final ItemStack plannedOutput;
+        try {
+            outputBefore = GridCraftingCommitGuard.snapshot(menu.getItemInSlot(CRAFT_OUTPUT_SLOT));
+            plannedOutput = GridCraftingCommitGuard.snapshot(eventOutput);
+            if (plannedOutput == null) {
+                return;
+            }
+        } catch (RuntimeException | LinkageError exception) {
+            Networks.getInstance().getLogger().log(java.util.logging.Level.SEVERE,
+                "Network Crafting Grid could not snapshot its output; no recipe inputs were consumed at "
+                    + menu.getLocation(), exception);
+            return;
         }
-        menu.markDirty();
+
+        final ItemStack[] ingredientRemainders;
+        try {
+            // Preflight the full matrix, consume it and recheck every debit.
+            // A later ingredient callback must not undo an earlier debit.
+            ingredientRemainders = GridCraftingCommitGuard.consumeVerified(menu, CRAFT_ITEMS, consumptionRecipe);
+            GridCraftingCommitGuard.verifyUnchanged(menu, CRAFT_OUTPUT_SLOT, outputBefore);
+        } catch (RuntimeException | LinkageError exception) {
+            NetworkTransferUtils.quarantineUnverifiedNetworkRoot(
+                root, menu.getLocation(), plannedOutput.getType(), plannedOutput.getAmount(), exception);
+            return;
+        }
+
+        // Newly manufactured output is not a network withdrawal. Never create
+        // an additional speculative refund after an uncertain menu write.
+        try {
+            BlockMenuUtil.pushItem(menu, plannedOutput.clone(), CRAFT_OUTPUT_SLOT);
+            GridCraftingCommitGuard.verifyExactOutputAddition(
+                menu, CRAFT_OUTPUT_SLOT, outputBefore, plannedOutput);
+            menu.markDirty();
+            GridCraftingCommitGuard.verifyExactOutputAddition(
+                menu, CRAFT_OUTPUT_SLOT, outputBefore, plannedOutput);
+            GridCraftingCommitGuard.verifyRecipeRemainders(menu, CRAFT_ITEMS, ingredientRemainders);
+        } catch (RuntimeException | LinkageError exception) {
+            NetworkTransferUtils.quarantineUnverifiedNetworkRoot(
+                root, menu.getLocation(), plannedOutput.getType(), plannedOutput.getAmount(), exception);
+            return;
+        }
         root.refreshRootItems();
 
         // Refill only empty ingredient slots with the same exact recipe ingredient.
@@ -362,16 +406,24 @@ public class NetworkCraftingGrid extends AbstractGrid {
     }
 
     private void tryReturnItems(@NotNull BlockMenu menu) {
-        // Get node and, if it doesn't exist - escape
-        final NodeDefinition definition = NetworkStorage.getNode(menu.getLocation());
+        if (!GridCraftingCommitGuard.tryEnter(menu)) {
+            return;
+        }
+        try {
+            returnItemsOnce(menu);
+        } finally {
+            GridCraftingCommitGuard.exit(menu);
+        }
+    }
 
+    private void returnItemsOnce(@NotNull BlockMenu menu) {
+        final NodeDefinition definition = NetworkStorage.getNode(menu.getLocation());
         if (definition == null || definition.getNode() == null) {
             return;
         }
 
         for (int recipeSlot : CRAFT_ITEMS) {
             final ItemStack stack = menu.getItemInSlot(recipeSlot);
-
             if (stack == null || stack.getType() == Material.AIR) {
                 continue;
             }

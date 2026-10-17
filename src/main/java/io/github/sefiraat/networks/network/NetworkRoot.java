@@ -18,6 +18,7 @@ import io.github.mooy1.infinityexpansion.items.storage.StorageUnit;
 import io.github.sefiraat.networks.Networks;
 import io.github.sefiraat.networks.network.barrel.FluffyBarrel;
 import io.github.sefiraat.networks.network.barrel.InfinityBarrel;
+import io.github.sefiraat.networks.network.barrel.LegacyInfinityExpansionBarrel;
 import io.github.sefiraat.networks.network.barrel.NetworkStorage;
 import io.github.sefiraat.networks.network.stackcaches.BarrelIdentity;
 import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
@@ -29,6 +30,7 @@ import io.github.sefiraat.networks.slimefun.network.NetworkGreedyBlock;
 import io.github.sefiraat.networks.slimefun.network.NetworkPowerNode;
 import io.github.sefiraat.networks.slimefun.network.NetworkQuantumStorage;
 import io.github.sefiraat.networks.utils.StackUtils;
+import io.github.sefiraat.networks.utils.NetworkTransferUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.ncbpfluffybear.fluffymachines.items.Barrel;
 import lombok.Getter;
@@ -759,6 +761,11 @@ public class NetworkRoot extends NetworkNode {
     @Deprecated(forRemoval = true)
     @Nullable
     public ItemStack getItemStack(@NotNull ItemRequest request) {
+        final Location controller = getNodePosition();
+        if (controller != null && NetworkTransferUtils.isNetworkRootHeld(this, controller)) {
+            return null;
+        }
+        try {
         ItemStack stackToReturn = null;
 
         if (request.getAmount() <= 0) {
@@ -789,13 +796,13 @@ public class NetworkRoot extends NetworkNode {
                 if (request.getAmount() <= itemStack.getAmount()) {
                     // We can't take more than this stack. Level to request amount, remove items and then return
                     stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
-                    itemStack.setAmount(itemStack.getAmount() - request.getAmount());
+                    consumeVerifiedMenuSource(blockMenu, slot, itemStack, request.getAmount());
                     return stackToReturn;
                 } else {
                     // We can take more than what is here, consume before trying to take more
                     stackToReturn.setAmount(stackToReturn.getAmount() + itemStack.getAmount());
                     request.receiveAmount(itemStack.getAmount());
-                    itemStack.setAmount(0);
+                    consumeVerifiedMenuSource(blockMenu, slot, itemStack, itemStack.getAmount());
                 }
             }
         }
@@ -822,12 +829,12 @@ public class NetworkRoot extends NetworkNode {
 
                 if (request.getAmount() <= itemStack.getAmount()) {
                     stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
-                    itemStack.setAmount(itemStack.getAmount() - request.getAmount());
+                    consumeVerifiedMenuSource(blockMenu, slot, itemStack, request.getAmount());
                     return stackToReturn;
                 } else {
                     stackToReturn.setAmount(stackToReturn.getAmount() + itemStack.getAmount());
                     request.receiveAmount(itemStack.getAmount());
-                    itemStack.setAmount(0);
+                    consumeVerifiedMenuSource(blockMenu, slot, itemStack, itemStack.getAmount());
                 }
             }
         }
@@ -853,12 +860,12 @@ public class NetworkRoot extends NetworkNode {
 
                 if (request.getAmount() <= itemStack.getAmount()) {
                     stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
-                    itemStack.setAmount(itemStack.getAmount() - request.getAmount());
+                    consumeVerifiedMenuSource(blockMenu, slot, itemStack, request.getAmount());
                     return stackToReturn;
                 } else {
                     stackToReturn.setAmount(stackToReturn.getAmount() + itemStack.getAmount());
                     request.receiveAmount(itemStack.getAmount());
-                    itemStack.setAmount(0);
+                    consumeVerifiedMenuSource(blockMenu, slot, itemStack, itemStack.getAmount());
                 }
             }
         }
@@ -888,13 +895,13 @@ public class NetworkRoot extends NetworkNode {
             if (request.getAmount() <= itemStack.getAmount()) {
                 // We can't take more than this stack. Level to request amount, remove items and then return
                 stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
-                itemStack.setAmount(itemStack.getAmount() - request.getAmount());
+                consumeVerifiedMenuSource(blockMenu, slots[0], itemStack, request.getAmount());
                 return stackToReturn;
             } else {
                 // We can take more than what is here, consume before trying to take more
                 stackToReturn.setAmount(stackToReturn.getAmount() + itemStack.getAmount());
                 request.receiveAmount(itemStack.getAmount());
-                itemStack.setAmount(0);
+                consumeVerifiedMenuSource(blockMenu, slots[0], itemStack, itemStack.getAmount());
             }
         }
 
@@ -930,12 +937,12 @@ public class NetworkRoot extends NetworkNode {
 
             if (request.getAmount() <= preserveAmount) {
                 stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
-                fetched.setAmount(fetched.getAmount() - request.getAmount());
+                consumeVerifiedBarrelSource(barrelIdentity, fetched, request.getAmount());
                 return stackToReturn;
             } else {
                 stackToReturn.setAmount(stackToReturn.getAmount() + preserveAmount);
                 request.receiveAmount(preserveAmount);
-                fetched.setAmount(fetched.getAmount() - preserveAmount);
+                consumeVerifiedBarrelSource(barrelIdentity, fetched, preserveAmount);
             }
         }
 
@@ -961,6 +968,15 @@ public class NetworkRoot extends NetworkNode {
         }
 
         return stackToReturn;
+        } catch (RuntimeException | LinkageError failure) {
+            if (controller != null) {
+                final ItemStack requested = request.getItemStack();
+                final Material affected = requested == null ? Material.BARRIER : requested.getType();
+                NetworkTransferUtils.quarantineUnverifiedNetworkRoot(
+                    this, controller, affected, Math.max(0, request.getAmount()), failure);
+            }
+            throw failure;
+        }
     }
 
     public static void addAmount(Map<ItemStack, Long> all, ItemStack key, @Nullable ItemStack item) {
@@ -1441,6 +1457,13 @@ public class NetworkRoot extends NetworkNode {
             "This method is deprecated and will be removed in the future. Use addItemStack0(Location, ItemStack) instead.")
     @Deprecated(forRemoval = true)
     public void addItemStack(@NotNull ItemStack incoming) {
+        final Location controller = getNodePosition();
+        if (controller != null && NetworkTransferUtils.isNetworkRootHeld(this, controller)) {
+            return;
+        }
+        final Material offeredMaterial = incoming.getType();
+        final int offeredAmount = incoming.getAmount();
+        try {
         if (StackUtils.isBlacklisted(incoming)) {
             return;
         }
@@ -1499,6 +1522,13 @@ public class NetworkRoot extends NetworkNode {
             if (incoming.getAmount() == 0) {
                 return;
             }
+        }
+        } catch (RuntimeException | LinkageError failure) {
+            if (controller != null) {
+                NetworkTransferUtils.quarantineUnverifiedNetworkRoot(
+                    this, controller, offeredMaterial, Math.max(0, offeredAmount), failure);
+            }
+            throw failure;
         }
     }
 
@@ -1807,7 +1837,108 @@ public class NetworkRoot extends NetworkNode {
         }
     }
 
+    /**
+     * The original Infinity and reflected legacy Infinity adapters expose a raw
+     * machine output ItemStack. Some menu implementations return a defensive
+     * copy, so mutating the returned value is NOT proof that storage lost items.
+     *
+     * Other barrel adapters (Quantum, Fluffy, IE2) already debit their own
+     * backing store in requestItem(); their returned ItemStack is only a receipt
+     * that the caller reduces as part of existing accounting.
+     */
+    private static void consumeVerifiedBarrelSource(
+        @NotNull BarrelIdentity barrel,
+        @NotNull ItemStack returned,
+        int amount) {
+        if (amount <= 0) {
+            return;
+        }
+
+        if (barrel instanceof InfinityBarrel || barrel instanceof LegacyInfinityExpansionBarrel) {
+            final BlockMenu liveMenu = StorageCacheUtils.getMenu(barrel.getLocation());
+            if (liveMenu == null) {
+                throw new IllegalStateException("Infinity output menu unavailable during withdrawal");
+            }
+            final int[] outputSlots = barrel.getOutputSlot();
+            if (outputSlots.length != 1) {
+                throw new IllegalStateException("Infinity storage output-slot layout changed");
+            }
+
+            final int slot = outputSlots[0];
+            final ItemStack current = liveMenu.getItemInSlot(slot);
+            if (current == null || current.getType().isAir()
+                || current.getAmount() != returned.getAmount()
+                || !returned.isSimilar(current)) {
+                throw new IllegalStateException("Infinity output changed before authoritative debit");
+            }
+
+            consumeVerifiedMenuSource(liveMenu, slot, current, amount);
+        } else {
+            returned.setAmount(returned.getAmount() - amount);
+        }
+    }
+
+    /**
+     * Menu APIs owned by other Slimefun cores/addons may return a defensive
+     * ItemStack copy. Mutating that copy is NOT evidence items were consumed.
+     * Authoritatively replace the exact source slot and read it back before
+     * crediting the withdrawn items to any player/network destination.
+     *
+     * Any writer failure or disagreement propagates to the root-wide quarantine.
+     */
+    private static void consumeVerifiedMenuSource(
+        @NotNull BlockMenu menu,
+        int slot,
+        @NotNull ItemStack observedBefore,
+        int consumed) {
+        final int beforeCount = observedBefore.getAmount();
+        if (consumed <= 0 || beforeCount < consumed) {
+            throw new IllegalStateException("Invalid menu withdrawal quantity");
+        }
+
+        final int remaining = beforeCount - consumed;
+        ItemStack replacement = null;
+        if (remaining > 0) {
+            // SlimefunItemStack subclasses sometimes rebuild metadata in
+            // clone(); avoid silently rewriting another addon's item model.
+            final ItemStack cloned = observedBefore.clone();
+            if (cloned != observedBefore && cloned.isSimilar(observedBefore)) {
+                replacement = cloned;
+            } else {
+                final ItemStack snapshot = ItemStack.of(observedBefore.getType(), remaining);
+                if (observedBefore.hasItemMeta() && !snapshot.setItemMeta(observedBefore.getItemMeta())) {
+                    throw new IllegalStateException("Menu source metadata copy failed");
+                }
+                if (!snapshot.isSimilar(observedBefore)) {
+                    throw new IllegalStateException("Menu source metadata changed during copy");
+                }
+                replacement = snapshot;
+            }
+            replacement.setAmount(remaining);
+        }
+
+        // Use the menu setter rather than mutating a potentially detached
+        // getItemInSlot() object. A throwing setter may already have written:
+        // caller quarantines instead of issuing an unverified second item.
+        menu.replaceExistingItem(slot, replacement);
+
+        final ItemStack live = menu.getItemInSlot(slot);
+        if (remaining <= 0) {
+            if (live != null && !live.getType().isAir() && live.getAmount() > 0) {
+                throw new IllegalStateException("Menu source did not clear after withdrawal");
+            }
+        } else if (live == null
+            || live.getAmount() != remaining
+            || !observedBefore.isSimilar(live)) {
+            throw new IllegalStateException("Menu source amount/identity failed withdrawal readback");
+        }
+    }
+
     public ItemStack getItemStack0(@NotNull Location accessor, @NotNull ItemRequest request) {
+        if (NetworkTransferUtils.isNetworkRootHeld(this, accessor)) {
+            return null;
+        }
+        try {
         ItemStack stackToReturn = null;
 
         if (request.getAmount() <= 0) {
@@ -1856,7 +1987,7 @@ public class NetworkRoot extends NetworkNode {
                     // Netex - Reduce end
                     // We can't take more than this stack. Level to request amount, remove items and then return
                     stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
-                    itemStack.setAmount(itemStack.getAmount() - request.getAmount());
+                    consumeVerifiedMenuSource(blockMenu, slot, itemStack, request.getAmount());
                     // Netex - Record start
                     tryRecord(accessor, request);
                     // Netex - Record end
@@ -1865,7 +1996,7 @@ public class NetworkRoot extends NetworkNode {
                     // We can take more than what is here, consume before trying to take more
                     stackToReturn.setAmount(stackToReturn.getAmount() + itemStack.getAmount());
                     request.receiveAmount(itemStack.getAmount());
-                    itemStack.setAmount(0);
+                    consumeVerifiedMenuSource(blockMenu, slot, itemStack, itemStack.getAmount());
                 }
             }
         }
@@ -1898,7 +2029,7 @@ public class NetworkRoot extends NetworkNode {
                     uncontrolAccessOutput(accessor);
                     // Netex - Reduce end
                     stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
-                    itemStack.setAmount(itemStack.getAmount() - request.getAmount());
+                    consumeVerifiedMenuSource(blockMenu, slot, itemStack, request.getAmount());
                     // Netex - Record start
                     tryRecord(accessor, request);
                     // Netex - Record end
@@ -1906,7 +2037,7 @@ public class NetworkRoot extends NetworkNode {
                 } else {
                     stackToReturn.setAmount(stackToReturn.getAmount() + itemStack.getAmount());
                     request.receiveAmount(itemStack.getAmount());
-                    itemStack.setAmount(0);
+                    consumeVerifiedMenuSource(blockMenu, slot, itemStack, itemStack.getAmount());
                 }
             }
         }
@@ -1938,7 +2069,7 @@ public class NetworkRoot extends NetworkNode {
                     uncontrolAccessOutput(accessor);
                     // Netex - Reduce end
                     stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
-                    itemStack.setAmount(itemStack.getAmount() - request.getAmount());
+                    consumeVerifiedMenuSource(blockMenu, slot, itemStack, request.getAmount());
                     // Netex - Record start
                     tryRecord(accessor, request);
                     // Netex - Record end
@@ -1946,7 +2077,7 @@ public class NetworkRoot extends NetworkNode {
                 } else {
                     stackToReturn.setAmount(stackToReturn.getAmount() + itemStack.getAmount());
                     request.receiveAmount(itemStack.getAmount());
-                    itemStack.setAmount(0);
+                    consumeVerifiedMenuSource(blockMenu, slot, itemStack, itemStack.getAmount());
                 }
             }
         }
@@ -1983,7 +2114,7 @@ public class NetworkRoot extends NetworkNode {
                 // Netex - Reduce end
                 // We can't take more than this stack. Level to request amount, remove items and then return
                 stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
-                itemStack.setAmount(itemStack.getAmount() - request.getAmount());
+                consumeVerifiedMenuSource(blockMenu, slots[0], itemStack, request.getAmount());
                 // Netex - Record start
                 tryRecord(accessor, request);
                 // Netex - Record end
@@ -1992,7 +2123,7 @@ public class NetworkRoot extends NetworkNode {
                 // We can take more than what is here, consume before trying to take more
                 stackToReturn.setAmount(stackToReturn.getAmount() + itemStack.getAmount());
                 request.receiveAmount(itemStack.getAmount());
-                itemStack.setAmount(0);
+                consumeVerifiedMenuSource(blockMenu, slots[0], itemStack, itemStack.getAmount());
             }
         }
 
@@ -2050,7 +2181,7 @@ public class NetworkRoot extends NetworkNode {
                         uncontrolAccessOutput(accessor);
                         // Netex - Reduce end
                         stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
-                        fetched.setAmount(fetched.getAmount() - request.getAmount());
+                        consumeVerifiedBarrelSource(barrelIdentity, fetched, request.getAmount());
                         // Netex - Record start
                         tryRecord(accessor, request);
                         // Netex - Record end
@@ -2058,7 +2189,7 @@ public class NetworkRoot extends NetworkNode {
                     } else {
                         stackToReturn.setAmount(stackToReturn.getAmount() + preserveAmount);
                         request.receiveAmount(preserveAmount);
-                        fetched.setAmount(fetched.getAmount() - preserveAmount);
+                        consumeVerifiedBarrelSource(barrelIdentity, fetched, preserveAmount);
                     }
                     // </editor-fold>
                 } else {
@@ -2156,7 +2287,7 @@ public class NetworkRoot extends NetworkNode {
                 uncontrolAccessOutput(accessor);
                 // Netex - Reduce end
                 stackToReturn.setAmount(stackToReturn.getAmount() + request.getAmount());
-                fetched.setAmount(fetched.getAmount() - request.getAmount());
+                consumeVerifiedBarrelSource(barrelIdentity, fetched, request.getAmount());
                 // Netex - Record start
                 tryRecord(accessor, request);
                 // Netex - Record end
@@ -2164,7 +2295,7 @@ public class NetworkRoot extends NetworkNode {
             } else {
                 stackToReturn.setAmount(stackToReturn.getAmount() + preserveAmount);
                 request.receiveAmount(preserveAmount);
-                fetched.setAmount(fetched.getAmount() - preserveAmount);
+                consumeVerifiedBarrelSource(barrelIdentity, fetched, preserveAmount);
             }
             // </editor-fold>
         }
@@ -2210,6 +2341,13 @@ public class NetworkRoot extends NetworkNode {
         // Netex - Record end
 
         return stackToReturn;
+        } catch (RuntimeException | LinkageError unverifiedWithdrawal) {
+            final ItemStack requested = request.getItemStack();
+            final Material affected = requested == null ? Material.BARRIER : requested.getType();
+            NetworkTransferUtils.quarantineUnverifiedNetworkRoot(
+                this, accessor, affected, Math.max(0, request.getAmount()), unverifiedWithdrawal);
+            throw unverifiedWithdrawal;
+        }
     }
 
     public void addItem(@NotNull Location accessor, @NotNull ItemStack incoming) {
@@ -2237,6 +2375,12 @@ public class NetworkRoot extends NetworkNode {
     }
 
     public void addItemStack0(@NotNull Location accessor, @NotNull ItemStack incoming) {
+        if (NetworkTransferUtils.isNetworkRootHeld(this, accessor)) {
+            return;
+        }
+        final Material offeredMaterial = incoming.getType();
+        final int originallyOffered = incoming.getAmount();
+        try {
         if (!allowAccessInput(accessor)) {
             FeedbackSendable.sendFeedback0(accessor, FeedbackType.ROOT_LIMITING_ACCESS_INPUT);
             return;
@@ -2479,6 +2623,11 @@ public class NetworkRoot extends NetworkNode {
         // Netex - Record start
         tryRecord(accessor, beforeItemStack, incoming.getAmount());
         // Netex - Record end
+        } catch (RuntimeException | LinkageError unverifiedDeposit) {
+            NetworkTransferUtils.quarantineUnverifiedNetworkRoot(
+                this, accessor, offeredMaterial, Math.max(0, originallyOffered), unverifiedDeposit);
+            throw unverifiedDeposit;
+        }
     }
 
     public Map<Location, BarrelIdentity> getMapInputAbleBarrels() {

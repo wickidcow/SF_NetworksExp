@@ -93,6 +93,20 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew clean test shadowJar --no-daemon -PslimefunCoreJar="$SLIMEFUN_CORE_JAR" -PjegJar="$JEG_JAR" -PstrictDeprecation="${{ matrix.strict_deprecation }}"
+      - name: Show exact failing JUnit assertions
+        if: failure()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from xml.etree import ElementTree
+          for path in sorted(Path("build/test-results/test").glob("TEST-*.xml")):
+              root = ElementTree.parse(path).getroot()
+              for case in root.iter("testcase"):
+                  for failure in list(case.findall("failure")) + list(case.findall("error")):
+                      print(f"{case.get('classname')}#{case.get('name')}: "
+                            f"{failure.get('message') or (failure.text or '')[:450]}")
+          PY
       - name: Locate canonical compatibility JAR
         shell: bash
         run: |

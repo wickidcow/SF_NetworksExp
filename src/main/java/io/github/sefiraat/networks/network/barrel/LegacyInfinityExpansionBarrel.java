@@ -42,7 +42,7 @@ public final class LegacyInfinityExpansionBarrel extends BarrelIdentity {
             return menu == null ? null : menu.getItemInSlot(OUTPUT_SLOT);
         } catch (RuntimeException | LinkageError exception) {
             Networks.getSupportedPluginManager().disableOptionalIntegration("InfinityExpansion", exception);
-            return null;
+            throw new IllegalStateException("InfinityExpansion withdrawal is unverified", exception);
         }
     }
 
@@ -53,11 +53,14 @@ public final class LegacyInfinityExpansionBarrel extends BarrelIdentity {
             depositAll.invoke(cache, (Object) itemsToDeposit, true);
         } catch (IllegalAccessException | IllegalArgumentException exception) {
             Networks.getSupportedPluginManager().disableOptionalIntegration("InfinityExpansion", exception);
+            throw new IllegalStateException("InfinityExpansion reflected deposit acceptance is unverified", exception);
         } catch (InvocationTargetException exception) {
             final Throwable cause = exception.getCause() == null ? exception : exception.getCause();
             Networks.getSupportedPluginManager().disableOptionalIntegration("InfinityExpansion", cause);
+            throw new IllegalStateException("InfinityExpansion storage deposit acceptance is unverified", cause);
         } catch (RuntimeException | LinkageError exception) {
             Networks.getSupportedPluginManager().disableOptionalIntegration("InfinityExpansion", exception);
+            throw new IllegalStateException("InfinityExpansion deposit acceptance is unverified", exception);
         }
     }
 

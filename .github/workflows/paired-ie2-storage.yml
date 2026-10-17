@@ -1,0 +1,128 @@
+name: Paired Networks and IE2 storage repair
+
+# Exact candidate testing; no release, deployment or persistent server access.
+on:
+  push:
+    branches: [security/crafting-grid-verified-debit-20261017]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: paired-ie2-storage-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IE2_HEAD: 2163bbbd82ed12b4854963a8277d56af86527c13
+  CORE_HEAD: 36d665f1ec47ce3f05b1be092051ed0b1a1f53ff
+
+jobs:
+  paired-storage:
+    name: Paired IE2 storage conservation and restart / Purpur 1.21.11
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out exact Networks candidate
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Check out pinned IE2 storage repair
+        uses: actions/checkout@v6
+        with:
+          repository: wickidcow/SF_InfinityExpansion2
+          ref: ${{ env.IE2_HEAD }}
+          path: .ci/paired-ie2
+          persist-credentials: false
+      - name: Check out pinned Slimefun Legacy core
+        uses: actions/checkout@v6
+        with:
+          repository: wickidcow/Slimefun-Legacy
+          ref: ${{ env.CORE_HEAD }}
+          path: .ci/paired-core
+          persist-credentials: false
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Set up Java 25 toolchain and runtime
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+      - name: Verify source pins and source contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C .ci/paired-ie2 rev-parse HEAD)" = "$IE2_HEAD"
+          test "$(git -C .ci/paired-core rev-parse HEAD)" = "$CORE_HEAD"
+          echo "NETWORKS_HEAD=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          python3 scripts/verify_legacy_compatibility.py
+          python3 .ci/paired-ie2/scripts/verify_transport_contracts.py \
+            --slimefun .ci/paired-core --networks "$PWD"
+      - name: Build and publish the pinned Slimefun API locally
+        working-directory: .ci/paired-core
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          python3 scripts/verify_legacy.py .
+          # Match the existing Networks Legacy dependency build: apply the
+          # pinned core formatter, then retain ALL build and test checks.
+          ./gradlew spotlessApply --no-daemon
+          git diff --binary > "$GITHUB_WORKSPACE/paired-core-formatting.patch"
+          ./gradlew clean build publishToMavenLocal -PprojectVersion=ALBION-SNAPSHOT --no-daemon
+      - name: Locate the exact core used by both candidates
+        shell: bash
+        run: |
+          set -euo pipefail
+          CORE_JAR=$(python3 scripts/find_slimefun_jar.py .ci/paired-core)
+          test -s "$CORE_JAR"
+          echo "CORE_JAR=$CORE_JAR" >> "$GITHUB_ENV"
+          sha256sum "$CORE_JAR"
+      - name: Build and test the Networks candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/download_jeg.sh
+          chmod +x gradlew
+          ./gradlew clean build --no-daemon -PslimefunCoreJar="$CORE_JAR" \
+            -PjegJar="$PWD/.ci/jeg/SF_JustEnoughGuide2.1.67.jar" -PstrictDeprecation=true
+          python3 scripts/verify_java21_bytecode.py build/libs/SF_Networks1.0.59.jar
+          python3 scripts/verify_universal_jar.py build/libs/SF_Networks1.0.59.jar 1.0.59
+      - name: Build and test the pinned IE2 candidate against that core
+        working-directory: .ci/paired-ie2
+        run: |
+          chmod +x gradlew
+          ./gradlew clean build --no-daemon -PpaperApiVersion=1.21.11-R0.1-SNAPSHOT \
+            -PtargetJvm=21 -PbuildVersion=2.0.14 \
+            -PslimefunApiCoordinate=com.github.slimefun:Slimefun:ALBION-SNAPSHOT
+      - name: Run real IE2 and Networks storage through two JVMs
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --retry 2 --max-time 240 \
+            https://api.purpurmc.org/v2/purpur/1.21.11/2568/download \
+            --output .ci/paired-purpur.jar
+          python3 scripts/paired_ie2_storage_probe.py "$CORE_JAR" \
+            build/libs/SF_Networks1.0.59.jar \
+            .ci/paired-ie2/build/libs/SF_InfinityExpansion2.0.14.jar \
+            .ci/paired-purpur.jar build/paired-ie2-storage
+      - name: Retain paired evidence and test failures
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: paired-ie2-storage-evidence
+          include-hidden-files: true
+          path: |
+            paired-core-formatting.patch
+            .ci/paired-core/build/test-results/test/TEST-*.xml
+            build/paired-ie2-storage/inputs.json
+            build/paired-ie2-storage/patch.log
+            build/paired-ie2-storage/*-console.log
+            build/paired-ie2-storage/*-result.txt
+            build/test-results/test/TEST-*.xml
+            .ci/paired-ie2/build/test-results/test/TEST-*.xml
+          if-no-files-found: warn
+          retention-days: 14
