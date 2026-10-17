@@ -53,6 +53,26 @@ class RecipeAwarePusherPlannerTest {
     }
 
     @Test
+    void missingIngredientKeepsSharedInputRoomFree() {
+        // Shared two-slot recipe: nine iron and one gold, eight buffered batches.
+        assertEquals(9, RecipeAwarePusherPlanner.calculateFairTransferAmount(9, 8, 0, 128, true));
+        assertEquals(72, RecipeAwarePusherPlanner.calculateFairTransferAmount(9, 8, 0, 128, false));
+    }
+
+    @Test
+    void initialBatchIsNotExpandedUntilThePeerAppears() {
+        assertEquals(0, RecipeAwarePusherPlanner.calculateFairTransferAmount(9, 8, 9, 119, true));
+        assertEquals(63, RecipeAwarePusherPlanner.calculateFairTransferAmount(9, 8, 9, 119, false));
+    }
+
+    @Test
+    void capacityAndSingleTemplateBufferAreUnchanged() {
+        assertEquals(3, RecipeAwarePusherPlanner.calculateFairTransferAmount(9, 8, 0, 3, true));
+        assertEquals(12, RecipeAwarePusherPlanner.calculateFairTransferAmount(2, 8, 4, 64, false));
+        assertEquals(0, RecipeAwarePusherPlanner.calculateFairTransferAmount(2, 8, 0, 0, true));
+    }
+
+    @Test
     void stopsWhenIngredientBufferIsSatisfied() {
         assertEquals(0, RecipeAwarePusherPlanner.calculateTransferAmount(2, 8, 16, 64));
     }

@@ -36,6 +36,17 @@ public final class NetworkTransferUtils {
     /** Clears safety holds only as part of controlled plugin lifecycle cleanup. */
     public static void resetRuntimeSafety() {
         MenuTransferSafetyHold.reset();
+        RootRollbackSafetyHold.reset();
+    }
+
+    /** Source-network rollback holds are read-only until a controlled restart. */
+    public static int getHeldWithdrawalSourceCount() {
+        return RootRollbackSafetyHold.count();
+    }
+
+    /** Coarse root-accessor details intentionally omit players, lore and PDC data. */
+    public static @NotNull List<String> getHeldWithdrawalSourceSummaries(int limit) {
+        return RootRollbackSafetyHold.describe(limit);
     }
 
     /** Read-only visibility for Networks Doctor. Holds must not be cleared by auto-repair. */
@@ -726,8 +737,14 @@ public final class NetworkTransferUtils {
     }
 
     /**
-     * Returns a previously withdrawn stack to its source network. Any final remainder is dropped in-world so
-     * a full or externally modified network cannot silently destroy items.
+     * Returns a withdrawn stack to its source network. Only a normally completed, identity-preserving
+     * network insertion can authorize a world drop of the unaccepted remainder.
+     *
+     * <p>A storage adapter may accept an item and then throw without decrementing the offered
+     * ItemStack. The previous catch clause proceeded to the safety-drop path, minting another
+     * physical copy of an item that might already be in network storage. Such failures are
+     * fundamentally ambiguous without a storage-level receipt: fail closed, preserve the live
+     * offer for diagnostics and record an outstanding rollback instead of dropping it.</p>
      */
     public static void rollbackNetworkWithdrawal(
         @NotNull NetworkRoot root,
@@ -741,23 +758,92 @@ public final class NetworkTransferUtils {
         }
 
         final int beforeRollback = remainder.getAmount();
-        try {
-            root.uncontrolAccessInput(accessor);
-            root.addItemStack0(accessor, remainder);
-        } catch (RuntimeException | LinkageError exception) {
-            TransferAudit.recordFailure();
-            Networks.getInstance().getLogger().log(
-                java.util.logging.Level.SEVERE,
-                "A Networks rollback failed while reinserting into its source network; using the safety-drop path.",
-                exception);
-        }
-        final int afterRollback = validAmount(remainder);
-        TransferAudit.recordRollback(beforeRollback, Math.max(0, beforeRollback - afterRollback));
-        if (afterRollback <= 0) {
+        // An earlier ambiguous refund may have suspended this root/accessor.
+        // No network insertion is attempted here, so this *new* remainder can
+        // still use the known-unaccepted world-drop fallback without duplication.
+        if (RootRollbackSafetyHold.isHeld(root, accessor)) {
+            TransferAudit.recordRollback(beforeRollback, 0);
+            dropLossPreventionRemainder(remainder, fallbackLocation,
+                operation + " (source withdrawal hold)", beforeRollback);
             return;
         }
 
-        dropLossPreventionRemainder(remainder, fallbackLocation, operation, beforeRollback);
+        final ItemStack beforeIdentity;
+        try {
+            beforeIdentity = snapshotMenuSource(remainder);
+        } catch (RuntimeException | LinkageError snapshotFailure) {
+            TransferAudit.recordFailure();
+            // No destination write was attempted. Preserve existing safe-drop fallback
+            // for a source item that cannot be copied, rather than silently discarding it.
+            TransferAudit.recordRollback(beforeRollback, 0);
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.SEVERE,
+                "A Networks " + operation + " rollback could not snapshot its source item before"
+                    + " network insertion at " + fallbackLocation + ". No network write was attempted.",
+                snapshotFailure);
+            dropLossPreventionRemainder(remainder, fallbackLocation, operation, beforeRollback);
+            return;
+        }
+
+        try {
+            root.uncontrolAccessInput(accessor);
+        } catch (RuntimeException | LinkageError accessFailure) {
+            TransferAudit.recordFailure();
+            // Access-reset failed before the storage insertion was invoked, so no
+            // ambiguous write could have happened in this rollback attempt.
+            TransferAudit.recordRollback(beforeRollback, 0);
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.SEVERE,
+                "A Networks " + operation + " rollback could not reset its network access at "
+                    + fallbackLocation + ". No network item insertion was attempted.",
+                accessFailure);
+            dropLossPreventionRemainder(remainder, fallbackLocation, operation, beforeRollback);
+            return;
+        }
+
+        try {
+            root.addItemStack0(accessor, remainder);
+        } catch (RuntimeException | LinkageError storageFailure) {
+            TransferAudit.recordFailure();
+            RootRollbackSafetyHold.hold(root, accessor, beforeIdentity.getType(), beforeRollback);
+            // A throwing adapter may have already written all, some, or none of
+            // the offered stack. The mutated ItemStack amount is NOT a receipt.
+            TransferAudit.recordRollback(beforeRollback, 0);
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.SEVERE,
+                "A Networks " + operation + " rollback of up to " + beforeRollback
+                    + " " + beforeIdentity.getType() + " item(s) at " + fallbackLocation
+                    + " encountered a source-network write exception. The accepted amount"
+                    + " is unverified; NO item was world-dropped or automatically refunded."
+                    + " Preserve this location, server log and storage state for investigation.",
+                storageFailure);
+            return;
+        }
+
+        final int afterRollback;
+        try {
+            afterRollback = validAmount(remainder);
+            if (afterRollback > beforeRollback
+                || (afterRollback > 0 && !beforeIdentity.isSimilar(remainder))) {
+                throw new IllegalStateException("Network rollback changed the offered item identity or increased it");
+            }
+        } catch (RuntimeException | LinkageError verificationFailure) {
+            TransferAudit.recordFailure();
+            RootRollbackSafetyHold.hold(root, accessor, beforeIdentity.getType(), beforeRollback);
+            TransferAudit.recordRollback(beforeRollback, 0);
+            Networks.getInstance().getLogger().log(
+                java.util.logging.Level.SEVERE,
+                "A Networks " + operation + " rollback could not verify the offered item's"
+                    + " identity/count after a network insertion at " + fallbackLocation
+                    + ". No unverified remainder was world-dropped; investigate storage.",
+                verificationFailure);
+            return;
+        }
+
+        TransferAudit.recordRollback(beforeRollback, beforeRollback - afterRollback);
+        if (afterRollback > 0) {
+            dropLossPreventionRemainder(remainder, fallbackLocation, operation, beforeRollback);
+        }
     }
 
     /** Returns the number of matching items a menu can accept in the supplied transport slots. */
@@ -1116,7 +1202,9 @@ public final class NetworkTransferUtils {
         @NotNull ItemStack template,
         int amount) {
 
-        if (amount <= 0) {
+        if (amount <= 0 || RootRollbackSafetyHold.isHeld(root, accessor)) {
+            // An earlier ambiguous refund through this accessor must be resolved
+            // before any further network withdrawals can be attempted.
             return null;
         }
         TransferAudit.recordWithdrawalAttempt(amount);

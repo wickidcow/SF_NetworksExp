@@ -54,6 +54,23 @@ final class RecipeAwarePusherPlanner {
             + Math.floorMod((normalized - MIN_BUFFERED_BATCHES) + delta, range);
     }
 
+    /**
+     * Hold an ingredient at one batch while another template has no physical stack.
+     * Once all types are represented, return to the configured multi-batch target.
+     */
+    static int calculateFairTransferAmount(
+        int requiredPerBatch,
+        int bufferedBatches,
+        int existingAmount,
+        int insertCapacity,
+        boolean anotherIngredientMissing) {
+        return calculateTransferAmount(
+            requiredPerBatch,
+            anotherIngredientMissing ? MIN_BUFFERED_BATCHES : bufferedBatches,
+            existingAmount,
+            insertCapacity);
+    }
+
     static int calculateTransferAmount(
         int requiredPerBatch,
         int bufferedBatches,
