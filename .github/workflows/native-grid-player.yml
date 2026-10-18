@@ -1,0 +1,132 @@
+name: Native Grid player conservation
+
+# Loopback-only test infrastructure. Never releases or touches an operator's server.
+on:
+  push:
+    branches: [test/native-grid-player-conservation-20261017]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-grid-player-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IE2_HEAD: 1ee9e3a5566886d14f2cc1a9a0ea0ce55b400a27
+  CORE_HEAD: 36d665f1ec47ce3f05b1be092051ed0b1a1f53ff
+
+jobs:
+  native-player:
+    name: Real player Grid clicks and paired IE2 storage / Purpur 1.21.11
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out exact Networks candidate
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Check out pinned merged IE2 repair
+        uses: actions/checkout@v6
+        with:
+          repository: wickidcow/SF_InfinityExpansion2
+          ref: ${{ env.IE2_HEAD }}
+          path: .ci/paired-ie2
+          persist-credentials: false
+      - name: Check out pinned Slimefun Legacy
+        uses: actions/checkout@v6
+        with:
+          repository: wickidcow/Slimefun-Legacy
+          ref: ${{ env.CORE_HEAD }}
+          path: .ci/paired-core
+          persist-credentials: false
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Set up Java 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+      - name: Set up local protocol client runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install exact client version without lifecycle scripts
+        run: |
+          mkdir -p .ci/native-player
+          printf '{"name":"networks-native-fixture","version":"1.0.0","private":true}\n' > .ci/native-player/package.json
+          npm --prefix .ci/native-player install --save-exact --ignore-scripts --no-audit --no-fund mineflayer@4.39.0
+          npm --prefix .ci/native-player ls --all > native-client-dependencies.txt
+          sha256sum .ci/native-player/package-lock.json
+      - name: Verify source pins and contracts
+        run: |
+          set -euo pipefail
+          test "$(git -C .ci/paired-ie2 rev-parse HEAD)" = "$IE2_HEAD"
+          test "$(git -C .ci/paired-core rev-parse HEAD)" = "$CORE_HEAD"
+          echo "NETWORKS_HEAD=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          python3 scripts/verify_legacy_compatibility.py
+          python3 .ci/paired-ie2/scripts/verify_transport_contracts.py --slimefun .ci/paired-core --networks "$PWD"
+          python3 -m py_compile scripts/native_grid_player_probe.py
+          node --check tests/runtime/native_grid_player_client.cjs
+      - name: Build and publish pinned core API locally
+        working-directory: .ci/paired-core
+        run: |
+          chmod +x gradlew
+          python3 scripts/verify_legacy.py .
+          ./gradlew spotlessApply --no-daemon
+          git diff --binary > "$GITHUB_WORKSPACE/paired-core-formatting.patch"
+          ./gradlew clean build publishToMavenLocal -PprojectVersion=ALBION-SNAPSHOT --no-daemon
+      - name: Locate the exact shared core
+        run: |
+          CORE_JAR=$(python3 scripts/find_slimefun_jar.py .ci/paired-core)
+          test -s "$CORE_JAR"
+          echo "CORE_JAR=$CORE_JAR" >> "$GITHUB_ENV"
+          sha256sum "$CORE_JAR"
+      - name: Build and test Networks
+        run: |
+          bash scripts/download_jeg.sh
+          chmod +x gradlew
+          ./gradlew clean build --no-daemon -PslimefunCoreJar="$CORE_JAR" \
+            -PjegJar="$PWD/.ci/jeg/SF_JustEnoughGuide2.1.67.jar" -PstrictDeprecation=true
+          python3 scripts/verify_java21_bytecode.py build/libs/SF_Networks1.0.59.jar
+          python3 scripts/verify_universal_jar.py build/libs/SF_Networks1.0.59.jar 1.0.59
+      - name: Build and test IE2
+        working-directory: .ci/paired-ie2
+        run: |
+          chmod +x gradlew
+          ./gradlew clean build --no-daemon -PpaperApiVersion=1.21.11-R0.1-SNAPSHOT \
+            -PtargetJvm=21 -PbuildVersion=2.0.14 \
+            -PslimefunApiCoordinate=com.github.slimefun:Slimefun:ALBION-SNAPSHOT
+      - name: Run storage restart and real player ledger
+        run: |
+          curl --fail --location --silent --show-error --retry 2 --max-time 240 \
+            https://api.purpurmc.org/v2/purpur/1.21.11/2568/download --output .ci/native-purpur.jar
+          python3 scripts/native_grid_player_probe.py "$CORE_JAR" \
+            build/libs/SF_Networks1.0.59.jar .ci/paired-ie2/build/libs/SF_InfinityExpansion2.0.14.jar \
+            .ci/native-purpur.jar build/native-grid-player .ci/native-player
+      - name: Retain native player and paired storage evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-grid-player-evidence
+          include-hidden-files: true
+          path: |
+            paired-core-formatting.patch
+            native-client-dependencies.txt
+            .ci/native-player/package.json
+            .ci/native-player/package-lock.json
+            build/native-grid-player/inputs.json
+            build/native-grid-player/patch.log
+            build/native-grid-player/*-console.log
+            build/native-grid-player/*-client.log
+            build/native-grid-player/*-result.txt
+            build/test-results/test/TEST-*.xml
+            .ci/paired-ie2/build/test-results/test/TEST-*.xml
+            .ci/paired-core/build/test-results/test/TEST-*.xml
+          if-no-files-found: warn
+          retention-days: 14
