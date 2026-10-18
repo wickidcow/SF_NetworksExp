@@ -36,6 +36,7 @@ public final class DataStorage {
     private static final ConcurrentMap<Integer, Optional<StorageUnitData>> CACHE = new ConcurrentHashMap<>(4096);
     private static final AtomicReference<ConcurrentMap<Integer, ConcurrentMap<Integer, Integer>>> CHANGES =
         new AtomicReference<>(new ConcurrentHashMap<>(4096));
+    private static final Object AMOUNT_PUBLICATION_MONITOR = new Object();
     private static final AtomicBoolean SAVE_IN_FLIGHT = new AtomicBoolean();
     private static volatile String lastSaveStatus = "idle";
     private static volatile int recoveryEntryCount;
@@ -131,15 +132,32 @@ public final class DataStorage {
     }
 
     // These methods intentionally do not mutate the current StorageUnitData snapshot.
+    // Keep direct SQL submissions and the absolute recovery intent in one short publication
+    // boundary. The autosave snapshot must use this SAME boundary before queuing its write.
     public static void addStoredItem(int containerId, int itemId, int amount) {
-        dataSource().addStoredItem(containerId, itemId, amount);
+        if (amount <= 0) {
+            return;
+        }
+        synchronized (AMOUNT_PUBLICATION_MONITOR) {
+            publishStoredAmount(containerId, itemId, amount);
+            dataSource().addStoredItem(containerId, itemId, amount);
+        }
     }
 
     public static void deleteStoredItem(int containerId, int itemId) {
-        dataSource().deleteStoredItem(containerId, itemId);
+        synchronized (AMOUNT_PUBLICATION_MONITOR) {
+            publishStoredAmount(containerId, itemId, -1);
+            dataSource().deleteStoredItem(containerId, itemId);
+        }
     }
 
     public static void setStoredAmount(int containerId, int itemId, int amount) {
+        synchronized (AMOUNT_PUBLICATION_MONITOR) {
+            publishStoredAmount(containerId, itemId, amount);
+        }
+    }
+
+    private static void publishStoredAmount(int containerId, int itemId, int amount) {
         CHANGES.get()
             .computeIfAbsent(containerId, ignored -> new ConcurrentHashMap<>())
             .put(itemId, amount);
