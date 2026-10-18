@@ -261,13 +261,32 @@ public final class DataSource implements AutoCloseable {
 
 
     /**
-     * Applies one delayed drawer snapshot in a single SQLite transaction. Every value is an absolute amount,
-     * making recovery-journal replay idempotent.
+     * Reserves one FIFO SQLite task before any later direct drawer write can be queued.
+     * The worker must force the absolute-value journal before it touches SQL.
+     * Normal saves journal here; startup replay uses the already durable historical journal.
      */
     void applyAmountChanges(
         @NotNull Map<Integer, ? extends Map<Integer, Integer>> changes,
         @NotNull Consumer<Boolean> completion
     ) {
+        scheduleAmountChanges(changes, completion, true);
+    }
+
+    void applyRecoveredAmountChanges(
+        @NotNull Map<Integer, ? extends Map<Integer, Integer>> changes,
+        @NotNull Consumer<Boolean> completion
+    ) {
+        scheduleAmountChanges(changes, completion, false);
+    }
+
+    private void scheduleAmountChanges(
+        @NotNull Map<Integer, ? extends Map<Integer, Integer>> changes,
+        @NotNull Consumer<Boolean> completion,
+        boolean recordJournal
+    ) {
+        // Do not read Bukkit configuration from the database worker.
+        boolean journalRequired = recordJournal && Networks.getInstance() != null
+            && Networks.getInstance().getConfig().getBoolean("database.recovery-journal", true);
         Map<Integer, Map<Integer, Integer>> immutableSnapshot = new LinkedHashMap<>();
         for (Map.Entry<Integer, ? extends Map<Integer, Integer>> container : changes.entrySet()) {
             immutableSnapshot.put(container.getKey(), Map.copyOf(container.getValue()));
@@ -279,7 +298,16 @@ public final class DataSource implements AutoCloseable {
             @Override
             public boolean execute() {
                 try {
+                    if (journalRequired) {
+                        // The original three-column journal and write/fsync semantics are unchanged.
+                        // If this fails, absolutely no portion of the SQLite transaction may run.
+                        DrawerRecoveryJournal.merge(recoveryJournalFile, immutableSnapshot);
+                    }
                     success = applyAmountChangesTransaction(immutableSnapshot);
+                } catch (IOException exception) {
+                    success = false;
+                    logger.warning("Networks refused a drawer SQL update because the recovery journal failed.");
+                    Debug.trace(exception);
                 } catch (RuntimeException | LinkageError exception) {
                     success = false;
                     logger.warning("An unexpected error interrupted a Networks drawer amount transaction.");
