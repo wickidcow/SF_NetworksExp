@@ -203,7 +203,10 @@ public final class DataStorage {
         if (!recoveryJournalEnabled()) {
             return;
         }
-        Map<Integer, Map<Integer, Integer>> pending = immutableSnapshot(CHANGES.get());
+        Map<Integer, Map<Integer, Integer>> pending;
+        synchronized (AMOUNT_PUBLICATION_MONITOR) {
+            pending = immutableSnapshot(CHANGES.get());
+        }
         if (pending.isEmpty()) {
             return;
         }
@@ -221,46 +224,49 @@ public final class DataStorage {
     }
 
     public static void saveAmountChange() {
-        if (!SAVE_IN_FLIGHT.compareAndSet(false, true)) {
-            return;
-        }
-
-        ConcurrentMap<Integer, ConcurrentMap<Integer, Integer>> liveSnapshot =
-            CHANGES.getAndSet(new ConcurrentHashMap<>(4096));
-        if (liveSnapshot.isEmpty()) {
-            SAVE_IN_FLIGHT.set(false);
-            lastSaveStatus = "idle";
-            return;
-        }
-
-        Map<Integer, Map<Integer, Integer>> snapshot = immutableSnapshot(liveSnapshot);
-        if (recoveryJournalEnabled()) {
-            try {
-                DrawerRecoveryJournal.merge(dataSource().getRecoveryJournalFile(), snapshot);
-                recoveryEntryCount = DrawerRecoveryJournal.count(dataSource().getRecoveryJournalFile());
-            } catch (IOException exception) {
-                mergeBack(snapshot);
-                SAVE_IN_FLIGHT.set(false);
-                lastSaveStatus = "journal-write-failed";
-                Networks.getInstance().getLogger().log(
-                    Level.SEVERE,
-                    "Networks refused to queue drawer amount updates because the recovery journal could not be written.",
-                    exception);
+        final boolean submitted;
+        synchronized (AMOUNT_PUBLICATION_MONITOR) {
+            if (!SAVE_IN_FLIGHT.compareAndSet(false, true)) {
                 return;
             }
+
+            // All publishers take this same short monitor. Reserve the SQL worker task
+            // BEFORE allowing a newer DELETE/INSERT to queue; otherwise an older
+            // snapshot can resurrect a row after slow recovery-journal I/O.
+            ConcurrentMap<Integer, ConcurrentMap<Integer, Integer>> liveSnapshot =
+                CHANGES.getAndSet(new ConcurrentHashMap<>(4096));
+            if (liveSnapshot.isEmpty()) {
+                SAVE_IN_FLIGHT.set(false);
+                lastSaveStatus = "idle";
+                return;
+            }
+
+            Map<Integer, Map<Integer, Integer>> snapshot = immutableSnapshot(liveSnapshot);
+            lastSaveStatus = "saving-" + countEntries(snapshot);
+            // This reserves a FIFO position only. The WORKER now writes/fsyncs
+            // the journal before it is allowed to commit any of this SQL.
+            submitted = scheduleSnapshot(snapshot, false);
         }
 
-        Networks.getInstance().getLogger().info(Lang.getString("messages.data-saving.saving-drawer"));
-        lastSaveStatus = "saving-" + countEntries(snapshot);
-        scheduleSnapshot(snapshot, false);
+        if (submitted) {
+            Networks.getInstance().getLogger().info(Lang.getString("messages.data-saving.saving-drawer"));
+        }
     }
 
-    private static void scheduleSnapshot(
+    private static boolean scheduleSnapshot(
         @NotNull Map<Integer, ? extends Map<Integer, Integer>> snapshot,
         boolean recoveryReplay
     ) {
         try {
-            dataSource().applyAmountChanges(snapshot, success -> completeSnapshot(snapshot, success, recoveryReplay));
+            if (recoveryReplay) {
+                // An existing v1 recovery file was already written before startup.
+                dataSource().applyRecoveredAmountChanges(
+                    snapshot, success -> completeSnapshot(snapshot, success, true));
+            } else {
+                dataSource().applyAmountChanges(
+                    snapshot, success -> completeSnapshot(snapshot, success, false));
+            }
+            return true;
         } catch (RuntimeException exception) {
             if (!recoveryReplay) {
                 mergeBack(snapshot);
@@ -271,6 +277,7 @@ public final class DataStorage {
                 Level.SEVERE,
                 "Networks could not queue a drawer amount transaction; the recovery journal was retained.",
                 exception);
+            return false;
         }
     }
 
@@ -328,13 +335,15 @@ public final class DataStorage {
     }
 
     private static void mergeBack(@NotNull Map<Integer, ? extends Map<Integer, Integer>> snapshot) {
-        ConcurrentMap<Integer, ConcurrentMap<Integer, Integer>> current = CHANGES.get();
-        for (Map.Entry<Integer, ? extends Map<Integer, Integer>> container : snapshot.entrySet()) {
-            ConcurrentMap<Integer, Integer> destination =
-                current.computeIfAbsent(container.getKey(), ignored -> new ConcurrentHashMap<>());
-            for (Map.Entry<Integer, Integer> item : container.getValue().entrySet()) {
-                // A newer runtime amount always wins over the older failed snapshot.
-                destination.putIfAbsent(item.getKey(), item.getValue());
+        synchronized (AMOUNT_PUBLICATION_MONITOR) {
+            ConcurrentMap<Integer, ConcurrentMap<Integer, Integer>> current = CHANGES.get();
+            for (Map.Entry<Integer, ? extends Map<Integer, Integer>> container : snapshot.entrySet()) {
+                ConcurrentMap<Integer, Integer> destination =
+                    current.computeIfAbsent(container.getKey(), ignored -> new ConcurrentHashMap<>());
+                for (Map.Entry<Integer, Integer> item : container.getValue().entrySet()) {
+                    // A newer runtime amount always wins over the older failed snapshot.
+                    destination.putIfAbsent(item.getKey(), item.getValue());
+                }
             }
         }
     }
