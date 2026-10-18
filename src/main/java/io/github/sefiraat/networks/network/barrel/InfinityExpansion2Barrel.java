@@ -47,23 +47,9 @@ public final class InfinityExpansion2Barrel extends BarrelIdentity {
                 return null;
             }
 
-            int received = 0;
-            final ItemStack target = itemRequest.getItemStack();
-            for (int slot : getOutputSlot()) {
-                final ItemStack output = menu.getItemInSlot(slot);
-                if (output == null || output.getType() == Material.AIR || !StackUtils.itemsMatch(output, target)) {
-                    continue;
-                }
-
-                final int moved = Math.min(output.getAmount(), itemRequest.getAmount() - received);
-                if (moved <= 0) {
-                    break;
-                }
-                BlockMenuUtil.consumeItem(menu, slot, moved);
-                received += moved;
-            }
-
-            return received <= 0 ? null : StackUtils.getAsQuantity(target, received);
+            return InfinityExpansion2Withdrawal.withdraw(
+                menu, getOutputSlot(), itemRequest.getItemStack(), itemRequest.getAmount(),
+                (slot, amount) -> BlockMenuUtil.consumeItem(menu, slot, amount));
         } catch (RuntimeException | LinkageError exception) {
             Networks.getSupportedPluginManager().disableOptionalIntegration("InfinityExpansion2", exception);
             throw new IllegalStateException("InfinityExpansion2 output withdrawal is unverified", exception);
