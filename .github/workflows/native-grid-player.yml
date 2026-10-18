@@ -3,7 +3,7 @@ name: Native Grid player conservation
 # Loopback-only test infrastructure. Never releases or touches an operator's server.
 on:
   push:
-    branches: [test/native-grid-player-conservation-20261017]
+    branches: [test/native-grid-player-conservation-20261017, integration/cursor-ie2-withdrawal-player-20261018]
   workflow_dispatch:
 
 permissions:
