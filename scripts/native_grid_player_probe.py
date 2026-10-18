@@ -41,6 +41,8 @@ def main() -> None:
     manifest = json.loads(manifest_path.read_text())
     if manifest.get('result') != 'PASS':
         raise SystemExit('Paired storage prerequisite did not pass')
+    manifest.update(paired_storage_result='PASS', result='NATIVE_PLAYER_PENDING')
+    manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
     java_bin = Path(os.environ['JAVA_HOME']) / 'bin'
     java, javac = str(java_bin / 'java'), str(java_bin / 'javac')
     plugins = work / 'plugins'
@@ -90,7 +92,7 @@ def main() -> None:
             report = result.read_text().strip() if result.is_file() else 'Missing server-side result'
             if process.returncode != 0 or not report.startswith('PASS: native-player '):
                 raise RuntimeError('Native Grid oracle failed: ' + report)
-            manifest.update(native_player_result=report, native_player_pid=process.pid,
+            manifest.update(result="PASS", native_player_result=report, native_player_pid=process.pid,
                             client_version='mineflayer 4.39.0', client_lock_sha256=sha(lock),
                             native_player_protocol='1.21.11', native_player_loopback_only=True)
             manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
@@ -108,6 +110,10 @@ def main() -> None:
                     process.wait()
             if result.is_file():
                 shutil.copyfile(result, work / 'native-grid-result.txt')
+            if manifest.get('result') != 'PASS':
+                manifest.update(result='FAIL', native_player_pid=process.pid,
+                                native_player_result=result.read_text().strip() if result.is_file() else 'No native-player PASS')
+                manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
             for name in ('native-grid-console.log', 'native-grid-client.log'):
                 print('\n--- ' + name + ' ---\n' + '\n'.join((work / name).read_text(errors='replace').splitlines()[-70:]), flush=True)
 

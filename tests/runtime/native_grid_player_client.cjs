@@ -30,10 +30,10 @@ async function command(text, expected) {
   bot.chat('/networksfixture ' + text)
   await until(() => seen.slice(start).some(line => line === 'NATIVEGRID:' + expected), expected)
 }
-async function click(slot, mode = 0) {
+async function click(slot, mode = 0, button = 0) {
   assert(bot.currentWindow, 'Expected the actual Grid window')
-  console.log(`click window=${bot.currentWindow.id} slot=${slot} mode=${mode}`)
-  await bot.clickWindow(slot, 0, mode)
+  console.log(`click window=${bot.currentWindow.id} slot=${slot} mode=${mode} button=${button}`)
+  await bot.clickWindow(slot, button, mode)
   await sleep(150)
 }
 async function run() {
@@ -49,7 +49,8 @@ async function run() {
     display = displaySlots.find(slot => bot.currentWindow?.slots[slot]?.name === 'diamond') ?? -1
     return display >= 0
   }, 'storage item rendered by the actual Grid')
-  await click(display)
+  // Classic Grid uses right-click for a stack; left-click requests one item.
+  await click(display, 0, 1)
   await command('check-cursor', 'close-ready')
   bot.closeWindow(bot.currentWindow)
   await command('check-close', 'transfer-pass')
