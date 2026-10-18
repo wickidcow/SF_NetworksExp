@@ -33,9 +33,10 @@ import static org.mockito.Mockito.when;
  * TEST FIRST: exercises the real DataStorage autosave and real QueryQueue ordering.
  *
  * The DataSource boundary uses a deliberately simple in-memory SQL-row model,
- * not actual SQLite. A mocked journal-path lookup stalls the saver AFTER the
- * generation swap and BEFORE its snapshot has been enqueued. This isolates
- * the known write-order hazard without relying on timing or live server data.
+ * not actual SQLite. A mocked journal-path lookup stalls journal I/O AFTER
+ * the generation swap. In the old code that happens before SQL FIFO reservation;
+ * in a corrected worker-journal design it happens after FIFO reservation.
+ * The same conservation assertions must pass in both scheduling environments.
  *
  * A complete correction must journal BEFORE SQL on the reserved FIFO task,
  * preserve legacy journal replay and handle shutdown/failure/zero-row intent.
@@ -105,8 +106,11 @@ class DrawerAutosaveEnqueueOrderTest {
             @SuppressWarnings("unchecked")
             final Map<Integer, ? extends Map<Integer, Integer>> saved =
                 (Map<Integer, ? extends Map<Integer, Integer>>) call.getArgument(0);
-            // Same absolute-value UPSERT semantic as the original DataSource transaction.
+            // Simulate the worker's mandatory journal-before-SQL gate using the REAL
+            // original production journal implementation and its fsync/rename path.
+            // In the baseline the saver has ALREADY journaled before this queued task.
             queue.scheduleUpdate(() -> {
+                DrawerRecoveryJournal.merge(source.getRecoveryJournalFile(), saved);
                 physicalDatabaseAmount.set(saved.get(21).get(9));
                 return false;
             });
