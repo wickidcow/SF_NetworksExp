@@ -110,7 +110,11 @@ class DrawerAutosaveEnqueueOrderTest {
             // original production journal implementation and its fsync/rename path.
             // In the baseline the saver has ALREADY journaled before this queued task.
             queue.scheduleUpdate(() -> {
-                DrawerRecoveryJournal.merge(source.getRecoveryJournalFile(), saved);
+                try {
+                    DrawerRecoveryJournal.merge(source.getRecoveryJournalFile(), saved);
+                } catch (java.io.IOException exception) {
+                    throw new java.io.UncheckedIOException(exception);
+                }
                 physicalDatabaseAmount.set(saved.get(21).get(9));
                 return false;
             });
