@@ -3,7 +3,7 @@ name: Paired Networks and IE2 storage repair
 # Exact candidate testing; no release, deployment or persistent server access.
 on:
   push:
-    branches: [security/crafting-grid-verified-debit-20261017, security/cursor-callback-conservation-20261017, integration/cursor-ie2-withdrawal-player-20261018]
+    branches: [security/crafting-grid-verified-debit-20261017, security/cursor-callback-conservation-20261017, integration/cursor-ie2-withdrawal-player-20261018, integration/ie2-input-receipts-20261018]
   workflow_dispatch:
 
 permissions:
@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IE2_HEAD: 1ee9e3a5566886d14f2cc1a9a0ea0ce55b400a27
+  IE2_HEAD: 52dd985aa3fba9f82c84c8db180bcb8c4134f3ca
   CORE_HEAD: 36d665f1ec47ce3f05b1be092051ed0b1a1f53ff
 
 jobs:
