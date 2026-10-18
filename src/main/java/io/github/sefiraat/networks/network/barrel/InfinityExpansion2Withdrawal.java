@@ -1,5 +1,6 @@
 package io.github.sefiraat.networks.network.barrel;
 
+import com.balugaq.netex.utils.BlockMenuUtil;
 import io.github.sefiraat.networks.utils.StackUtils;
 import java.util.Collections;
 import java.util.HashSet;
@@ -15,12 +16,24 @@ final class InfinityExpansion2Withdrawal {
     // Only active calls retain a menu. Different adapter instances may share the same menu.
     private static final Set<BlockMenu> ACTIVE = Collections.newSetFromMap(new IdentityHashMap<>());
 
+    @FunctionalInterface
+    interface SourceConsumer {
+        void consume(int slot, int amount);
+    }
+
     private InfinityExpansion2Withdrawal() {
     }
 
     static @Nullable ItemStack withdraw(
         @NotNull BlockMenu menu, int @NotNull [] outputSlots,
         @Nullable ItemStack target, int requested) {
+        return withdraw(menu, outputSlots, target, requested,
+            (slot, amount) -> BlockMenuUtil.consumeItem(menu, slot, amount));
+    }
+
+    static @Nullable ItemStack withdraw(
+        @NotNull BlockMenu menu, int @NotNull [] outputSlots,
+        @Nullable ItemStack target, int requested, @NotNull SourceConsumer consumer) {
         if (requested <= 0 || empty(target) || outputSlots.length == 0) {
             return null;
         }
@@ -30,7 +43,7 @@ final class InfinityExpansion2Withdrawal {
             }
         }
         try {
-            return withdrawOwned(menu, outputSlots.clone(), target, requested);
+            return withdrawOwned(menu, outputSlots.clone(), target, requested, consumer);
         } finally {
             synchronized (ACTIVE) {
                 ACTIVE.remove(menu);
@@ -39,7 +52,7 @@ final class InfinityExpansion2Withdrawal {
     }
 
     private static @Nullable ItemStack withdrawOwned(
-        BlockMenu menu, int[] slots, ItemStack target, int requested) {
+        BlockMenu menu, int[] slots, ItemStack target, int requested, SourceConsumer consumer) {
         final int size = menu.getSize();
         if (slots.length > size) {
             throw new IllegalStateException("Invalid IE2 output-slot count");
@@ -53,7 +66,7 @@ final class InfinityExpansion2Withdrawal {
 
         final ItemStack[] before = new ItemStack[slots.length];
         final ItemStack[] expected = new ItemStack[slots.length];
-        final boolean[] changed = new boolean[slots.length];
+        final int[] debits = new int[slots.length];
         ItemStack prototype = null;
         int received = 0;
         for (int index = 0; index < slots.length; index++) {
@@ -74,7 +87,7 @@ final class InfinityExpansion2Withdrawal {
             final int remaining = source.getAmount() - moved;
             expected[index] = remaining == 0 ? null : snapshot(source);
             if (expected[index] != null) expected[index].setAmount(remaining);
-            changed[index] = true;
+            debits[index] = moved;
             received += moved;
         }
         if (received == 0) return null;
@@ -84,13 +97,20 @@ final class InfinityExpansion2Withdrawal {
         // Finish every potentially failing snapshot before touching physical inventory.
         verify(menu, slots, before);
         for (int index = 0; index < slots.length; index++) {
-            if (!changed[index]) continue;
+            if (debits[index] == 0) continue;
             if (!same(before[index], menu.getItemInSlot(slots[index]))) {
                 throw new IllegalStateException("IE2 output changed before its source debit");
             }
-            // A mutable getItemInSlot() return value is not proof of a real debit.
-            // Give the writer its own copy so callbacks cannot alter our receipt state.
-            menu.replaceExistingItem(slots[index], snapshot(expected[index]));
+            // Preserve the existing live-stack consumption path when it genuinely
+            // debits the menu. Only a still-unchanged source needs a write-through
+            // fallback for a defensive-copy getter; never overwrite an unexpected state.
+            consumer.consume(slots[index], debits[index]);
+            final ItemStack observed = menu.getItemInSlot(slots[index]);
+            if (same(before[index], observed)) {
+                menu.replaceExistingItem(slots[index], snapshot(expected[index]));
+            } else if (!same(expected[index], observed)) {
+                throw new IllegalStateException("IE2 source consumption changed an unexpected quantity or identity");
+            }
             if (!same(expected[index], menu.getItemInSlot(slots[index]))) {
                 throw new IllegalStateException("IE2 output setter did not commit the exact debit");
             }

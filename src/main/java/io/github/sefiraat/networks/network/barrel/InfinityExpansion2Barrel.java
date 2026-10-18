@@ -48,7 +48,8 @@ public final class InfinityExpansion2Barrel extends BarrelIdentity {
             }
 
             return InfinityExpansion2Withdrawal.withdraw(
-                menu, getOutputSlot(), itemRequest.getItemStack(), itemRequest.getAmount());
+                menu, getOutputSlot(), itemRequest.getItemStack(), itemRequest.getAmount(),
+                (slot, amount) -> BlockMenuUtil.consumeItem(menu, slot, amount));
         } catch (RuntimeException | LinkageError exception) {
             Networks.getSupportedPluginManager().disableOptionalIntegration("InfinityExpansion2", exception);
             throw new IllegalStateException("InfinityExpansion2 output withdrawal is unverified", exception);
