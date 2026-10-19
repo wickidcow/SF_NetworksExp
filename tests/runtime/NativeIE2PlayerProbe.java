@@ -2,6 +2,8 @@ package networksprobe;
 
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import io.github.sefiraat.networks.integrations.infinityexpansion2.InfinityExpansion2Integration;
+import io.github.sefiraat.networks.network.barrel.InfinityExpansion2Barrel;
+import io.github.sefiraat.networks.network.stackcaches.ItemRequest;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
@@ -37,6 +39,7 @@ public final class NativeIE2PlayerProbe extends JavaPlugin implements Listener {
     private Object cache;
     private Player player;
     private int stage;
+    private InfinityExpansion2Barrel heldBarrel;
     private boolean finished;
     private ItemStack[] heldInventory;
     private boolean heldVoid;
@@ -193,6 +196,8 @@ public final class NativeIE2PlayerProbe extends JavaPlugin implements Listener {
             }
             case "wrong-owner" -> {
                 expect(11, 28, 3); requireLedger(188, 0); requireInventoryUnchanged();
+                heldBarrel = adapter.getBarrel(location(), unit, true);
+                require(heldBarrel != null, "Expected real IE2 storage adapter before synthetic hold");
                 // Explicit fault injection: this tests player retry behavior under an
                 // existing hold, not a claim that a live exploit triggered that hold.
                 Field held = cache.getClass().getDeclaredField("transferUnverified");
@@ -203,6 +208,7 @@ public final class NativeIE2PlayerProbe extends JavaPlugin implements Listener {
             }
             case "held-reopen" -> {
                 require(stage == 12, "Unexpected held reopen"); requireHeld();
+                verifyHeldNetworksBoundary();
                 menu.open(player); stage = 13; signal("held-single-ready");
             }
             case "held-single" -> {
@@ -226,6 +232,57 @@ public final class NativeIE2PlayerProbe extends JavaPlugin implements Listener {
             }
             default -> throw new AssertionError("Unknown IE2 fixture command: " + command);
         }
+    }
+
+    /**
+     * Reproduce the IE2 cache hold at the REAL Networks boundary, using a
+     * stale barrel facade captured BEFORE synthetic quarantine.
+     * No real exploit is claimed: this is disposable JVM fault injection.
+     */
+    private void verifyHeldNetworksBoundary() throws Exception {
+        final int[] outputs = adapter.getOutputSlots(unit);
+        final int[] inputs = adapter.getInputSlots(unit);
+        require(outputs.length > 0 && inputs.length > 0, "Missing physical IE2 transport slots");
+        final int outputSlot = outputs[0];
+        final int inputSlot = inputs[0];
+        final ItemStack outputBefore = freeze(menu.getItemInSlot(outputSlot));
+        final ItemStack inputBefore = freeze(menu.getItemInSlot(inputSlot));
+        require(outputBefore != null && token(1).isSimilar(outputBefore)
+                && outputBefore.getAmount() > 0,
+            "A real owner-tagged IE2 output buffer must exist at the held boundary");
+
+        final ItemStack withdrawn = heldBarrel.requestItem(new ItemRequest(token(1), 1));
+        final boolean outputUnchanged = sameExact(outputBefore, menu.getItemInSlot(outputSlot));
+
+        final ItemStack offer = token(4);
+        final ItemStack offeredBefore = freeze(offer);
+        heldBarrel.depositItemStack(new ItemStack[] {offer});
+        final boolean inputUnchanged = sameExact(inputBefore, menu.getItemInSlot(inputSlot));
+        final boolean offerUnchanged = sameExact(offeredBefore, offer);
+        final boolean hiddenFromDiscovery = adapter.getBarrel(location(), unit, true) == null;
+
+        require(withdrawn == null && outputUnchanged && inputUnchanged
+                && offerUnchanged && hiddenFromDiscovery,
+            "IE2 held Networks boundary: output=" + withdrawn
+                + " unchangedOutput=" + outputUnchanged
+                + " unchangedInput=" + inputUnchanged
+                + " unchangedOffer=" + offerUnchanged
+                + " hiddenDiscovery=" + hiddenFromDiscovery);
+        requireHeld();
+    }
+
+    private static ItemStack freeze(ItemStack stack) {
+        if (count(stack) == 0) return null;
+        final ItemStack detached = stack.clone();
+        require(detached != stack && detached.getAmount() == stack.getAmount()
+                && detached.isSimilar(stack), "Test snapshot lost actual item identity");
+        return detached;
+    }
+
+    private static boolean sameExact(ItemStack expected, ItemStack observed) {
+        if (count(expected) == 0) return count(observed) == 0;
+        return count(observed) > 0 && expected.getAmount() == observed.getAmount()
+            && expected.isSimilar(observed);
     }
 
     private void requireHeld() throws Exception {
