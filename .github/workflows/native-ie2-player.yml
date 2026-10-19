@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IE2_HEAD: b35426af82d1aaf6b94230d30d03cd7302bb2392
+  IE2_HEAD: b249728677afde03b505c8c151c466b8fd3fe7bf
   CORE_HEAD: 36d665f1ec47ce3f05b1be092051ed0b1a1f53ff
 
 jobs:
@@ -27,7 +27,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - name: Check out pinned IE2 player withdrawal repair
+      - name: Check out corrected combined IE2 input and withdrawal receipts
         uses: actions/checkout@v6
         with:
           repository: wickidcow/SF_InfinityExpansion2
