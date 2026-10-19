@@ -160,7 +160,7 @@ public final class InfinityExpansion2Integration implements StorageAdapter {
         @NotNull SlimefunItem storageUnit,
         boolean includeEmpty
     ) throws ReflectiveOperationException {
-        if (!isStorageUnit(storageUnit)) {
+        if (!isStorageUnit(storageUnit) || isTransferBlocked(location, storageUnit)) {
             return null;
         }
 
@@ -234,6 +234,36 @@ public final class InfinityExpansion2Integration implements StorageAdapter {
             }
         }
         return null;
+    }
+
+    /**
+     * Never advertise or transfer IE2's physical buffers while its OWN
+     * storage cache is in an incident hold or lacks a verified item identity.
+     * Method discovery is cached; values and cache location are always fresh.
+     *
+     * A legacy implementation without getCaches() has no runtime guard to
+     * query. An unreadable modern cache fails closed only for this storage
+     * location, not by globally unregistering the optional integration.
+     */
+    public boolean isTransferBlocked(
+        @NotNull Location location, @NotNull SlimefunItem storageUnit
+    ) throws ReflectiveOperationException {
+        try {
+            final Method cachesMethod = accessorsFor(storageUnit).getCaches();
+            if (cachesMethod == null) {
+                return false; // Pre-cache IE2 version: keep historic lazy compatibility.
+            }
+            final Object value = invoke(cachesMethod, storageUnit);
+            if (!(value instanceof Map<?, ?> caches)) {
+                throw new ReflectiveOperationException("IE2 storage cache map cannot be read");
+            }
+            final Object cache = findCache(caches, location);
+            return cache == null || IE2CacheTransferHold.isBlocked(cache);
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
+            discoveryDiagnostic = describeFailure(exception)
+                + "; this IE2 storage is unavailable until its cache is verified";
+            return true;
+        }
     }
 
     private @NotNull StorageSnapshot getSnapshot(
