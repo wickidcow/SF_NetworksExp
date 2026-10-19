@@ -136,8 +136,10 @@ public final class NativeGridPlayerProbe extends JavaPlugin implements Listener 
         if (event.getView().getTopInventory() != menu.toInventory()) return;
         clicks++;
         if (event.isShiftClick()) shifts++;
-        getLogger().info("Native client click raw=" + event.getRawSlot() + " type=" + event.getClick()
-            + " cancelled=" + event.isCancelled());
+        getLogger().info("Native client click raw=" + event.getRawSlot() + " local=" + event.getSlot()
+            + " clicked=" + (event.getClickedInventory() == player.getInventory() ? "player" : "menu")
+            + " currentAmount=" + count(event.getCurrentItem())
+            + " type=" + event.getClick() + " cancelled=" + event.isCancelled());
     }
 
     @EventHandler public void onCraft(NetworkCraftEvent event) {
@@ -179,6 +181,23 @@ public final class NativeGridPlayerProbe extends JavaPlugin implements Listener 
             }
             case "check-shift" -> {
                 require(stage == 1 && shifts >= 1, "A real shift-click must have occurred");
+                if (storageCount() != 16 || playerTokens() != 0 || count(player.getItemOnCursor()) != 0) {
+                    // Test-only failure diagnostics AFTER the real click. Do not prime
+                    // barrel discovery before the click or relax the conservation ledger.
+                    try {
+                        var connected = root().getInputAbleBarrels();
+                        long ie2Barrels = connected.stream().filter(barrel ->
+                            barrel instanceof io.github.sefiraat.networks.network.barrel.InfinityExpansion2Barrel).count();
+                        getLogger().warning("Rejected Grid shift diagnostic: inputBarrels=" + connected.size()
+                            + " ie2InputBarrels=" + ie2Barrels
+                            + " controllerHeld=" + NetworkTransferUtils.isNetworkRootHeld(root(), gridLocation())
+                            + " inventoryTokens=" + playerTokens()
+                            + " storedTokens=" + storageCount());
+                    } catch (RuntimeException diagnosticFailure) {
+                        getLogger().warning("Grid barrel diagnostics failed: "
+                            + diagnosticFailure.getClass().getSimpleName());
+                    }
+                }
                 require(storageCount() == 16 && playerTokens() == 0 && count(player.getItemOnCursor()) == 0,
                     "Shift-click must move exactly 16 owned items to storage; storage=" + storageCount()
                         + " inventory=" + playerTokens() + " cursor=" + count(player.getItemOnCursor()));
