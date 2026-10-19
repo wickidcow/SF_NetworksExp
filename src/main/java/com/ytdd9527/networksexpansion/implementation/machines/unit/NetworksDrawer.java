@@ -726,15 +726,15 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
                                 return;
                             }
                             final long quantumAmount = quantumCache.getAmountLong();
-                            final int canAdd = (int) Math.min(
-                                quantumAmount, thisStorage.getSizeType().getEachMaxSize() - each.getAmount());
+                            final int canAdd = DrawerQuantumTransferMath.fromQuantum(
+                                quantumAmount, each.getAmount(), thisStorage.getSizeType().getEachMaxSize());
                             if (canAdd <= 0) {
                                 player.sendMessage(
                                     Lang.getString("messages.unsupported-operation.drawer.quantum_storage_full"));
                                 return;
                             }
 
-                            final int left = (int) quantumAmount - canAdd;
+                            final long left = DrawerQuantumTransferMath.remainingAfterDebit(quantumAmount, canAdd);
                             if (left > 0) {
                                 quantumCache.setAmount(left);
                                 DataTypeMethods.setCustom(
@@ -766,14 +766,8 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
                                 final NetworkQuantumStorage nqs = (NetworkQuantumStorage) slimefunItem;
                                 final long quantumLimit = nqs.getMaxAmount();
 
-                                final int unitAmount = each.getAmount();
-                                final long canAddr = Math.min(unitAmount, quantumLimit);
-                                int canAdd;
-                                if (canAddr > Integer.MAX_VALUE) {
-                                    canAdd = Integer.MAX_VALUE;
-                                } else {
-                                    canAdd = (int) canAddr;
-                                }
+                                final int canAdd = DrawerQuantumTransferMath.toQuantum(
+                                    each.getAmount(), 0L, quantumLimit);
                                 if (canAdd <= 0) {
                                     player.sendMessage(Lang.getString(
                                         "messages.unsupported-operation.drawer.each_not_enough_item"));
@@ -781,10 +775,16 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
                                 }
                                 final ItemStack clone = sample.clone();
 
-                                thisStorage.requestItem0(location, new ItemRequest(clone, canAdd), false);
+                                final ItemStack withdrawn =
+                                    thisStorage.requestItem0(location, new ItemRequest(clone, canAdd), false);
+                                final int actualMoved =
+                                    DrawerQuantumTransferMath.verifiedReceipt(clone, withdrawn, canAdd);
+                                if (actualMoved <= 0) {
+                                    return;
+                                }
                                 storages.put(location, thisStorage);
 
-                                quantumCache = new QuantumCache(clone, canAdd, quantumLimit, false, false);
+                                quantumCache = new QuantumCache(clone, actualMoved, quantumLimit, false, false);
                                 DataTypeMethods.setCustom(
                                     meta,
                                     Keys.QUANTUM_STORAGE_INSTANCE,
@@ -796,11 +796,12 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
                                 player.sendMessage(Lang.getString(
                                     "messages.completed-operation.drawer.transferred_to_quantum_storage"));
                                 return;
-                            } else if (StackUtils.itemsMatch(quantumCache.getItemStack(), sample)) {
+                            } else if (quantumCache.getItemStack() != null
+                                && StackUtils.itemsMatch(quantumCache.getItemStack(), sample)) {
                                 final long quantumLimit = quantumCache.getLimitLong();
-                                final int quantumAmount = (int) quantumCache.getAmountLong();
-                                final int unitAmount = each.getAmount();
-                                final int canAdd = Math.toIntExact(Math.min(unitAmount, quantumLimit - quantumAmount));
+                                final long quantumAmount = quantumCache.getAmountLong();
+                                final int canAdd = DrawerQuantumTransferMath.toQuantum(
+                                    each.getAmount(), quantumAmount, quantumLimit);
                                 if (canAdd <= 0) {
                                     player.sendMessage(Lang.getString(
                                         "messages.unsupported-operation.drawer.each_not_enough_item"));
@@ -808,11 +809,18 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
                                 }
                                 final ItemStack clone = sample.clone();
 
-                                thisStorage.requestItem0(location, new ItemRequest(clone, canAdd));
+                                final ItemStack withdrawn =
+                                    thisStorage.requestItem0(location, new ItemRequest(clone, canAdd));
+                                final int actualMoved =
+                                    DrawerQuantumTransferMath.verifiedReceipt(clone, withdrawn, canAdd);
+                                if (actualMoved <= 0) {
+                                    return;
+                                }
                                 storages.put(location, thisStorage);
 
-                                quantumCache =
-                                    new QuantumCache(clone, quantumAmount + canAdd, quantumLimit, false, false);
+                                quantumCache = DrawerQuantumTransferMath.rebalanced(quantumCache,
+                                    DrawerQuantumTransferMath.creditedAfterReceipt(
+                                        quantumAmount, quantumLimit, canAdd, actualMoved));
                                 DataTypeMethods.setCustom(
                                     meta,
                                     Keys.QUANTUM_STORAGE_INSTANCE,
