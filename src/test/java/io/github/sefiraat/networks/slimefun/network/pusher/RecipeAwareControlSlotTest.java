@@ -48,6 +48,34 @@ class RecipeAwareControlSlotTest {
     }
 
     @Test
+    void canonicalTemplateBackgroundPreloadedByPresetCanBecomeTheControl() {
+        ItemStack legacyBackground = new ItemStack(Material.BLUE_STAINED_GLASS_PANE);
+        ItemStack unchanged = legacyBackground.clone();
+        assertEquals(RecipeAwareControlSlot.Decision.REFRESH,
+            RecipeAwareControlSlot.inspect(legacyBackground, icon(false, 8), icon(true, 8), unchanged));
+        assertEquals(unchanged, legacyBackground);
+    }
+
+    @Test
+    void foreignMetadataOrQuantityInTheLegacyBackgroundSlotCannotBeDestroyed() {
+        ItemStack canonical = new ItemStack(Material.BLUE_STAINED_GLASS_PANE);
+        ItemStack tagged = canonical.clone();
+        tagged.editMeta(meta -> meta.getPersistentDataContainer().set(
+            new NamespacedKey("otheraddon", "owner"), PersistentDataType.STRING, "keep"));
+        ItemStack taggedBefore = tagged.clone();
+        assertEquals(RecipeAwareControlSlot.Decision.FOREIGN,
+            RecipeAwareControlSlot.inspect(tagged, icon(false, 8), icon(true, 8), canonical));
+        assertEquals(taggedBefore, tagged);
+
+        ItemStack stacked = canonical.clone();
+        stacked.setAmount(17);
+        ItemStack stackedBefore = stacked.clone();
+        assertEquals(RecipeAwareControlSlot.Decision.FOREIGN,
+            RecipeAwareControlSlot.inspect(stacked, icon(false, 8), icon(true, 8), canonical));
+        assertEquals(stackedBefore, stacked);
+    }
+
+    @Test
     void aPlayersDiamondIsNotOverwrittenOrEdited() {
         ItemStack foreign = new ItemStack(Material.DIAMOND, 13);
         ItemStack prior = foreign.clone();

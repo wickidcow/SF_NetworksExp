@@ -214,7 +214,7 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
             present == null || present.getType().isAir() || present.isSimilar(desired)
                 ? desired : createRecipeAwareModeStack(location, !enabled);
         final RecipeAwareControlSlot.Decision decision =
-            RecipeAwareControlSlot.inspect(present, desired, alternate);
+            RecipeAwareControlSlot.inspect(present, desired, alternate, getOtherBackgroundStack());
 
         if (decision == RecipeAwareControlSlot.Decision.FOREIGN) {
             return false;

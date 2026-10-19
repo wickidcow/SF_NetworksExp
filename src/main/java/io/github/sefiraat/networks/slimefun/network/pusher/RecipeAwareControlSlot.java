@@ -23,6 +23,13 @@ final class RecipeAwareControlSlot {
 
     static @NotNull Decision inspect(
         @Nullable ItemStack present, @NotNull ItemStack desired, @NotNull ItemStack opposite) {
+        return inspect(present, desired, opposite, null);
+    }
+
+    /** Recognize a metadata- and quantity-identical historical backdrop without claiming a player's stack. */
+    static @NotNull Decision inspect(
+        @Nullable ItemStack present, @NotNull ItemStack desired, @NotNull ItemStack opposite,
+        @Nullable ItemStack historicalBackground) {
 
         if (present == null || present.getType() == Material.AIR || present.getAmount() <= 0) {
             return Decision.REFRESH;
@@ -31,7 +38,15 @@ final class RecipeAwareControlSlot {
             return present.isSimilar(desired) && present.getAmount() == desired.getAmount()
                 ? Decision.UNCHANGED : Decision.REFRESH;
         }
-        return matchesControl(present, opposite) ? Decision.REFRESH : Decision.FOREIGN;
+        if (matchesControl(present, opposite)) {
+            return Decision.REFRESH;
+        }
+        // BlockMenuPreset prepopulates this slot with a language-specific background
+        // pane on new machines; only that exact backdrop is safe to promote.
+        return historicalBackground != null
+            && present.isSimilar(historicalBackground)
+            && present.getAmount() == historicalBackground.getAmount()
+            ? Decision.REFRESH : Decision.FOREIGN;
     }
 
     private static boolean matchesControl(@NotNull ItemStack present, @NotNull ItemStack target) {
