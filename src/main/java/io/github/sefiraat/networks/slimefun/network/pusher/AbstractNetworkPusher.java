@@ -113,14 +113,24 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
         }
 
         final Location location = blockMenu.getLocation();
-        final boolean enabled = isRecipeAware(blockMenu);
-        blockMenu.replaceExistingItem(modeSlot, createRecipeAwareModeStack(location, enabled));
+        // Never replace a foreign item that an older, initially empty GUI allowed
+        // into this slot. Allow its recovery before recreating the control.
+        if (!refreshRecipeAwareControl(blockMenu, modeSlot)) {
+            return;
+        }
         blockMenu.addMenuClickHandler(modeSlot, (player, slot, itemStack, clickAction) -> {
             // An admin or another addon can replace a block while its old menu is still open.
             // Never write per-machine settings through a stale menu, for any click type.
             if (getCurrentRecipeAwareMenu(location, blockMenu) == null) {
                 player.sendMessage(ChatColors.color("&cThat Network Pusher is no longer available."));
                 return false;
+            }
+            if (!refreshRecipeAwareControl(blockMenu, modeSlot)) {
+                // A foreign item can arrive from another addon after the handler
+                // was registered. Permit its ordinary recovery, not a toggle.
+                player.sendMessage(ChatColors.color(
+                    "&eRemove the item from the Recipe-Aware control slot first."));
+                return true;
             }
             if (clickAction.isShiftClicked()) {
                 final int delta = clickAction.isRightClicked() ? 1 : -1;
@@ -129,9 +139,7 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
                     delta);
                 setRecipeBufferBatches(location, next);
                 clearBackoffForSource(location);
-                blockMenu.replaceExistingItem(
-                    modeSlot,
-                    createRecipeAwareModeStack(location, isRecipeAware(blockMenu)));
+                refreshRecipeAwareControl(blockMenu, modeSlot);
                 return false;
             }
 
@@ -144,6 +152,13 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
                         RECIPE_BUFFER_BATCHES.remove(location);
                         player.sendMessage(ChatColors.color(
                             "&cThat Network Pusher is no longer available."));
+                        return;
+                    }
+
+                    if (!refreshRecipeAwareControl(liveMenu, modeSlot)) {
+                        player.sendMessage(ChatColors.color(
+                            "&eRemove the item from the Recipe-Aware control slot first."));
+                        liveMenu.open(player);
                         return;
                     }
 
@@ -163,9 +178,7 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
                                 "&aRecipe-Aware batch target set to &b" + value + "&a."));
                         }
 
-                        liveMenu.replaceExistingItem(
-                            modeSlot,
-                            createRecipeAwareModeStack(location, isRecipeAware(liveMenu)));
+                        refreshRecipeAwareControl(liveMenu, modeSlot);
                         liveMenu.open(player);
                     } catch (NumberFormatException exception) {
                         player.sendMessage(ChatColors.color(
@@ -183,9 +196,33 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
             final boolean next = !isRecipeAware(blockMenu);
             StorageCacheUtils.setData(location, RECIPE_AWARE_KEY, Boolean.toString(next));
             clearBackoffForSource(location);
-            blockMenu.replaceExistingItem(modeSlot, createRecipeAwareModeStack(location, next));
+            refreshRecipeAwareControl(blockMenu, modeSlot);
             return false;
         });
+    }
+
+    /**
+     * Refresh only recognized GUI icons. A previously empty control slot may
+     * contain a real player item on upgraded servers; never destroy that stack.
+     */
+    private boolean refreshRecipeAwareControl(@NotNull BlockMenu blockMenu, int modeSlot) {
+        final Location location = blockMenu.getLocation();
+        final boolean enabled = isRecipeAware(blockMenu);
+        final ItemStack desired = createRecipeAwareModeStack(location, enabled);
+        final ItemStack present = blockMenu.getItemInSlot(modeSlot);
+        final ItemStack alternate =
+            present == null || present.getType().isAir() || present.isSimilar(desired)
+                ? desired : createRecipeAwareModeStack(location, !enabled);
+        final RecipeAwareControlSlot.Decision decision =
+            RecipeAwareControlSlot.inspect(present, desired, alternate);
+
+        if (decision == RecipeAwareControlSlot.Decision.FOREIGN) {
+            return false;
+        }
+        if (decision == RecipeAwareControlSlot.Decision.REFRESH) {
+            blockMenu.replaceExistingItem(modeSlot, desired);
+        }
+        return true;
     }
 
     private @Nullable BlockMenu getCurrentRecipeAwareMenu(
