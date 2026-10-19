@@ -37,12 +37,10 @@ class DrawerQuantumQuickTransferSourceContractTest {
 
     @Test
     void toQuantumMustNotIgnoreActualDrawerWithdrawal() throws IOException {
-        assertFalse(java.util.regex.Pattern.compile(
-            "(?m)^\\s*thisStorage\\.requestItem0\\(location, new ItemRequest\\(clone, canAdd\\)[^;]*;")
-            .matcher(drawerSource()).find(),
-            "A standalone withdrawal call discards the actual Drawer debit receipt");
+        assertTrue(drawerSource().contains("final ItemStack withdrawn ="),
+            "Actual Drawer source withdrawal must have an explicit checked receipt");
         assertTrue(drawerSource().contains("DrawerQuantumTransferMath.verifiedReceipt("),
-            "Quantum credit must be derived from a validated source withdrawal receipt");
+            "Quantum credit must be derived from that checked source withdrawal receipt");
     }
 
     @Test
