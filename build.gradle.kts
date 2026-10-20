@@ -130,6 +130,8 @@ dependencies {
     testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v1.21:4.110.0")
     mockitoAgent("org.mockito:mockito-core:5.18.0") { isTransitive = false }
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    // Real SQLite for Drawer persistence regressions; never bundled in the plugin JAR.
+    testRuntimeOnly("org.xerial:sqlite-jdbc:3.50.3.0")
     compileOnly("com.github.SlimefunGuguProject:InfinityExpansion:3c5db3650a")
     compileOnly("com.github.Sefiraat:Netheopoiesis:8d1af6c570")
     compileOnly("com.github.schntgaispock:SlimeHUD:1.2.7")
