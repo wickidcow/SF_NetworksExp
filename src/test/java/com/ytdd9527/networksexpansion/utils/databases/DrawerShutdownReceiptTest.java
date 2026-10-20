@@ -1,9 +1,13 @@
 package com.ytdd9527.networksexpansion.utils.databases;
 
+import com.balugaq.netex.api.enums.MinecraftVersion;
+import com.ytdd9527.networksexpansion.core.managers.ConfigManager;
 import com.ytdd9527.networksexpansion.core.services.LocalizationService;
+import io.github.sefiraat.networks.managers.SupportedPluginManager;
 import io.github.sefiraat.networks.Networks;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -25,6 +29,7 @@ import java.util.logging.Logger;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
 /** Production cache/queue/journal/JDBC integration; only the Bukkit plugin host is mocked.
@@ -40,6 +45,28 @@ class DrawerShutdownReceiptTest {
     private DataSource source;
     private YamlConfiguration config;
 
+    @BeforeAll
+    static void initializePluginConstants() throws Exception {
+        // Match the existing discovery fixture: Paper keys use Plugin.namespace().
+        // Initialize on this thread while bootstrap-only static collaborators are visible.
+        try (var networks = mockStatic(Networks.class);
+             var integrations = mockStatic(SupportedPluginManager.class)) {
+            Networks plugin = mock(Networks.class);
+            ConfigManager config = mock(ConfigManager.class);
+            SupportedPluginManager supported = mock(SupportedPluginManager.class);
+            networks.when(Networks::getConfigManager).thenReturn(config);
+            networks.when(Networks::getInstance).thenReturn(plugin);
+            networks.when(Networks::getSupportedPluginManager).thenReturn(supported);
+            integrations.when(SupportedPluginManager::getInstance).thenReturn(supported);
+            when(plugin.getName()).thenReturn("Networks");
+            when(plugin.namespace()).thenReturn("networks");
+            when(plugin.getMCVersion()).thenReturn(MinecraftVersion.UNKNOWN);
+            Class.forName("io.github.sefiraat.networks.network.NetworkRoot");
+            Class.forName("io.github.sefiraat.networks.slimefun.network.NetworkDirectional");
+            Class.forName("com.ytdd9527.networksexpansion.implementation.machines.unit.NetworksDrawer");
+        }
+    }
+
     @BeforeEach
     void setUp() throws Exception {
         MockBukkit.mock();
@@ -53,6 +80,7 @@ class DrawerShutdownReceiptTest {
         Logger logger = Logger.getLogger("DrawerShutdownReceiptTest");
         logger.setLevel(Level.OFF);
         when(plugin.getName()).thenReturn("Networks");
+        when(plugin.namespace()).thenReturn("networks");
         when(plugin.getConfig()).thenReturn(config);
         when(plugin.getDataFolder()).thenReturn(directory.toFile());
         when(plugin.getLogger()).thenReturn(logger);
