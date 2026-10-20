@@ -103,7 +103,17 @@ public final class NativeGridPlayerProbe extends JavaPlugin implements Listener 
                                 storageItem = StorageCacheUtils.getSlimefunItem(storageLocation());
                                 require(adapter.isStorageUnit(storageItem), "Discovered real IE2 storage is required");
                                 require(storageCount() == 0, "Prior paired ledger must have been fully drained");
-                                require(!NetworkTransferUtils.isNetworkRootHeld(root(), gridLocation()), "No initial quarantine");
+                                // A previous tick may have memoized an empty storage-barrel view
+                                // before IE2 populated its real cache. Use ONE ordinary stable
+                                // controller refresh after cache readiness; never create or
+                                // prime a barrel explicitly, and do not retry player deposits.
+                                final NetworkRoot beforeReady = root();
+                                controller.getBlockTicker().tick(controllerLocation().getBlock(), controller, cd);
+                                final NetworkRoot afterReady = root();
+                                require(!NetworkTransferUtils.isNetworkRootHeld(afterReady, gridLocation()),
+                                    "No initial quarantine after stable controller refresh");
+                                getLogger().info("Native Grid readiness: IE2 cache initialized, ordinaryControllerTick=true rootReused="
+                                    + (beforeReady == afterReady));
                                 Files.writeString(file("ready.txt"), "READY: actual player may connect\n");
                                 cancel();
                                 return;
