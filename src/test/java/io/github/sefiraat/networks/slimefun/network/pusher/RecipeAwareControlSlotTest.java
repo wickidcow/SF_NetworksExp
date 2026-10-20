@@ -107,6 +107,29 @@ class RecipeAwareControlSlotTest {
             RecipeAwareControlSlot.inspect(foreign, icon(false, 8), icon(true, 8)));
     }
 
+
+    @Test
+    void controlLookingStackWithDifferentPhysicalQuantityIsForeign() {
+        for (boolean enabled : new boolean[] { false, true }) {
+            ItemStack foreign = icon(enabled, 8);
+            foreign.setAmount(21);
+            ItemStack before = foreign.clone();
+            assertEquals(RecipeAwareControlSlot.Decision.FOREIGN,
+                RecipeAwareControlSlot.inspect(foreign, icon(enabled, 8), icon(!enabled, 8)));
+            assertEquals(before, foreign);
+        }
+    }
+
+    @Test
+    void staleBatchControlMustAgreeWithItsOwnLoreQuantity() {
+        ItemStack malformed = icon(true, 5);
+        malformed.setAmount(8);
+        ItemStack before = malformed.clone();
+        assertEquals(RecipeAwareControlSlot.Decision.FOREIGN,
+            RecipeAwareControlSlot.inspect(malformed, icon(true, 8), icon(false, 8)));
+        assertEquals(before, malformed);
+    }
+
     private static ItemStack icon(boolean enabled, int batches) {
         ItemStack item = new ItemStack(enabled ? Material.CRAFTING_TABLE : Material.HOPPER, batches);
         item.editMeta(meta -> {
