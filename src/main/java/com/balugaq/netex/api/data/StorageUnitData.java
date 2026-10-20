@@ -37,6 +37,8 @@ public class StorageUnitData {
     private final OfflinePlayer owner;
 
     private final ConcurrentHashMap<Integer, ItemContainer> storedItems;
+    // Accessed under this drawer's synchronized request methods; never persisted.
+    private boolean withdrawalPreparing;
     @Getter
     private boolean isPlaced;
 
@@ -428,25 +430,40 @@ public class StorageUnitData {
         int requested,
         boolean contentLocked) {
 
-        final int available = Math.max(0, container.getAmount());
-        final int taken = Math.min(requested, available);
-        if (taken <= 0) {
-            if (!contentLocked) {
-                removeItem(container.getId());
-            }
+        if (withdrawalPreparing) {
             return null;
         }
+        withdrawalPreparing = true;
+        try {
+            final int available = Math.max(0, container.getAmount());
+            final int taken = Math.min(requested, available);
+            if (taken <= 0) {
+                if (!contentLocked) {
+                    removeItem(container.getId());
+                }
+                return null;
+            }
 
-        container.removeAmount(taken);
-        if (container.getAmount() <= 0 && !contentLocked) {
-            removeItem(container.getId());
-        } else {
-            DataStorage.setStoredAmount(id, container.getId(), Math.max(0, container.getAmount()));
+            // Keep the existing requesting-template identity contract. Prepare the
+            // complete returned stack before any balance or persistence mutation.
+            final ItemStack result = template.clone();
+            result.setAmount(taken);
+            if (storedItems.get(container.getId()) != container || container.getAmount() != available) {
+                // A preparation callback changed the source. Do not debit an old
+                // snapshot or remove a replacement container with the same ID.
+                return null;
+            }
+
+            container.removeAmount(taken);
+            if (container.getAmount() <= 0 && !contentLocked) {
+                removeItem(container.getId());
+            } else {
+                DataStorage.setStoredAmount(id, container.getId(), Math.max(0, container.getAmount()));
+            }
+            return result;
+        } finally {
+            withdrawalPreparing = false;
         }
-
-        final ItemStack result = template.clone();
-        result.setAmount(taken);
-        return result;
     }
 
     public synchronized void depositItemStacks0(
