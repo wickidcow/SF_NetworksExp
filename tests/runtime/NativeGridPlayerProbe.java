@@ -8,6 +8,7 @@ import io.github.sefiraat.networks.network.NetworkRoot;
 import io.github.sefiraat.networks.slimefun.network.NetworkController;
 import io.github.sefiraat.networks.slimefun.network.grid.NetworkCraftingGrid;
 import io.github.sefiraat.networks.utils.NetworkTransferUtils;
+import io.github.sefiraat.networks.utils.TransferAudit;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import java.lang.reflect.Method;
@@ -50,6 +51,7 @@ public final class NativeGridPlayerProbe extends JavaPlugin implements Listener 
     private boolean cancelCraft;
     private boolean reenterCraft;
     private boolean finished;
+    private TransferAudit.Snapshot shiftAuditBaseline;
 
     private Path file(String name) { return getDataFolder().toPath().getParent().resolve("native-grid-" + name); }
     private Location storageLocation() { return new Location(Bukkit.getWorlds().getFirst(), 160, 100, 160); }
@@ -185,6 +187,7 @@ public final class NativeGridPlayerProbe extends JavaPlugin implements Listener 
                 player.getInventory().clear();
                 player.setItemOnCursor(null);
                 player.getInventory().setItem(9, token(16));
+                shiftAuditBaseline = TransferAudit.snapshot();
                 menu.open(player);
                 stage = 1;
                 signal("shift-ready");
@@ -203,7 +206,33 @@ public final class NativeGridPlayerProbe extends JavaPlugin implements Listener 
                             + " controllerHeld=" + NetworkTransferUtils.isNetworkRootHeld(root(), gridLocation())
                             + " inventoryTokens=" + playerTokens()
                             + " storedTokens=" + storageCount());
-                    } catch (RuntimeException diagnosticFailure) {
+                        // Diagnostics run ONLY after the original player click has failed.
+                        // No extra source offer, manual barrel priming, or retry.
+                        final TransferAudit.Snapshot audit = TransferAudit.snapshot();
+                        getLogger().warning("Grid transfer audit: attempts="
+                            + (audit.depositAttempts() - shiftAuditBaseline.depositAttempts())
+                            + " offered=" + (audit.depositOffered() - shiftAuditBaseline.depositOffered())
+                            + " committed=" + (audit.depositCommitted() - shiftAuditBaseline.depositCommitted())
+                            + " failures=" + (audit.failures() - shiftAuditBaseline.failures())
+                            + " inputLimiterAvailable=" + root().allowAccessInput(gridLocation()));
+                        final BlockMenu physical = StorageCacheUtils.getMenu(storageLocation());
+                        getLogger().warning("IE2 buffer/adapter: hasMenu=" + (physical != null)
+                            + " inputSlots=" + java.util.Arrays.toString(adapter.getInputSlots(storageItem))
+                            + " input10Amount=" + (physical == null ? -1 : count(physical.getItemInSlot(10)))
+                            + " held=" + adapter.isTransferBlocked(storageLocation(), storageItem)
+                            + " discoveryDiagnostic=" + adapter.getDiscoveryDiagnostic());
+                        final ItemStack template = adapter.getLiveTemplate(storageLocation(), storageItem);
+                        getLogger().warning("IE2 live template null=" + (template == null)
+                            + " matchesTagged=" + (template == null || token(1).isSimilar(template)));
+                        for (var barrel : connected) {
+                            if (barrel instanceof io.github.sefiraat.networks.network.barrel.InfinityExpansion2Barrel) {
+                                getLogger().warning("IE2 barrel: correctLocation="
+                                    + storageLocation().equals(barrel.getLocation())
+                                    + " acceptsTagged=" + barrel.canAccept(token(1))
+                                    + " slots=" + java.util.Arrays.toString(barrel.getInputSlot()));
+                            }
+                        }
+                    } catch (Exception | LinkageError diagnosticFailure) {
                         getLogger().warning("Grid barrel diagnostics failed: "
                             + diagnosticFailure.getClass().getSimpleName());
                     }
