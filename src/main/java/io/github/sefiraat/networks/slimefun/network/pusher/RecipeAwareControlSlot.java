@@ -53,9 +53,6 @@ final class RecipeAwareControlSlot {
         if (present.getType() != target.getType()) {
             return false;
         }
-        if (present.isSimilar(target)) {
-            return true;
-        }
         final ItemMeta original = present.getItemMeta();
         final ItemMeta targetMeta = target.getItemMeta();
         if (original == null || targetMeta == null) {
@@ -68,9 +65,17 @@ final class RecipeAwareControlSlot {
             || oldLore.get(BATCH_LINE) == null) {
             return false;
         }
-        if (!BATCH_TEXT.matcher(
-            PlainTextComponentSerializer.plainText().serialize(oldLore.get(BATCH_LINE))).matches()) {
+        final var renderedBatch = BATCH_TEXT.matcher(
+            PlainTextComponentSerializer.plainText().serialize(oldLore.get(BATCH_LINE)));
+        // The display lore encodes the batch count in the real GUI icon amount.
+        // A stack whose amount disagrees with its own lore may be a foreign item
+        // deposited into this historically writable slot. Never replace it.
+        if (!renderedBatch.matches()
+            || !Integer.toString(present.getAmount()).equals(renderedBatch.group(1))) {
             return false;
+        }
+        if (present.isSimilar(target)) {
+            return true;
         }
         // Only normalize the historical variable batch line. Every other bit
         // of metadata, including unknown owner PDC and model data, must match.
