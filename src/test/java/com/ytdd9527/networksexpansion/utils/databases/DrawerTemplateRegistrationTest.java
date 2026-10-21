@@ -27,6 +27,8 @@ import java.lang.reflect.Field;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.nio.file.Path;
+import java.nio.file.Files;
+import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -257,6 +259,183 @@ class DrawerTemplateRegistrationTest {
         assertEquals(1, observed.serializations.get(), "Injected callback must actually be reached");
     }
 
+    @Test
+    void cancelledTemplateWriteRetainsExactIdentityAndAmountAfterRestart() throws Exception {
+        ItemStack original = token("cancelled", 13);
+        int id;
+        try (PausedWorker ignored = pauseWorker()) {
+            id = source.getItemId(original);
+            DataStorage.setStoredAmount(7, id, 13);
+            DataStorage.saveAmountChange();
+            assertFalse(queue.shutdown(0));
+            assertFalse(queue.isWorkerRunning());
+            DataStorage.checkpointPendingChangesForShutdown();
+            assertEquals(0, templateRows(), "The template SQL really was cancelled");
+        }
+        reopenAndReplay();
+        assertEquals(original, payload(id), "Recovery must use the original serialized identity");
+        assertEquals(13, storedAmount(7, id));
+        assertEquals(id, source.getItemId(original));
+        reopenAndReplay();
+        assertEquals(original, payload(id));
+        assertEquals(13, storedAmount(7, id), "A second startup must not replay an extra credit");
+    }
+
+    @Test
+    void failedTemplateSqlRetainsOriginalBytesForLaterRestart() throws Exception {
+        sql("CREATE TRIGGER reject_template BEFORE INSERT ON ItemStack "
+            + "BEGIN SELECT RAISE(ABORT, 'injected-template-write-failure'); END;");
+        ItemStack original = token("sql-failure", 9);
+        int id = source.getItemId(original);
+        assertTrue(queue.awaitDrained(5_000));
+        assertEquals(0, templateRows(), "Real SQLite rejected the identity INSERT");
+        DataStorage.setStoredAmount(7, id, 9);
+        DataStorage.saveAmountChange();
+        assertTrue(queue.awaitDrained(5_000));
+        assertEquals(9, storedAmount(7, id));
+        sql("DROP TRIGGER reject_template;");
+        reopenAndReplay();
+        assertEquals(original, payload(id));
+        assertEquals(9, storedAmount(7, id));
+    }
+
+    @Test
+    void templateJournalFailurePrecedesPhysicalDepositAndIdPublication() throws Exception {
+        Files.createDirectory(directory.resolve("CargoStorageUnits.templates.tsv"));
+        ItemStack original = token("journal-failure", 13);
+        var items = new ConcurrentHashMap<Integer, ItemContainer>();
+        Location location = new Location(MockBukkit.getMock().addSimpleWorld("journal-failure"), 1, 64, 1);
+        StorageUnitData drawer = new StorageUnitData(7, mock(OfflinePlayer.class), StorageUnitType.TINY,
+            true, location, items);
+        int next = nextId();
+        long scheduled = queue.snapshot().scheduled();
+        try (var slimefun = mockStatic(SlimefunItem.class)) {
+            assertThrows(IllegalStateException.class, () -> drawer.depositItemStack0(location, original, false));
+        }
+        assertEquals(13, original.getAmount());
+        assertTrue(drawer.getStoredItemsMap().isEmpty());
+        assertEquals(Map.of(), templates());
+        assertEquals(next, nextId());
+        assertEquals(scheduled, queue.snapshot().scheduled());
+    }
+
+    @Test
+    void orphanStoredItemIdCannotBeAssignedToANewIdentity() throws Exception {
+        sql("INSERT INTO ItemStored (ContainerID, ItemID, Amount) VALUES (7, 2000, 27);");
+        reopenAndReplay();
+        int id = source.getItemId(token("new", 4));
+        assertTrue(id > 2000, "An unresolved old ItemID must remain reserved");
+        assertTrue(queue.awaitDrained(5_000));
+        assertEquals(27, storedAmount(7, 2000), "Unknown stock remains available for administrator recovery");
+        assertFalse(templates().containsKey(2000), "No identity may be guessed for the old balance");
+    }
+
+    @Test
+    void orphanStoredContainerIdCannotBeAssignedToANewDrawer() throws Exception {
+        sql("INSERT INTO ItemStored (ContainerID, ItemID, Amount) VALUES (3000, 42, 8);");
+        reopenAndReplay();
+        assertTrue(source.getNextContainerId() > 3000, "An unresolved container must not become someone else's drawer");
+        assertEquals(8, storedAmount(3000, 42));
+    }
+
+    @Test
+    void pendingAmountJournalReservesBothIdsBeforeReplay() throws Exception {
+        assertTrue(queue.shutdown(5_000));
+        source.close();
+        DrawerRecoveryJournal.writeSnapshot(directory.resolve(DrawerRecoveryJournal.FILE_NAME),
+            Map.of(4000, Map.of(5000, 12)));
+        openRuntime();
+        assertTrue(source.getNextContainerId() > 4000);
+        int id = source.getItemId(token("new-after-journal", 2));
+        assertTrue(id > 5000, "Counters must inspect recovery references before they are replayed");
+        assertTrue(queue.awaitDrained(5_000));
+        assertFalse(templates().containsKey(5000));
+        assertEquals(12, DrawerRecoveryJournal.read(source.getRecoveryJournalFile())
+            .get(new DrawerRecoveryJournal.Key(4000, 5000)));
+    }
+
+    @Test
+    void conflictingTemplateReplayRefusesStartupAndPreservesBothOriginals() throws Exception {
+        ItemStack intended = token("intended", 6);
+        int id;
+        try (PausedWorker ignored = pauseWorker()) {
+            id = source.getItemId(intended);
+            assertFalse(queue.shutdown(0));
+            assertFalse(queue.isWorkerRunning());
+        }
+        Path journal = directory.resolve("CargoStorageUnits.templates.tsv");
+        assertTrue(Files.isRegularFile(journal), "Accepted identity must already have a durable receipt");
+        byte[] originalJournal = Files.readAllBytes(journal);
+        ItemStack conflicting = token("conflicting", 6);
+        insertTemplate(id, conflicting);
+        source.close();
+        assertThrows(SQLException.class, this::openRuntime,
+            "A conflicting durable identity must block startup, never overwrite either template");
+        assertEquals(conflicting, payload(id));
+        assertArrayEquals(originalJournal, Files.readAllBytes(journal));
+    }
+
+    @Test
+    void startupBackupIncludesPendingTemplateAndAmountRecoveryFiles() throws Exception {
+        try (PausedWorker ignored = pauseWorker()) {
+            int id = source.getItemId(token("backup", 5));
+            DrawerRecoveryJournal.writeSnapshot(source.getRecoveryJournalFile(), Map.of(7, Map.of(id, 5)));
+            Path backup = DatabaseBackupManager.createStartupBackup(directory, 2,
+                Logger.getLogger("drawer-backup-test"));
+            assertNotNull(backup);
+            Path templates = directory.resolve("CargoStorageUnits.templates.tsv");
+            assertTrue(Files.isRegularFile(backup.resolve(templates.getFileName())));
+            assertArrayEquals(Files.readAllBytes(templates), Files.readAllBytes(backup.resolve(templates.getFileName())));
+            assertArrayEquals(Files.readAllBytes(source.getRecoveryJournalFile()),
+                Files.readAllBytes(backup.resolve(DrawerRecoveryJournal.FILE_NAME)));
+        }
+    }
+
+    private void openRuntime() throws Exception {
+        queue = new QueryQueue();
+        field(Networks.class, "queryQueue").set(null, queue);
+        source = new DataSource();
+        field(Networks.class, "dataSource").set(null, source);
+        queue.startThread();
+        assertTrue(queue.awaitDrained(5_000));
+    }
+
+    private void reopenAndReplay() throws Exception {
+        if (queue.isWorkerRunning()) assertTrue(queue.shutdown(5_000));
+        source.close();
+        DataStorage.clearRuntimeCache();
+        openRuntime();
+        DataStorage.replayRecoveryJournal();
+        assertTrue(queue.awaitDrained(5_000));
+    }
+
+    private int storedAmount(int container, int item) throws Exception {
+        try (Connection connection = connection();
+             var statement = connection.prepareStatement("SELECT Amount FROM ItemStored WHERE ContainerID = ? AND ItemID = ?")) {
+            statement.setInt(1, container);
+            statement.setInt(2, item);
+            try (var result = statement.executeQuery()) {
+                assertTrue(result.next());
+                return result.getInt(1);
+            }
+        }
+    }
+
+    private void insertTemplate(int id, ItemStack item) throws Exception {
+        try (Connection connection = connection();
+             var statement = connection.prepareStatement("INSERT INTO ItemStack (ItemID, Item) VALUES (?, ?)")) {
+            statement.setInt(1, id);
+            statement.setString(2, DataSource.getBase64String(item));
+            statement.executeUpdate();
+        }
+    }
+
+    private void sql(String sql) throws Exception {
+        try (Connection connection = connection(); var statement = connection.createStatement()) {
+            statement.execute(sql);
+        }
+    }
+
     private void assertRejectedBeforePublication(Fault fault) throws Exception {
         ObservedStack input = new ObservedStack(token("A", 13), fault);
         int before = nextId();
@@ -391,3 +570,4 @@ class DrawerTemplateRegistrationTest {
         @Override public void close() { release.countDown(); }
     }
 }
+

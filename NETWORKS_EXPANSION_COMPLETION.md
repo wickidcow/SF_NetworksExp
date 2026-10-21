@@ -4,6 +4,16 @@ Updated October 20, 2026 America/New_York (October 21 UTC in CI).
 
 ## Resume here — do not restart accepted work
 
+### Active continuation: DS-02b and initial Recipe-Aware control regressions
+
+Remote state was verified at `fc0582bff93128c60dd5fa9f36562c5c04332f75` before editing. Its native run **39523127735** has now completed successfully: four independent JVMs, the 192-item storage/restart ledger, actual Grid clicks/crafting, and actual IE2 player buttons all pass. Universal run **39523132641** also passed. The former first-shift refusal is intermittent; this success does not erase the earlier failure. The passive successful click observed `cachedInputs=unbuilt` before and one real IE2 barrel after, two monitors, and no input cooldown/miss. A repeat native run is in progress to obtain a failing click boundary if the refusal recurs.
+
+This continuation adds eight real SQLite/queue/restart tests to `DrawerTemplateRegistrationTest` for the known missing durable template receipt, orphan ID reservation, conflicting stored identity, journal write rejection and backups. It adds `RecipeAwareInitialControlHandlerTest` with two first-viewer foreign-stack/stale-menu regressions. Production remains unchanged for this test-first checkpoint; failures in the new regressions are expected and must be repaired before acceptance. Existing 513 tests are retained.
+
+**Next development action:** run this test-only candidate, implement DS-02b exact-byte durable template receipt and replay before identity/counter loading, and install the existing foreign-item recovery handler on the initial Recipe-Aware control update. In parallel, the recovered IE2 v4 break candidate is being integrated into the exact #32 source; its partial-drop/restart ambiguity remains an explicit blocker. No merge, release or version bump is claimed.
+
+### Previous checkpoint details (preserved evidence)
+
 **Production at `5a8dd3747684f585ba6552b12e96eaa30c5ae47d` now passes all eight universal gates and 513/513 project tests. Its separate paired native player run failed conservatively at the first Grid shift.** The two storage/restart JVMs passed; all 16 tagged items stayed in the player's inventory, zero in storage/cursor, no reported transfer exception. This is NOT evidence of a dupe, loss or a registration-path regression, and the native pair is NOT accepted at this head.
 
 This commit changes ONLY the disposable NativeGridPlayerProbe and this checkpoint. It captures already-published root/cache/cooldown/miss state at LOWEST and MONITOR click priorities. It never invokes lazy barrel discovery, changes inventories, retries deposits, refreshes controllers, or relaxes the exact existing 16-item/crafting assertions. Production and all 513 tests remain unchanged.
