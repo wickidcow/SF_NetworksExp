@@ -2,25 +2,25 @@
 
 ## Release
 
-`2.1.112-Legacy-1.0`
+`1.0.60`, coordinated with InfinityExpansion2 `2.0.15`.
 
-## Priority order
+The exact accepted commits, public artifact hashes, native evidence and remaining limitations are recorded in [NETWORKS_EXPANSION_COMPLETION.md](NETWORKS_EXPANSION_COMPLETION.md).
 
-1. **Slimefun Legacy** — primary runtime, compiler target, and release-blocking requirement
-2. **Slimefun United** — required exact-core compatibility build
-3. **Slimefun Gugu** — required exact-core compatibility build
+## Maintenance target and retained compatibility gates
 
-A universal release is not uploaded unless the same source compiles/tests against all three.
+**GuGu Slimefun Legacy** is the primary runtime and development target. The release uses `wickidcow/Slimefun-Legacy` source `1cb32d6e95b305998065b8ef6b936a56f679187d` for its core and coordinated native acceptance.
+
+The existing auxiliary United and Gugu exact-core build gates remain enabled and passed. They preserve the established universal build contract; this release does not undertake new maintenance of abandoned United support. A universal release is not uploaded unless every existing required gate succeeds.
 
 ## Preserved world and addon identity
 
-1.0 Legacy retains:
+1.0.60 retains:
 
 - Bukkit plugin name `Networks`
 - Main class `io.github.sefiraat.networks.Networks`
 - Required plugin name `Slimefun`
 - Existing Java package names
-- All 288 item IDs from the established 2.1.111/Alpha series contract
+- All 289 currently registered item IDs, including the established 2.1.111/Alpha series identities
 - Existing Networks and historical persistent-data namespaces
 - Existing `CargoStorageUnits.db` file and core tables
 - Existing configuration keys, with additive compatibility/Doctor options
@@ -32,11 +32,13 @@ No intentional item-ID, guide, placed-block, or database-file migration is inclu
 
 GitHub Actions builds exact core JARs from:
 
-- `wickidcow/Slimefun-Legacy` `master` using Java 25 for the core build
+- `wickidcow/Slimefun-Legacy` pinned at `1cb32d6e95b305998065b8ef6b936a56f679187d`, using Java 25 for the core build
 - `Slimefun-United/Slimefun-United` `dev`
 - `SlimefunGuguProject/Slimefun4` `master`
 
 Networks itself is compiled to Java 21 bytecode against each JAR. The build uses the Paper `1.21.11-R0.1-SNAPSHOT` API baseline and injects the exact core through `-PslimefunCoreJar=/path/to/Slimefun.jar`.
+
+Separate gates compile Networks against Paper 26.3 build 176 and exercise native Paper 26.3 builds 176/194 and Purpur 1.21.11 build 2568. IE2's coordinated storage/machine acceptance is on Purpur; it also passes separate Paper 1.21.11/26.2/26.3 compilation. These results do not certify every future server build or Folia runtime safety.
 
 The release verifier rejects:
 
@@ -86,8 +88,10 @@ The release verifier rejects:
 9. Restart and compare stored data.
 10. Test optional integrations individually and in the same combination used on production.
 
-Folia remains unclaimed because multi-chunk transactional networks are not inherently region-safe.
+Folia is unsupported by these addons because multi-chunk transactional networks have not been made safe across independent regions. Neither addon enables Folia with a descriptor flag. This is an addon limitation, not a claim that the pinned Slimefun Legacy core lacks Folia support. Leaf runtime validation is also not established by the 1.0.60/2.0.15 refresh.
 
 ## 1.0 persistence additions
 
 The database path and schema remain unchanged. The release adds startup backups, `PRAGMA quick_check`, transactional absolute amount snapshots, and an external `CargoStorageUnits.recovery.tsv` file used only for pending write recovery. Missing configuration keys use safe defaults.
+
+The 1.0.60 repair series adds exact-identity template recovery evidence, retains pending amount writes through rejected database work and clean shutdown, and preserves invalid stored balances for reconciliation. Receipt verification and clean restart tests do not claim atomic recovery across an arbitrary process crash.
