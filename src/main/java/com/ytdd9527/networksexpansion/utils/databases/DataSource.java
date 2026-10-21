@@ -22,6 +22,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -52,6 +53,7 @@ public final class DataSource implements AutoCloseable {
     private int nextItemId;
     private Path databaseFile;
     private Path recoveryJournalFile;
+    private Path templateJournalFile;
     private String integrityStatus = "not-run";
     private String lastBackup = "none";
 
@@ -61,6 +63,7 @@ public final class DataSource implements AutoCloseable {
             connect();
             verifyIntegrity();
             createTable();
+            replayTemplateJournal();
             loadItemMap();
             loadEnvironment();
             initCounters();
@@ -113,6 +116,7 @@ public final class DataSource implements AutoCloseable {
     }
 
     synchronized int getNextContainerId() {
+        requireAvailableId(nextContainerId, "container");
         int id = nextContainerId++;
         persistCounter(CONTAINER_ID_KEY, nextContainerId);
         return id;
@@ -165,18 +169,26 @@ public final class DataSource implements AutoCloseable {
             throw new IllegalStateException("Could not serialize a new Networks drawer item template", exception);
         }
 
-        int id = nextItemId++;
+        requireAvailableId(nextItemId, "item");
+        int id = nextItemId;
+        try {
+            // Before any stock can be accepted, preserve the original bytes outside
+            // the cancellable worker. A failed SQL INSERT can be replayed unchanged.
+            DrawerTemplateJournal.record(templateJournalFile, id, serialized);
+        } catch (IOException exception) {
+            throw new IllegalStateException("Could not preserve a new Networks drawer item identity", exception);
+        }
+        nextItemId++;
         persistCounter(ITEM_ID_KEY, nextItemId);
 
         Networks.getQueryQueue().scheduleUpdate(() -> {
-            String sql = "INSERT INTO " + DataTables.ITEM_STACK + " VALUES (?,?);";
-            try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                statement.setInt(1, id);
-                statement.setString(2, serialized);
-                statement.executeUpdate();
+            Map<Integer, String> receipt = Map.of(id, serialized);
+            try {
+                persistTemplateRecords(receipt);
+                removeCommittedTemplates(receipt);
                 return true;
             } catch (SQLException exception) {
-                logger.warning(Lang.getString("messages.data-saving.error-occurred-when-saving-itemstack"));
+                logger.warning("Networks retained item-template recovery receipt " + id + " after a failed SQL write.");
                 Debug.trace(exception);
                 return false;
             }
@@ -461,6 +473,7 @@ public final class DataSource implements AutoCloseable {
         Path dataPath = dataFolder.toPath();
         databaseFile = dataPath.resolve("CargoStorageUnits.db");
         recoveryJournalFile = DrawerRecoveryJournal.pathFor(dataPath);
+        templateJournalFile = DrawerTemplateJournal.pathFor(dataPath);
         if (Networks.getInstance().getConfig().getBoolean("database.startup-backups.enabled", true)) {
             int retained = Math.max(1,
                 Networks.getInstance().getConfig().getInt("database.startup-backups.retained", 5));
@@ -559,6 +572,112 @@ public final class DataSource implements AutoCloseable {
         }
     }
 
+    private void replayTemplateJournal() throws SQLException {
+        final Map<Integer, String> receipts;
+        try {
+            receipts = DrawerTemplateJournal.read(templateJournalFile);
+            // Validate every payload before any SQL mutation. Invalid bytes and
+            // conflicts retain the complete journal for administrator inspection.
+            for (String serialized : receipts.values()) {
+                getItemStack(serialized);
+            }
+        } catch (IOException | ClassNotFoundException | RuntimeException exception) {
+            throw new SQLException("Could not validate the Networks item-template recovery journal", exception);
+        }
+        if (!receipts.isEmpty()) {
+            persistTemplateRecords(receipts);
+            removeCommittedTemplates(receipts);
+            logger.info("Recovered " + receipts.size() + " exact Networks drawer item-template receipt(s).");
+        }
+    }
+
+    private void persistTemplateRecords(Map<Integer, String> receipts) throws SQLException {
+        if (!connection.getAutoCommit()) {
+            throw new SQLException("Networks item-template persistence requires its own transaction");
+        }
+        int previousSynchronous;
+        try (Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery("PRAGMA synchronous;")) {
+            if (!result.next()) {
+                throw new SQLException("Could not read SQLite durability mode");
+            }
+            previousSynchronous = result.getInt(1);
+        }
+        // SQLite NORMAL may leave the newest WAL commit only in the OS cache.
+        // Force identity commits before discarding their already-forced receipt.
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("PRAGMA synchronous = FULL;");
+        }
+        try {
+            connection.setAutoCommit(false);
+            try (PreparedStatement select = connection.prepareStatement(
+                     "SELECT Item FROM " + DataTables.ITEM_STACK + " WHERE ItemID = ?;");
+                 PreparedStatement insert = connection.prepareStatement(
+                     "INSERT INTO " + DataTables.ITEM_STACK + " (ItemID, Item) VALUES (?,?);")) {
+                boolean inserted = false;
+                for (Map.Entry<Integer, String> receipt : receipts.entrySet()) {
+                    select.setInt(1, receipt.getKey());
+                    boolean exists;
+                    try (ResultSet row = select.executeQuery()) {
+                        exists = row.next();
+                        if (exists && !receipt.getValue().equals(row.getString(1))) {
+                            throw new SQLException("Conflicting Networks drawer item identity " + receipt.getKey()
+                                + "; original SQL and journal bytes have been preserved");
+                        }
+                    }
+                    if (!exists) {
+                        insert.setInt(1, receipt.getKey());
+                        insert.setString(2, receipt.getValue());
+                        insert.executeUpdate();
+                        inserted = true;
+                        // An INSERT trigger or storage fault must not replace the
+                        // identity while still reporting a successful SQL write.
+                        try (ResultSet row = select.executeQuery()) {
+                            if (!row.next() || !receipt.getValue().equals(row.getString(1))) {
+                                throw new SQLException("Networks drawer item-template readback failed for "
+                                    + receipt.getKey());
+                            }
+                        }
+                    }
+                }
+                connection.commit();
+                connection.setAutoCommit(true);
+                if (!inserted) {
+                    // A read-only replay commit does not fsync an earlier WAL write.
+                    // Checkpoint identical existing rows before releasing their receipt.
+                    try (Statement checkpoint = connection.createStatement();
+                         ResultSet result = checkpoint.executeQuery("PRAGMA wal_checkpoint(FULL);")) {
+                        if (!result.next() || result.getInt(1) != 0) {
+                            throw new SQLException("Could not checkpoint recovered Networks item identities");
+                        }
+                    }
+                }
+            } catch (SQLException exception) {
+                try {
+                    if (!connection.getAutoCommit()) connection.rollback();
+                } catch (SQLException rollback) {
+                    exception.addSuppressed(rollback);
+                }
+                throw exception;
+            }
+        } finally {
+            connection.setAutoCommit(true);
+            try (Statement statement = connection.createStatement()) {
+                statement.execute("PRAGMA synchronous = " + previousSynchronous + ';');
+            }
+        }
+    }
+
+    private void removeCommittedTemplates(Map<Integer, String> receipts) {
+        try {
+            DrawerTemplateJournal.removeCommitted(templateJournalFile, receipts);
+        } catch (IOException exception) {
+            // A leftover receipt is safe: replay checks exact bytes and is idempotent.
+            logger.warning("Networks retained committed item-template receipts because journal cleanup failed.");
+            Debug.trace(exception);
+        }
+    }
+
     private void loadItemMap() {
         executeQuery("SELECT Item, ItemID FROM " + DataTables.ITEM_STACK + ";", result -> {
             try {
@@ -585,22 +704,58 @@ public final class DataSource implements AutoCloseable {
         });
     }
 
-    private void initCounters() {
-        nextItemId = Math.max(parseCounter(ITEM_ID_KEY), highestUsedId(DataTables.ITEM_STACK, "ItemID") + 1);
-        nextContainerId = Math.max(parseCounter(CONTAINER_ID_KEY), highestUsedId(DataTables.CONTAINER, "ContainerID") + 1);
+    private void initCounters() throws SQLException {
+        int itemMaximum = Math.max(highestUsedId(DataTables.ITEM_STACK, "ItemID"),
+            highestUsedId(DataTables.ITEM_STORED, "ItemID"));
+        int containerMaximum = Math.max(highestUsedId(DataTables.CONTAINER, "ContainerID"),
+            highestUsedId(DataTables.ITEM_STORED, "ContainerID"));
+        try {
+            if (Files.exists(recoveryJournalFile) && !Files.isRegularFile(recoveryJournalFile)) {
+                throw new IOException("Networks amount recovery journal is not a regular file");
+            }
+            for (DrawerRecoveryJournal.Key key : DrawerRecoveryJournal.read(recoveryJournalFile).keySet()) {
+                itemMaximum = Math.max(itemMaximum, key.itemId());
+                containerMaximum = Math.max(containerMaximum, key.containerId());
+            }
+        } catch (IOException exception) {
+            throw new SQLException("Could not reserve the IDs referenced by the Networks amount recovery journal", exception);
+        }
+        // References with no known template/container are still owned. Never reuse
+        // them for a newly created identity or silently reassign an orphan balance.
+        nextItemId = nextSafeCounter(ITEM_ID_KEY, itemMaximum);
+        nextContainerId = nextSafeCounter(CONTAINER_ID_KEY, containerMaximum);
         persistCounter(ITEM_ID_KEY, nextItemId);
         persistCounter(CONTAINER_ID_KEY, nextContainerId);
     }
 
-    private int highestUsedId(@NotNull String table, @NotNull String column) {
+    private int nextSafeCounter(String key, int maximum) throws SQLException {
+        if (maximum == Integer.MAX_VALUE) {
+            throw new SQLException("Networks database ID space is exhausted for " + key);
+        }
+        return Math.max(parseCounter(key), maximum + 1);
+    }
+
+    private static void requireAvailableId(int id, String kind) {
+        if (id < 0 || id == Integer.MAX_VALUE) {
+            throw new IllegalStateException("Networks drawer " + kind + " ID space is exhausted");
+        }
+    }
+
+    private int highestUsedId(@NotNull String table, @NotNull String column) throws SQLException {
         String sql = "SELECT MAX(CAST(" + column + " AS INTEGER)) FROM " + table + ';';
         try (Statement statement = connection.createStatement();
              ResultSet result = statement.executeQuery(sql)) {
-            return result.next() ? result.getInt(1) : -1;
-        } catch (SQLException exception) {
-            logger.warning("Could not verify the Networks database counter for " + table + '.');
-            Debug.trace(exception);
-            return -1;
+            if (!result.next()) {
+                return -1;
+            }
+            long value = result.getLong(1);
+            if (result.wasNull()) {
+                return 0;
+            }
+            if (value > Integer.MAX_VALUE) {
+                throw new SQLException("Networks database ID exceeds supported range in " + table + '.' + column);
+            }
+            return (int) Math.max(-1L, value);
         }
     }
 

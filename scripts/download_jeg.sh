@@ -27,7 +27,7 @@ curl \
 test -s "$TEMP"
 printf '%s  %s\n' "$EXPECTED_SHA256" "$TEMP" | sha256sum --check --status
 unzip -tq "$TEMP" >/dev/null
-unzip -Z1 "$TEMP" | grep -Fxq 'com/balugaq/jeg/api/recipe_complete/source/RecipeCompleteProvider.class'
+unzip -Z1 "$TEMP" | grep -Fx 'com/balugaq/jeg/api/recipe_complete/source/RecipeCompleteProvider.class' >/dev/null
 
 mv "$TEMP" "$DESTINATION"
 printf 'Verified maintained JEG %s at %s\n' "$VERSION" "$DESTINATION"

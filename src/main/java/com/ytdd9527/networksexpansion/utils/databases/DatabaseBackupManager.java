@@ -31,7 +31,9 @@ public final class DatabaseBackupManager {
         @NotNull Logger logger
     ) throws IOException {
         Path database = dataFolder.resolve("CargoStorageUnits.db");
-        if (!Files.isRegularFile(database)) {
+        if (!Files.isRegularFile(database)
+            && !Files.isRegularFile(DrawerRecoveryJournal.pathFor(dataFolder))
+            && !Files.isRegularFile(DrawerTemplateJournal.pathFor(dataFolder))) {
             return null;
         }
 
@@ -45,6 +47,9 @@ public final class DatabaseBackupManager {
             backup.resolve(database.getFileName() + "-wal"));
         copyIfPresent(database.resolveSibling(database.getFileName() + "-shm"),
             backup.resolve(database.getFileName() + "-shm"));
+
+        copyIfPresent(DrawerRecoveryJournal.pathFor(dataFolder), backup.resolve(DrawerRecoveryJournal.FILE_NAME));
+        copyIfPresent(DrawerTemplateJournal.pathFor(dataFolder), backup.resolve(DrawerTemplateJournal.FILE_NAME));
 
         prune(backupRoot, Math.max(1, retained), logger);
         return backup;

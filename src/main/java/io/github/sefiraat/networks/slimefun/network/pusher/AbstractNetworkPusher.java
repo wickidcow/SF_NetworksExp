@@ -113,11 +113,10 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
         }
 
         final Location location = blockMenu.getLocation();
-        // Never replace a foreign item that an older, initially empty GUI allowed
-        // into this slot. Allow its recovery before recreating the control.
-        if (!refreshRecipeAwareControl(blockMenu, modeSlot)) {
-            return;
-        }
+        // Keep a foreign stack intact, but install the recovery handler even on
+        // the first viewer tick. The preset background handler otherwise locks
+        // a stack that was already present before this control was initialized.
+        refreshRecipeAwareControl(blockMenu, modeSlot);
         blockMenu.addMenuClickHandler(modeSlot, (player, slot, itemStack, clickAction) -> {
             // An admin or another addon can replace a block while its old menu is still open.
             // Never write per-machine settings through a stale menu, for any click type.
@@ -777,3 +776,4 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
 
     public abstract int @NotNull [] getItemSlots();
 }
+
