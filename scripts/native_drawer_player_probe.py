@@ -48,9 +48,17 @@ def run_phase(java: str, node: str, server: Path, work: Path, modules: Path, pha
         bot = None
         try:
             deadline = time.monotonic() + 120
-            while not ready.is_file() and process.poll() is None and time.monotonic() < deadline:
+            expected_ready = f'READY: native drawer {phase}'
+            observed_ready = ''
+            while process.poll() is None and time.monotonic() < deadline:
+                try:
+                    observed_ready = ready.read_text().strip()
+                except FileNotFoundError:
+                    observed_ready = ''
+                if observed_ready == expected_ready:
+                    break
                 time.sleep(0.25)
-            if not ready.is_file() or process.poll() is not None:
+            if observed_ready != expected_ready or process.poll() is not None:
                 raise RuntimeError(f'Native Drawer {phase} server did not become ready')
             bot = subprocess.Popen([node, str(ROOT / 'tests/runtime/native_drawer_player_client.cjs')],
                                    env=env, stdout=client_log, stderr=subprocess.STDOUT)
@@ -73,6 +81,19 @@ def run_phase(java: str, node: str, server: Path, work: Path, modules: Path, pha
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait()
+            # Retain the exact stopped files before another JVM can open them.
+            # These copies are evidence only; the harness never checkpoints,
+            # rewrites or restores the live databases/player inventory.
+            stopped_storage = work / f'native-drawer-{phase}-stopped-storage'
+            for relative in ('data-storage', 'plugins/Networks', 'fixture/playerdata'):
+                source = work / relative
+                if source.is_dir():
+                    shutil.copytree(source, stopped_storage / relative)
+            hashes = {
+                str(path.relative_to(stopped_storage)): digest(path)
+                for path in sorted(stopped_storage.rglob('*')) if path.is_file()
+            }
+            (work / f'native-drawer-{phase}-storage-hashes.json').write_text(json.dumps(hashes, indent=2) + '\n')
             if result.is_file():
                 shutil.copyfile(result, work / f'native-drawer-{phase}-result.txt')
             for name in (console, client):
@@ -136,6 +157,10 @@ def main() -> None:
         manifest.update(result='FAIL', drawer_player_result='FAIL; inspect phase logs/results')
         raise
     finally:
+        for phase in ('seed', 'verify'):
+            receipt = work / f'native-drawer-{phase}-storage-hashes.json'
+            if receipt.is_file():
+                manifest[f'drawer_{phase}_stopped_storage_sha256'] = json.loads(receipt.read_text())
         manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
 
 

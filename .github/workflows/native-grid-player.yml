@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IE2_HEAD: 19e4943a53c44589a6cfcf618150358f7bdf5a1c
+  IE2_HEAD: 8d876da50973f8c295be61d30ded7a25e5628602
   CORE_HEAD: 36d665f1ec47ce3f05b1be092051ed0b1a1f53ff
 
 jobs:

@@ -77,7 +77,8 @@ final class DrawerQuantumWithdrawalReceipt {
                 }
                 Throwable writeFailure = null;
                 try {
-                    menu.replaceExistingItem(destinationSlot, updated);
+                    // Retain the full expected identity even if the setter mutates its argument.
+                    menu.replaceExistingItem(destinationSlot, ItemStackUtil.getCleanItem(updated));
                 } catch (RuntimeException | LinkageError failure) {
                     writeFailure = failure;
                 }

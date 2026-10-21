@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IE2_HEAD: 19e4943a53c44589a6cfcf618150358f7bdf5a1c
+  IE2_HEAD: 8d876da50973f8c295be61d30ded7a25e5628602
   CORE_HEAD: 1cb32d6e95b305998065b8ef6b936a56f679187d
 
 jobs:
@@ -131,6 +131,8 @@ jobs:
             build/native-drawer-player/*-console.log
             build/native-drawer-player/*-client.log
             build/native-drawer-player/*-result.txt
+            build/native-drawer-player/native-drawer-*-storage-hashes.json
+            build/native-drawer-player/native-drawer-*-stopped-storage
             build/test-results/test/TEST-*.xml
             .ci/paired-ie2/build/test-results/test/TEST-*.xml
             .ci/paired-core/build/test-results/test/TEST-*.xml

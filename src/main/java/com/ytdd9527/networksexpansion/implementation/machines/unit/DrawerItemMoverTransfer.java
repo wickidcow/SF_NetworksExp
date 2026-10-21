@@ -94,7 +94,9 @@ final class DrawerItemMoverTransfer {
         }
         Throwable writeFailure = null;
         try {
-            menu.replaceExistingItem(slot, prepared);
+            // The setter may mutate its argument. Keep the expected receipt
+            // independent of the object handed to the authoritative slot.
+            menu.replaceExistingItem(slot, ItemMoverStorage.snapshot(prepared));
         } catch (RuntimeException | LinkageError failure) {
             writeFailure = failure;
         }

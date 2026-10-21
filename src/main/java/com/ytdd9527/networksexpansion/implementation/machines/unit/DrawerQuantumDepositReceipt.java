@@ -78,7 +78,8 @@ final class DrawerQuantumDepositReceipt {
 
                 Throwable writeFailure = null;
                 try {
-                    menu.replaceExistingItem(sourceSlot, updated);
+                    // Retain the full expected identity even if the setter mutates its argument.
+                    menu.replaceExistingItem(sourceSlot, ItemStackUtil.getCleanItem(updated));
                 } catch (RuntimeException | LinkageError failure) {
                     // The setter may have completed before reporting failure. Its
                     // authoritative readback, not the exception, determines ownership.

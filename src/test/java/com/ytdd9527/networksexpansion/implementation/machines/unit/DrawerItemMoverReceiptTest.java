@@ -221,6 +221,41 @@ class DrawerItemMoverReceiptTest {
     }
 
     @Test
+    void sourceSetterCannotRewriteTheExpectedReceiptThroughItsInputAlias() throws Throwable {
+        doAnswer(call -> {
+            ItemStack supplied = call.getArgument(1);
+            ItemMeta meta = supplied.getItemMeta();
+            meta.getPersistentDataContainer().set(Keys.ITEM_MOVER_AMOUNT_LONG, PersistentDataType.LONG, STOCK);
+            supplied.setItemMeta(meta);
+            source.set(supplied);
+            return null;
+        }).when(menu).replaceExistingItem(eq(9), any(ItemStack.class));
+        try { transfer(); } catch (IllegalStateException expected) { }
+        assertEquals(DRAWER_AMOUNT, stored.getAmount(),
+            "A setter-mutated prepared stack is not proof that the source lost its planned44");
+        assertEquals(STOCK, remaining());
+        assertTrue(drawer.hasUnverifiedSourceTransfer(), "An unknown source receipt must hold the Drawer");
+    }
+
+    @Test
+    void destinationSetterCannotRewriteTheExpectedReceiptThroughItsInputAlias() throws Throwable {
+        map("quickTransferModes").put(location, QuickTransferMode.TO_QUANTUM);
+        doAnswer(call -> {
+            ItemStack supplied = call.getArgument(1);
+            ItemMeta meta = supplied.getItemMeta();
+            meta.getPersistentDataContainer().set(Keys.ITEM_MOVER_AMOUNT_LONG, PersistentDataType.LONG, STOCK);
+            supplied.setItemMeta(meta);
+            source.set(supplied);
+            return null;
+        }).when(menu).replaceExistingItem(eq(9), any(ItemStack.class));
+        try { transfer(); } catch (IllegalStateException expected) { }
+        assertEquals(DRAWER_AMOUNT, stored.getAmount(),
+            "A setter-mutated prepared stack is not proof that the destination received its planned212");
+        assertEquals(STOCK, remaining());
+        assertTrue(drawer.hasUnverifiedSourceTransfer(), "An unknown destination receipt must hold the Drawer");
+    }
+
+    @Test
     void detachedPreparationDoesNotInvokeWrapperMetadataWriters() throws Throwable {
         AtomicInteger callbacks = new AtomicInteger();
         source.set(new CallbackStack(source.get(), () -> {

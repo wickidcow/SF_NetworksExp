@@ -144,3 +144,6 @@ gradle.properties
 
 # One-shot migration scratch files
 .refork-*
+
+# Regenerated from the committed Dust acceptance preparer.
+/scripts/infinity_dust_runtime_probe.py

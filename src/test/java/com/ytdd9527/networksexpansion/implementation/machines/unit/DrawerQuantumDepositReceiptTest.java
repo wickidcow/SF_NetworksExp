@@ -236,6 +236,24 @@ class DrawerQuantumDepositReceiptTest {
         assertLedger(0);
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void authoritativeSetterCannotRewriteTheExpectedContainerIdentity(boolean toQuantum) throws Throwable {
+        if (toQuantum) map("quickTransferModes").put(location, QuickTransferMode.TO_QUANTUM);
+        doAnswer(call -> {
+            ItemStack supplied = call.getArgument(1);
+            ItemMeta meta = supplied.getItemMeta();
+            meta.getPersistentDataContainer().set(OWNER, PersistentDataType.STRING, "setter-changed-owner");
+            supplied.setItemMeta(meta);
+            source.set(supplied);
+            return null;
+        }).when(menu).replaceExistingItem(eq(9), any(ItemStack.class));
+        try { transfer(); } catch (IllegalStateException expected) { }
+        assertEquals(DRAWER_AMOUNT, stored.getAmount(),
+            "The prepared balance alone cannot acknowledge a changed physical container identity");
+        assertTrue(drawer.hasUnverifiedSourceTransfer(), "An unknown identity write must hold the Drawer");
+    }
+
     @Test
     void sourceWriterCannotReenterDestinationMutations() throws Throwable {
         AtomicInteger callbacks = new AtomicInteger();

@@ -4,6 +4,30 @@ Updated October 20, 2026 America/New_York (October 21 UTC in CI).
 
 ## Resume here — do not restart accepted work
 
+
+### Current execution checkpoint — final native acceptance and receipt alias fix
+
+This is the final **665-test Networks1.0.60 candidate**, based on b5e48c5c8da4ddab93cabafca44349ee4ad26a2e, on PR104 to master. IE2 evidence head is **8d876da50973f8c295be61d30ded7a25e5628602**, version2.0.15, PR32 to master; production is unchanged from19e4943a. No master merge or publication yet.
+
+**Do not repeat the local SQLite investigation.** The pinned core already documents the same startup file-restoration diagnostic in [its4.1.72 checkpoint](https://github.com/wickidcow/Slimefun-Legacy/blob/1cb32d6e95b305998065b8ef6b936a56f679187d/docs/release-candidates/4.1.72.md#storage-assessment-and-remaining-attribution), from PR362/363. Prior run03 traced matched `.rsync-tmp` moves restoring deleted WAL/SHM/clean-marker files. Current recipe evidence proves stale-WAL replay/truncation byte-for-byte, but does not identify the current actor. Current local failures remain FAIL_DIAGNOSTIC. For native local acceptance, keep **all mutable runtime and trace files in process-local `/tmp` until every server JVM exits**, then export the evidence. Independent GitHub CI is the other accepted environment. Do not add speculative core fixes, force database flushes, reseed restart state or remove assertions.
+
+**Accepted evidence at b5e48c5c:**
+
+Both universal workflows39535135880/39535130407 PASS all eight gates, including native Paper26.3 builds176/194 and Purpur persistence. The following are prior-head behavioral results; the three-helper repair above has its own final gates.
+
+- Recipe workflow **39535130524**, job119009912281 PASS: four distinct JVMs6542/6652/6780/6929;192-item restart ledger; actual Classic/More/Best controls,3foreign-stack break refusals,24GUI clicks,39typed-PDC items, batch5/chat/reopen; real smeltery ratios,OFF64 and no refill when re-enabled; exact256-per-ingredient ledger and persisted settings/templates/player contents. Artifact12317400679 SHA256`8c47282e39e72f551b5135461730c01044acb26fbe6b06108dd1727716319a74`.
+- Drawer workflow **39535130437**, job119009911833 PASS: four JVMs6773/6882/7007/7144;192 prerequisite ledger,19seedclicks+2reloadclicks, exact3,000,000,086 total with64-bitQuantum/PDC/lock/void/settings preserved. Artifact12317264138 SHA256`951a13500974bc67b3f77ee012a38155fc07ce449f5f8f4b5f4117df60198fc7`.
+- Grid/IE2 player workflow **39535130411**, job119009911420 PASS.
+- Both downloaded recipe/Drawer artifacts contain the exact canonical NetworksJAR SHA`0588ad1e19281293daee6dd419c51d92e5b9dc7923d707dd27157b14b9238ae3` and IE2JAR SHA`897bd4de70c9219217ecfb0f8cf68f0147b6c38758a239085db39718dd686eef`. CI coreJAR SHA`cec822e34f0d9b2f27b5e7b8190e4a2e9625e634144a219a30d7a3394a4ba783` differs from the local build but names the same1cb source; do not conflate those build artifacts. Networks661 andIE2158 tests have zero failures/errors/skips. Core941 entries have zero failures/errors and one existing optional real-database assumption skip.
+- Reused Dust Extractor fixture passes **152real production/line-transfer cases** on the final b5/19e/local1cb pair: synchronized registered tickers, exact full metadata/PDC, partial/VOID transfers and compensation. The four obsolete producer-growth abort cases were replaced by16exact normal/VOID growth ledgers; metadata/replacement/empty source guards remain. Single-JVM acceptance does not claim restart or a real destination network (sink is controlled).
+- Final IE2 six-break-case/player-placement/reload acceptance now PASS in isolated temporary storage, exported only after bothJVMs exited: seed40003/verify40438; exact11-item independent reload. Source19e/b5/local1cb and JARs unchanged. Evidence `build-tools/native-runtime/ie2-final-b5e48c5c-19e4943a-isolated`.
+
+**Final review defect fixed and independently reviewed:** a custom inventory setter could mutate the same prepared ItemStack later used as its expected receipt. Clean RED:39tests, existing35pass,4newfailures (ItemMover source44duplication/destination212loss; two Quantum owner-PDC aliases). The three writer calls now pass independent plain snapshots; affected39tests pass. Root integrated the exact five-file repair from independently reviewed local7e92a2e2 and ran a full strict clean build: **665tests, zero failures/errors/skips**,65suites. Source289IDs, Java21bytecode536classes, universal JAR and ZIP CRC pass. Immutable1.0.60JAR SHA256 **e355ce958bd1e3d3c8ddd65d7f56dbd2b8d4c605ca6b0f1025a34e65c6a808b2**, byte-identical to the reviewer build. Final pusher review found no additional blocker. No broader investigation is required.
+
+**Included reproducible fixtures:** native ItemMover runner/client/Java/doc, isolated GitHub ItemMover+Dust gate, reused Dust probe/preparer and phase-specific Drawer readiness/stopped-file evidence. SQL diagnostic SELECTs in ItemMover are opt-in and off by default; an audit-enabled pass is not allowed to hide the failed local no-audit control. The final gate runs without that instrumentation.
+
+**Exact next action:** require this final Networks candidate's CI/native gates, including the new audit-off ItemMover and Dust workflow. Complete IE2 evidence-head CI/review and master integration; its production and accepted native JARs are unchanged. Then use the existing gated publishers for1.0.60/2.0.15 and update only the two applicable JARs in SF_Addons. Existing versioned release artifacts remain immutable.
+
 ### Active final integration — October 21 UTC
 
 This commit is the combined Networks **1.0.60** candidate on PR **#104**, based on `1266e7a0f7461ba40af331ede42c288d848f49fc`. PR #104 now targets **master**. Coordinated IE2 **2.0.15** is committed at `19e4943a53c44589a6cfcf618150358f7bdf5a1c` in PR **#32**, also targeting master. Both remain draft until the final native acceptance gates pass. Neither release has been published and the SF_Addons ZIP has not been replaced.
