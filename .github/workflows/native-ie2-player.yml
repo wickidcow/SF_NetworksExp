@@ -1,0 +1,142 @@
+name: Native IE2 player actions
+
+# Adds real IE2 menu clicks AFTER the unchanged Grid and storage/restart tests.
+on:
+  push:
+    branches: [test/native-ie2-player-actions-20261018]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-ie2-player-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IE2_HEAD: 8d876da50973f8c295be61d30ded7a25e5628602
+  CORE_HEAD: 1cb32d6e95b305998065b8ef6b936a56f679187d
+
+jobs:
+  native-ie2-player:
+    name: Real Grid and IE2 player ledgers / Purpur 1.21.11
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out exact combined Networks candidate
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Check out corrected combined IE2 input and withdrawal receipts
+        uses: actions/checkout@v6
+        with:
+          repository: wickidcow/SF_InfinityExpansion2
+          ref: ${{ env.IE2_HEAD }}
+          path: .ci/paired-ie2
+          persist-credentials: false
+      - name: Check out pinned Slimefun Legacy
+        uses: actions/checkout@v6
+        with:
+          repository: wickidcow/Slimefun-Legacy
+          ref: ${{ env.CORE_HEAD }}
+          path: .ci/paired-core
+          persist-credentials: false
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Set up Java 25 toolchain and runtime
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+      - name: Set up loopback client runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned client without lifecycle scripts
+        run: |
+          set -euo pipefail
+          mkdir -p .ci/native-player
+          printf '{"name":"networks-native-fixture","version":"1.0.0","private":true}\n' > .ci/native-player/package.json
+          npm --prefix .ci/native-player install --save-exact --ignore-scripts --no-audit --no-fund mineflayer@4.39.0
+          npm --prefix .ci/native-player ls --all > native-client-dependencies.txt
+          sha256sum .ci/native-player/package-lock.json
+      - name: Verify exact source pins, original contracts and fixture syntax
+        run: |
+          set -euo pipefail
+          test "$(git -C .ci/paired-ie2 rev-parse HEAD)" = "$IE2_HEAD"
+          test "$(git -C .ci/paired-core rev-parse HEAD)" = "$CORE_HEAD"
+          echo "NETWORKS_HEAD=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          python3 scripts/verify_legacy_compatibility.py
+          python3 .ci/paired-ie2/scripts/verify_transport_contracts.py --slimefun .ci/paired-core --networks "$PWD"
+          python3 -m py_compile scripts/native_grid_player_probe.py scripts/native_ie2_player_probe.py
+          node --check tests/runtime/native_grid_player_client.cjs
+          node --check tests/runtime/native_ie2_player_client.cjs
+      - name: Build and publish pinned core API locally
+        working-directory: .ci/paired-core
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          python3 scripts/verify_legacy.py .
+          ./gradlew spotlessApply --no-daemon
+          git diff --binary > "$GITHUB_WORKSPACE/paired-core-formatting.patch"
+          ./gradlew clean build publishToMavenLocal -PprojectVersion=ALBION-SNAPSHOT --no-daemon
+      - name: Locate the exact shared core
+        run: |
+          set -euo pipefail
+          CORE_JAR=$(python3 scripts/find_slimefun_jar.py .ci/paired-core)
+          test -s "$CORE_JAR"
+          echo "CORE_JAR=$CORE_JAR" >> "$GITHUB_ENV"
+          sha256sum "$CORE_JAR"
+      - name: Build and test combined Networks
+        run: |
+          set -euo pipefail
+          bash scripts/download_jeg.sh
+          chmod +x gradlew
+          ./gradlew clean build --no-daemon -PslimefunCoreJar="$CORE_JAR" \
+            -PjegJar="$PWD/.ci/jeg/SF_JustEnoughGuide2.1.67.jar" -PstrictDeprecation=true
+          python3 scripts/verify_java21_bytecode.py build/libs/SF_Networks1.0.60.jar
+          python3 scripts/verify_universal_jar.py build/libs/SF_Networks1.0.60.jar 1.0.60
+      - name: Build and test exact IE2 repair
+        working-directory: .ci/paired-ie2
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew clean build --no-daemon -PpaperApiVersion=1.21.11-R0.1-SNAPSHOT \
+            -PtargetJvm=21 -PbuildVersion=2.0.15 \
+            -PslimefunApiCoordinate=com.github.slimefun:Slimefun:ALBION-SNAPSHOT
+      - name: Require storage restart, actual Grid clicks, then actual IE2 buttons
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --retry 2 --max-time 240 \
+            https://api.purpurmc.org/v2/purpur/1.21.11/2568/download --output .ci/native-purpur.jar
+          python3 scripts/native_ie2_player_probe.py "$CORE_JAR" \
+            build/libs/SF_Networks1.0.60.jar .ci/paired-ie2/build/libs/SF_InfinityExpansion2.0.15.jar \
+            .ci/native-purpur.jar build/native-ie2-player .ci/native-player
+      - name: Retain complete evidence, client resolution and fixture source
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-ie2-player-evidence
+          include-hidden-files: true
+          path: |
+            paired-core-formatting.patch
+            native-client-dependencies.txt
+            .ci/native-player/package.json
+            .ci/native-player/package-lock.json
+            build/native-ie2-player/inputs.json
+            build/native-ie2-player/patch.log
+            build/native-ie2-player/*-console.log
+            build/native-ie2-player/*-client.log
+            build/native-ie2-player/*-result.txt
+            build/test-results/test/TEST-*.xml
+            .ci/paired-ie2/build/test-results/test/TEST-*.xml
+            .ci/paired-core/build/test-results/test/TEST-*.xml
+            tests/runtime/NativeIE2PlayerProbe.java
+            tests/runtime/native_ie2_player_client.cjs
+            scripts/native_ie2_player_probe.py
+          if-no-files-found: warn
+          retention-days: 14

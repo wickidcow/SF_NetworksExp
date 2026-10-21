@@ -6,7 +6,6 @@ import com.balugaq.netex.api.enums.QuickTransferMode;
 import com.balugaq.netex.api.enums.StorageUnitType;
 import com.balugaq.netex.api.helpers.Icon;
 import com.balugaq.netex.api.interfaces.ModellableItem;
-import com.balugaq.netex.utils.InventoryUtil;
 import com.balugaq.netex.utils.Lang;
 import com.jeff_media.morepersistentdatatypes.DataType;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
@@ -562,64 +561,42 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
 
     private static void addClickHandler(@NotNull Location l) {
         final BlockMenu blockMenu = StorageCacheUtils.getMenu(l);
-        if (blockMenu == null) {
-            return;
-        }
         final StorageUnitData data = storages.get(l);
+        if (blockMenu == null || data == null) return;
+        final java.util.function.BooleanSupplier attached = () -> StorageCacheUtils.getMenu(l) == blockMenu
+            && storages.get(l) == data;
         for (int s : DISPLAY_SLOTS) {
             blockMenu.addMenuClickHandler(s, (player, slot, clickItem, action) -> {
-                final ItemStack itemOnCursor = player.getItemOnCursor();
-                if (itemOnCursor != null && itemOnCursor.getType() != Material.AIR && StackUtils.isBlacklisted(itemOnCursor)) {
-                    return false;
-                }
-
-                NetworkUtils.clearNearbyNetworks(blockMenu.getLocation());
-                if (StackUtils.itemsMatch(clickItem, Icon.ERROR_BORDER)) {
-                    if (itemOnCursor.getType() != Material.AIR) {
-                        data.depositItemStack0(l, itemOnCursor, false, true);
-                    }
-                } else {
-                    List<Integer> display = new ArrayList<>();
-                    for (int i : DISPLAY_SLOTS) {
-                        display.add(i);
-                    }
-                    int index = display.indexOf(slot);
-                    final var stored = storages.get(l).copyStoredItems();
-                    if (stored.size() <= index) {
-                        return false;
-                    }
-
-                    final ItemStack take = stored.get(index).getSampleDirectly();
-
-                    final ItemRequest itemRequest = new ItemRequest(take, 1);
-
-                    if (!action.isShiftClicked() || !action.isRightClicked()) {
-                        if (action.isRightClicked()) {
-                            itemRequest.setAmount(take.getMaxStackSize());
-                        } else if (action.isShiftClicked()) {
-                            itemRequest.setAmount(take.getMaxStackSize() * 36);
-                        }
-
-                        final ItemStack requestedItemStack = data.requestItem0(l, itemRequest, false);
-                        if (requestedItemStack != null) {
-                            do {
-                                int max =
-                                    Math.min(requestedItemStack.getAmount(), requestedItemStack.getMaxStackSize());
-                                final ItemStack clone = StackUtils.getAsQuantity(requestedItemStack, max);
-                                requestedItemStack.setAmount(requestedItemStack.getAmount() - max);
-                                InventoryUtil.addItem(player, clone);
-                                if (clone.getAmount() > 0) {
-                                    data.depositItemStack0(l, clone, false);
-                                }
-                            } while (requestedItemStack.getAmount() > 0);
-                        }
+                if (!attached.getAsBoolean() || data.hasUnverifiedSourceTransfer()) return false;
+                try {
+                    final ItemStack itemOnCursor = player.getItemOnCursor();
+                    if (itemOnCursor != null && !itemOnCursor.getType().isAir()
+                        && StackUtils.isBlacklisted(itemOnCursor)) return false;
+                    NetworkUtils.clearNearbyNetworks(blockMenu.getLocation());
+                    if (StackUtils.itemsMatch(clickItem, Icon.ERROR_BORDER)) {
+                        DrawerMenuTransfer.depositCursor(data, l, player, attached);
                     } else {
-                        for (ItemStack each : player.getInventory().getStorageContents()) {
-                            if (StackUtils.itemsMatch(each, take)) {
-                                data.depositItemStack0(l, each, true);
-                            }
+                        int index = -1;
+                        for (int i = 0; i < DISPLAY_SLOTS.length; i++) {
+                            if (DISPLAY_SLOTS[i] == slot) { index = i; break; }
+                        }
+                        final var stored = data.copyStoredItems();
+                        if (index < 0 || index >= stored.size()) return false;
+                        final ItemContainer source = stored.get(index);
+                        final ItemStack take = source.getSample();
+                        if (action.isShiftClicked() && action.isRightClicked()) {
+                            DrawerMenuTransfer.depositInventory(data, l, player, take, attached);
+                        } else {
+                            int requested = action.isRightClicked() ? take.getMaxStackSize()
+                                : action.isShiftClicked() ? take.getMaxStackSize() * 36 : 1;
+                            DrawerMenuTransfer.withdraw(data, l, source, requested, player, attached);
                         }
                     }
+                } catch (RuntimeException | LinkageError failure) {
+                    Networks.getInstance().getLogger().log(java.util.logging.Level.SEVERE,
+                        "Drawer GUI transfer could not be verified at " + l
+                            + "; no speculative refund or item drop was performed.", failure);
+                    player.sendMessage("[Networks] The drawer transfer could not be verified. Please ask an administrator to inspect it.");
                 }
                 return false;
             });
@@ -703,6 +680,9 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
 
         final StorageUnitData thisStorage = storages.get(location);
         final QuickTransferMode mode = quickTransferModes.get(location);
+        if (thisStorage == null || mode == null || StorageCacheUtils.getMenu(location) != blockMenu) {
+            return;
+        }
 
         if (isQuantum) {
             for (ItemContainer each : thisStorage.copyStoredItems()) {
@@ -725,32 +705,15 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
                                     "messages.unsupported-operation.drawer.quantum_storage_item_mismatch"));
                                 return;
                             }
-                            final long quantumAmount = quantumCache.getAmountLong();
-                            final int canAdd = (int) Math.min(
-                                quantumAmount, thisStorage.getSizeType().getEachMaxSize() - each.getAmount());
-                            if (canAdd <= 0) {
+                            final int moved = DrawerQuantumDepositReceipt.transfer(
+                                blockMenu, QUANTUM_SLOT, location, thisStorage, each, itemStack,
+                                () -> storages.get(location) == thisStorage
+                                    && StorageCacheUtils.getMenu(location) == blockMenu);
+                            if (moved <= 0) {
                                 player.sendMessage(
                                     Lang.getString("messages.unsupported-operation.drawer.quantum_storage_full"));
                                 return;
                             }
-
-                            final int left = (int) quantumAmount - canAdd;
-                            if (left > 0) {
-                                quantumCache.setAmount(left);
-                                DataTypeMethods.setCustom(
-                                    meta,
-                                    Keys.QUANTUM_STORAGE_INSTANCE,
-                                    PersistentQuantumStorageType.TYPE,
-                                    quantumCache);
-                                quantumCache.updateMetaLore(meta);
-                                itemStack.setItemMeta(meta);
-                            } else {
-                                blockMenu.replaceExistingItem(
-                                    QUANTUM_SLOT, ItemStackUtil.getCleanItem(slimefunItem.getItem()));
-                            }
-                            final ItemStack clone = quantumCache.getItemStack().clone();
-                            clone.setAmount(canAdd);
-                            thisStorage.depositItemStack0(location, clone, true);
                             player.sendMessage(Lang.getString("messages.completed-operation.drawer.deposited_item"));
                             return;
                         }
@@ -762,70 +725,17 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
                                 return;
                             }
 
-                            if (quantumCache == null) {
-                                final NetworkQuantumStorage nqs = (NetworkQuantumStorage) slimefunItem;
-                                final long quantumLimit = nqs.getMaxAmount();
-
-                                final int unitAmount = each.getAmount();
-                                final long canAddr = Math.min(unitAmount, quantumLimit);
-                                int canAdd;
-                                if (canAddr > Integer.MAX_VALUE) {
-                                    canAdd = Integer.MAX_VALUE;
-                                } else {
-                                    canAdd = (int) canAddr;
-                                }
-                                if (canAdd <= 0) {
-                                    player.sendMessage(Lang.getString(
-                                        "messages.unsupported-operation.drawer.each_not_enough_item"));
-                                    return;
-                                }
-                                final ItemStack clone = sample.clone();
-
-                                thisStorage.requestItem0(location, new ItemRequest(clone, canAdd), false);
-                                storages.put(location, thisStorage);
-
-                                quantumCache = new QuantumCache(clone, canAdd, quantumLimit, false, false);
-                                DataTypeMethods.setCustom(
-                                    meta,
-                                    Keys.QUANTUM_STORAGE_INSTANCE,
-                                    PersistentQuantumStorageType.TYPE,
-                                    quantumCache);
-                                quantumCache.updateMetaLore(meta);
-                                itemStack.setItemMeta(meta);
-
-                                player.sendMessage(Lang.getString(
-                                    "messages.completed-operation.drawer.transferred_to_quantum_storage"));
-                                return;
-                            } else if (StackUtils.itemsMatch(quantumCache.getItemStack(), sample)) {
-                                final long quantumLimit = quantumCache.getLimitLong();
-                                final int quantumAmount = (int) quantumCache.getAmountLong();
-                                final int unitAmount = each.getAmount();
-                                final int canAdd = Math.toIntExact(Math.min(unitAmount, quantumLimit - quantumAmount));
-                                if (canAdd <= 0) {
-                                    player.sendMessage(Lang.getString(
-                                        "messages.unsupported-operation.drawer.each_not_enough_item"));
-                                    return;
-                                }
-                                final ItemStack clone = sample.clone();
-
-                                thisStorage.requestItem0(location, new ItemRequest(clone, canAdd));
-                                storages.put(location, thisStorage);
-
-                                quantumCache =
-                                    new QuantumCache(clone, quantumAmount + canAdd, quantumLimit, false, false);
-                                DataTypeMethods.setCustom(
-                                    meta,
-                                    Keys.QUANTUM_STORAGE_INSTANCE,
-                                    PersistentQuantumStorageType.TYPE,
-                                    quantumCache);
-                                quantumCache.updateMetaLore(meta);
-                                itemStack.setItemMeta(meta);
-                                player.sendMessage(Lang.getString(
-                                    "messages.completed-operation.drawer.transferred_to_quantum_storage"));
-                                return;
-                            } else {
+                            final int moved = DrawerQuantumWithdrawalReceipt.transfer(
+                                blockMenu, QUANTUM_SLOT, location, thisStorage, each, itemStack,
+                                ((NetworkQuantumStorage) slimefunItem).getMaxAmount(),
+                                () -> storages.get(location) == thisStorage
+                                    && StorageCacheUtils.getMenu(location) == blockMenu);
+                            if (moved <= 0) {
                                 return;
                             }
+                            player.sendMessage(Lang.getString(
+                                "messages.completed-operation.drawer.transferred_to_quantum_storage"));
+                            return;
                         }
                     }
                 }
@@ -859,42 +769,28 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
                 if (StackUtils.itemsMatch(sample, toTransfer)) {
                     switch (mode) {
                         case FROM_QUANTUM -> {
-                            long exist = ItemMover.getStoredAmount(itemStack);
-                            ItemStack stored = StackUtils.getAsQuantity(
-                                ItemMover.getStoredItemStack(itemStack), exist > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int)exist);
-                            if (stored == null || stored.getType() == Material.AIR) {
-                                player.sendMessage(
-                                    Lang.getString("messages.unsupported-operation.drawer.item_mover_empty"));
+                            int moved = DrawerItemMoverTransfer.fromMover(
+                                blockMenu, QUANTUM_SLOT, location, thisStorage, each, itemStack,
+                                () -> storages.get(location) == thisStorage
+                                    && StorageCacheUtils.getMenu(location) == blockMenu);
+                            if (moved > 0) {
+                                player.sendMessage(String.format(
+                                    Lang.getString("messages.completed-operation.drawer.transferred_to_drawer"),
+                                    DisplayNameUtils.getDisplayName(sample), moved));
                             }
-                            int before = stored.getAmount();
-                            String name = DisplayNameUtils.getDisplayName(stored);
-                            thisStorage.depositItemStack0(location, stored, true);
-                            int left = stored.getAmount();
-                            ItemMover.setStoredAmount(itemStack, exist - (before - left));
-                            player.sendMessage(String.format(
-                                Lang.getString("messages.completed-operation.drawer.transferred_to_drawer"),
-                                name,
-                                before - left));
                         }
                         case TO_QUANTUM -> {
-                            ItemRequest itemRequest = new ItemRequest(sample, each.getAmount());
-                            int before = each.getAmount();
-                            ItemStack fetched = thisStorage.requestItem0(location, itemRequest, false);
-                            if (fetched != null) {
-                                String name = DisplayNameUtils.getDisplayName(fetched);
-                                ItemMover.depositItem(itemStack, fetched);
-                                int left = fetched.getAmount();
-                                if (fetched.getAmount() > 0) {
-                                    thisStorage.depositItemStack0(location, fetched, false);
-                                }
+                            int moved = DrawerItemMoverTransfer.toMover(
+                                blockMenu, QUANTUM_SLOT, location, thisStorage, each, itemStack,
+                                () -> storages.get(location) == thisStorage
+                                    && StorageCacheUtils.getMenu(location) == blockMenu);
+                            if (moved > 0) {
                                 player.sendMessage(String.format(
                                     Lang.getString("messages.completed-operation.drawer.transferred_to_item_mover"),
-                                    name,
-                                    before - left));
+                                    DisplayNameUtils.getDisplayName(sample), moved));
                             }
                         }
                     }
-                    ItemMover.updateLore(itemStack);
                     return;
                 }
             }

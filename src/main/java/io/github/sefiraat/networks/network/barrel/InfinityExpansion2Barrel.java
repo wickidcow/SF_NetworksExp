@@ -23,6 +23,13 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class InfinityExpansion2Barrel extends BarrelIdentity {
 
+    /** A local cache incident is not grounds for disabling the whole IE2 adapter. */
+    private static final class IE2HeldStorageException extends IllegalStateException {
+        private IE2HeldStorageException(String reason) {
+            super(reason);
+        }
+    }
+
     private final InfinityExpansion2Integration integration;
     private final SlimefunItem storageUnit;
 
@@ -42,29 +49,28 @@ public final class InfinityExpansion2Barrel extends BarrelIdentity {
     @Override
     public @Nullable ItemStack requestItem(@NotNull ItemRequest itemRequest) {
         try {
+            // Existing barrel handles remain unsafe even when cache discovery
+            // happened before an IE2 incident hold was installed.
+            if (itemRequest.getAmount() <= 0 || integration.isTransferBlocked(getLocation(), storageUnit)) {
+                return null;
+            }
             final BlockMenu menu = StorageCacheUtils.getMenu(getLocation());
-            if (menu == null || itemRequest.getAmount() <= 0) {
+            if (menu == null) {
                 return null;
             }
 
-            int received = 0;
-            final ItemStack target = itemRequest.getItemStack();
-            for (int slot : getOutputSlot()) {
-                final ItemStack output = menu.getItemInSlot(slot);
-                if (output == null || output.getType() == Material.AIR || !StackUtils.itemsMatch(output, target)) {
-                    continue;
-                }
-
-                final int moved = Math.min(output.getAmount(), itemRequest.getAmount() - received);
-                if (moved <= 0) {
-                    break;
-                }
-                BlockMenuUtil.consumeItem(menu, slot, moved);
-                received += moved;
+            final ItemStack withdrawn = InfinityExpansion2Withdrawal.withdraw(
+                menu, getOutputSlot(), itemRequest.getItemStack(), itemRequest.getAmount(),
+                (slot, amount) -> BlockMenuUtil.consumeItem(menu, slot, amount));
+            if (withdrawn != null && integration.isTransferBlocked(getLocation(), storageUnit)) {
+                // Source may already have been debited. Never expose uncertain
+                // stock or manufacture a speculative restoration to the network.
+                throw new IE2HeldStorageException("IE2 hold changed during physical output debit");
             }
-
-            return received <= 0 ? null : StackUtils.getAsQuantity(target, received);
-        } catch (RuntimeException | LinkageError exception) {
+            return withdrawn;
+        } catch (IE2HeldStorageException exception) {
+            throw exception; // Quarantine this transaction, NOT every IE2 unit.
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
             Networks.getSupportedPluginManager().disableOptionalIntegration("InfinityExpansion2", exception);
             throw new IllegalStateException("InfinityExpansion2 output withdrawal is unverified", exception);
         }
@@ -73,6 +79,9 @@ public final class InfinityExpansion2Barrel extends BarrelIdentity {
     @Override
     public void depositItemStack(ItemStack @NotNull [] itemsToDeposit) {
         try {
+            if (integration.isTransferBlocked(getLocation(), storageUnit)) {
+                return;
+            }
             final BlockMenu menu = StorageCacheUtils.getMenu(getLocation());
             if (menu == null) {
                 return;
@@ -87,9 +96,19 @@ public final class InfinityExpansion2Barrel extends BarrelIdentity {
                 if (item == null || item.getType() == Material.AIR || item.getAmount() <= 0 || !canAccept(item)) {
                     continue;
                 }
+                if (integration.isTransferBlocked(getLocation(), storageUnit)) {
+                    return;
+                }
                 BlockMenuUtil.pushItem(menu, item, inputSlots);
+                if (integration.isTransferBlocked(getLocation(), storageUnit)) {
+                    // A setter callback could have changed IE2 cache ownership.
+                    // Leave its physical slot for operator reconciliation.
+                    throw new IE2HeldStorageException("IE2 hold changed during physical input insertion");
+                }
             }
-        } catch (RuntimeException | LinkageError exception) {
+        } catch (IE2HeldStorageException exception) {
+            throw exception; // Do not globally unregister otherwise healthy storage.
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
             Networks.getSupportedPluginManager().disableOptionalIntegration("InfinityExpansion2", exception);
             throw new IllegalStateException("InfinityExpansion2 deposit acceptance is unverified", exception);
         }
@@ -98,7 +117,8 @@ public final class InfinityExpansion2Barrel extends BarrelIdentity {
     @Override
     public boolean canAccept(@NotNull ItemStack incoming) {
         try {
-            if (StackUtils.isBlacklisted(incoming) || integration.isStorageUnitItem(incoming)) {
+            if (StackUtils.isBlacklisted(incoming) || integration.isStorageUnitItem(incoming)
+                || integration.isTransferBlocked(getLocation(), storageUnit)) {
                 return false;
             }
             final ItemStack liveTemplate = integration.getLiveTemplate(getLocation(), storageUnit);

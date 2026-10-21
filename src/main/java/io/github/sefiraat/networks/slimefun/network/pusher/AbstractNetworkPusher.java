@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import me.mrCookieSlime.Slimefun.Objects.SlimefunItem.interfaces.InventoryBlock;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
 import org.bukkit.Bukkit;
@@ -113,14 +114,23 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
         }
 
         final Location location = blockMenu.getLocation();
-        final boolean enabled = isRecipeAware(blockMenu);
-        blockMenu.replaceExistingItem(modeSlot, createRecipeAwareModeStack(location, enabled));
+        // Keep a foreign stack intact, but install the recovery handler even on
+        // the first viewer tick. The preset background handler otherwise locks
+        // a stack that was already present before this control was initialized.
+        refreshRecipeAwareControl(blockMenu, modeSlot);
         blockMenu.addMenuClickHandler(modeSlot, (player, slot, itemStack, clickAction) -> {
             // An admin or another addon can replace a block while its old menu is still open.
             // Never write per-machine settings through a stale menu, for any click type.
             if (getCurrentRecipeAwareMenu(location, blockMenu) == null) {
                 player.sendMessage(ChatColors.color("&cThat Network Pusher is no longer available."));
                 return false;
+            }
+            if (!refreshRecipeAwareControl(blockMenu, modeSlot)) {
+                // A foreign item can arrive from another addon after the handler
+                // was registered. Permit its ordinary recovery, not a toggle.
+                player.sendMessage(ChatColors.color(
+                    "&eRemove the item from the Recipe-Aware control slot first."));
+                return true;
             }
             if (clickAction.isShiftClicked()) {
                 final int delta = clickAction.isRightClicked() ? 1 : -1;
@@ -129,9 +139,7 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
                     delta);
                 setRecipeBufferBatches(location, next);
                 clearBackoffForSource(location);
-                blockMenu.replaceExistingItem(
-                    modeSlot,
-                    createRecipeAwareModeStack(location, isRecipeAware(blockMenu)));
+                refreshRecipeAwareControl(blockMenu, modeSlot);
                 return false;
             }
 
@@ -144,6 +152,13 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
                         RECIPE_BUFFER_BATCHES.remove(location);
                         player.sendMessage(ChatColors.color(
                             "&cThat Network Pusher is no longer available."));
+                        return;
+                    }
+
+                    if (!refreshRecipeAwareControl(liveMenu, modeSlot)) {
+                        player.sendMessage(ChatColors.color(
+                            "&eRemove the item from the Recipe-Aware control slot first."));
+                        liveMenu.open(player);
                         return;
                     }
 
@@ -163,9 +178,7 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
                                 "&aRecipe-Aware batch target set to &b" + value + "&a."));
                         }
 
-                        liveMenu.replaceExistingItem(
-                            modeSlot,
-                            createRecipeAwareModeStack(location, isRecipeAware(liveMenu)));
+                        refreshRecipeAwareControl(liveMenu, modeSlot);
                         liveMenu.open(player);
                     } catch (NumberFormatException exception) {
                         player.sendMessage(ChatColors.color(
@@ -183,9 +196,33 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
             final boolean next = !isRecipeAware(blockMenu);
             StorageCacheUtils.setData(location, RECIPE_AWARE_KEY, Boolean.toString(next));
             clearBackoffForSource(location);
-            blockMenu.replaceExistingItem(modeSlot, createRecipeAwareModeStack(location, next));
+            refreshRecipeAwareControl(blockMenu, modeSlot);
             return false;
         });
+    }
+
+    /**
+     * Refresh only recognized GUI icons. A previously empty control slot may
+     * contain a real player item on upgraded servers; never destroy that stack.
+     */
+    private boolean refreshRecipeAwareControl(@NotNull BlockMenu blockMenu, int modeSlot) {
+        final Location location = blockMenu.getLocation();
+        final boolean enabled = isRecipeAware(blockMenu);
+        final ItemStack desired = createRecipeAwareModeStack(location, enabled);
+        final ItemStack present = blockMenu.getItemInSlot(modeSlot);
+        final ItemStack alternate =
+            present == null || present.getType().isAir() || present.isSimilar(desired)
+                ? desired : createRecipeAwareModeStack(location, !enabled);
+        final RecipeAwareControlSlot.Decision decision =
+            RecipeAwareControlSlot.inspect(present, desired, alternate, getOtherBackgroundStack());
+
+        if (decision == RecipeAwareControlSlot.Decision.FOREIGN) {
+            return false;
+        }
+        if (decision == RecipeAwareControlSlot.Decision.REFRESH) {
+            blockMenu.replaceExistingItem(modeSlot, desired);
+        }
+        return true;
     }
 
     private @Nullable BlockMenu getCurrentRecipeAwareMenu(
@@ -209,7 +246,10 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
         @NotNull Location location,
         boolean enabled) {
 
-        final int bufferedBatches = getRecipeBufferBatches(location);
+        return createRecipeAwareModeStack(enabled, getRecipeBufferBatches(location));
+    }
+
+    private static @NotNull ItemStack createRecipeAwareModeStack(boolean enabled, int bufferedBatches) {
         final ItemStack control = new CustomItemStack(
             enabled ? Material.CRAFTING_TABLE : Material.HOPPER,
             enabled ? "&aRecipe-Aware Mode: ON" : "&7Recipe-Aware Mode: OFF",
@@ -286,7 +326,29 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
 
     @Override
     protected void onBreak(@NotNull BlockBreakEvent event) {
-        RECIPE_BUFFER_BATCHES.remove(event.getBlock().getLocation());
+        if (event.isCancelled()) {
+            return;
+        }
+        final Location location = event.getBlock().getLocation();
+        final BlockMenu menu = StorageCacheUtils.getMenu(location);
+        final int modeSlot = getRecipeAwareModeSlot();
+        if (menu != null && modeSlot >= 0) {
+            // Only template slots have ordinary drops. Keep a historical player
+            // stack in the control slot attached to its block until recovered.
+            // Recognition uses fixed icons, so this preflight never writes settings.
+            final var decision = RecipeAwareControlSlot.inspect(
+                menu.getItemInSlot(modeSlot),
+                createRecipeAwareModeStack(false, DEFAULT_RECIPE_BUFFER_BATCHES),
+                createRecipeAwareModeStack(true, DEFAULT_RECIPE_BUFFER_BATCHES),
+                getOtherBackgroundStack());
+            if (decision == RecipeAwareControlSlot.Decision.FOREIGN) {
+                event.setCancelled(true);
+                event.getPlayer().sendMessage(ChatColors.color(
+                    "&eRemove the item from the Recipe-Aware control slot before breaking this pusher."));
+                return;
+            }
+        }
+        RECIPE_BUFFER_BATCHES.remove(location);
         super.onBreak(event);
     }
 
@@ -336,10 +398,10 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
 
         // Presence must be in a physical input accepted for that exact item. Display
         // and output stacks do not reserve the missing ingredient's input capacity.
-        final int[] recipeInputSlots = recipeAware && requestCount > 1
+        final int[] recipeInputSlots = recipeAware
             ? getRecipeInputSlots(targetMenu)
             : null;
-        final boolean[] represented = recipeInputSlots != null
+        final boolean[] represented = recipeInputSlots != null && requestCount > 1
             ? findRepresentedRecipeIngredients(targetMenu, requests, recipeInputSlots)
             : null;
         int unrepresented = 0;
@@ -384,7 +446,7 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
 
             final int transferAmount;
             if (recipeAware) {
-                final int existing = countMatchingItems(targetMenu, template, slots);
+                final int existing = countRecipeInputItems(targetMenu, template, recipeInputSlots, slots);
                 // The normal transfer discovery can confirm a type left unverified by
                 // the bounded presence scan without another item-aware routing call.
                 if (represented != null && !represented[requestIndex] && existing > 0
@@ -498,10 +560,23 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
         try {
             final int[] slots = targetMenu.getPreset()
                 .getSlotsAccessedByItemTransport(ItemTransportFlow.INSERT);
-            return slots == null ? new int[0] : slots;
+            if (slots != null && slots.length > 0) {
+                return slots;
+            }
+
+            // Dynamic machines such as Electric Smeltery leave generic transport
+            // slots empty. Read their own physical declaration, never a null-item
+            // routing result or a replacement block's inventory layout.
+            final Location location = targetMenu.getLocation();
+            if (location != null && StorageCacheUtils.getMenu(location) == targetMenu
+                && StorageCacheUtils.getSlimefunItem(location) instanceof InventoryBlock inventory) {
+                final int[] inputs = inventory.getInputSlots();
+                return inputs == null ? new int[0] : inputs;
+            }
         } catch (RuntimeException | AbstractMethodError | NoSuchMethodError ignored) {
-            return new int[0];
+            // Missing or incompatible declarations remain conservatively unknown.
         }
+        return new int[0];
     }
 
     /**
@@ -575,13 +650,44 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
         return false;
     }
 
+    /**
+     * Full input stacks still belong to the buffer even when dynamic insertion
+     * routing omits them. This count only limits transfer quantity; fresh item
+     * permissions and the separate peer-presence gate still authorize insertion.
+     */
+    static int countRecipeInputItems(
+        @NotNull BlockMenu targetMenu,
+        @NotNull ItemStack template,
+        int @NotNull [] inputSlots,
+        int @NotNull [] transportSlots) {
+
+        for (int slot : inputSlots) {
+            if (slot >= 0 && slot < targetMenu.getSize()) {
+                return countMatchingItems(targetMenu, template, inputSlots);
+            }
+        }
+        return countMatchingItems(targetMenu, template, transportSlots);
+    }
+
     private static int countMatchingItems(
         @NotNull BlockMenu targetMenu,
         @NotNull ItemStack template,
         int @NotNull [] slots) {
         long count = 0L;
-        for (int slot : slots) {
+        for (int index = 0; index < slots.length; index++) {
+            final int slot = slots[index];
             if (slot < 0 || slot >= targetMenu.getSize()) {
+                continue;
+            }
+
+            boolean duplicate = false;
+            for (int previous = 0; previous < index; previous++) {
+                if (slots[previous] == slot) {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (duplicate) {
                 continue;
             }
 
@@ -740,3 +846,4 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
 
     public abstract int @NotNull [] getItemSlots();
 }
+

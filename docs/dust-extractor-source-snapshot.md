@@ -1,5 +1,15 @@
 # Dust extractor menu-source snapshot follow-up
 
+## Final coordinated 1.0.60 / 2.0.15 candidate
+
+The October21 candidate pair, Networks `b5e48c5c8da4ddab93cabafca44349ee4ad26a2e` and IE2 `19e4943a53c44589a6cfcf618150358f7bdf5a1c`, passed **152 native Dust Extractor production/Networks line-transfer cases** on Purpur1.21.11/2568 with core `1cb32d6e95b305998065b8ef6b936a56f679187d`. The exact JAR hashes and final release acceptance are tracked in `NETWORKS_EXPANSION_COMPLETION.md`.
+
+This reuses the established real extractor fixture. It retains the synchronized-ticker, exact modern model/PDC identity, replacement, empty-source, partial acceptance and compensation checks. Networks now intentionally permits a producer to add stock of the same exact identity during a transfer. The previous four amount-change abort cases are therefore replaced by16explicit ordinary/VOID growth ledgers, including decorated items. Each checks accepted+retained+intentionalVOID quantity against original+newly produced stock; VOID cannot consume the new producer stock.
+
+The sink remains controlled and the probe runs in one JVM. This proves the stated actual producer/menu/line paths; it does not certify a live destination topology, arbitrary tick interleavings or restart durability. `scripts/prepare_infinity_dust_probe.py` regenerates the runner from the existing disposable-server harness; immutable source pins must be supplied through `NETWORKS_HEAD`, `IE2_HEAD` and `CORE_HEAD`.
+
+The following published-pair evidence remains historical; it is not relabelled as a test of the new candidate.
+
 ## Confirmed producer-side trigger and published fix
 
 A later live trace on Networks 1.0.56 reported the same guarded conflict at `world -5274,-26,-5510`: the network accepted 8 items, detected that the menu source changed, and removed all 8 accepted items as compensation. That is the intended 1.0.56 safety behavior: the conflict is rejected without authorizing the old destructive VOID cleanup.

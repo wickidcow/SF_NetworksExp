@@ -571,7 +571,8 @@ public final class NetworkTransferUtils {
         @NotNull ItemStack template,
         int limit) {
 
-        if (template.getType() == Material.AIR || limit <= 0) {
+        if (template.getType() == Material.AIR || limit <= 0
+            || RootRollbackSafetyHold.isHeld(root, accessor)) {
             return 0;
         }
 
@@ -636,25 +637,46 @@ public final class NetworkTransferUtils {
             return 0;
         }
 
-        // Root callbacks may interact with the player inventory before source withdrawal finishes.
-        // Never overwrite another plugin's cursor replacement with our stale snapshot.
+        // Root callbacks may already have delivered this withdrawal to the cursor.
+        // A changed/unreadable cursor is NOT proof that none of it was accepted.
+        // Do not overwrite the callback's result or refund a potentially accepted
+        // stack. Only an observed unrelated replacement/no gain permits a refund.
+        final boolean cursorChanged;
+        final boolean possibleCallbackCredit;
         try {
-            if (!sourceStillMatches(originalCursor, player.getItemOnCursor())) {
-                TransferAudit.recordFailure();
-                rollbackNetworkWithdrawal(root, accessor, frozenWithdrawal, player.getLocation(),
-                    "cursor changed before destination write");
-                Networks.getInstance().getLogger().warning(
-                    "A Networks cursor changed during withdrawal; the uncommitted items were returned.");
-                return 0;
-            }
+            final ItemStack observed = player.getItemOnCursor();
+            cursorChanged = !sourceStillMatches(originalCursor, observed);
+            possibleCallbackCredit = cursorChanged && validAmount(observed) > 0
+                && StackUtils.itemsMatch(observed, frozenWithdrawal)
+                && (validAmount(observed) > validAmount(originalCursor)
+                    || originalCursor == null || !originalCursor.isSimilar(observed));
         } catch (RuntimeException | LinkageError exception) {
             TransferAudit.recordFailure();
-            rollbackNetworkWithdrawal(root, accessor, frozenWithdrawal, player.getLocation(),
-                "cursor pre-commit read failure");
+            RootRollbackSafetyHold.hold(root, accessor, frozenWithdrawal.getType(), withdrawn);
             Networks.getInstance().getLogger().log(
-                java.util.logging.Level.WARNING,
-                "A Networks cursor changed or became unreadable before its write; items were returned.",
+                java.util.logging.Level.SEVERE,
+                "A Networks cursor became unreadable before its write after withdrawing "
+                    + withdrawn + " item(s). No ambiguous amount was refunded or dropped. "
+                    + "The controller is quarantined; inspect the player's cursor and inventory.",
                 exception);
+            return 0;
+        }
+
+        if (cursorChanged) {
+            TransferAudit.recordFailure();
+            if (possibleCallbackCredit) {
+                RootRollbackSafetyHold.hold(root, accessor, frozenWithdrawal.getType(), withdrawn);
+                Networks.getInstance().getLogger().severe(
+                    "A Networks cursor gained potentially withdrawn items before its normal write. "
+                        + "No part of the ambiguous " + withdrawn + "-item withdrawal was refunded "
+                        + "or dropped. The controller is quarantined; inspect the cursor and inventory.");
+            } else {
+                rollbackNetworkWithdrawal(root, accessor, frozenWithdrawal, player.getLocation(),
+                    "cursor changed before destination write without a matching gain");
+                Networks.getInstance().getLogger().warning(
+                    "A Networks cursor changed during withdrawal without gaining the requested item; "
+                        + "the uncommitted items were returned.");
+            }
             return 0;
         }
 

@@ -253,6 +253,15 @@ public class Networks extends JavaPlugin implements SlimefunAddon {
         }
 
         if (dataSource != null && databaseWorkerStopped) {
+            // A worker journal merge may overtake the pre-drain checkpoint.
+            // Cancelled tasks also skip their completion callbacks. Only after
+            // the worker stops is it safe to checkpoint all remaining receipts.
+            try {
+                DataStorage.checkpointPendingChangesForShutdown();
+            } catch (RuntimeException exception) {
+                getLogger().severe("Networks could not write the final drawer recovery checkpoint.");
+                Debug.trace(exception);
+            }
             dataSource.close();
             dataSource = null;
         }

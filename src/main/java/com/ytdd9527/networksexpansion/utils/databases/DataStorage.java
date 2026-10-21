@@ -36,6 +36,11 @@ public final class DataStorage {
     private static final ConcurrentMap<Integer, Optional<StorageUnitData>> CACHE = new ConcurrentHashMap<>(4096);
     private static final AtomicReference<ConcurrentMap<Integer, ConcurrentMap<Integer, Integer>>> CHANGES =
         new AtomicReference<>(new ConcurrentHashMap<>(4096));
+    // Retain an immutable save receipt until its callback completes. A shutdown
+    // timeout can cancel an unstarted journal/SQL task without invoking it.
+    private static final AtomicReference<Map<Integer, ? extends Map<Integer, Integer>>> DETACHED_AMOUNT_CHANGES =
+        new AtomicReference<>(Map.of());
+    private static final Object AMOUNT_PUBLICATION_MONITOR = new Object();
     private static final AtomicBoolean SAVE_IN_FLIGHT = new AtomicBoolean();
     private static volatile String lastSaveStatus = "idle";
     private static volatile int recoveryEntryCount;
@@ -131,15 +136,32 @@ public final class DataStorage {
     }
 
     // These methods intentionally do not mutate the current StorageUnitData snapshot.
+    // Keep direct SQL submissions and the absolute recovery intent in one short publication
+    // boundary. The autosave snapshot must use this SAME boundary before queuing its write.
     public static void addStoredItem(int containerId, int itemId, int amount) {
-        dataSource().addStoredItem(containerId, itemId, amount);
+        if (amount <= 0) {
+            return;
+        }
+        synchronized (AMOUNT_PUBLICATION_MONITOR) {
+            publishStoredAmount(containerId, itemId, amount);
+            dataSource().addStoredItem(containerId, itemId, amount);
+        }
     }
 
     public static void deleteStoredItem(int containerId, int itemId) {
-        dataSource().deleteStoredItem(containerId, itemId);
+        synchronized (AMOUNT_PUBLICATION_MONITOR) {
+            publishStoredAmount(containerId, itemId, -1);
+            dataSource().deleteStoredItem(containerId, itemId);
+        }
     }
 
     public static void setStoredAmount(int containerId, int itemId, int amount) {
+        synchronized (AMOUNT_PUBLICATION_MONITOR) {
+            publishStoredAmount(containerId, itemId, amount);
+        }
+    }
+
+    private static void publishStoredAmount(int containerId, int itemId, int amount) {
         CHANGES.get()
             .computeIfAbsent(containerId, ignored -> new ConcurrentHashMap<>())
             .put(itemId, amount);
@@ -178,14 +200,20 @@ public final class DataStorage {
     }
 
     /**
-     * Persists every still-unsubmitted runtime amount to the recovery journal before queue shutdown. The
-     * values remain in memory as well; this method is a crash/shutdown checkpoint, not a normal save.
+     * Persists detached save receipts and newer runtime amounts to the existing recovery journal.
+     * Called before shutdown and again after the database worker has actually stopped. Values
+     * remain in memory; this checkpoint is not an assertion of forced-crash atomicity.
      */
     public static void checkpointPendingChangesForShutdown() {
         if (!recoveryJournalEnabled()) {
             return;
         }
-        Map<Integer, Map<Integer, Integer>> pending = immutableSnapshot(CHANGES.get());
+        Map<Integer, Map<Integer, Integer>> pending;
+        synchronized (AMOUNT_PUBLICATION_MONITOR) {
+            // Newer published amounts must win over an older detached save.
+            pending = overlayAmountSnapshots(DETACHED_AMOUNT_CHANGES.get(),
+                immutableSnapshot(CHANGES.get()));
+        }
         if (pending.isEmpty()) {
             return;
         }
@@ -203,49 +231,54 @@ public final class DataStorage {
     }
 
     public static void saveAmountChange() {
-        if (!SAVE_IN_FLIGHT.compareAndSet(false, true)) {
-            return;
-        }
-
-        ConcurrentMap<Integer, ConcurrentMap<Integer, Integer>> liveSnapshot =
-            CHANGES.getAndSet(new ConcurrentHashMap<>(4096));
-        if (liveSnapshot.isEmpty()) {
-            SAVE_IN_FLIGHT.set(false);
-            lastSaveStatus = "idle";
-            return;
-        }
-
-        Map<Integer, Map<Integer, Integer>> snapshot = immutableSnapshot(liveSnapshot);
-        if (recoveryJournalEnabled()) {
-            try {
-                DrawerRecoveryJournal.merge(dataSource().getRecoveryJournalFile(), snapshot);
-                recoveryEntryCount = DrawerRecoveryJournal.count(dataSource().getRecoveryJournalFile());
-            } catch (IOException exception) {
-                mergeBack(snapshot);
-                SAVE_IN_FLIGHT.set(false);
-                lastSaveStatus = "journal-write-failed";
-                Networks.getInstance().getLogger().log(
-                    Level.SEVERE,
-                    "Networks refused to queue drawer amount updates because the recovery journal could not be written.",
-                    exception);
+        final boolean submitted;
+        synchronized (AMOUNT_PUBLICATION_MONITOR) {
+            if (!SAVE_IN_FLIGHT.compareAndSet(false, true)) {
                 return;
             }
+
+            // All publishers take this same short monitor. Reserve the SQL worker task
+            // BEFORE allowing a newer DELETE/INSERT to queue; otherwise an older
+            // snapshot can resurrect a row after slow recovery-journal I/O.
+            ConcurrentMap<Integer, ConcurrentMap<Integer, Integer>> liveSnapshot =
+                CHANGES.getAndSet(new ConcurrentHashMap<>(4096));
+            if (liveSnapshot.isEmpty()) {
+                SAVE_IN_FLIGHT.set(false);
+                lastSaveStatus = "idle";
+                return;
+            }
+
+            Map<Integer, Map<Integer, Integer>> snapshot = immutableSnapshot(liveSnapshot);
+            DETACHED_AMOUNT_CHANGES.set(snapshot);
+            lastSaveStatus = "saving-" + countEntries(snapshot);
+            // This reserves a FIFO position only. The WORKER now writes/fsyncs
+            // the journal before it is allowed to commit any of this SQL.
+            submitted = scheduleSnapshot(snapshot, false);
         }
 
-        Networks.getInstance().getLogger().info(Lang.getString("messages.data-saving.saving-drawer"));
-        lastSaveStatus = "saving-" + countEntries(snapshot);
-        scheduleSnapshot(snapshot, false);
+        if (submitted) {
+            Networks.getInstance().getLogger().info(Lang.getString("messages.data-saving.saving-drawer"));
+        }
     }
 
-    private static void scheduleSnapshot(
+    private static boolean scheduleSnapshot(
         @NotNull Map<Integer, ? extends Map<Integer, Integer>> snapshot,
         boolean recoveryReplay
     ) {
         try {
-            dataSource().applyAmountChanges(snapshot, success -> completeSnapshot(snapshot, success, recoveryReplay));
+            if (recoveryReplay) {
+                // An existing v1 recovery file was already written before startup.
+                dataSource().applyRecoveredAmountChanges(
+                    snapshot, success -> completeSnapshot(snapshot, success, true));
+            } else {
+                dataSource().applyAmountChanges(
+                    snapshot, success -> completeSnapshot(snapshot, success, false));
+            }
+            return true;
         } catch (RuntimeException exception) {
             if (!recoveryReplay) {
                 mergeBack(snapshot);
+                DETACHED_AMOUNT_CHANGES.compareAndSet(snapshot, Map.of());
             }
             SAVE_IN_FLIGHT.set(false);
             lastSaveStatus = "queue-rejected";
@@ -253,6 +286,7 @@ public final class DataStorage {
                 Level.SEVERE,
                 "Networks could not queue a drawer amount transaction; the recovery journal was retained.",
                 exception);
+            return false;
         }
     }
 
@@ -293,6 +327,10 @@ public final class DataStorage {
                     "A Networks drawer amount transaction failed. The recovery journal was retained for retry.");
             }
         } finally {
+            // A cancelled task never enters this callback; retain its receipt.
+            if (!recoveryReplay) {
+                DETACHED_AMOUNT_CHANGES.compareAndSet(snapshot, Map.of());
+            }
             // Never leave autosaving permanently blocked if logging, journal cleanup, or a callback fails.
             SAVE_IN_FLIGHT.set(false);
             Networks.getInstance().debug("Database task amount: " + Networks.getQueryQueue().getTaskAmount());
@@ -309,14 +347,31 @@ public final class DataStorage {
         return Map.copyOf(copy);
     }
 
+    private static @NotNull Map<Integer, Map<Integer, Integer>> overlayAmountSnapshots(
+        @NotNull Map<Integer, ? extends Map<Integer, Integer>> older,
+        @NotNull Map<Integer, ? extends Map<Integer, Integer>> newer
+    ) {
+        Map<Integer, Map<Integer, Integer>> combined = new LinkedHashMap<>();
+        for (Map.Entry<Integer, ? extends Map<Integer, Integer>> container : older.entrySet()) {
+            combined.put(container.getKey(), new LinkedHashMap<>(container.getValue()));
+        }
+        for (Map.Entry<Integer, ? extends Map<Integer, Integer>> container : newer.entrySet()) {
+            combined.computeIfAbsent(container.getKey(), ignored -> new LinkedHashMap<>())
+                .putAll(container.getValue());
+        }
+        return immutableSnapshot(combined);
+    }
+
     private static void mergeBack(@NotNull Map<Integer, ? extends Map<Integer, Integer>> snapshot) {
-        ConcurrentMap<Integer, ConcurrentMap<Integer, Integer>> current = CHANGES.get();
-        for (Map.Entry<Integer, ? extends Map<Integer, Integer>> container : snapshot.entrySet()) {
-            ConcurrentMap<Integer, Integer> destination =
-                current.computeIfAbsent(container.getKey(), ignored -> new ConcurrentHashMap<>());
-            for (Map.Entry<Integer, Integer> item : container.getValue().entrySet()) {
-                // A newer runtime amount always wins over the older failed snapshot.
-                destination.putIfAbsent(item.getKey(), item.getValue());
+        synchronized (AMOUNT_PUBLICATION_MONITOR) {
+            ConcurrentMap<Integer, ConcurrentMap<Integer, Integer>> current = CHANGES.get();
+            for (Map.Entry<Integer, ? extends Map<Integer, Integer>> container : snapshot.entrySet()) {
+                ConcurrentMap<Integer, Integer> destination =
+                    current.computeIfAbsent(container.getKey(), ignored -> new ConcurrentHashMap<>());
+                for (Map.Entry<Integer, Integer> item : container.getValue().entrySet()) {
+                    // A newer runtime amount always wins over the older failed snapshot.
+                    destination.putIfAbsent(item.getKey(), item.getValue());
+                }
             }
         }
     }
@@ -387,6 +442,7 @@ public final class DataStorage {
         CACHE.clear();
         STATE.clear();
         CHANGES.set(new ConcurrentHashMap<>(4096));
+        DETACHED_AMOUNT_CHANGES.set(Map.of());
         SAVE_IN_FLIGHT.set(false);
         recoveryEntryCount = 0;
         lastSaveStatus = "idle";
