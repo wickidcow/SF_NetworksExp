@@ -80,7 +80,9 @@ class DrawerTemplateRegistrationTest {
         when(plugin.getDataFolder()).thenReturn(directory.toFile());
         when(plugin.getLogger()).thenReturn(logger);
         ConfigManager manager = mock(ConfigManager.class);
-        when(manager.useBukkitItemComparison()).thenReturn(true);
+        // Use the maintained metadata matcher for Slimefun's comparison-only wrapper.
+        // The native ItemStack comparison override is not the subject of this fixture.
+        when(manager.useBukkitItemComparison()).thenReturn(false);
         field(Networks.class, "configManager").set(plugin, manager);
         LocalizationService localization = mock(LocalizationService.class);
         when(localization.getString(anyString())).thenAnswer(call -> call.getArgument(0));
