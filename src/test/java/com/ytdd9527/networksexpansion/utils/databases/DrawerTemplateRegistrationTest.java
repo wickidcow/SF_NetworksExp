@@ -7,10 +7,11 @@ import com.balugaq.netex.api.enums.StorageUnitType;
 import com.ytdd9527.networksexpansion.core.managers.ConfigManager;
 import com.ytdd9527.networksexpansion.core.services.LocalizationService;
 import io.github.sefiraat.networks.Networks;
+import io.github.sefiraat.networks.utils.StackUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import net.kyori.adventure.text.Component;
-import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -20,6 +21,7 @@ import org.bukkit.persistence.PersistentDataType;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockbukkit.mockbukkit.MockBukkit;
+import org.mockito.MockedStatic;
 
 import java.lang.reflect.Field;
 import java.sql.Connection;
@@ -38,7 +40,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 /** Real DataSource registration, Bukkit object serialization and SQLite.
- * The plugin host is mocked; injected serializer failures are not a live exploit.
+ * The plugin host and unrelated component matcher are isolated; serialization,
+ * identity metadata and SQL remain real. Injected failures are not a live exploit.
  */
 @Timeout(20)
 class DrawerTemplateRegistrationTest {
@@ -48,6 +51,7 @@ class DrawerTemplateRegistrationTest {
     private final Map<String, Object> originalGlobals = new LinkedHashMap<>();
     private QueryQueue queue;
     private DataSource source;
+    private MockedStatic<StackUtils> comparison;
 
     @BeforeAll
     static void initializeConstants() throws Exception {
@@ -80,8 +84,6 @@ class DrawerTemplateRegistrationTest {
         when(plugin.getDataFolder()).thenReturn(directory.toFile());
         when(plugin.getLogger()).thenReturn(logger);
         ConfigManager manager = mock(ConfigManager.class);
-        // Use the maintained metadata matcher for Slimefun's comparison-only wrapper.
-        // The native ItemStack comparison override is not the subject of this fixture.
         when(manager.useBukkitItemComparison()).thenReturn(false);
         field(Networks.class, "configManager").set(plugin, manager);
         LocalizationService localization = mock(LocalizationService.class);
@@ -89,6 +91,19 @@ class DrawerTemplateRegistrationTest {
         field(Networks.class, "localizationService").set(plugin, localization);
         field(Networks.class, "instance").set(null, plugin);
         DataStorage.clearRuntimeCache();
+        // MockBukkit does not implement matchesWithoutData; ItemStackWrapper's
+        // inherited native comparison also lacks its cached metadata. Isolate
+        // registration from that unrelated matcher, using real Bukkit metadata
+        // on a materialized stack. Never stub registration, serialization or SQL.
+        comparison = mockStatic(StackUtils.class, CALLS_REAL_METHODS);
+        comparison.when(() -> StackUtils.itemsMatch(any(ItemStack.class), any(ItemStack.class)))
+            .thenAnswer(call -> {
+                ItemStack first = call.getArgument(0);
+                ItemStack wrapped = call.getArgument(1);
+                ItemStack materialized = new ItemStack(wrapped.getType());
+                materialized.setItemMeta(wrapped.getItemMeta());
+                return first.isSimilar(materialized);
+            });
         queue = new QueryQueue();
         field(Networks.class, "queryQueue").set(null, queue);
         source = new DataSource();
@@ -107,6 +122,7 @@ class DrawerTemplateRegistrationTest {
             if (source != null) source.close();
             DataStorage.clearRuntimeCache();
         } finally {
+            if (comparison != null) comparison.close();
             for (var entry : originalGlobals.entrySet()) {
                 field(Networks.class, entry.getKey()).set(null, entry.getValue());
             }
