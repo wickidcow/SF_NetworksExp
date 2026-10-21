@@ -155,24 +155,35 @@ public final class DataSource implements AutoCloseable {
             }
         }
 
+        // Prepare the exact historical payload before publishing an ID or accepting stock.
+        // A serializer failure must reach the depositing caller while its input is untouched.
+        // Known item types return above and never repeat this work on ordinary deposits.
+        final String serialized;
+        try {
+            serialized = getBase64String(clone);
+        } catch (IOException exception) {
+            throw new IllegalStateException("Could not serialize a new Networks drawer item template", exception);
+        }
+
         int id = nextItemId++;
-        // Publish immediately so simultaneous deposits cannot assign multiple IDs to the same item.
-        itemMap.put(id, clone);
         persistCounter(ITEM_ID_KEY, nextItemId);
 
         Networks.getQueryQueue().scheduleUpdate(() -> {
             String sql = "INSERT INTO " + DataTables.ITEM_STACK + " VALUES (?,?);";
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 statement.setInt(1, id);
-                statement.setString(2, getBase64String(clone));
+                statement.setString(2, serialized);
                 statement.executeUpdate();
                 return true;
-            } catch (SQLException | IOException exception) {
+            } catch (SQLException exception) {
                 logger.warning(Lang.getString("messages.data-saving.error-occurred-when-saving-itemstack"));
                 Debug.trace(exception);
                 return false;
             }
         });
+        // getItemId remains synchronized: concurrent registrants cannot pass this
+        // publication boundary, and rejected submissions cannot leave a phantom type.
+        itemMap.put(id, clone);
         return id;
     }
 
