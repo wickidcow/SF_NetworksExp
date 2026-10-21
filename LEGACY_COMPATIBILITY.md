@@ -8,9 +8,17 @@ The exact accepted commits, public artifact hashes, native evidence and remainin
 
 ## Maintenance target and retained compatibility gates
 
-**GuGu Slimefun Legacy** is the primary runtime and development target. The release uses `wickidcow/Slimefun-Legacy` source `1cb32d6e95b305998065b8ef6b936a56f679187d` for its core and coordinated native acceptance.
+**GuGu Slimefun Legacy** is the primary runtime and development target. The published 1.0.60/2.0.15 addon release-native acceptance used `wickidcow/Slimefun-Legacy` source `1cb32d6e95b305998065b8ef6b936a56f679187d`. That historical source and the build pins below remain unchanged.
 
 The existing auxiliary United and Gugu exact-core build gates remain enabled and passed. They preserve the established universal build contract; this release does not undertake new maintenance of abandoned United support. A universal release is not uploaded unless every existing required gate succeeds.
+
+## Coordinated core 4.1.76 candidate
+
+[Core PR #414](https://github.com/wickidcow/Slimefun-Legacy/pull/414) integrated the published pair in r143 at `e7ba40469eae1aa54b4347af19e58341f492edcb`. Its exact-source native, canonical, automatic full-stack and manual [reproducible validation 39625265406](https://github.com/wickidcow/Slimefun-Legacy/actions/runs/39625265406) passed. The verified r143 ZIP replaced the outdated r140 handoff without publishing core 4.1.76.
+
+Core has since advanced through PR #415 and PR #413 to **r145**, source `f472c473b6a2013be29403061785e90d32d1c868`. Its canonical, native, automatic full-stack and final manual [validation 39669276799](https://github.com/wickidcow/Slimefun-Legacy/actions/runs/39669276799) workflows passed, with publication and normalization skipped. Downloaded r145 artifacts and the unchanged strict native/full-stack evidence verifiers now pass, including all 45 addon source/version/hash/CRC records and the unchanged published pair. The verified r145 ZIP successfully replaced the saved r143 handoff with version history preserved. The maintained-tip IE2 test-fixture compile failure is repaired by [PR #36](https://github.com/wickidcow/SF_InfinityExpansion2/pull/36), merged at `b1fd91db9e85189fd108b45e343e32cead9c2dde` after local 183-test and hosted API/build/source-safety acceptance. Its post-merge workflow and the [targeted core maintained-addon retry](https://github.com/wickidcow/Slimefun-Legacy/actions/runs/39666239493/attempts/2) both pass. The original failure, actual successful job/report and separate existing-release cleanup guard refusal are recorded explicitly in the [completion checkpoint](NETWORKS_EXPANSION_COMPLETION.md#current-r145-candidate); r143 evidence does not replace these current-source requirements.
+
+Core publication remains held for explicit maintainer approval of the concrete verified candidate. `publish=false` remains the default. The [core checkpoint](https://github.com/wickidcow/Slimefun-Legacy/blob/master/NETWORKS_EXPANSION_COMPLETION.md), [release tracker #378](https://github.com/wickidcow/Slimefun-Legacy/issues/378), and current Git state determine the live core handoff. Published addon pins and historical acceptance below remain intact. Declared-addon Folia startup checks do not enable Networks or IE2 Folia runtime support.
 
 ## Preserved world and addon identity
 
