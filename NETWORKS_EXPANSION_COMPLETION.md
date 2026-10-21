@@ -4,7 +4,21 @@ Updated October 20, 2026 America/New_York (October 21 UTC in CI).
 
 ## Resume here — do not restart accepted work
 
-### Active continuation: performance integration, native readiness, IE2 break receipts
+### Latest implementation checkpoint: GUI, Quantum and recipe fallback
+
+**Canonical clean strict build: 572 tests, zero failures/errors/skips.** Legacy source contracts, Java 21 bytecode (531 owned classes), universal JAR (289 IDs) pass. Versions remain unchanged pending final acceptance.
+
+- **DS-03 GUI:** actual installed handler onfd59173d ran8tests: healthy control passed,7failures reproduced full/rejected/partial-inventory loss, snapshot cursor/inventory duplicate credits and stale-menu access. All8 now pass, plus4controls for reentry, intentional input Void Excess, new-type registration and refused source writes. New `DrawerMenuTransfer` uses authoritative slot/cursor writes/readbacks. `StorageUnitData` holds canonical Drawer/container ownership until exact source debit/destination credit is observed; no refund passes through void/lock policy. New handler rejects detached menus/replaced storage.
+- **DS-03 Quantum:** FROM baseline5tests:1control passed,4failures duplicated44 or lost37/44. TO baseline4tests:1control passed,3failures lost212. New `DrawerQuantumDepositReceipt` and `DrawerQuantumWithdrawalReceipt` use guarded live menu/PDC receipts. All18actual-handler cases pass: snapshot reads, rejected writes, write-then-throw, preparation callbacks, reentry, stale menus, zero/full drain, first assignment andLong.MAX_VALUE. Full drain preserves original unrelated container PDC, template, capacity and flags. The source-order assertion now checks the verified helper sequence.
+- **RA-02:** native834df8dd/IE2tree74680f3e proved actual GUI pickup/toggles/chat5/reopen and exact per-round ledgers, then real ElectricSmeltery buffered1CARBON when5was requested. Five unit declarations reproduced1failure/4healthy controls. `AbstractNetworkPusher.getRecipeInputSlots` now uses the same live target's public `InventoryBlock.getInputSlots` when its generic declaration is empty. Dynamic item-aware insertion permissions are unchanged. All5new cases and fullsuite pass; native ratio/OFF/re-enable/restart is next.
+- Native recipe client now sends the ordinary close-window action after the real chat prompt; pinned ChatUtils does not close the inventory automatically. No server assertions weakened.
+- Compatibility check initially caught the removed old empty-Quantum cleaning expression. New GUI/Quantum receipts now detach prepared items with the established `ItemStackUtil.getCleanItem` before CraftInventory writes, preserving exact PDC. The verifier checks all three new helpers and retained display cleanup. Full572-test build rerun and all static/bytecode/JAR gates pass after this correction.
+
+**Remote/native evidence:** Networksfd59173d native workflow **39530959605**, job **118996473117**, passed storage192restart, actual Grid/crafting and IE2 player actions againstIE2`274a1833`. The real-monitor readiness correction is verified. Recipe workflow39530959650failed the old client assumption; corrected client is included here. IE2`274a1833488fba8dbd8e3bbc44b95e59d49c09b7` passed both CI workflows **39530756144**/**39530752142**. Separate local native IE2 break acceptance now PASS: five real Player.breakBlock ledgers, full+Void physical output, foreign PDC, cancelled second spawn rollback/retry, callback reentry denial, actual client placement and independent-JVM reload. SeedPID14864/verifyPID15153; exact core1cb/Networks834/IE2localfa4 treeequalremote274a. Fixture files are ready to commit; no forced-crash claim.
+
+**Exact next action:** run this canonical572-test candidate through native recipe acceptance; complete ItemMover PDC/slot receipts and repair the existing silent overcapacity clamp. Then native Drawer acceptance, final reviews/master integration/versioning/release/SF_Addons. Existing documented Folia runtime remains unclaimed because multi-chunk networks are not region-safe; do not force an unsafe descriptor flag. Applicable Paper/Purpur26.3 gates remain mandatory. Runtime ambiguous-write holds do not establish forced-crash recovery.
+
+### Previous integration checkpoint: performance, readiness and IE2 break receipts
 
 **Latest verified production:** Networks `834df8dd424a6749e5f1723f63cfdabca936831f` passed both universal workflows **39529931281** and **39529926947**. All 530 tests and eight platform/compatibility gates passed. Its native workflow **39529927009**, job **118993225786**, passed the 192-item two-JVM storage/restart ledger but reproduced the first Grid shift refusal. At the actual click, the published root had **zero monitors**, `cachedInputs=unbuilt` before and `0` after; all 16 items stayed with the player. Later discovery found the two real monitors/one deduplicated IE2 storage. This establishes a fixture-readiness race: the old condition accepted the Grid node before its physical monitors registered.
 
@@ -88,10 +102,10 @@ Production **`5a8dd3747684f585ba6552b12e96eaa30c5ae47d`**, DataSource blob `e2f7
 | DS-01 | Dedicated native Drawer timeout/restart | Full project and paired regressions pass; dedicated fault/crash evidence still distinct. |
 | DS-02a | Registration preflight | Accepted in 530/537-test builds and universal gates. Native Grid readiness race identified and fixture corrected; exact-pair rerun pending. |
 | DS-02b | Durable templates/orphan IDs | Implemented834df8dd; real SQLite/worker/journal tests and universal CI pass. Dedicated crash acceptance is distinct. |
-| DS-03 | GUI remainder/ItemMover/Quantum receipts | Preparation accepted; other known receipt/restore candidates require real project/native tests. |
-| IE-01 | Break/output/Void/zero/live PDC | Implemented274a1833; full150-test build passes. Native break/place/restart and CI pending. Runtime ambiguous-spawn holds remain explicit. |
+| DS-03 | GUI remainder/ItemMover/Quantum receipts | GUI12/Quantum18 real-handler cases pass in full572-test build. ItemMover, malformed-balance clamp and native Drawer acceptance remain. |
+| IE-01 | Break/output/Void/zero/live PDC | Implemented274a1833;150tests/both CI pass. Five native breakcases, actual placement andindependent restart pass with834pair; fixturecommit/finalpair pending. |
 | RA-01 | Foreign-slot initial handler | Implemented834df8dd; initial/stale-menu tests pass. Native pickup/toggle/batch/reload running. |
-| RA-02 | Recipe/OFF parity | Classic/More/Best implemented; native ratios/accepted slots/budget tests pending. Other families distinct. |
+| RA-02 | Recipe/OFF parity | Real smeltery one-vs-five defect reproduced; fallback passes5new tests/fullsuite. Canonical native ratio/OFF/re-enable/restart pending. |
 | PAIR-01 | Final pair/Dust Extractor | Keep exact ledgers. First-shift readiness race causally identified; rerun corrected fixture against274a1833. |
 | PLATFORM-01 | Paper/Purpur/Folia/performance | Paper176/194 and Purpur storage pass at5a8; paired Folia/live MSPT not established. Perf96 integrated with seven operation-count tests; final native acceptance remains. |
 | RELEASE-01 | Review/integrate/version/release/SF_Addons | Authorized only after acceptance. No unrelated Legacy publication. |

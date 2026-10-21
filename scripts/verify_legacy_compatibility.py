@@ -1000,7 +1000,13 @@ require("new ConcurrentHashMap<>()" in networks_drawer
         "Networks Drawer runtime caches are not concurrency-safe")
 require("final ItemStack cleanSample = ItemStackUtil.getCleanItem(item);" in networks_drawer
         and "ItemStackUtil.getCleanItem(new CustomItemStack(" in networks_drawer
-        and "QUANTUM_SLOT, ItemStackUtil.getCleanItem(slimefunItem.getItem())" in networks_drawer,
+        and "DrawerQuantumDepositReceipt.transfer(" in networks_drawer
+        and "DrawerQuantumWithdrawalReceipt.transfer(" in networks_drawer
+        and all("updated = ItemStackUtil.getCleanItem(updated);" in read(path) for path in [
+            "src/main/java/com/ytdd9527/networksexpansion/implementation/machines/unit/DrawerQuantumDepositReceipt.java",
+            "src/main/java/com/ytdd9527/networksexpansion/implementation/machines/unit/DrawerQuantumWithdrawalReceipt.java",
+            "src/main/java/com/ytdd9527/networksexpansion/implementation/machines/unit/DrawerMenuTransfer.java",
+        ]),
         "Networks Drawer can expose SlimefunItemStack-backed menu items to CraftInventory")
 require("supportsVirtualItemTransport" in networks_drawer
         and "insertByItemTransport" in networks_drawer

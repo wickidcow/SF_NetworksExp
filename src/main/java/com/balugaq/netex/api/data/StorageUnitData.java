@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BooleanSupplier;
 
 @SuppressWarnings({"UnusedAssignment", "DuplicatedCode"})
 @ToString
@@ -39,6 +40,9 @@ public class StorageUnitData {
     private final ConcurrentHashMap<Integer, ItemContainer> storedItems;
     // Accessed under this drawer's synchronized request methods; never persisted.
     private boolean withdrawalPreparing;
+    // Source callbacks can reenter a synchronized drawer on the same thread.
+    private boolean sourceTransferActive;
+    private boolean sourceTransferUnverified;
     @Getter
     private boolean isPlaced;
 
@@ -242,6 +246,9 @@ public class StorageUnitData {
     }
 
     public synchronized void setPlaced(boolean isPlaced) {
+        if (sourceTransferActive || sourceTransferUnverified) {
+            return;
+        }
         if (this.isPlaced != isPlaced) {
             this.isPlaced = isPlaced;
             DataStorage.setContainerStatus(id, isPlaced);
@@ -249,6 +256,9 @@ public class StorageUnitData {
     }
 
     public synchronized void setSizeType(@NotNull StorageUnitType sizeType) {
+        if (sourceTransferActive || sourceTransferUnverified) {
+            return;
+        }
         if (this.sizeType != sizeType) {
             this.sizeType = sizeType;
             DataStorage.setContainerSizeType(id, sizeType);
@@ -256,6 +266,9 @@ public class StorageUnitData {
     }
 
     public synchronized void setLastLocation(@NotNull Location lastLocation) {
+        if (sourceTransferActive || sourceTransferUnverified) {
+            return;
+        }
         if (!lastLocation.equals(this.lastLocation)) {
             this.lastLocation = lastLocation.clone();
             DataStorage.setContainerLocation(id, this.lastLocation);
@@ -263,12 +276,18 @@ public class StorageUnitData {
     }
 
     public synchronized void removeItem(int itemId) {
+        if (sourceTransferActive || sourceTransferUnverified) {
+            return;
+        }
         if (storedItems.remove(itemId) != null) {
             DataStorage.deleteStoredItem(id, itemId);
         }
     }
 
     public synchronized void setItemAmount(int itemId, int amount) {
+        if (sourceTransferActive || sourceTransferUnverified) {
+            return;
+        }
         if (amount < 0) {
             // Directly remove
             removeItem(itemId);
@@ -282,6 +301,9 @@ public class StorageUnitData {
     }
 
     public synchronized void removeAmount(int itemId, int amount) {
+        if (sourceTransferActive || sourceTransferUnverified) {
+            return;
+        }
         ItemContainer container = storedItems.get(itemId);
         if (container != null) {
             container.removeAmount(amount);
@@ -385,6 +407,9 @@ public class StorageUnitData {
         @NotNull ItemRequest itemRequest,
         boolean contentLocked) {
 
+        if (sourceTransferActive || sourceTransferUnverified) {
+            return null;
+        }
         final ItemStack template = itemRequest.getItemStack();
         final int requested = itemRequest.getAmount();
         if (template == null || template.getType().isAir() || requested <= 0) {
@@ -509,7 +534,7 @@ public class StorageUnitData {
 
     public synchronized void depositItemStack0(
         @NotNull Location accessor, @Nullable ItemStack itemsToDeposit, boolean contentLocked, boolean force) {
-        if (itemsToDeposit == null
+        if (sourceTransferActive || sourceTransferUnverified || itemsToDeposit == null
             || itemsToDeposit.getType().isAir()
             || itemsToDeposit.getAmount() <= 0
             || isBlacklisted(itemsToDeposit)) {
@@ -546,7 +571,8 @@ public class StorageUnitData {
         boolean contentLocked,
         boolean force) {
 
-        if (item.getType().isAir() || amount <= 0 || isBlacklisted(item)) {
+        if (sourceTransferActive || sourceTransferUnverified
+            || item.getType().isAir() || amount <= 0 || isBlacklisted(item)) {
             return 0;
         }
 
@@ -601,6 +627,196 @@ public class StorageUnitData {
         final int added = addToContainer(existing, amount);
         return added;
     }
+
+    /**
+     * Accepts an existing type only after an authoritative source debit is verified.
+     * The source callback must return false only when its physical source is unchanged;
+     * an ambiguous write must throw. Capacity and identity stay under the actual drawer
+     * and container locks across preparation, source commit and destination credit.
+     */
+    public synchronized int depositFromVerifiedSource(
+        @NotNull Location accessor,
+        @NotNull ItemContainer destination,
+        @NotNull ItemStack incoming,
+        long available,
+        @NotNull SourceDebit sourceDebit
+    ) {
+        return depositFromVerifiedSource0(accessor, destination, incoming, available, false, sourceDebit);
+    }
+
+    /** GUI input keeps the historical new-type/lock and explicit Void Excess policy. */
+    public synchronized int depositFromVerifiedSource(
+        @NotNull Location accessor,
+        @NotNull ItemStack incoming,
+        boolean contentLocked,
+        boolean force,
+        @NotNull SourceDebit sourceDebit
+    ) {
+        if (sourceTransferActive || sourceTransferUnverified || incoming.getType().isAir()
+            || incoming.getAmount() <= 0 || isBlacklisted(incoming)) return 0;
+        for (ItemContainer existing : storedItems.values()) {
+            if (existing.isSimilar(incoming)) {
+                return depositFromVerifiedSource0(accessor, existing, incoming, incoming.getAmount(),
+                    NetworksDrawer.isVoidExcess(lastLocation), sourceDebit);
+            }
+        }
+        if ((!force && (contentLocked || NetworksDrawer.isLocked(lastLocation)))
+            || storedItems.size() >= sizeType.getMaxItemCount()) return 0;
+
+        // Registration durably preserves identity before a physical source can be
+        // consumed. The empty runtime entry owns no items and can be discarded on
+        // a verified refusal. The absolute amount publication below upserts SQL.
+        int itemId = DataStorage.getItemId(incoming);
+        ItemContainer prepared = new ItemContainer(itemId, incoming, 0);
+        if (sourceTransferActive || sourceTransferUnverified
+            || (!force && (contentLocked || NetworksDrawer.isLocked(lastLocation)))
+            || storedItems.size() >= sizeType.getMaxItemCount()) return 0;
+        ItemContainer existing = storedItems.putIfAbsent(itemId, prepared);
+        ItemContainer destination = existing == null ? prepared : existing;
+        try {
+            return depositFromVerifiedSource0(accessor, destination, incoming, incoming.getAmount(),
+                existing != null && NetworksDrawer.isVoidExcess(lastLocation), sourceDebit);
+        } finally {
+            if (existing == null && !sourceTransferUnverified && prepared.getAmount() == 0) {
+                storedItems.remove(itemId, prepared);
+            }
+        }
+    }
+
+    private int depositFromVerifiedSource0(
+        Location accessor, ItemContainer destination, ItemStack incoming, long available,
+        boolean consumeOverflow, SourceDebit sourceDebit
+    ) {
+        if (withdrawalPreparing || sourceTransferActive || sourceTransferUnverified || available <= 0) {
+            return 0;
+        }
+        sourceTransferActive = true;
+        boolean sourceMayHaveChanged = false;
+        try {
+            synchronized (destination) {
+                if (storedItems.get(destination.getId()) != destination
+                    || incoming.getType().isAir() || isBlacklisted(incoming)
+                    || !destination.isSimilar(incoming)) {
+                    return 0;
+                }
+                ItemStack identity = destination.getSample();
+                int before = destination.getAmount();
+                int maximum = sizeType.getEachMaxSize();
+                if (before < 0 || before > maximum) {
+                    return 0;
+                }
+                int credited = (int) Math.min(available, (long) maximum - before);
+                int planned = consumeOverflow ? (int) Math.min(available, Integer.MAX_VALUE) : credited;
+                if (planned <= 0) {
+                    return 0;
+                }
+                BooleanSupplier destinationUnchanged = () -> storedItems.get(destination.getId()) == destination
+                    && destination.getAmount() == before && sizeType.getEachMaxSize() == maximum
+                    && identity.equals(destination.getSampleDirectly());
+                if (!destinationUnchanged.getAsBoolean()) {
+                    return 0;
+                }
+                sourceMayHaveChanged = true;
+                if (!sourceDebit.commit(planned, destinationUnchanged)) {
+                    sourceMayHaveChanged = false;
+                    return 0;
+                }
+                if (!destinationUnchanged.getAsBoolean()) {
+                    throw new IllegalStateException("Drawer destination changed after its verified source debit");
+                }
+                destination.addAmount(credited);
+                if (storedItems.get(destination.getId()) != destination
+                    || destination.getAmount() != before + credited
+                    || !identity.equals(destination.getSampleDirectly())) {
+                    throw new IllegalStateException("Drawer destination credit has no exact receipt");
+                }
+                if (credited > 0) DataStorage.setStoredAmount(id, destination.getId(), before + credited);
+                addCountObservingAccessHistory(accessor, destination.getId());
+                sourceMayHaveChanged = false;
+                return planned;
+            }
+        } catch (RuntimeException | LinkageError failure) {
+            if (sourceMayHaveChanged) {
+                sourceTransferUnverified = true;
+            }
+            throw failure;
+        } finally {
+            sourceTransferActive = false;
+        }
+    }
+
+    public synchronized boolean hasUnverifiedSourceTransfer() {
+        return sourceTransferUnverified;
+    }
+
+    /**
+     * Retains drawer ownership until the destination reports its exact physical
+     * addition. No unused withdrawal is sent back through input Void Excess or
+     * content-lock policy. Reentrant network/menu operations cannot reuse stock.
+     */
+    public synchronized int withdrawToVerifiedDestination(
+        @NotNull Location accessor,
+        @NotNull ItemContainer source,
+        int requested,
+        boolean contentLocked,
+        @NotNull DestinationCredit destinationCredit
+    ) {
+        if (sourceTransferActive || sourceTransferUnverified || requested <= 0) return 0;
+        sourceTransferActive = true;
+        boolean destinationMayHaveChanged = false;
+        try {
+            synchronized (source) {
+                if (storedItems.get(source.getId()) != source || source.getAmount() <= 0) return 0;
+                int before = source.getAmount();
+                ItemStack identity = source.getSample();
+                ItemStack offered = identity.clone();
+                int planned = Math.min(before, requested);
+                offered.setAmount(planned);
+                BooleanSupplier sourceUnchanged = () -> storedItems.get(source.getId()) == source
+                    && source.getAmount() == before && identity.equals(source.getSampleDirectly());
+                if (!sourceUnchanged.getAsBoolean()) return 0;
+                destinationMayHaveChanged = true;
+                int accepted = destinationCredit.commit(offered, sourceUnchanged);
+                if (accepted < 0 || accepted > planned || !sourceUnchanged.getAsBoolean()) {
+                    throw new IllegalStateException("Drawer withdrawal has no exact destination receipt");
+                }
+                if (accepted == 0) {
+                    destinationMayHaveChanged = false;
+                    return 0;
+                }
+                source.setAmount(before - accepted);
+                if (storedItems.get(source.getId()) != source || source.getAmount() != before - accepted
+                    || !identity.equals(source.getSampleDirectly())) {
+                    throw new IllegalStateException("Drawer source debit has no exact receipt");
+                }
+                if (source.getAmount() == 0 && !contentLocked) {
+                    storedItems.remove(source.getId(), source);
+                    DataStorage.deleteStoredItem(id, source.getId());
+                } else {
+                    DataStorage.setStoredAmount(id, source.getId(), source.getAmount());
+                }
+                addCountObservingAccessHistory(accessor, source.getId());
+                destinationMayHaveChanged = false;
+                return accepted;
+            }
+        } catch (RuntimeException | LinkageError failure) {
+            if (destinationMayHaveChanged) sourceTransferUnverified = true;
+            throw failure;
+        } finally {
+            sourceTransferActive = false;
+        }
+    }
+
+    @FunctionalInterface
+    public interface DestinationCredit {
+        int commit(ItemStack offered, BooleanSupplier sourceUnchanged);
+    }
+
+    @FunctionalInterface
+    public interface SourceDebit {
+        boolean commit(int amount, BooleanSupplier destinationUnchanged);
+    }
+
 
     private int addToContainer(@NotNull ItemContainer container, int requested) {
         final int current = Math.max(0, container.getAmount());

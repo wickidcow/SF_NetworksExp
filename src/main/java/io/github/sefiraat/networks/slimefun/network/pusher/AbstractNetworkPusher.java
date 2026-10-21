@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import me.mrCookieSlime.Slimefun.Objects.SlimefunItem.interfaces.InventoryBlock;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
 import org.bukkit.Bukkit;
@@ -534,10 +535,23 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
         try {
             final int[] slots = targetMenu.getPreset()
                 .getSlotsAccessedByItemTransport(ItemTransportFlow.INSERT);
-            return slots == null ? new int[0] : slots;
+            if (slots != null && slots.length > 0) {
+                return slots;
+            }
+
+            // Dynamic machines such as Electric Smeltery leave generic transport
+            // slots empty. Read their own physical declaration, never a null-item
+            // routing result or a replacement block's inventory layout.
+            final Location location = targetMenu.getLocation();
+            if (location != null && StorageCacheUtils.getMenu(location) == targetMenu
+                && StorageCacheUtils.getSlimefunItem(location) instanceof InventoryBlock inventory) {
+                final int[] inputs = inventory.getInputSlots();
+                return inputs == null ? new int[0] : inputs;
+            }
         } catch (RuntimeException | AbstractMethodError | NoSuchMethodError ignored) {
-            return new int[0];
+            // Missing or incompatible declarations remain conservatively unknown.
         }
+        return new int[0];
     }
 
     /**

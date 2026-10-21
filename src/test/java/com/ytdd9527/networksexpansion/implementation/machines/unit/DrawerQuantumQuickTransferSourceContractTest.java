@@ -36,11 +36,17 @@ class DrawerQuantumQuickTransferSourceContractTest {
     }
 
     @Test
-    void toQuantumMustNotIgnoreActualDrawerWithdrawal() throws IOException {
-        assertTrue(drawerSource().contains("final ItemStack withdrawn ="),
-            "Actual Drawer source withdrawal must have an explicit checked receipt");
-        assertTrue(drawerSource().contains("DrawerQuantumTransferMath.verifiedReceipt("),
-            "Quantum credit must be derived from that checked source withdrawal receipt");
+    void toQuantumMustCommitOnlyAgainstAnAuthoritativeDestinationReceipt() throws IOException {
+        assertTrue(drawerSource().contains("DrawerQuantumWithdrawalReceipt.transfer("),
+            "The actual handler must use the authoritative Quantum destination receipt");
+        String receipt = Files.readString(Path.of("src/main/java/com/ytdd9527/networksexpansion/"
+            + "implementation/machines/unit/DrawerQuantumWithdrawalReceipt.java"), StandardCharsets.UTF_8);
+        assertTrue(receipt.contains("drawer.withdrawToVerifiedDestination("),
+            "Drawer source ownership must be guarded through the authoritative destination write");
+        assertTrue(receipt.contains("menu.replaceExistingItem(") && receipt.contains("menu.getItemInSlot("),
+            "A detached metadata write alone is not an authoritative destination receipt");
+        assertTrue(receipt.contains("DrawerQuantumTransferMath.verifiedReceipt("),
+            "The guarded offer must retain its amount and item identity checks");
     }
 
     @Test

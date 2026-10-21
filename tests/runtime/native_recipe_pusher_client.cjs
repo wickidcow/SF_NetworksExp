@@ -57,8 +57,12 @@ async function run() {
     await click(slot, 0, 1, 'minus', 'exact-' + tier)
     await sleep(1100)
     console.log(`Recipe exact-batch prompt window=${bot.currentWindow.id} raw=${slot}`)
+    const promptStart = seen.length
     await bot.clickWindow(slot, 1, 0)
-    await until(() => !bot.currentWindow, 'ordinary chat prompt closes inventory')
+    await until(() => seen.slice(promptStart).some(s => s === 'Enter the Recipe-Aware batch target (1-64)'), 'ordinary batch chat prompt')
+    // ChatUtils registers the callback; the ordinary player closes the menu to type.
+    bot.closeWindow(bot.currentWindow)
+    await until(() => !bot.currentWindow, 'player closes inventory for chat input')
     bot.chat('5')
     await until(() => bot.currentWindow && bot.currentWindow.inventoryStart === 45, 'ordinary batch chat reopens inventory')
     await command('exact', 'off-' + tier)
