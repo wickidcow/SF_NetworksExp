@@ -1,6 +1,9 @@
 package io.github.sefiraat.networks.slimefun.network.pusher;
 
+import com.balugaq.netex.api.enums.MinecraftVersion;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
+import com.ytdd9527.networksexpansion.core.managers.ConfigManager;
+import io.github.sefiraat.networks.Networks;
 import io.github.thebusybiscuit.slimefun4.api.items.ItemSetting;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -27,6 +30,7 @@ import static org.mockito.Mockito.*;
 /** The first viewer tick must release an old foreign item without changing its identity. */
 class RecipeAwareInitialControlHandlerTest {
     private MockedStatic<StorageCacheUtils> storage;
+    private MockedStatic<Networks> networks;
     private AbstractNetworkPusher pusher;
     private BlockMenu menu;
     private Location location;
@@ -37,6 +41,13 @@ class RecipeAwareInitialControlHandlerTest {
     @SuppressWarnings("unchecked")
     void setUp() throws ReflectiveOperationException {
         var server = MockBukkit.mock();
+        networks = mockStatic(Networks.class);
+        ConfigManager config = mock(ConfigManager.class);
+        Networks plugin = mock(Networks.class);
+        networks.when(Networks::getConfigManager).thenReturn(config);
+        networks.when(Networks::getInstance).thenReturn(plugin);
+        when(plugin.getMCVersion()).thenReturn(MinecraftVersion.UNKNOWN);
+        when(config.useBukkitItemComparison()).thenReturn(true);
         location = new Location(server.addSimpleWorld("recipe-handler"), 4, 64, 4);
         foreign = new ItemStack(Material.DIAMOND, 13);
         foreign.editMeta(meta -> meta.getPersistentDataContainer().set(
@@ -68,6 +79,7 @@ class RecipeAwareInitialControlHandlerTest {
     void tearDown() {
         try {
             if (storage != null) storage.close();
+            if (networks != null) networks.close();
         } finally {
             AbstractNetworkPusher.resetRuntimeState();
             MockBukkit.unmock();

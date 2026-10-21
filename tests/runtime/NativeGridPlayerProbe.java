@@ -15,6 +15,7 @@ import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.Set;
 import me.mrCookieSlime.Slimefun.Objects.handlers.BlockTicker;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Bukkit;
@@ -102,20 +103,23 @@ public final class NativeGridPlayerProbe extends JavaPlugin implements Listener 
                             var cd = StorageCacheUtils.getBlock(controllerLocation());
                             controller.getBlockTicker().tick(controllerLocation().getBlock(), controller, cd);
                             var definition = NetworkStorage.getNode(gridLocation());
-                            if (definition != null && definition.getNode() != null) {
+                            if (definition != null && definition.getNode() != null
+                                && monitorsDiscovered(definition.getNode().getRoot())) {
                                 storageItem = StorageCacheUtils.getSlimefunItem(storageLocation());
                                 require(adapter.isStorageUnit(storageItem), "Discovered real IE2 storage is required");
                                 require(storageCount() == 0, "Prior paired ledger must have been fully drained");
-                                // A previous tick may have memoized an empty storage-barrel view
-                                // before IE2 populated its real cache. Use ONE ordinary stable
-                                // controller refresh after cache readiness; never create or
-                                // prime a barrel explicitly, and do not retry player deposits.
+                                // A grid node can register before either physical monitor on
+                                // restart. Wait for the real published topology above, then use
+                                // one ordinary refresh after IE2 cache readiness. Never prime
+                                // lazy barrel discovery or retry player deposits.
                                 final NetworkRoot beforeReady = root();
                                 controller.getBlockTicker().tick(controllerLocation().getBlock(), controller, cd);
                                 final NetworkRoot afterReady = root();
+                                require(monitorsDiscovered(afterReady),
+                                    "Both physical monitors must remain in the published root");
                                 require(!NetworkTransferUtils.isNetworkRootHeld(afterReady, gridLocation()),
                                     "No initial quarantine after stable controller refresh");
-                                getLogger().info("Native Grid readiness: IE2 cache initialized, ordinaryControllerTick=true rootReused="
+                                getLogger().info("Native Grid readiness: IE2 cache initialized, monitors=2 ordinaryControllerTick=true rootReused="
                                     + (beforeReady == afterReady));
                                 Files.writeString(file("ready.txt"), "READY: actual player may connect\n");
                                 cancel();
@@ -127,6 +131,19 @@ public final class NativeGridPlayerProbe extends JavaPlugin implements Listener 
                 } catch (Throwable failure) { cancel(); fail(failure); }
             }
         }.runTaskTimer(this, 1L, 5L);
+    }
+
+    private boolean monitorsDiscovered(NetworkRoot current) {
+        if (current == null) return false;
+        Set<Location> expected = Set.of(storageLocation().add(1, 0, 0), storageLocation().add(0, 0, 1));
+        if (!current.getMonitors().equals(expected)) return false;
+        for (Location location : expected) {
+            var data = StorageCacheUtils.getBlock(location);
+            var node = NetworkStorage.getValidatedNode(location);
+            if (data == null || !data.isDataLoaded() || StorageCacheUtils.getMenu(location) == null
+                || node == null || node.getNode() == null || node.getNode().getRoot() != current) return false;
+        }
+        return true;
     }
 
     @EventHandler public void onJoin(PlayerJoinEvent event) {
