@@ -1,166 +1,258 @@
 # Networks Expansion completion checkpoint
 
-Updated October 20, 2026 America/New_York (October 21 UTC in CI).
+Updated: **2026-10-21 UTC**. This is the current release record. Earlier investigation queues are superseded by the evidence below; the [previous checkpoint remains in Git history](https://github.com/wickidcow/SF_NetworksExp/blob/175dcae24fd311bef0b3daf2bafb1a51af913e07/NETWORKS_EXPANSION_COMPLETION.md).
 
-## Resume here — do not restart accepted work
+## Resume here
 
+**Networks 1.0.60 and InfinityExpansion2 2.0.15 are merged, published, and verified. SF_Addons r140 is saved with the two official release JARs.** All known scoped item-conservation, IE2, recipe-control, and Paper/Purpur release blockers described in the earlier checkpoint are resolved. Folia runtime support remains an unmet platform requirement: neither addon declares it, and cross-region transactions have not been made safe. This release does not claim full Folia support.
 
-### Current execution checkpoint — final native acceptance and receipt alias fix
+Before new work, read this file and inspect the current Git branch, worktree, PR heads, and master. Continue from the released source below. Do not recreate PR #98, reapply incorporated patches, rerun accepted native suites without a concrete risk, or overwrite immutable releases.
 
-This is the final **665-test Networks1.0.60 candidate**, based on b5e48c5c8da4ddab93cabafca44349ee4ad26a2e, on PR104 to master. IE2 evidence head is **8d876da50973f8c295be61d30ded7a25e5628602**, version2.0.15, PR32 to master; production is unchanged from19e4943a. No master merge or publication yet.
+**Exact next action for this release:** merge the documentation-only checkpoint through the existing CI gates. When this file is on master with those checks passing, no publication or ZIP-update action remains. Future Folia implementation must establish ownership and coordinated inventory writes on every affected region before enabling either plugin there; a descriptor flag alone is insufficient.
 
-**Do not repeat the local SQLite investigation.** The pinned core already documents the same startup file-restoration diagnostic in [its4.1.72 checkpoint](https://github.com/wickidcow/Slimefun-Legacy/blob/1cb32d6e95b305998065b8ef6b936a56f679187d/docs/release-candidates/4.1.72.md#storage-assessment-and-remaining-attribution), from PR362/363. Prior run03 traced matched `.rsync-tmp` moves restoring deleted WAL/SHM/clean-marker files. Current recipe evidence proves stale-WAL replay/truncation byte-for-byte, but does not identify the current actor. Current local failures remain FAIL_DIAGNOSTIC. For native local acceptance, keep **all mutable runtime and trace files in process-local `/tmp` until every server JVM exits**, then export the evidence. Independent GitHub CI is the other accepted environment. Do not add speculative core fixes, force database flushes, reseed restart state or remove assertions.
+## Published artifacts
 
-**Accepted evidence at b5e48c5c:**
+| Addon | Accepted source | Published tag / target | Integration |
+|---|---|---|---|
+| Networks 1.0.60 | `175dcae24fd311bef0b3daf2bafb1a51af913e07` | [v1.0.60](https://github.com/wickidcow/SF_NetworksExp/releases/tag/v1.0.60) -> `d41d362c8b71073dca41abc24f6ef6a5a8688fff` | [PR #104](https://github.com/wickidcow/SF_NetworksExp/pull/104), reviewed and merged normally |
+| InfinityExpansion2 2.0.15 | `8d876da50973f8c295be61d30ded7a25e5628602`; production `19e4943a53c44589a6cfcf618150358f7bdf5a1c` | [v2.0.15](https://github.com/wickidcow/SF_InfinityExpansion2/releases/tag/v2.0.15) -> `168815bb99e5701d3680095a9eb9170d83a19740` | [PR #32](https://github.com/wickidcow/SF_InfinityExpansion2/pull/32) merged at `557a01ce09419461159e58272ed0f0e17512b3fc`; [publisher-only PR #34](https://github.com/wickidcow/SF_InfinityExpansion2/pull/34) merged at the release target |
 
-Both universal workflows39535135880/39535130407 PASS all eight gates, including native Paper26.3 builds176/194 and Purpur persistence. The following are prior-head behavioral results; the three-helper repair above has its own final gates.
+Networks merge tree `3a3348663755c0536ff838ebf977cc4c7d00955a` is identical to the accepted candidate. IE2 PR #32 merge tree `25bd6adda38f48c43cd61d2afe5ceabd0cf95624` is identical to its accepted head; PR #34 changes only the artifact downloader in `.github/workflows/ci.yml`. Its production sources and resulting JAR are unchanged.
 
-- Recipe workflow **39535130524**, job119009912281 PASS: four distinct JVMs6542/6652/6780/6929;192-item restart ledger; actual Classic/More/Best controls,3foreign-stack break refusals,24GUI clicks,39typed-PDC items, batch5/chat/reopen; real smeltery ratios,OFF64 and no refill when re-enabled; exact256-per-ingredient ledger and persisted settings/templates/player contents. Artifact12317400679 SHA256`8c47282e39e72f551b5135461730c01044acb26fbe6b06108dd1727716319a74`.
-- Drawer workflow **39535130437**, job119009911833 PASS: four JVMs6773/6882/7007/7144;192 prerequisite ledger,19seedclicks+2reloadclicks, exact3,000,000,086 total with64-bitQuantum/PDC/lock/void/settings preserved. Artifact12317264138 SHA256`951a13500974bc67b3f77ee012a38155fc07ce449f5f8f4b5f4117df60198fc7`.
-- Grid/IE2 player workflow **39535130411**, job119009911420 PASS.
-- Both downloaded recipe/Drawer artifacts contain the exact canonical NetworksJAR SHA`0588ad1e19281293daee6dd419c51d92e5b9dc7923d707dd27157b14b9238ae3` and IE2JAR SHA`897bd4de70c9219217ecfb0f8cf68f0147b6c38758a239085db39718dd686eef`. CI coreJAR SHA`cec822e34f0d9b2f27b5e7b8190e4a2e9625e634144a219a30d7a3394a4ba783` differs from the local build but names the same1cb source; do not conflate those build artifacts. Networks661 andIE2158 tests have zero failures/errors/skips. Core941 entries have zero failures/errors and one existing optional real-database assumption skip.
-- Reused Dust Extractor fixture passes **152real production/line-transfer cases** on the final b5/19e/local1cb pair: synchronized registered tickers, exact full metadata/PDC, partial/VOID transfers and compensation. The four obsolete producer-growth abort cases were replaced by16exact normal/VOID growth ledgers; metadata/replacement/empty source guards remain. Single-JVM acceptance does not claim restart or a real destination network (sink is controlled).
-- Final IE2 six-break-case/player-placement/reload acceptance now PASS in isolated temporary storage, exported only after bothJVMs exited: seed40003/verify40438; exact11-item independent reload. Source19e/b5/local1cb and JARs unchanged. Evidence `build-tools/native-runtime/ie2-final-b5e48c5c-19e4943a-isolated`.
+Both public releases are stable, non-draft releases. Their actual downloadable assets were fetched and compared byte-for-byte with the accepted test binaries, including CRC, embedded version, and Java 21 bytecode checks.
 
-**Final review defect fixed and independently reviewed:** a custom inventory setter could mutate the same prepared ItemStack later used as its expected receipt. Clean RED:39tests, existing35pass,4newfailures (ItemMover source44duplication/destination212loss; two Quantum owner-PDC aliases). The three writer calls now pass independent plain snapshots; affected39tests pass. Root integrated the exact five-file repair from independently reviewed local7e92a2e2 and ran a full strict clean build: **665tests, zero failures/errors/skips**,65suites. Source289IDs, Java21bytecode536classes, universal JAR and ZIP CRC pass. Immutable1.0.60JAR SHA256 **e355ce958bd1e3d3c8ddd65d7f56dbd2b8d4c605ca6b0f1025a34e65c6a808b2**, byte-identical to the reviewer build. Final pusher review found no additional blocker. No broader investigation is required.
+| Release asset | Bytes | SHA-256 | GitHub asset |
+|---|---:|---|---:|
+| `SF_Networks1.0.60.jar` | 1,681,029 | `e355ce958bd1e3d3c8ddd65d7f56dbd2b8d4c605ca6b0f1025a34e65c6a808b2` | 661228146 |
+| `SF_InfinityExpansion2.0.15.jar` | 1,707,539 | `897bd4de70c9219217ecfb0f8cf68f0147b6c38758a239085db39718dd686eef` | 661246651 |
 
-**Included reproducible fixtures:** native ItemMover runner/client/Java/doc, isolated GitHub ItemMover+Dust gate, reused Dust probe/preparer and phase-specific Drawer readiness/stopped-file evidence. SQL diagnostic SELECTs in ItemMover are opt-in and off by default; an audit-enabled pass is not allowed to hide the failed local no-audit control. The final gate runs without that instrumentation.
+Networks release 419112723 was published at 03:24:55 UTC by [workflow 39537659539](https://github.com/wickidcow/SF_NetworksExp/actions/runs/39537659539), after every required gate passed. IE2 release 419121965 was published at 03:34:45 UTC by [workflow 39539123498](https://github.com/wickidcow/SF_InfinityExpansion2/actions/runs/39539123498), with compatibility, source safety, and publication all successful. Its explicit confirmation was `2.0.15`.
 
-**Exact next action:** require this final Networks candidate's CI/native gates, including the new audit-off ItemMover and Dust workflow. Complete IE2 evidence-head CI/review and master integration; its production and accepted native JARs are unchanged. Then use the existing gated publishers for1.0.60/2.0.15 and update only the two applicable JARs in SF_Addons. Existing versioned release artifacts remain immutable.
+### SF_Addons r140
 
-### Active final integration — October 21 UTC
+- File: **`SF_Addons_r140_1.21.11-26.3.zip`**, saved successfully as the replacement for the existing bundle.
+- SHA-256: **`9254a5ef4ee568349ad26a520dbba79c93f0bc0e3c9d9c8b5f6aa589621ba9f1`**.
+- Size: **24,584,646 bytes**; **45 JARs / 48 unique entries**.
+- Base r139 SHA-256: `541708ca969bb6d6c7a0b11510e856b221c2dbd984e6523404a53ebdaa60ff1c`.
+- Only Networks 1.0.56 and IE2 2.0.13 were replaced, by the official assets above. The other **43 JARs and their individual manifest entries are unchanged**.
+- Outer ZIP and all 45 inner JAR CRC checks pass. Every manifest and `SHA256SUMS.txt` digest matches the actual bytes. The two old target JARs are absent.
+- Manifest and compatibility notes record exact release commits, asset IDs, acceptance evidence, Java/API targets, and platform limitations. Historical provenance for the untouched addons is retained.
+- No Slimefun core JAR, unrelated addon change, resource pack, or live-server data is included. No unrelated Slimefun Legacy change was published.
 
-This commit is the combined Networks **1.0.60** candidate on PR **#104**, based on `1266e7a0f7461ba40af331ede42c288d848f49fc`. PR #104 now targets **master**. Coordinated IE2 **2.0.15** is committed at `19e4943a53c44589a6cfcf618150358f7bdf5a1c` in PR **#32**, also targeting master. Both remain draft until the final native acceptance gates pass. Neither release has been published and the SF_Addons ZIP has not been replaced.
+An independent read-only verification confirmed the complete bundle, both live release digests, all unrelated bytes, and the platform notes.
 
-**Completed in this Networks batch:**
+## Completed fixes and verification
 
-- `StorageUnitData` and `DrawerInvalidBalanceTest`: invalid negative or overcapacity deposits retain the original record and the complete physical input, including with Void Excess. Negative unlocked withdrawals retain the canonical record. Clean RED deposit cases:12invalid failures+4valid controls; withdrawal cases:2unlocked failures+2locked controls. All20new cases now pass.
-- `AbstractNetworkPusher`, two new test classes and native fixtures: count full physical inputs before recipe top-up while retaining dynamic insertion permissions. Native1266 CI39532219093 and actual local smeltery actions reproduced OFF-to-ON refill. Eight new buffer regressions pass. A real break-before-pickup action reproduced foreign control-slot loss; nine guard cases pass. The existing59pusher cases pass.
-- `DrawerItemMoverTransfer`, the actual `NetworksDrawer` hookup and17real-handler regressions: baseline16cases had14failures and2healthy controls. Authoritative slot writes/readbacks now precede opposite-endpoint changes. Snapshot reads, rejected writes, write-then-throw, reentry, detached menus, long limits, first assignment and full drain pass. A reached live metadata-read callback reproduced a capacity-change race after the initial check (16pass/1fail); the final prewrite capacity recheck fixes it. Safe preparation does not invoke wrapper metadata writers. Full item data comparisons avoid cross-wrapper equality casts.
-- `ItemMover`, new `ItemMoverStorage` and35helper regressions from agent production18e1d9ad: prepare full identity and long amount together, validate malformed/conflicting balances, reserve exact serialized transfer evidence, verify actual menu/hand writes and retain unresolved receipts. Native rejected candidates34175/427c5eb exposed wrapper serialization/equality failures; final plain material+amount+full live metadata snapshots address them. Do not reuse rejected candidates.
-- Native Drawer fixture/workflow/client/runner added. Version, changelog, release notes, active workflows and source verifier updated to1.0.60. Native workflows pin IE2final19e4943a and Legacycore1cb32d6e. All existing build/release gates remain enabled.
+| Area | Implemented behavior | Evidence |
+|---|---|---|
+| Inventory transfers | Live source, cursor, player-inventory and destination receipts determine the committed amount. Partial/rejected writes, write-then-throw outcomes, stale menus and reentry are handled without speculative refunds. Existing input/output/grabber/pusher/crafting guards are retained. | Full 665-test Networks suite; Grid/IE2 player and storage native workflows; earlier incident regressions retained. |
+| Drawer menu and Quantum | Drawer ownership spans authoritative slot/cursor readback; exact item metadata, capacity, lock/void settings and 64-bit quantities are retained. Transfer writers receive independent snapshots so a setter cannot mutate its expected receipt. | Four new alias cases reproduced two quantity defects and two identity defects before the fix; 39 affected tests pass. Final actual-click/restart ledger is exactly 3,000,000,086. |
+| Drawer persistence | Flushed exact-identity template journal precedes new-type registration. Rejected/cancelled amount writes remain pending and shutdown checkpoints them. Negative/overcapacity records and associated physical items are retained for recovery, not clamped or deleted. | Durable registration, pending deletion, enqueue ordering, shutdown and invalid-balance tests; final native restart with all 28 stopped storage-file digests matching. |
+| ItemMover | Full identity and long balance are prepared together. Menu and main/off-hand writes are verified; stale events cannot reuse stock. Ambiguous writes retain exact original/prepared/offered evidence and block replay. | Unit receipt regressions; five actual native gestures; independent reload of healthy 17, Long.MAX_VALUE, exact pending bytes, empty stale mover, and Quantum total 101. Audit instrumentation disabled for acceptance. |
+| IE2 storage | Input/output/withdrawal operations hold ownership through physical readback, including cross-direction callbacks and partial writes. Authorized zero-balance retyping uses the exact incoming identity. Invalid balances fail closed without guessing identity. | 158 passing IE2 tests, six source verifiers, coordinated storage and player native suites. |
+| IE2 block break | Prepare exact cache/output identity before mutation; retain physical output with Void Excess; roll back captured entities before restoring source. RuntimeException/LinkageError use verified recovery, while fatal VM errors are rethrown. | Five native break-event cases plus one injected slot-clear LinkageError handler case; verified rollback/retry, real placement, and independent 11-item reload. |
+| Infinity Dust Extractor | Retained the synchronized producer repair and validated ordinary growth, metadata, partial/VOID transfer and compensation behavior. No asynchronous producer workaround or guessed item identity was added. | 152 native production/line-transfer cases, 38 per tier, and all four registered synchronous ticker checks pass. |
+| Recipe-aware pushers | Classic/More/Best have persistent per-pusher ON/OFF controls and targets of 1-64 batches. Supported recipes, fresh item-aware permissions, complete physical input counts and dynamic declarations govern top-up. OFF behavior is preserved. Foreign control-slot items remain recoverable and block unsafe breaking. | Unit regressions; 24 actual GUI clicks, three foreign-stack break refusals, 39 preserved typed/PDC items, actual smeltery ratios, OFF 64 parity, no excess refill on re-enable, and persisted batch-five settings. |
+| Performance | Target classification is reused within a line pass; confirmed missing sources skip target work; covered capacity requests stop further scanning. Existing routing and amount budgets are retained. | Seven operation-count regressions. No server-wide TPS improvement percentage is claimed. |
 
-**Verified combined build:** strict Gradle `clean build` **661tests, zero failures/errors/skips**,65suites; source compatibility289item IDs; Java21bytecode536owned classes; universal JAR and ZIP CRC pass. Local candidate `SF_Networks1.0.60.jar` SHA256 **0588ad1e19281293daee6dd419c51d92e5b9dc7923d707dd27157b14b9238ae3**. CoreJAR SHA256`251e9075bb6d1629790d845569fb90994e4ff1ed76408400ee733d4041bb9e3e`. This local build is not a published release artifact.
+See [Networks release notes](docs/releases/1.0.60.md) and [IE2 release notes](https://github.com/wickidcow/SF_InfinityExpansion2/blob/v2.0.15/docs/releases/2.0.15.md) for operator-facing behavior. The plugin remains `Networks` with all **289 registered IDs**, existing recipes and established persistent namespaces.
 
-**IE2final19e4943a:** preserves mastercc6f568 fixes as an additional parent, fixes authorized zero-balance cache reseeding with exact incoming identity, and routes RuntimeException/LinkageError break failures through verified recovery while rethrowing fatal VM errors.158tests pass; all six source verifiers and version/bytecode/JAR checks pass. Both CI runs **39534149819** and **39534145743** pass. Immutable local2.0.15JAR SHA256`897bd4de70c9219217ecfb0f8cf68f0147b6c38758a239085db39718dd686eef`. Native seed passes six physical break cases including injected LinkageError rollback and real player placement. A separate native pair at `ie2-final/build/native-linkage-green-19e4943a-snapshots` now passes all six seed cases, real placement and an11-item independent reload with the unchanged fixture. The earlier reversion failure remains unexplained, so it is retained as an unresolved acceptance issue rather than dismissed by retry.
+## Successful build and native gates
 
-**Native evidence already accepted at1266:** universal39532225425/39532219143 PASS; native Grid/IE2 player39532219149 PASS. Drawer fixture passed four independent JVMs20478/20769/21046/21507: prerequisite192ledger,19actual seed clicks+2reload clicks, exact3,000,000,086total, partial5/full0withdrawals, inventory64/cursor1inputs, Quantum184debit/256credit, small13full drain and identity/flags/settings after restart. These are earlier-source results; final661-test pair must pass separately.
+### Exact final candidates
 
-**Current native blockers, not concealed:** ItemMover final18e1d9ad seed passes all five actual main/off-hand gestures, stale-hand replacement denial, modern model data, pending exact-byte receipts and healthy/long/PDC recovery checks. A fixture Chest.update call overwrote newly written slots; that fixture fault is corrected. The stopped seed Quantum database contains37stored+64physical=101, but the second JVM sees a reverted row. IE2 seed shutdown backup likewise contains the correct placed11-item record and no broken rows; verify sees the original six rows instead. Both agents are checking the specific fixture/startup persistence lifecycle. No quantity assertion has been removed, no native restart is marked PASS and no core change has been published.
+- Networks strict clean build: **665 tests / 65 suites, zero failures, errors or skips**. Source contract, universal JAR, Java 21 bytecode (536 owned classes), no bundled Slimefun/optional APIs and no hard InfinityExpansion1 linkage all pass.
+- Networks universal workflows [39537008996](https://github.com/wickidcow/SF_NetworksExp/actions/runs/39537008996) and [39537012642](https://github.com/wickidcow/SF_NetworksExp/actions/runs/39537012642): all eight gates pass on `175dcae2`.
+- IE2: **158 tests, zero failures, errors or skips**, all six source verifiers, version/bytecode/JAR checks pass. Exact-head workflows [39536618288](https://github.com/wickidcow/SF_InfinityExpansion2/actions/runs/39536618288) and [39536611861](https://github.com/wickidcow/SF_InfinityExpansion2/actions/runs/39536611861) pass on `8d876da5`.
+- Publisher-only IE2 fix `76b2c8c3844bc9d63c0e5e430eb7a54fa6961906`: workflows [39538766853](https://github.com/wickidcow/SF_InfinityExpansion2/actions/runs/39538766853) and [39538780758](https://github.com/wickidcow/SF_InfinityExpansion2/actions/runs/39538780758) pass before merge. Corrected publication then passes on `168815bb`.
 
-**Independent review:** Drawer/Quantum/menu/ItemMover receipts reviewed; the two concrete IE2 review findings are fixed/tested in19e4943a. Both PRs have no existing review submissions or inline threads as of this checkpoint. Final exact-head review still required before merging.
+### Native evidence bound to the released JARs
 
-**SF_Addons base:** `SF_Addons_r139_1.21.11-26.3.zip` is CRC-valid,45JARs/48entries, SHA256`541708ca969bb6d6c7a0b11510e856b221c2dbd984e6523404a53ebdaa60ff1c`. It contains Networks1.0.56/IE2.0.13. Replace only the two applicable verified release JARs and precise manifest/checksum/compatibility metadata; preserve the other43JARs byte-for-byte. No unrelated core is bundled or published.
+| Gate | Successful workflow | Result |
+|---|---|---|
+| Grid / IE2 player | [39537009159](https://github.com/wickidcow/SF_NetworksExp/actions/runs/39537009159) | Actual Grid/crafting and IE2 player operations, paired 24 round trips and 192-item restart ledger. |
+| Drawer / Quantum | [39537009109](https://github.com/wickidcow/SF_NetworksExp/actions/runs/39537009109) | Four JVMs 4662/4773/4900/5034; 19 seed clicks + 2 reload clicks; exact total 3,000,000,086 = Drawer 13 + large Quantum 3,000,000,072 + small typed Quantum 0 + chosen item 1. |
+| Recipe pushers | [39537009201](https://github.com/wickidcow/SF_NetworksExp/actions/runs/39537009201) | Four JVMs 4584/4713/4839/4989; exact 256 per ingredient in the smeltery ledger, persistent controls and templates, OFF-mode parity, physical foreign-stack protection. |
+| ItemMover / Dust | [39537009022](https://github.com/wickidcow/SF_NetworksExp/actions/runs/39537009022) | ItemMover seed 4553 / verify 4681, audit OFF, Quantum 101; all 152 Dust cases and four synchronous tickers pass. |
 
-**Exact next action:** push this661-test candidate on the existing PR104 branch; run final canonical recipe/Drawer acceptance withIE219e4943a, resolve the causal native restart blocker and commit the reproducible ItemMover fixture. Require final CI/native acceptance and exact-head review, then merge master, publish Networks1.0.60/IE22.0.15 through existing gated workflows, verify the actual release assets, and update SF_Addons. Folia remains explicitly unsupported for cross-region transactions; no descriptor flag or forced-crash claim is introduced.
+The downloaded native evidence manifests record the tested Networks `e355ce95...` and IE2 `897bd4de...` JAR SHA-256 values, which match the published release assets:
 
+| Suite | Actions artifact ID | Evidence ZIP SHA-256 |
+|---|---:|---|
+| Drawer | 12318361922 | `9a916efc6248dd8101db453413f5ea8858ea15f03e1a6b5b4ebbc10599efb3c6` |
+| Recipe | 12318192465 | `6ee83a4090a1495cb30d9aa0e1e9268b34d69cf0dd6b90206a0f41f7c8b6718b` |
+| ItemMover / Dust | 12318421633 | `1dd0c7828f37b5f002f47b550738708cf359009706395d9e520678a87ec5b55c` |
 
-### Latest implementation checkpoint: GUI, Quantum and recipe fallback
+Local audit-OFF ItemMover acceptance also passes with Java 21, independent JVMs 42757/42920 and the unchanged accepted JAR. All runtime and trace files stayed in process-local temporary storage until both JVMs exited. The stopped seed database SHA-256 is `0214b2ab94bfed6b84cd8cdaf2c609a116cb619924ea08e0e2b4c3a113396af8`; no WAL/SHM remained. Local final IE2 break acceptance used JVMs 40003/40438 and the unchanged production `19e4943a` binary.
 
-**Canonical clean strict build: 572 tests, zero failures/errors/skips.** Legacy source contracts, Java 21 bytecode (531 owned classes), universal JAR (289 IDs) pass. Versions remain unchanged pending final acceptance.
+### Tested core and platform scope
 
-- **DS-03 GUI:** actual installed handler onfd59173d ran8tests: healthy control passed,7failures reproduced full/rejected/partial-inventory loss, snapshot cursor/inventory duplicate credits and stale-menu access. All8 now pass, plus4controls for reentry, intentional input Void Excess, new-type registration and refused source writes. New `DrawerMenuTransfer` uses authoritative slot/cursor writes/readbacks. `StorageUnitData` holds canonical Drawer/container ownership until exact source debit/destination credit is observed; no refund passes through void/lock policy. New handler rejects detached menus/replaced storage.
-- **DS-03 Quantum:** FROM baseline5tests:1control passed,4failures duplicated44 or lost37/44. TO baseline4tests:1control passed,3failures lost212. New `DrawerQuantumDepositReceipt` and `DrawerQuantumWithdrawalReceipt` use guarded live menu/PDC receipts. All18actual-handler cases pass: snapshot reads, rejected writes, write-then-throw, preparation callbacks, reentry, stale menus, zero/full drain, first assignment andLong.MAX_VALUE. Full drain preserves original unrelated container PDC, template, capacity and flags. The source-order assertion now checks the verified helper sequence.
-- **RA-02:** native834df8dd/IE2tree74680f3e proved actual GUI pickup/toggles/chat5/reopen and exact per-round ledgers, then real ElectricSmeltery buffered1CARBON when5was requested. Five unit declarations reproduced1failure/4healthy controls. `AbstractNetworkPusher.getRecipeInputSlots` now uses the same live target's public `InventoryBlock.getInputSlots` when its generic declaration is empty. Dynamic item-aware insertion permissions are unchanged. All5new cases and fullsuite pass; native ratio/OFF/re-enable/restart is next.
-- Native recipe client now sends the ordinary close-window action after the real chat prompt; pinned ChatUtils does not close the inventory automatically. No server assertions weakened.
-- Compatibility check initially caught the removed old empty-Quantum cleaning expression. New GUI/Quantum receipts now detach prepared items with the established `ItemStackUtil.getCleanItem` before CraftInventory writes, preserving exact PDC. The verifier checks all three new helpers and retained display cleanup. Full572-test build rerun and all static/bytecode/JAR gates pass after this correction.
+The pinned GuGu Slimefun Legacy source is `1cb32d6e95b305998065b8ef6b936a56f679187d`. Hosted core JAR SHA-256 is `cec822e34f0d9b2f27b5e7b8190e4a2e9625e634144a219a30d7a3394a4ba783`; local core JAR SHA-256 is `251e9075bb6d1629790d845569fb90994e4ff1ed76408400ee733d4041bb9e3e`. These are separate build artifacts from the same recorded source, not interchangeable hash claims. Core XML contains 941 test entries with zero failures/errors and one existing optional external-database assumption skip. Neither addon suite skips tests.
 
-**Remote/native evidence:** Networksfd59173d native workflow **39530959605**, job **118996473117**, passed storage192restart, actual Grid/crafting and IE2 player actions againstIE2`274a1833`. The real-monitor readiness correction is verified. Recipe workflow39530959650failed the old client assumption; corrected client is included here. IE2`274a1833488fba8dbd8e3bbc44b95e59d49c09b7` passed both CI workflows **39530756144**/**39530752142**. Separate local native IE2 break acceptance now PASS: five real Player.breakBlock ledgers, full+Void physical output, foreign PDC, cancelled second spawn rollback/retry, callback reentry denial, actual client placement and independent-JVM reload. SeedPID14864/verifyPID15153; exact core1cb/Networks834/IE2localfa4 treeequalremote274a. Fixture files are ready to commit; no forced-crash claim.
+| Platform / API | Established evidence | Boundary |
+|---|---|---|
+| Java 21 / Paper 1.21.11 API floor | Both published JARs are Java 21 compatible; strict baseline build. | Native Paper 26.3 runs use Java 25. |
+| Paper 26.3 | Networks API compile at build 176 and native manager/Quantum/persistence checks at builds 176 and 194. IE2 separately compiles against 1.21.11, 26.2 and 26.3. | IE2 coordinated machine/player acceptance was on Purpur; do not claim every IE2 native case on Paper 26.3. |
+| Purpur 1.21.11 build 2568 | Native manager, storage, player, pusher, Drawer, Quantum, ItemMover, Dust and restart fixtures. | No untested future Purpur release is certified. |
+| Folia | **Unsupported by these addons.** Both descriptors omit Folia opt-in; cross-region transaction ownership remains unimplemented. | This is an addon limitation, not a claim that the pinned core lacks Folia support. |
+| Leaf | No new runtime acceptance established by this refresh. | Do not infer it from Paper/Purpur success. |
 
-**Exact next action:** run this canonical572-test candidate through native recipe acceptance; complete ItemMover PDC/slot receipts and repair the existing silent overcapacity clamp. Then native Drawer acceptance, final reviews/master integration/versioning/release/SF_Addons. Existing documented Folia runtime remains unclaimed because multi-chunk networks are not region-safe; do not force an unsafe descriptor flag. Applicable Paper/Purpur26.3 gates remain mandatory. Runtime ambiguous-write holds do not establish forced-crash recovery.
+GuGu Slimefun Legacy is the maintenance target. Existing auxiliary United/Gugu compatibility gates were retained and passed; no new development was directed at reviving abandoned United support.
 
-### Previous integration checkpoint: performance, readiness and IE2 break receipts
+## Failures retained and resolved
 
-**Latest verified production:** Networks `834df8dd424a6749e5f1723f63cfdabca936831f` passed both universal workflows **39529931281** and **39529926947**. All 530 tests and eight platform/compatibility gates passed. Its native workflow **39529927009**, job **118993225786**, passed the 192-item two-JVM storage/restart ledger but reproduced the first Grid shift refusal. At the actual click, the published root had **zero monitors**, `cachedInputs=unbuilt` before and `0` after; all 16 items stayed with the player. Later discovery found the two real monitors/one deduplicated IE2 storage. This establishes a fixture-readiness race: the old condition accepted the Grid node before its physical monitors registered.
+| Failed evidence | Concrete disposition |
+|---|---|
+| Four independent inventory-setter alias regressions: existing 35 pass / new four fail; source case duplicated 44, destination case lost 212, Quantum cases accepted modified owner metadata. | Three helper writers now receive independent plain snapshots. All 39 affected tests and the complete 665-test suite pass. |
+| Earlier Drawer menu, Quantum, ItemMover capacity, invalid-balance and recipe-buffer/break regressions. | Each was implemented and retained as an automated regression. The previous checkpoint contains individual RED counts and accepted fixes; they are not pending work. |
+| Local native SQLite restarts in the shared workspace reverted stopped seed state. | Retained as **FAIL_DIAGNOSTIC**. Prior core evidence traced `.rsync-tmp` restoration of deleted WAL/SHM/markers; current recipe evidence proves stale-WAL replay/truncation but does not establish the current actor. Acceptance used isolated process-local runtime storage and independent hosted CI without weakening assertions. |
+| Initial IE2 publisher [39537784165](https://github.com/wickidcow/SF_InfinityExpansion2/actions/runs/39537784165). | Build/safety gates passed, publication failed before tag/release creation: download-artifact v6 did not preserve the raw JAR uploaded with `archive: false`. PR #34 changes only to v8 with `skip-decompress: true`. Corrected run 39539123498 preserves SHA `897bd4de...` and publishes successfully. |
 
-**Current Networks integration batch:**
+Do not repeat the resolved workspace SQLite investigation or patch core storage speculatively. Its [existing core checkpoint](https://github.com/wickidcow/Slimefun-Legacy/blob/1cb32d6e95b305998065b8ef6b936a56f679187d/docs/release-candidates/4.1.72.md#storage-assessment-and-remaining-attribution) remains the attribution record. Do not force flushes, reseed a restart fixture, add audit reads as a hidden acceptance dependency, or remove conservation assertions.
 
-- Reuses existing performance PR **#96**, source `323e7d1a7c641668ea960e7ed55b4e2198710361`, as an additional parent. Applies only its original two-file patch, preserving subsequent incident guards. Multi-template pushes classify each target once, skip target work for confirmed source misses, and stop capacity/count scans once the request is covered. Seven new test invocations verify unchanged routing/withdrawal budgets and reduced calls; these are operation-count results, not a live TPS claim.
-- Native Grid readiness now requires both actual physical monitors, loaded authoritative records/menus, and node ownership by the published root before connecting the client. It does not call lazy barrel discovery, retry a player deposit, or weaken any conservation/crafting assertion.
-- Adds the native Recipe-Aware fixture/workflow: actual Classic/More/Best GUI actions, foreign PDC stack pickup, toggle/batch persistence, actual smeltery ingredient ratios, OFF behavior and independent-JVM reload. Native acceptance is in progress; fixture inclusion is not a PASS claim.
-- Initial Recipe-Aware control regression fixture now explicitly initializes its own plugin config constants; assertions and production behavior are unchanged.
-- Both native workflows pin the coordinated IE2 repair `274a1833488fba8dbd8e3bbc44b95e59d49c09b7` and core `1cb32d6e95b305998065b8ef6b936a56f679187d`.
+## Reviews and existing PR disposition
 
-**Verified locally for this integration batch:** full Gradle `clean build`, strict production deprecation gate; **537 tests, zero failures/errors/skips**; Legacy source compatibility, Java 21 bytecode (526 owned classes), universal JAR (289 item IDs). Tested core JAR SHA256 `251e9075bb6d1629790d845569fb90994e4ff1ed76408400ee733d4041bb9e3e`.
+Independent automated-agent reviews are recorded honestly as automated reviews, not human approvals: Networks review **5594544313**, IE2 review **5594513572**, publisher fix review **5594638779**. The final production PRs had no unresolved review threads. All merges used normal GitHub merge operations after the relevant checks passed; no failing test was bypassed.
 
-**Coordinated IE2 progress:** PR **#32** now at `274a1833488fba8dbd8e3bbc44b95e59d49c09b7`, source tree `74680f3ec78546d2cffa1c72e2c8d1618a91da45` exactly equal to locally tested commit `fa4b7adf9539511b13f919b29de1c5bb9222d14b`. Five files: `StorageCache.kt`, `StorageUnit.kt`, new `StorageBreakDropReceipt.java` and two test classes. Break preparation uses live exact identity, preserves physical output regardless of input Void Excess, verifies shell PDC before mutation, holds source ownership through exact world-entity receipts, and rolls back captured entities before source restoration. Ambiguous rollback remains held without speculative refunds. Full local build **150 tests, zero failures/errors/skips**, including 19 new regressions and 2,500 seeded ledgers. Immutable candidate JAR SHA256 `ef25cc5022734988b8aef77ebb316764f570300a2e2608bb0239b98abd8d01f4`. Native break/place/restart and CI are still required; forced-crash atomicity is not claimed.
+| Repository | PRs | Final disposition |
+|---|---|---|
+| Networks | #98 | Already merged before this continuation; retained as the starting baseline. |
+| Networks | #96, #99 | Merged; performance and cursor work incorporated, not recreated. |
+| Networks | #104 | Final integration reviewed, marked ready and merged at `d41d362c`. |
+| Networks | #100, #102 | Closed with explicit supersession notes; their heads are ancestors of the accepted release. |
+| Networks | #101 | Closed with exact-integration evidence; its two production and two test blobs are included. |
+| Networks | #103 | Closed as the superseded workflow-only alternate; final workflows use accepted coordinated IE2 source. |
+| IE2 | #30 | Already merged and retained. |
+| IE2 | #31 | Closed with exact integration evidence; input receipt helper/test imported and combined with existing ownership guards. |
+| IE2 | #32, #34 | Both reviewed and merged; production repairs plus the narrowly scoped publisher correction. |
 
-**Exact next actionable development task:** implement and test DS-03 actual drawer GUI remainder/slot receipts while parallel work finishes Quantum source readback and ItemMover PDC receipts. Inspect newly triggered native Recipe-Aware and Grid jobs; fix concrete failures immediately. Local native startup currently needs IE2 Libby dependency provisioning; no product failure is inferred from its missing Kotlin runtime. No merge, version bump, release or SF_Addons update yet.
+The five superseded PRs were closed without deleting branches or history. No unrelated Slimefun Legacy release or merge was performed for this delivery.
 
-### DS-02b and initial Recipe-Aware control accepted locally and in universal CI
+## Remaining issues and limits
 
-Test-only `0287ff137cd5f7ec77badb0e1be77faebced1293`, GuGu job **118990879584** in workflow **39529184106**, compiled and ran **523 tests with exactly the 10 new failures**; all original 513 passed. Repair `834df8dd` passed **530 tests, zero failures/errors/skips**, then both universal CI runs above.
+- **Folia runtime support remains unmet**, as stated above. Cross-region inventory/world operations need a dedicated ownership and coordination implementation before either addon can safely opt in.
+- Ambiguous external adapter writes preserve exact recovery evidence and hold further transfers; they do not authorize deleting contents, guessing identities, or issuing speculative refunds. Existing corrupted data still needs evidence-based reconciliation.
+- Synchronous receipts, clean shutdown and independent-JVM restart tests do not establish arbitrary process-crash atomicity across the core database, inventory persistence and world item entities.
+- Performance reductions are verified as operation counts; no live server-wide TPS percentage was measured.
+- No known unresolved blocker remains for the published, tested Paper/Purpur release. The other 43 bundled addons were preserved, not rebuilt or newly certified.
 
-- DS-02b: `DataSource`, new `DrawerTemplateJournal`, and `DatabaseBackupManager` preserve fsynced exact-byte identity receipts before accepting new types; replay before maps/counters; verify committed bytes and refuse conflicts; reserve orphan item/container IDs; include recovery files in backups. Existing serialization, schema, amount journal and known-type fast path remain intact. Seven production-journal tests join eight real SQLite/worker regressions.
-- RA-01: `AbstractNetworkPusher` always installs the existing foreign-item recovery handler, including the first menu update; no replacement or deletion of the foreign stack. Initial/stale-menu regressions pass.
-- Build helper `scripts/download_jeg.sh` consumes the complete ZIP entry listing during class verification, avoiding SIGPIPE exit 141 under `pipefail`; pinned digest and ZIP/class checks remain enforced.
-- Earlier `fc0582bff93128c60dd5fa9f36562c5c04332f75` native run **39523127735** passed four independent JVMs, the 192-item restart ledger, actual Grid/crafting clicks and IE2 player buttons. Its repeat was cancelled by the next branch push. The later click-time evidence above now explains the intermittent readiness failure.
+## Files changed in the accepted integration
 
-### Previous checkpoint details (preserved evidence)
+The inventory below records the Networks and coordinated IE2 integration files tracked for this acceptance. Earlier repairs remain in the preserved commit history and previous checkpoint. The final documentation follow-up updates this file and `LEGACY_COMPATIBILITY.md` only; it does not change the published production tree or release assets.
 
-**Production at `5a8dd3747684f585ba6552b12e96eaa30c5ae47d` now passes all eight universal gates and 513/513 project tests. Its separate paired native player run failed conservatively at the first Grid shift.** The two storage/restart JVMs passed; all 16 tagged items stayed in the player's inventory, zero in storage/cursor, no reported transfer exception. This is NOT evidence of a dupe, loss or a registration-path regression, and the native pair is NOT accepted at this head.
+### Networks — 80 recorded integration files
 
-This commit changes ONLY the disposable NativeGridPlayerProbe and this checkpoint. It captures already-published root/cache/cooldown/miss state at LOWEST and MONITOR click priorities. It never invokes lazy barrel discovery, changes inventories, retries deposits, refreshes controllers, or relaxes the exact existing 16-item/crafting assertions. Production and all 513 tests remain unchanged.
+- `.github/workflows/build.yml`
+- `.github/workflows/compatibility.yml`
+- `.github/workflows/native-drawer-player.yml`
+- `.github/workflows/native-grid-player.yml`
+- `.github/workflows/native-ie2-player.yml`
+- `.github/workflows/native-item-mover.yml`
+- `.github/workflows/native-recipe-pusher.yml`
+- `.github/workflows/paired-ie2-storage.yml`
+- `.gitignore`
+- `CHANGELOG.md`
+- `NETWORKS_EXPANSION_COMPLETION.md`
+- `build.gradle.kts`
+- `docs/dust-extractor-source-snapshot.md`
+- `docs/native-item-mover-receipts.md`
+- `docs/releases/1.0.60.md`
+- `scripts/download_jeg.sh`
+- `scripts/native_drawer_player_probe.py`
+- `scripts/native_grid_player_probe.py`
+- `scripts/native_ie2_player_probe.py`
+- `scripts/native_item_mover_receipts.py`
+- `scripts/native_recipe_pusher_probe.py`
+- `scripts/prepare_infinity_dust_probe.py`
+- `scripts/verify_legacy_compatibility.py`
+- `src/main/java/com/balugaq/netex/api/data/StorageUnitData.java`
+- `src/main/java/com/balugaq/netex/utils/LineOperationUtil.java`
+- `src/main/java/com/ytdd9527/networksexpansion/implementation/machines/unit/DrawerItemMoverTransfer.java`
+- `src/main/java/com/ytdd9527/networksexpansion/implementation/machines/unit/DrawerMenuTransfer.java`
+- `src/main/java/com/ytdd9527/networksexpansion/implementation/machines/unit/DrawerQuantumDepositReceipt.java`
+- `src/main/java/com/ytdd9527/networksexpansion/implementation/machines/unit/DrawerQuantumTransferMath.java`
+- `src/main/java/com/ytdd9527/networksexpansion/implementation/machines/unit/DrawerQuantumWithdrawalReceipt.java`
+- `src/main/java/com/ytdd9527/networksexpansion/implementation/machines/unit/NetworksDrawer.java`
+- `src/main/java/com/ytdd9527/networksexpansion/implementation/tools/ItemMover.java`
+- `src/main/java/com/ytdd9527/networksexpansion/implementation/tools/ItemMoverStorage.java`
+- `src/main/java/com/ytdd9527/networksexpansion/utils/databases/DataSource.java`
+- `src/main/java/com/ytdd9527/networksexpansion/utils/databases/DataStorage.java`
+- `src/main/java/com/ytdd9527/networksexpansion/utils/databases/DatabaseBackupManager.java`
+- `src/main/java/com/ytdd9527/networksexpansion/utils/databases/DrawerTemplateJournal.java`
+- `src/main/java/io/github/sefiraat/networks/Networks.java`
+- `src/main/java/io/github/sefiraat/networks/integrations/infinityexpansion2/IE2CacheTransferHold.java`
+- `src/main/java/io/github/sefiraat/networks/integrations/infinityexpansion2/InfinityExpansion2Integration.java`
+- `src/main/java/io/github/sefiraat/networks/network/barrel/InfinityExpansion2Barrel.java`
+- `src/main/java/io/github/sefiraat/networks/network/barrel/InfinityExpansion2Withdrawal.java`
+- `src/main/java/io/github/sefiraat/networks/slimefun/network/pusher/AbstractNetworkPusher.java`
+- `src/main/java/io/github/sefiraat/networks/slimefun/network/pusher/RecipeAwareControlSlot.java`
+- `src/main/java/io/github/sefiraat/networks/utils/NetworkTransferUtils.java`
+- `src/test/java/com/balugaq/netex/api/data/DrawerInvalidBalanceTest.java`
+- `src/test/java/com/balugaq/netex/api/data/DrawerWithdrawalPreparationTest.java`
+- `src/test/java/com/balugaq/netex/utils/LineOperationUtilTest.java`
+- `src/test/java/com/ytdd9527/networksexpansion/implementation/machines/unit/DrawerItemMoverReceiptTest.java`
+- `src/test/java/com/ytdd9527/networksexpansion/implementation/machines/unit/DrawerMenuReceiptTest.java`
+- `src/test/java/com/ytdd9527/networksexpansion/implementation/machines/unit/DrawerQuantumDepositReceiptTest.java`
+- `src/test/java/com/ytdd9527/networksexpansion/implementation/machines/unit/DrawerQuantumQuickTransferSourceContractTest.java`
+- `src/test/java/com/ytdd9527/networksexpansion/implementation/machines/unit/DrawerQuantumTransferMathTest.java`
+- `src/test/java/com/ytdd9527/networksexpansion/implementation/tools/ItemMoverStorageTest.java`
+- `src/test/java/com/ytdd9527/networksexpansion/utils/databases/DrawerAutosaveEnqueueOrderTest.java`
+- `src/test/java/com/ytdd9527/networksexpansion/utils/databases/DrawerPendingDeletionConservationTest.java`
+- `src/test/java/com/ytdd9527/networksexpansion/utils/databases/DrawerShutdownReceiptTest.java`
+- `src/test/java/com/ytdd9527/networksexpansion/utils/databases/DrawerTemplateJournalTest.java`
+- `src/test/java/com/ytdd9527/networksexpansion/utils/databases/DrawerTemplateRegistrationTest.java`
+- `src/test/java/io/github/sefiraat/networks/integrations/infinityexpansion2/IE2CacheTransferHoldTest.java`
+- `src/test/java/io/github/sefiraat/networks/network/barrel/InfinityExpansion2WithdrawalGuardTest.java`
+- `src/test/java/io/github/sefiraat/networks/network/barrel/InfinityExpansion2WithdrawalReceiptTest.java`
+- `src/test/java/io/github/sefiraat/networks/slimefun/network/pusher/RecipeAwareBreakGuardTest.java`
+- `src/test/java/io/github/sefiraat/networks/slimefun/network/pusher/RecipeAwareControlSlotTest.java`
+- `src/test/java/io/github/sefiraat/networks/slimefun/network/pusher/RecipeAwareFullInputBufferTest.java`
+- `src/test/java/io/github/sefiraat/networks/slimefun/network/pusher/RecipeAwareInitialControlHandlerTest.java`
+- `src/test/java/io/github/sefiraat/networks/slimefun/network/pusher/RecipeAwarePhysicalInputDeclarationTest.java`
+- `src/test/java/io/github/sefiraat/networks/utils/NetworkCursorPrecommitConservationTest.java`
+- `tests/runtime/InfinityDustTransferProbe.java`
+- `tests/runtime/NativeDrawerPlayerProbe.java`
+- `tests/runtime/NativeGridPlayerProbe.java`
+- `tests/runtime/NativeIE2PlayerProbe.java`
+- `tests/runtime/NativeItemMoverReceiptProbe.java`
+- `tests/runtime/NativeRecipePusherProbe.java`
+- `tests/runtime/NativeRecipeTransferProbe.java`
+- `tests/runtime/native_drawer_player_client.cjs`
+- `tests/runtime/native_grid_player_client.cjs`
+- `tests/runtime/native_ie2_player_client.cjs`
+- `tests/runtime/native_item_mover_client.cjs`
+- `tests/runtime/native_recipe_pusher_client.cjs`
 
-**Exact next action:** inspect this head's native run and passive click-state records. Resolve the observed Grid refusal causally without fabricated barrels or weaker ledgers. In parallel, continue the already-prepared DS-02b registration/restart tests rather than restarting DS-01 or DS-03. Preserve concurrent work and safety-denied-write boundaries. Do not publish while final acceptance is incomplete.
+### InfinityExpansion2 — 29 recorded integration files
 
-## Authority and boundaries
+- `.github/workflows/ci.yml`
+- `.github/workflows/paired-networks-storage.yml`
+- `CHANGELOG_FORK.md`
+- `build.gradle.kts`
+- `docs/native-storage-break-receipts.md`
+- `docs/releases/2.0.15.md`
+- `scripts/native_ie2_break_probe.py`
+- `scripts/verify_legacy_migration.py`
+- `src/main/java/net/guizhanss/infinityexpansion2/implementation/items/storage/StorageBreakDropReceipt.java`
+- `src/main/java/net/guizhanss/infinityexpansion2/implementation/items/storage/StorageInputReceipt.java`
+- `src/main/java/net/guizhanss/infinityexpansion2/implementation/items/storage/StorageOutputReceipt.java`
+- `src/main/kotlin/net/guizhanss/infinityexpansion2/implementation/items/storage/StorageCache.kt`
+- `src/main/kotlin/net/guizhanss/infinityexpansion2/implementation/items/storage/StorageUnit.kt`
+- `src/main/kotlin/net/guizhanss/infinityexpansion2/implementation/items/storage/StorageWithdrawal.kt`
+- `src/test/java/net/guizhanss/infinityexpansion2/implementation/items/storage/StorageBreakDropReceiptTest.java`
+- `src/test/java/net/guizhanss/infinityexpansion2/implementation/items/storage/StorageBreakSnapshotTest.java`
+- `src/test/java/net/guizhanss/infinityexpansion2/implementation/items/storage/StorageCrossDirectionTest.java`
+- `src/test/java/net/guizhanss/infinityexpansion2/implementation/items/storage/StorageInputIncidentBaselineTest.java`
+- `src/test/java/net/guizhanss/infinityexpansion2/implementation/items/storage/StorageInputOrderingTest.java`
+- `src/test/java/net/guizhanss/infinityexpansion2/implementation/items/storage/StorageInputReceiptTest.java`
+- `src/test/java/net/guizhanss/infinityexpansion2/implementation/items/storage/StorageInvalidBalanceGuardTest.java`
+- `src/test/java/net/guizhanss/infinityexpansion2/implementation/items/storage/StorageOutputReceiptTest.java`
+- `src/test/java/net/guizhanss/infinityexpansion2/implementation/items/storage/StorageSeedTemplateIntegrityTest.java`
+- `src/test/java/net/guizhanss/infinityexpansion2/implementation/items/storage/StorageTickerOutputOrderingTest.java`
+- `src/test/java/net/guizhanss/infinityexpansion2/implementation/items/storage/StorageWithdrawalConservationTest.java`
+- `src/test/java/net/guizhanss/infinityexpansion2/implementation/items/storage/StorageWithdrawalReceiptTest.java`
+- `src/test/java/net/guizhanss/infinityexpansion2/implementation/items/storage/StorageWithdrawalTest.java`
+- `tests/runtime/NativeIE2BreakProbe.java`
+- `tests/runtime/native_ie2_break_client.cjs`
 
-Owner authorization covers completing, reviewing, merging, versioning and publishing Networks Expansion and updating SF_Addons AFTER acceptance. It supersedes the old blanket release hold, not testing/safety requirements. No failing merges, safety-denial bypass, force pushes, guessed identities, silent deletion, live server/world/config changes, or unrelated Slimefun Legacy publication. Preserve recipes, IDs/PDC, storage/migration formats, physical counts, intentional input Void Excess, rates/budgets. GuGu/Legacy is the maintenance focus; retained United CI is historical compatibility evidence.
-
-Models, MockBukkit and injected faults are not native exploits, Folia, forced-crash or live TPS evidence. A passing earlier SHA does not accept a new source/core/IE2 combination. No master merge, version/tag/release or SF_Addons update has occurred in this workstream.
-
-## Repository topology at initial inspection (historical; active heads above)
-
-- Networks master `084515c96bdeb3aea433890249b6d36ec8de5d6b`.
-- Existing draft #104 branch `test/native-ie2-player-actions-20261018`, stacked on #102 `integration/cursor-ie2-withdrawal-player-20261018` at `96f9123f64df315a969a2b499b91781c6cc370f1`, NOT master. No formal reviews at run start.
-- #98 ALREADY MERGED October 17: merge `f934c3e3eb1545c6e2be45f4ce27afd7caac0d5d`, source `6bf76a0ab8b41b3101f710ccd09829b25a51891a`. Do not recreate.
-- #104 retains #99 cursor, #100 native Grid, #101 IE2 output, #102 integration. #103 is an alternate input pairing; perf #96 separate.
-- IE2 master `cc6f568b72b63283cf72bcbd85bf0817cba22194`; preserve independent fixes.
-- IE2 draft #32 `integration/ie2-cross-direction-receipts-20261018`, head `b96e3a0f09d56faeff135a1d3ac679776e1fbd24`, base #30 `ec201bc77f4bf0611c7d8674e7b75d1656e313da`. CI `39348655330` passed both validations, publish skipped. #30/#31 integration, ownership/clone cleanup and ticker output receipts already exist.
-- PR descriptions contain obsolete pins. Current refs and exact workflow/manifests take precedence.
-
-## Completed production changes and evidence
-
-### DS-01 — cancelled saves and post-worker checkpoint
-
-Production `40a06739228c39eff68a7a4302ef95668909623b`: retain detached immutable save receipts until completion/rejection, overlay newer per-key pending amounts, checkpoint after worker termination before DB close. Existing journal format unchanged. Files: DataStorage blob `2b3ad1f1adee2f19fe47c9cb0d4d67f1137b6d32`; Networks blob `d6f803344314531cd83f45213b85524e37eb1800`.
-
-Clean RED `39512799540`: 485 tests, five targeted failures. GREEN `39513489094` / `39513484351`: all eight gates. XML artifact `12307431485`, SHA256 `f0e8a1992dd3b9ef1968c52d1041ac728e213e23069f5aa0e688011a4c66abbe`: 485/485, 12 shutdown regressions. Production JDBC/SQLite, mocked host. Native `39513484119` passed; artifact `12307880141`, SHA256 `2b12f770f99a78e578d3f46dbbdd6c279afe0119bc5c2b2f5bd71c8c5cac5168`, four JVMs/192-item restart/real Grid and IE2 actions. Does not prove new-template durability or forced-crash atomicity.
-
-### DS-03 — withdrawal preparation
-
-Production `877e3fcac1c2f78ea7a2f1c4cc68d57cb8f8f9fb`: prepare clone/quantity before debit, finally-released same-drawer preparation ownership, canonical-container/balance readback before debit. StorageUnitData blob `e367dbed6a3ef68adb6616ad8e1f13ea35df1b5c`. Requesting-template/Slimefun canonicalization, lock-zero and long-deposit changes preserved.
-
-Clean RED `39514785065`: 500 tests, 11 new failures. GREEN `39515547044` / `39515538733`: eight gates; XML artifact `12306818461`, SHA256 `6e7d710f63c928c71fc04d061b0f7919edefd79f72970b0ee46ed63fedeacd89`: 500/500, 15 preparation and 12 shutdown tests. Native `39515538641` passed; downloaded artifact `12306769572`, SHA256 `72acc2800f6f3a6a5c7b6f5745abbc72308444355a7ba74ac5068e97df0a8708`. Correct manifest: Networks877e3fca/IE2b96e3a0f/core1cb32d6e95b305998065b8ef6b936a56f679187d, Purpur1.21.11/2568; PIDs4630/4740/4864/5025, Networks JAR SHA256 `520be90624b0769a7dfc1640c1f27dfa9500baa8d742bcdd3902ecf5ba7c4eb3`. Historical checkpoint PID/JAR transcription errors were corrected; source/PASS was accurate.
-
-### DS-02a — item-template serialization preflight
-
-Production **`5a8dd3747684f585ba6552b12e96eaa30c5ae47d`**, DataSource blob `e2f76480502ecda0d9f94a34d4a8cddc8f137044`: serialize exact historical payload before allocating/publishing a new ID, reuse immutable bytes on worker, publish map only after queue submissions are accepted. Known identity returns before serialization. Synchronized matching, formats, quantities and rates unchanged.
-
-- Test `DrawerTemplateRegistrationTest.java`, blob `50521f75b1e1b6e1566bd85d1d0c0b14b9f07626`: 13 actual registration/Bukkit serialization/SQLite tests. Only unrelated component matching is isolated because MockBukkit lacks matchesWithoutData. Registration/serializer/JDBC are not mocked. Actual physical-deposit failure keeps all 13 input items; PDC/lore/identity/readback/retry/queue rejection/fast path covered.
-- Initial `25d41f61` / `32c06ab9` fixture attempts included unsupported comparison controls. `dbf1025f` ran512/7 but the test subclass serializer was discarded by Paper clone. That initial clean serializer-fault claim is RETRACTED; do not cite it as valid reproduction.
-- `95840eaf` candidate exposed the injection problem. `5f6f69fa` forward-restored only unaccepted DS-02a production, explicitly retained the fault override across clones, strengthened callback-reached assertions and added a harness control. Corrected clean RED `39521322733`, GuGu job118965578859: **513 tests, seven targeted failures, zero skips**, 500 accepted plus six healthy controls pass.
-- `5a8dd374` reapplies the same production candidate with corrected tests unchanged. **Universal39521805317 SUCCESS, all eight gates**, including Legacy/GuGu/retained United, Java21 canonical JAR/Purpur, Paper26.3 API and native Paper176/194. Publication skipped.
-- Downloaded XML artifact **12312045405**, SHA256 **1970aa4e6478c94d91e5a5f013b1e51df89f14942330c3575df9077fb31f4144**: **513 tests, zero failures/errors/skips**, 13 registration, 15 withdrawal and 12 shutdown cases.
-- Separate native **39521800649 FAILED** at Grid first shift after successful192-item seed/restart. Downloaded artifact12311990636, verified SHA256 `bd01057ab10ff50405542db00cd56169a77f80a146953c6ef863894b82d282de`. At failure: attempts1/offered16/committed0/failures0, inventory16/storage0/cursor0. Five ticks later inputBarrels1/IE2barrels1, targetinputempty, unheld, template matches, acceptsTaggedtrue. That delayed snapshot cannot establish click-time state. This commit adds passive click-time snapshots only; no retry/ledger change.
-- This repair does NOT restore failed/cancelled SQL identity writes. First-new-type serialization now runs on registering thread; existing types do not repeat it. Practical performance/native acceptance remains separate.
-
-## Remaining acceptance queue
-
-| ID | Task | State / next requirement |
-| --- | --- | --- |
-| DS-01 | Dedicated native Drawer timeout/restart | Full project and paired regressions pass; dedicated fault/crash evidence still distinct. |
-| DS-02a | Registration preflight | Accepted in 530/537-test builds and universal gates. Native Grid readiness race identified and fixture corrected; exact-pair rerun pending. |
-| DS-02b | Durable templates/orphan IDs | Implemented834df8dd; real SQLite/worker/journal tests and universal CI pass. Dedicated crash acceptance is distinct. |
-| DS-03 | GUI remainder/ItemMover/Quantum receipts | GUI12/Quantum18 real-handler cases pass in full572-test build. ItemMover, malformed-balance clamp and native Drawer acceptance remain. |
-| IE-01 | Break/output/Void/zero/live PDC | Implemented274a1833;150tests/both CI pass. Five native breakcases, actual placement andindependent restart pass with834pair; fixturecommit/finalpair pending. |
-| RA-01 | Foreign-slot initial handler | Implemented834df8dd; initial/stale-menu tests pass. Native pickup/toggle/batch/reload running. |
-| RA-02 | Recipe/OFF parity | Real smeltery one-vs-five defect reproduced; fallback passes5new tests/fullsuite. Canonical native ratio/OFF/re-enable/restart pending. |
-| PAIR-01 | Final pair/Dust Extractor | Keep exact ledgers. First-shift readiness race causally identified; rerun corrected fixture against274a1833. |
-| PLATFORM-01 | Paper/Purpur/Folia/performance | Paper176/194 and Purpur storage pass at5a8; paired Folia/live MSPT not established. Perf96 integrated with seven operation-count tests; final native acceptance remains. |
-| RELEASE-01 | Review/integrate/version/release/SF_Addons | Authorized only after acceptance. No unrelated Legacy publication. |
-
-## Environment and evidence boundaries
-
-GitHub reads/writes/Actions/artifacts work. Approved network execution, exact full local checkouts and JDK25/JDK21 builds work. Use isolated Gradle user homes for concurrent builds and immutable validated artifacts. Full builds also execute in Actions. Earlier local model ZIPs are supplementary, not deployable releases. Permanent disk failure, nonstopping workers, arbitrary callbacks and forced-crash atomicity remain distinct requirements. Detailed earlier execution history remains in this file's Git history at5a8dd374 and predecessors.
+The exact publisher correction is limited to `.github/workflows/ci.yml`; accepted source, tests, build and immutability guards remain unchanged.
