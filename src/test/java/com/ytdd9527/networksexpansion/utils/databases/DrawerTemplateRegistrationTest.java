@@ -247,6 +247,16 @@ class DrawerTemplateRegistrationTest {
         assertEquals(scheduled, queue.snapshot().scheduled());
     }
 
+    @Test
+    void faultHarnessRetainsItsSerializerAcrossTheProductionClone() {
+        ObservedStack observed = new ObservedStack(token("A", 5), Fault.RUNTIME);
+        ObservedStack cloned = observed.clone();
+        assertNotSame(observed, cloned);
+        assertEquals(observed.getItemMeta(), cloned.getItemMeta());
+        assertThrows(IllegalStateException.class, cloned::serialize);
+        assertEquals(1, observed.serializations.get(), "Injected callback must actually be reached");
+    }
+
     private void assertRejectedBeforePublication(Fault fault) throws Exception {
         ObservedStack input = new ObservedStack(token("A", 13), fault);
         int before = nextId();
@@ -256,6 +266,7 @@ class DrawerTemplateRegistrationTest {
         RuntimeException observedFailure = failure;
         assertAll(
             () -> assertNotNull(observedFailure, "Serialization failure must be visible before a caller can credit stock"),
+            () -> assertEquals(1, input.serializations.get(), "The serializer fault must have been reached"),
             () -> assertEquals(before, nextId()),
             () -> assertEquals(Map.of(), templates()),
             () -> assertEquals(scheduled, queue.snapshot().scheduled()),
@@ -276,6 +287,7 @@ class DrawerTemplateRegistrationTest {
         RuntimeException observedFailure = failure;
         assertAll(
             () -> assertNotNull(observedFailure),
+            () -> assertEquals(1, input.serializations.get(), "The serializer fault must have been reached"),
             () -> assertEquals(13, input.getAmount(), "Physical input must remain with its original owner"),
             () -> assertTrue(drawer.getStoredItemsMap().isEmpty(), "No orphan balance may be accepted"),
             () -> assertEquals(Map.of(), templates()));
@@ -345,9 +357,23 @@ class DrawerTemplateRegistrationTest {
     @DelegateDeserialization(ItemStack.class)
     public static final class ObservedStack extends ItemStack {
         private final Fault fault;
-        final AtomicInteger serializations = new AtomicInteger();
-        final List<String> threads = Collections.synchronizedList(new ArrayList<>());
-        ObservedStack(ItemStack item, Fault fault) { super(item); this.fault = fault; }
+        final AtomicInteger serializations;
+        final List<String> threads;
+        ObservedStack(ItemStack item, Fault fault) {
+            this(item, fault, new AtomicInteger(), Collections.synchronizedList(new ArrayList<>()));
+        }
+        private ObservedStack(ItemStack item, Fault fault, AtomicInteger serializations, List<String> threads) {
+            super(item);
+            this.fault = fault;
+            this.serializations = serializations;
+            this.threads = threads;
+        }
+        @Override
+        public ObservedStack clone() {
+            // Paper delegates clone() to the underlying stack, discarding arbitrary
+            // subclasses. Retain only this explicit fault injection across that copy.
+            return new ObservedStack(super.clone(), fault, serializations, threads);
+        }
         @Override
         public Map<String, Object> serialize() {
             serializations.incrementAndGet();

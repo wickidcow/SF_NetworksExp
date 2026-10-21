@@ -1,69 +1,73 @@
 # Networks Expansion completion checkpoint
 
-Updated: 2026-10-20 America/New_York (CI timestamps after midnight UTC are October 21). DS-01 and DS-03 withdrawal preparation have verified project/native GREEN. DS-02a clean RED is now verified at `dbf1025fb781e4a8fb4d128e251b75bf5b12f70f`: 512 tests, 7 new failures, no skips. This commit applies the narrow registration preflight fix in DataSource blob `e2f76480502ecda0d9f94a34d4a8cddc8f137044`; GREEN is pending. Read this file and fresh refs before work; do not restart completed investigations.
+Updated October 20, 2026 America/New_York (October 21 UTC in CI).
+
+## Current execution — resume here
+
+**DS-02a baseline replay, not release-ready.** The first candidate `95840eaf3b25d4d0423972dd29d31f7437d9b305` compiled but CI `39520806970` had six registration failures out of 512. Investigation established that Paper `ItemStack.clone()` delegates to its underlying stack: the test's serializer override was discarded. Therefore the earlier claim that all seven failures at `dbf1025f` were valid serializer fault evidence is RETRACTED. Its queue-rejection assertion is valid; serializer controls require the correction below.
+
+This commit restores ONLY the unaccepted DS-02a DataSource change to exact baseline blob `ca9270918ce7f6a1651a075e312913a1b0fdaefd`, leaving all accepted DS-01/DS-03 work intact. The corrected test blob `50521f75b1e1b6e1566bd85d1d0c0b14b9f07626` preserves the explicit serializer injection across clones, asserts that the callback was reached, and adds a harness control. There are now 13 registration tests / 513 project tests expected. Matching isolation and physical/PDC/SQL assertions are unchanged. Obtain genuine baseline RED, then reapply prepared production blob `e2f76480502ecda0d9f94a34d4a8cddc8f137044` and obtain GREEN. This is a normal forward commit, not a force reset.
+
+**Exact next action:** inspect this baseline replay's exact-head CI. Confirm compilation, all six healthy new controls and 500 accepted tests pass, and only seven targeted registration cases fail. Reapply the already implemented DataSource blob without changing test assertions. Then inspect all eight gates and actual native paired workflow, download reports, update this checkpoint and continue the next unfinished acceptance item. Do not restart DS-01/DS-03 investigation.
 
 ## Authority and boundaries
 
-The owner explicitly authorized completing, testing, reviewing, merging, versioning and publishing Networks Expansion and updating SF_Addons AFTER acceptance. This replaces the earlier blanket release hold, not the requirement to pass tests. Never merge failing code, bypass a safety-denied write, force-push, guess identities, silently delete stock, mutate live servers/worlds/configs, or publish unrelated Slimefun Legacy changes. Preserve recipes, IDs/PDC, storage/migration formats, intentional input Void Excess, rates and tick budgets. GuGu/Legacy is the maintenance focus; retained United CI is historical compatibility evidence, not a new development target.
+The owner authorized finishing, reviewing, merging, versioning and publishing Networks Expansion and updating SF_Addons AFTER acceptance. This supersedes the old blanket release hold, not test/safety requirements. No failing merges, safety-denial bypass, force pushes, inferred item identities, silent deletion, live server/world/config changes, or unrelated Slimefun Legacy publication. Preserve recipes, IDs/PDC, schemas/migration, quantities, intentional input Void Excess, rates and budgets. GuGu/Legacy is the maintenance focus; retained United CI remains historical compatibility evidence.
 
-Use existing integration PRs and preserve concurrent commits. A prior green run does not accept a new head or different core/IE2 pin. Models, injected faults and MockBukkit are not native gameplay, Folia, forced-crash or live TPS proof.
+Use existing PRs and preserve concurrent changes. A previous green SHA does not accept a new SHA or different core/IE2 pin. MockBukkit, source models and injected faults are not native gameplay, Folia, forced-crash or live TPS proof. No master merge, release, version bump or bundle update has occurred in this workstream.
 
-## Repository baseline and topology
+## Repository topology
 
-- Networks master `084515c96bdeb3aea433890249b6d36ec8de5d6b`, unchanged at this run's start.
-- Networks PR #104 branch `test/native-ie2-player-actions-20261018`, based on #102 `integration/cursor-ie2-withdrawal-player-20261018` at `96f9123f64df315a969a2b499b91781c6cc370f1`, NOT master. Draft/open; no formal reviews at this run's start.
-- Networks #98 ALREADY MERGED: `f934c3e3eb1545c6e2be45f4ce27afd7caac0d5d` on October 17, source head `6bf76a0ab8b41b3101f710ccd09829b25a51891a`. Do not recreate it.
-- IE2 master `cc6f568b72b63283cf72bcbd85bf0817cba22194`; preserve independent master fixes during integration.
-- IE2 PR #32 branch `integration/ie2-cross-direction-receipts-20261018`, head `b96e3a0f09d56faeff135a1d3ac679776e1fbd24`, base #30 `ec201bc77f4bf0611c7d8674e7b75d1656e313da`. Exact CI `39348655330` passed both validation jobs, publication skipped. Draft/open, no formal reviews.
-- PR descriptions contain historical hashes. Current refs and exact workflow source take precedence. Last accepted production checkpoint remains `877e3fca` until the new production commit passes its own gates.
+- Networks master: `084515c96bdeb3aea433890249b6d36ec8de5d6b`.
+- Existing draft #104: `test/native-ie2-player-actions-20261018`, based on #102 `integration/cursor-ie2-withdrawal-player-20261018` at `96f9123f64df315a969a2b499b91781c6cc370f1`, NOT master. No formal reviews at start of this run.
+- #98 ALREADY MERGED October 17: merge `f934c3e3eb1545c6e2be45f4ce27afd7caac0d5d`, source `6bf76a0ab8b41b3101f710ccd09829b25a51891a`. Do not recreate.
+- #104 retains #99 cursor, #100 native Grid, #101 IE2 output receipts and #102 combined work. #103 is an alternate input pairing, not a second fix to blindly merge. Perf #96 is separate.
+- IE2 master: `cc6f568b72b63283cf72bcbd85bf0817cba22194`. Draft #32: `integration/ie2-cross-direction-receipts-20261018` at `b96e3a0f09d56faeff135a1d3ac679776e1fbd24`, base #30 `ec201bc77f4bf0611c7d8674e7b75d1656e313da`. CI `39348655330` passed both validation jobs; publication skipped.
+- IE2 #32 already integrates #30/#31 ownership/input/withdrawal and clone cleanup. Ticker output receipts ARE implemented. Preserve independent master fixes.
+- PR descriptions have obsolete historical pins. Current refs, workflow source and exact downloaded manifests take precedence.
 
-## Implemented work to retain
+## Accepted fixes and evidence
 
-- Merged #98: crafting ingredient debits, output receipts, metadata preservation, reentry rejection, no speculative refunds.
-- #104 includes #99 cursor safety, #100 actual Grid fixture, #101 IE2 output receipts, #102 combined tree and actual IE2 player fixtures. #103 is an alternative input-only pairing, not another production fix to blindly merge.
-- IE2 #32 combines #30 withdrawals and #31 physical input receipts, cross-direction ownership, seeded-template integrity and template-clone cleanup. Old `cb0df3ef` failure already fixed. Ticker output receipts are implemented; do not re-diagnose the old unchecked ticker as current.
-- Classic Pusher/More/Best already have per-block Recipe-Aware controls: normal OFF behavior, template quantities/duplicates define a batch, target 1-64, accepted physical inputs, fair four-template budget. Line/point/Vanilla/Smart pushers are distinct and not implicitly covered.
-- Preserve concurrent GUI changes through `5cddfba0`: physical-count/lore agreement, foreign PDC protection and no unchanged icon rewrites.
-- Preserve Drawer absolute updates/tombstones and FIFO ordering. DS-01 adds retained cancelled receipts and final shutdown checkpoint without changing the journal format.
+### DS-01: cancelled autosaves and final shutdown checkpoint
 
-## Actual execution history and evidence
+- Test-first commits `b7e42a31` then fixture correction `dac68eb3`. Clean RED `39512799540`: 485 tests, five new failures, no old regression.
+- Production **`40a06739228c39eff68a7a4302ef95668909623b`** retains detached immutable save receipts, overlays newer per-key pending values, and checkpoints after worker termination before DB close. Existing journal format unchanged.
+- Files: DataStorage blob `2b3ad1f1adee2f19fe47c9cb0d4d67f1137b6d32`; Networks blob `d6f803344314531cd83f45213b85524e37eb1800`.
+- Universal `39513489094` / `39513484351`: all eight gates passed, publish skipped. XML artifact `12307431485`, SHA256 `f0e8a1992dd3b9ef1968c52d1041ac728e213e23069f5aa0e688011a4c66abbe`: 485 tests, zero failures/errors/skips, 12 shutdown tests. Real production JDBC/SQLite, mocked Bukkit host.
+- Paired actual native `39513484119` passed; artifact `12307880141`, SHA256 `2b12f770f99a78e578d3f46dbbdd6c279afe0119bc5c2b2f5bd71c8c5cac5168`. Four JVMs, physical controller/monitors, 192 tagged items across restart, actual Grid and IE2 player ledgers. Synthetic incident hold explicitly distinguished.
 
-1. `7c81b6e7de6716481e01d8f95772cb0f97368efb`: permanent completion checkpoint created.
-2. `b7e42a31e796a98d1d52f16291c087921c57aec6`: 12 production JDBC/SQLite shutdown tests plus test-only sqlite-jdbc 3.50.3.0. Initial CI `39512094436` compiled but fixture namespace setup failed, NOT clean baseline evidence.
-3. `dac68eb35b9eb4789021b2ee1bf2cc2b7b98a08a`: fixed fixture namespace/bootstrap without relaxing assertions. Clean RED `39512799540`, GuGu job `118937676149`: 485 tests, exactly 5 new DS-01 failures; all existing tests passed. Cancelled snapshots resurrected or retained stale balances and final checkpoint was absent.
-4. **`40a06739228c39eff68a7a4302ef95668909623b`: DS-01 production.** DataStorage retains detached immutable save snapshots until completion/rejection and overlays newer pending amounts per key. Networks checkpoints after worker termination and before SQLite close. DataStorage blob `6560e2fb` -> `2b3ad1f1adee2f19fe47c9cb0d4d67f1137b6d32`; Networks blob `0463f648` -> `d6f803344314531cd83f45213b85524e37eb1800`.
-5. **DS-01 GREEN:** exact PR universal `39513489094` and push universal `39513484351` SUCCESS, all 8 gates including Legacy/GuGu/retained United, Java 21 JAR/Purpur, Paper 26.3 API and native Paper 176/194. Publication skipped.
-6. Downloaded XML artifact `12307431485`, SHA256 `f0e8a1992dd3b9ef1968c52d1041ac728e213e23069f5aa0e688011a4c66abbe`: **485 tests, 0 failures/errors/skips**, including 12/12 DrawerShutdownReceiptTest. Real production DataStorage/QueryQueue/DrawerRecoveryJournal/DataSource and SQLite; mocked Bukkit host. Synthetic existing IDs do not prove new-template registration or gameplay.
-7. Downloaded canonical JAR `12307561776`: 1,642,215 bytes, SHA256 `50aa02834355ea1605cca0d1d11b1f8af3beab1474bef1039fa9f95ca9e394a7`, plugin version 1.0.59. Development build, not published release.
-8. **Actual paired native `39513484119` SUCCESS** at `40a06739`, IE2 `b96e3a0f`, core `1cb32d6e95b305998065b8ef6b936a56f679187d`, Purpur 1.21.11 build 2568. Downloaded artifact `12307880141`, SHA256 `2b12f770f99a78e578d3f46dbbdd6c279afe0119bc5c2b2f5bd71c8c5cac5168`. Manifest Networks JAR hash matches canonical. JVM PIDs 6498/6610/6737/6892. 24 roundtrips/192 tagged items/restart, actual Grid 7 clicks/2 shifts/crafts, actual IE2 buttons 320/316 ledgers/PDC/full/partial/reopen. Incident hold explicitly synthetic. No fabricated barrels.
-9. `eef2618da32243882138af3e547ce426f4014b68` and checkpoint `e9f3e772cee14176b8cc839a96e888f258ba0682`: 15 actual-helper withdrawal tests, production unchanged `40a067`. File `src/test/java/com/balugaq/netex/api/data/DrawerWithdrawalPreparationTest.java`. Real ItemContainer/ItemStack/PDC; persistence calls observed through Mockito.
-10. **DS-03 clean RED at `e9f3e772`:** exact `39514785065`; GuGu job `118944221858` compiled source/tests, **500 tests with 11 failures, all in the new suite**. All 485 existing tests and 4 new healthy withdrawal tests passed. Four clone faults and four quantity-setting faults debit 16 to 13/0 prematurely and sometimes remove identity; failed retry loses 3; recursive preparation reaches clone twice; changed-source callback returns an obsolete withdrawal. Legacy and retained United lanes also failed this test commit. No fixture failures or assertion relaxation.
-11. **`877e3fcac1c2f78ea7a2f1c4cc68d57cb8f8f9fb`: DS-03 production**, unchanged test assertions. `StorageUnitData.java` blob `9661c9bc33804ee837612379b9d62379645cc773` -> `e367dbed6a3ef68adb6616ad8e1f13ea35df1b5c`. Result clone/quantity prepared before debit, per-drawer finally-released preparation guard, canonical container/balance readback before debit. Requesting-template identity, locked zero-balance behavior, existing long-quantity deposit fix, schemas and rates preserved. No claim of atomicity across arbitrary direct external ItemContainer mutations or later delivery/SQL failure.
-12. **DS-03 GREEN verified:** exact PR universal `39515547044` and push universal `39515538733` SUCCESS; all 8 gates passed and publication skipped. Downloaded XML artifact `12306818461`, SHA256 `6e7d710f63c928c71fc04d061b0f7919edefd79f72970b0ee46ed63fedeacd89`: **500 tests, 0 failures/errors/skips**, including 15/15 withdrawal preparation and 12/12 shutdown receipts. Native IE2/player `39515538641` completed SUCCESS at exact `877e3fca`. Downloaded artifact `12306769572`, verified SHA256 `72acc2800f6f3a6a5c7b6f5745abbc72308444355a7ba74ac5068e97df0a8708`; manifest pins IE2 `b96e3a0f`, core `1cb32d6e95b305998065b8ef6b936a56f679187d`, Purpur 2568 and four distinct JVMs 6500/6641/6770/6904. Original 192-item restart and actual Grid/IE2 player 320/316 ledgers preserved. Networks JAR SHA256 `6f2b7430a1a7af7556d354ec344cd316edf384ef0149cfc9173e2d8c427f6187`.
-13. **`25d41f61c195ae98fd385e9af4f404cf7b561482`: DS-02a TEST ONLY**, production unchanged `877e3fca`. Adds `src/test/java/com/ytdd9527/networksexpansion/utils/databases/DrawerTemplateRegistrationTest.java` with 12 tests executing real DataSource, Bukkit object serialization and SQLite. Tests checked/runtime serialization failures before registry/counter/task publication, physical Drawer deposit conservation, retry, rejected queue, typed PDC, independent snapshots, and no repeated serialization for known item types. Failure injection is a controlled ItemStack.serialize override, not a reproduced live exploit.
-14. Fixture corrections: `32c06ab9fbc0e32c6cff6569e1a4eb25c02092b0` changed the comparison configuration; CI `39519612547` ran 512 tests with 7 expected failures but 2 controls skipped by unsupported MockBukkit `matchesWithoutData`. This was NOT accepted as clean evidence. `dbf1025fb781e4a8fb4d128e251b75bf5b12f70f` isolates only the unrelated two-ItemStack comparison using materialized real Bukkit metadata, preserving all conservation assertions and real registration/serialization/SQLite. It does not test the production component matcher.
-15. **DS-02a clean RED:** exact PR universal `39520191771`, GuGu job `118961878647`: full source/tests compile, **512 tests, exactly 7 new failures, no skips**. All existing 500 tests and five healthy new controls pass. Both checked/runtime serializer failures consume 13 physical items into an orphan in-memory balance; ID/counter/tasks publish too early, failed retry leaves phantom identity, rejected queue leaves an entry, and serialization occurs after the registering caller returns. Legacy and retained United test lanes also fail this test-only head. Assertion-mapping diagnostics after MockBukkit teardown are reporting artifacts, not additional test failures.
-16. **This commit: DS-02a production candidate.** `DataSource.java` blob `ca9270918ce7f6a1651a075e312913a1b0fdaefd` -> `e2f76480502ecda0d9f94a34d4a8cddc8f137044`. Serialize the exact original format before allocating/publishing a new ID; reuse the captured immutable payload in the SQL worker; publish the in-memory template only after queue submissions are accepted. Existing-type fast path, synchronized registration, matching policy, schemas and amount operations unchanged. Same 12 tests remain unchanged. CI/native acceptance pending. This does NOT recover failed/cancelled SQL registration, reserve orphan IDs, or prove crash atomicity. First-unique-type serialization now occurs on the registering thread; no repeat work for known identities.
+### DS-03: withdrawal preparation (GUI/other receipts still outstanding)
 
-## Acceptance queue
+- Test-first `eef2618d` / checkpoint `e9f3e772`; clean RED `39514785065`: 500 tests, 11 new failures, 485 old plus four healthy new tests passed.
+- Production **`877e3fcac1c2f78ea7a2f1c4cc68d57cb8f8f9fb`** prepares clone/quantity before debit, adds finally-released same-drawer preparation ownership, and validates canonical container/balance before debit.
+- File StorageUnitData blob `e367dbed6a3ef68adb6616ad8e1f13ea35df1b5c`. Requesting-template identity/Slimefun canonicalization, lock-zero and long-quantity deposit changes preserved.
+- Universal **`39515547044` / `39515538733`** all eight gates passed, publication skipped. XML artifact `12306818461`, SHA256 `6e7d710f63c928c71fc04d061b0f7919edefd79f72970b0ee46ed63fedeacd89`: **500/500, zero failures/errors/skips**, 15 preparation and 12 shutdown tests.
+- Exact native **`39515538641`** passed; downloaded artifact `12306769572`, ZIP SHA256 `72acc2800f6f3a6a5c7b6f5745abbc72308444355a7ba74ac5068e97df0a8708`. Re-read the archive manifest: Networks `877e3fca`, IE2 `b96e3a0f`, core `1cb32d6e95b305998065b8ef6b936a56f679187d`, Purpur 1.21.11 build 2568. PIDs **4630/4740/4864/5025**. Networks JAR SHA256 **`520be90624b0769a7dfc1640c1f27dfa9500baa8d742bcdd3902ecf5ba7c4eb3`**. These replace transcription errors in the previous checkpoint's PID/JAR fields; source pins and PASS were correct. Original 192-item restart and actual Grid/IE2 320/316 ledgers preserved.
 
-| ID | Task | State / next requirement |
+## DS-02a development history and scope
+
+- `25d41f61` added 12 actual DataSource/SQLite/Bukkit serialization tests; `9ad88f64` checkpointed DS-03 acceptance.
+- `32c06ab9` switched comparison configuration; `39519612547` had seven failures but two skipped controls because MockBukkit lacks `matchesWithoutData`. Not accepted as clean RED.
+- `dbf1025f` isolates only the unrelated two-stack matcher by materializing real metadata; no registration, serializer or JDBC stubs. It ran 512 tests with seven failures/no skips in `39520191771`, but later evidence showed the injected serializer was not reached across the production clone. Do not cite that as clean serializer fault reproduction.
+- `95840eaf` implemented serialize-before-ID publication and captured immutable payload reuse, plus publish-map-after-queue-acceptance. Its CI compiled but six fault tests still failed due the clone issue. Candidate blob `e2f76480502ecda0d9f94a34d4a8cddc8f137044` remains available, not yet accepted.
+- Current baseline replay repairs clone propagation, tests the harness itself, and strengthens fault-reached assertions. Never relax the physical 13-item, original PDC, no-phantom registry, retry, or known-type fast-path assertions.
+- Preflight alone does not recover cancelled/failed SQL identity writes. Known types must never incur repeat serialization; first-unique-type work moves to the registering thread and needs practical performance validation.
+
+## Remaining acceptance queue
+
+| ID | Requirement | State / next acceptance |
 | --- | --- | --- |
-| DS-01 | Cancelled saves and post-worker checkpoint | Accepted by full project CI and paired regression. Dedicated native Drawer timeout/restart remains a final requirement; no forced-crash claim. |
-| DS-02a | Serialize new identity before publication | Clean RED 512/7/0 skips established; narrow production fix now committed with unchanged tests. Obtain exact-head project/native GREEN. |
-| DS-02b | Durable item-template/quantity registration; orphan IDs | Existing template-journal candidates remain separate. DS-01 and serializer preflight do not recover cancelled/failed SQL identity bytes or guarantee crash durability. |
-| DS-03 | Withdrawal preparation, GUI remainder, ItemMover/Quantum receipts | Preparation accepted by 500/500 project tests and exact native workflow. GUI remainder and ItemMover/Quantum receipt candidates remain. Preserve requesting-template/ItemContainer canonicalization contract. |
-| IE-01 | Break-output/zero/Void Excess/live identity/PDC | Existing full-context candidate needs full IE2 Gradle and native break/place/restart; partial-spawn/restart remains unresolved. |
-| RA-01 | Foreign-slot first-viewer handler | AbstractNetworkPusher returns before handler registration. Existing local patch; prior safety-denied write must not be bypassed. Native pickup/toggle/batch/reload needed. |
-| RA-02 | Recipe-aware insertion/OFF parity | Existing planner/policy implementation; extend disposable machine fixture for ratios, accepted inputs, metadata, four-template budget. |
-| PAIR-01 | Final Networks/IE2/core + Infinity Dust Extractor | Exact native workflow passed at 877e3fca. Re-run final changed pair; missing-barrel readiness uses normal controller refresh, never fabricated storage or relaxed ledgers. |
-| PLATFORM-01 | Paper/Purpur/Folia owner-thread/performance | Paper 176/194 and Purpur passed at 877e3fca, not paired Folia/live MSPT. Perf #96 separate until safety acceptance. Document external blockers accurately. |
-| RELEASE-01 | Review/integration/version/artifacts/publish/SF_Addons | Authorized after acceptance. No master merge/version/tag/release/bundle/live changes yet. No unrelated Legacy publication. |
+| DS-01 | Native Drawer timeout/restart | Project and paired regressions pass; dedicated native Drawer fault test and forced-crash evidence remain separate. |
+| DS-02a | Serializer preflight | Current baseline replay above, then unchanged-assertion GREEN. |
+| DS-02b | Durable templates and orphan IDs | Existing prototype/journal candidates not integrated. New-template SQL cancellation/failure and missing identities remain. |
+| DS-03 | GUI remainder, ItemMover and Quantum receipts | Preparation accepted; remaining known receipt/restore candidates need actual project/native tests. |
+| IE-01 | Break/output/Void/zero/live PDC | Existing full-context candidate; full Gradle/native break/place/restart and partial-spawn recovery unresolved. |
+| RA-01 | Foreign-slot initial handler | Existing narrow candidate but prior safety-denied write must not be bypassed. Native pickup/toggle/batch/reload still required. |
+| RA-02 | Recipe insertion/OFF parity | Classic/More/Best already implemented; validate native ratios/accepted inputs/budgets. Other pusher families distinct. |
+| PAIR-01 | Final pair and Infinity Dust Extractor | 877e3fca actual native passes; re-run final changed pair, never fabricate barrels or relax ledgers. |
+| PLATFORM-01 | Paper/Purpur/Folia/performance | Native Paper 176/194 and Purpur passed at accepted SHA; paired Folia and live MSPT not proven. Perf #96 separate. |
+| RELEASE-01 | Review/integrate/version/release/SF_Addons | Owner-authorized only after acceptance; unrelated Legacy publication excluded. |
 
-## Exact next action
+## Environment
 
-Inspect this production commit's exact-head universal and native CI. Fix genuine failures without weakening the 512-test suite; download and inspect reports and exact manifests. After GREEN, continue DS-02b durable template/quantity registration or the next independent acceptance task rather than restarting DS-01/DS-03. Preserve concurrent changes and existing safety-denied-write boundaries. Update this checkpoint with new commit/run/artifact hashes as work passes.
-
-## Environment and limitations
-
-GitHub reads/writes/CI work. Local Java 21 is available; direct clone/download DNS failed in this run. Full dependency-resolved compilation runs in GitHub Actions, not stand-ins. Historical local models are supplementary. Permanent disk failure/nonstopping workers/missing template durability/unsafe callbacks/forced-crash atomicity remain distinct requirements; green individual repairs do not prove all duplication paths eliminated.
+GitHub reads/writes/Actions/artifacts work. Local Java21 works; direct clone/download DNS fails, so full dependency-resolved builds execute in Actions. Historical isolated model packages are supplementary. Permanent disk failure, nonstopping workers, forced-crash atomicity and arbitrary unsafe callbacks are not solved by individual passing tests.
