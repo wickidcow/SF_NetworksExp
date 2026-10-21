@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IE2_HEAD: 1ee9e3a5566886d14f2cc1a9a0ea0ce55b400a27
+  IE2_HEAD: 19e4943a53c44589a6cfcf618150358f7bdf5a1c
   CORE_HEAD: 36d665f1ec47ce3f05b1be092051ed0b1a1f53ff
 
 jobs:
@@ -89,14 +89,14 @@ jobs:
           chmod +x gradlew
           ./gradlew clean build --no-daemon -PslimefunCoreJar="$CORE_JAR" \
             -PjegJar="$PWD/.ci/jeg/SF_JustEnoughGuide2.1.67.jar" -PstrictDeprecation=true
-          python3 scripts/verify_java21_bytecode.py build/libs/SF_Networks1.0.59.jar
-          python3 scripts/verify_universal_jar.py build/libs/SF_Networks1.0.59.jar 1.0.59
+          python3 scripts/verify_java21_bytecode.py build/libs/SF_Networks1.0.60.jar
+          python3 scripts/verify_universal_jar.py build/libs/SF_Networks1.0.60.jar 1.0.60
       - name: Build and test the pinned IE2 candidate against that core
         working-directory: .ci/paired-ie2
         run: |
           chmod +x gradlew
           ./gradlew clean build --no-daemon -PpaperApiVersion=1.21.11-R0.1-SNAPSHOT \
-            -PtargetJvm=21 -PbuildVersion=2.0.14 \
+            -PtargetJvm=21 -PbuildVersion=2.0.15 \
             -PslimefunApiCoordinate=com.github.slimefun:Slimefun:ALBION-SNAPSHOT
       - name: Run real IE2 and Networks storage through two JVMs
         shell: bash
@@ -106,8 +106,8 @@ jobs:
             https://api.purpurmc.org/v2/purpur/1.21.11/2568/download \
             --output .ci/paired-purpur.jar
           python3 scripts/paired_ie2_storage_probe.py "$CORE_JAR" \
-            build/libs/SF_Networks1.0.59.jar \
-            .ci/paired-ie2/build/libs/SF_InfinityExpansion2.0.14.jar \
+            build/libs/SF_Networks1.0.60.jar \
+            .ci/paired-ie2/build/libs/SF_InfinityExpansion2.0.15.jar \
             .ci/paired-purpur.jar build/paired-ie2-storage
       - name: Retain paired evidence and test failures
         if: always()

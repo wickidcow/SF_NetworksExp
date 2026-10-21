@@ -460,7 +460,12 @@ public class StorageUnitData {
         }
         withdrawalPreparing = true;
         try {
-            final int available = Math.max(0, container.getAmount());
+            final int available = container.getAmount();
+            if (available < 0) {
+                // Preserve invalid persisted balances and their canonical identity
+                // for recovery instead of treating them as an empty unlocked slot.
+                return null;
+            }
             final int taken = Math.min(requested, available);
             if (taken <= 0) {
                 if (!contentLocked) {
@@ -543,7 +548,12 @@ public class StorageUnitData {
 
         final int incoming = itemsToDeposit.getAmount();
         final boolean matchedExistingType = storedItems.values().stream().anyMatch(container -> container.isSimilar(itemsToDeposit));
-        final int actualAdded = addStoredItem0(accessor, itemsToDeposit, incoming, contentLocked, force);
+        final int actualAdded = addStoredItemWithReceipt(accessor, itemsToDeposit, incoming, contentLocked, force);
+        if (actualAdded < 0) {
+            // Invalid saved balances are not overflow. Preserve the original record
+            // and the complete physical input, including when Void Excess is enabled.
+            return;
+        }
         if (NetworksDrawer.isVoidExcess(getLastLocation()) && matchedExistingType) {
             // Preserve historical drawer semantics: only overflow for an already stored item type is voided.
             itemsToDeposit.setAmount(0);
@@ -571,6 +581,12 @@ public class StorageUnitData {
         boolean contentLocked,
         boolean force) {
 
+        return Math.max(0, addStoredItemWithReceipt(accessor, item, amount, contentLocked, force));
+    }
+
+    /** Internal negative receipt distinguishes invalid stock from ordinary full capacity. */
+    private int addStoredItemWithReceipt(
+        Location accessor, ItemStack item, int amount, boolean contentLocked, boolean force) {
         if (sourceTransferActive || sourceTransferUnverified
             || item.getType().isAir() || amount <= 0 || isBlacklisted(item)) {
             return 0;
@@ -819,20 +835,20 @@ public class StorageUnitData {
 
 
     private int addToContainer(@NotNull ItemContainer container, int requested) {
-        final int current = Math.max(0, container.getAmount());
-        if (current > sizeType.getEachMaxSize()) {
-            container.setAmount(sizeType.getEachMaxSize());
-            DataStorage.setStoredAmount(id, container.getId(), container.getAmount());
-            return 0;
-        }
+        synchronized (container) {
+            final int current = container.getAmount();
+            if (current < 0 || current > sizeType.getEachMaxSize()) {
+                return -1;
+            }
 
-        final int capacity = Math.max(0, sizeType.getEachMaxSize() - current);
-        final int accepted = Math.max(0, Math.min(requested, capacity));
-        if (accepted > 0) {
-            container.addAmount(accepted);
-            DataStorage.setStoredAmount(id, container.getId(), container.getAmount());
+            final int capacity = sizeType.getEachMaxSize() - current;
+            final int accepted = Math.max(0, Math.min(requested, capacity));
+            if (accepted > 0) {
+                container.addAmount(accepted);
+                DataStorage.setStoredAmount(id, container.getId(), container.getAmount());
+            }
+            return accepted;
         }
-        return accepted;
     }
 
     /**

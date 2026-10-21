@@ -4,6 +4,33 @@ Updated October 20, 2026 America/New_York (October 21 UTC in CI).
 
 ## Resume here — do not restart accepted work
 
+### Active final integration — October 21 UTC
+
+This commit is the combined Networks **1.0.60** candidate on PR **#104**, based on `1266e7a0f7461ba40af331ede42c288d848f49fc`. PR #104 now targets **master**. Coordinated IE2 **2.0.15** is committed at `19e4943a53c44589a6cfcf618150358f7bdf5a1c` in PR **#32**, also targeting master. Both remain draft until the final native acceptance gates pass. Neither release has been published and the SF_Addons ZIP has not been replaced.
+
+**Completed in this Networks batch:**
+
+- `StorageUnitData` and `DrawerInvalidBalanceTest`: invalid negative or overcapacity deposits retain the original record and the complete physical input, including with Void Excess. Negative unlocked withdrawals retain the canonical record. Clean RED deposit cases:12invalid failures+4valid controls; withdrawal cases:2unlocked failures+2locked controls. All20new cases now pass.
+- `AbstractNetworkPusher`, two new test classes and native fixtures: count full physical inputs before recipe top-up while retaining dynamic insertion permissions. Native1266 CI39532219093 and actual local smeltery actions reproduced OFF-to-ON refill. Eight new buffer regressions pass. A real break-before-pickup action reproduced foreign control-slot loss; nine guard cases pass. The existing59pusher cases pass.
+- `DrawerItemMoverTransfer`, the actual `NetworksDrawer` hookup and17real-handler regressions: baseline16cases had14failures and2healthy controls. Authoritative slot writes/readbacks now precede opposite-endpoint changes. Snapshot reads, rejected writes, write-then-throw, reentry, detached menus, long limits, first assignment and full drain pass. A reached live metadata-read callback reproduced a capacity-change race after the initial check (16pass/1fail); the final prewrite capacity recheck fixes it. Safe preparation does not invoke wrapper metadata writers. Full item data comparisons avoid cross-wrapper equality casts.
+- `ItemMover`, new `ItemMoverStorage` and35helper regressions from agent production18e1d9ad: prepare full identity and long amount together, validate malformed/conflicting balances, reserve exact serialized transfer evidence, verify actual menu/hand writes and retain unresolved receipts. Native rejected candidates34175/427c5eb exposed wrapper serialization/equality failures; final plain material+amount+full live metadata snapshots address them. Do not reuse rejected candidates.
+- Native Drawer fixture/workflow/client/runner added. Version, changelog, release notes, active workflows and source verifier updated to1.0.60. Native workflows pin IE2final19e4943a and Legacycore1cb32d6e. All existing build/release gates remain enabled.
+
+**Verified combined build:** strict Gradle `clean build` **661tests, zero failures/errors/skips**,65suites; source compatibility289item IDs; Java21bytecode536owned classes; universal JAR and ZIP CRC pass. Local candidate `SF_Networks1.0.60.jar` SHA256 **0588ad1e19281293daee6dd419c51d92e5b9dc7923d707dd27157b14b9238ae3**. CoreJAR SHA256`251e9075bb6d1629790d845569fb90994e4ff1ed76408400ee733d4041bb9e3e`. This local build is not a published release artifact.
+
+**IE2final19e4943a:** preserves mastercc6f568 fixes as an additional parent, fixes authorized zero-balance cache reseeding with exact incoming identity, and routes RuntimeException/LinkageError break failures through verified recovery while rethrowing fatal VM errors.158tests pass; all six source verifiers and version/bytecode/JAR checks pass. Both CI runs **39534149819** and **39534145743** pass. Immutable local2.0.15JAR SHA256`897bd4de70c9219217ecfb0f8cf68f0147b6c38758a239085db39718dd686eef`. Native seed passes six physical break cases including injected LinkageError rollback and real player placement. A separate native pair at `ie2-final/build/native-linkage-green-19e4943a-snapshots` now passes all six seed cases, real placement and an11-item independent reload with the unchanged fixture. The earlier reversion failure remains unexplained, so it is retained as an unresolved acceptance issue rather than dismissed by retry.
+
+**Native evidence already accepted at1266:** universal39532225425/39532219143 PASS; native Grid/IE2 player39532219149 PASS. Drawer fixture passed four independent JVMs20478/20769/21046/21507: prerequisite192ledger,19actual seed clicks+2reload clicks, exact3,000,000,086total, partial5/full0withdrawals, inventory64/cursor1inputs, Quantum184debit/256credit, small13full drain and identity/flags/settings after restart. These are earlier-source results; final661-test pair must pass separately.
+
+**Current native blockers, not concealed:** ItemMover final18e1d9ad seed passes all five actual main/off-hand gestures, stale-hand replacement denial, modern model data, pending exact-byte receipts and healthy/long/PDC recovery checks. A fixture Chest.update call overwrote newly written slots; that fixture fault is corrected. The stopped seed Quantum database contains37stored+64physical=101, but the second JVM sees a reverted row. IE2 seed shutdown backup likewise contains the correct placed11-item record and no broken rows; verify sees the original six rows instead. Both agents are checking the specific fixture/startup persistence lifecycle. No quantity assertion has been removed, no native restart is marked PASS and no core change has been published.
+
+**Independent review:** Drawer/Quantum/menu/ItemMover receipts reviewed; the two concrete IE2 review findings are fixed/tested in19e4943a. Both PRs have no existing review submissions or inline threads as of this checkpoint. Final exact-head review still required before merging.
+
+**SF_Addons base:** `SF_Addons_r139_1.21.11-26.3.zip` is CRC-valid,45JARs/48entries, SHA256`541708ca969bb6d6c7a0b11510e856b221c2dbd984e6523404a53ebdaa60ff1c`. It contains Networks1.0.56/IE2.0.13. Replace only the two applicable verified release JARs and precise manifest/checksum/compatibility metadata; preserve the other43JARs byte-for-byte. No unrelated core is bundled or published.
+
+**Exact next action:** push this661-test candidate on the existing PR104 branch; run final canonical recipe/Drawer acceptance withIE219e4943a, resolve the causal native restart blocker and commit the reproducible ItemMover fixture. Require final CI/native acceptance and exact-head review, then merge master, publish Networks1.0.60/IE22.0.15 through existing gated workflows, verify the actual release assets, and update SF_Addons. Folia remains explicitly unsupported for cross-region transactions; no descriptor flag or forced-crash claim is introduced.
+
+
 ### Latest implementation checkpoint: GUI, Quantum and recipe fallback
 
 **Canonical clean strict build: 572 tests, zero failures/errors/skips.** Legacy source contracts, Java 21 bytecode (531 owned classes), universal JAR (289 IDs) pass. Versions remain unchanged pending final acceptance.
@@ -59,7 +86,7 @@ Owner authorization covers completing, reviewing, merging, versioning and publis
 
 Models, MockBukkit and injected faults are not native exploits, Folia, forced-crash or live TPS evidence. A passing earlier SHA does not accept a new source/core/IE2 combination. No master merge, version/tag/release or SF_Addons update has occurred in this workstream.
 
-## Repository topology
+## Repository topology at initial inspection (historical; active heads above)
 
 - Networks master `084515c96bdeb3aea433890249b6d36ec8de5d6b`.
 - Existing draft #104 branch `test/native-ie2-player-actions-20261018`, stacked on #102 `integration/cursor-ie2-withdrawal-player-20261018` at `96f9123f64df315a969a2b499b91781c6cc370f1`, NOT master. No formal reviews at run start.

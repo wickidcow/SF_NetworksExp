@@ -246,7 +246,10 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
         @NotNull Location location,
         boolean enabled) {
 
-        final int bufferedBatches = getRecipeBufferBatches(location);
+        return createRecipeAwareModeStack(enabled, getRecipeBufferBatches(location));
+    }
+
+    private static @NotNull ItemStack createRecipeAwareModeStack(boolean enabled, int bufferedBatches) {
         final ItemStack control = new CustomItemStack(
             enabled ? Material.CRAFTING_TABLE : Material.HOPPER,
             enabled ? "&aRecipe-Aware Mode: ON" : "&7Recipe-Aware Mode: OFF",
@@ -323,7 +326,29 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
 
     @Override
     protected void onBreak(@NotNull BlockBreakEvent event) {
-        RECIPE_BUFFER_BATCHES.remove(event.getBlock().getLocation());
+        if (event.isCancelled()) {
+            return;
+        }
+        final Location location = event.getBlock().getLocation();
+        final BlockMenu menu = StorageCacheUtils.getMenu(location);
+        final int modeSlot = getRecipeAwareModeSlot();
+        if (menu != null && modeSlot >= 0) {
+            // Only template slots have ordinary drops. Keep a historical player
+            // stack in the control slot attached to its block until recovered.
+            // Recognition uses fixed icons, so this preflight never writes settings.
+            final var decision = RecipeAwareControlSlot.inspect(
+                menu.getItemInSlot(modeSlot),
+                createRecipeAwareModeStack(false, DEFAULT_RECIPE_BUFFER_BATCHES),
+                createRecipeAwareModeStack(true, DEFAULT_RECIPE_BUFFER_BATCHES),
+                getOtherBackgroundStack());
+            if (decision == RecipeAwareControlSlot.Decision.FOREIGN) {
+                event.setCancelled(true);
+                event.getPlayer().sendMessage(ChatColors.color(
+                    "&eRemove the item from the Recipe-Aware control slot before breaking this pusher."));
+                return;
+            }
+        }
+        RECIPE_BUFFER_BATCHES.remove(location);
         super.onBreak(event);
     }
 
@@ -373,10 +398,10 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
 
         // Presence must be in a physical input accepted for that exact item. Display
         // and output stacks do not reserve the missing ingredient's input capacity.
-        final int[] recipeInputSlots = recipeAware && requestCount > 1
+        final int[] recipeInputSlots = recipeAware
             ? getRecipeInputSlots(targetMenu)
             : null;
-        final boolean[] represented = recipeInputSlots != null
+        final boolean[] represented = recipeInputSlots != null && requestCount > 1
             ? findRepresentedRecipeIngredients(targetMenu, requests, recipeInputSlots)
             : null;
         int unrepresented = 0;
@@ -421,7 +446,7 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
 
             final int transferAmount;
             if (recipeAware) {
-                final int existing = countMatchingItems(targetMenu, template, slots);
+                final int existing = countRecipeInputItems(targetMenu, template, recipeInputSlots, slots);
                 // The normal transfer discovery can confirm a type left unverified by
                 // the bounded presence scan without another item-aware routing call.
                 if (represented != null && !represented[requestIndex] && existing > 0
@@ -625,13 +650,44 @@ public abstract class AbstractNetworkPusher extends NetworkDirectional implement
         return false;
     }
 
+    /**
+     * Full input stacks still belong to the buffer even when dynamic insertion
+     * routing omits them. This count only limits transfer quantity; fresh item
+     * permissions and the separate peer-presence gate still authorize insertion.
+     */
+    static int countRecipeInputItems(
+        @NotNull BlockMenu targetMenu,
+        @NotNull ItemStack template,
+        int @NotNull [] inputSlots,
+        int @NotNull [] transportSlots) {
+
+        for (int slot : inputSlots) {
+            if (slot >= 0 && slot < targetMenu.getSize()) {
+                return countMatchingItems(targetMenu, template, inputSlots);
+            }
+        }
+        return countMatchingItems(targetMenu, template, transportSlots);
+    }
+
     private static int countMatchingItems(
         @NotNull BlockMenu targetMenu,
         @NotNull ItemStack template,
         int @NotNull [] slots) {
         long count = 0L;
-        for (int slot : slots) {
+        for (int index = 0; index < slots.length; index++) {
+            final int slot = slots[index];
             if (slot < 0 || slot >= targetMenu.getSize()) {
+                continue;
+            }
+
+            boolean duplicate = false;
+            for (int previous = 0; previous < index; previous++) {
+                if (slots[previous] == slot) {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (duplicate) {
                 continue;
             }
 

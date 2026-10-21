@@ -31,11 +31,13 @@ import io.github.thebusybiscuit.slimefun4.libraries.dough.protection.Interaction
 import io.ncbpfluffybear.fluffymachines.items.Barrel;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import io.github.sefiraat.networks.utils.DisplayNameUtils;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataHolder;
 import org.bukkit.persistence.PersistentDataType;
@@ -45,8 +47,12 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ItemMover extends SpecialSlimefunItem implements DistinctiveItem {
+    private static final Set<UUID> ACTIVE_PLAYERS = ConcurrentHashMap.newKeySet();
     @NotNull
     public static final Interaction[] CHECK_INTERACTIONS =
         new Interaction[]{Interaction.PLACE_BLOCK, Interaction.BREAK_BLOCK, Interaction.INTERACT_BLOCK};
@@ -93,15 +99,27 @@ public class ItemMover extends SpecialSlimefunItem implements DistinctiveItem {
                         Lang.getString("messages.unsupported-operation.item_mover.invalid_item_mover_meta"));
                     return;
                 }
+                e.cancel();
+                final EquipmentSlot hand = e.getHand();
                 final Location location = optional.get().getLocation();
-                if (hasPermission(player, location)) {
-                    if (!player.isSneaking()) {
-                        // Right-click
-                        tryDepositIntoMover(player, itemStack, location);
-                    } else {
-                        // Shift+Right-click
-                        tryWithdrawFromMover(player, itemStack, location);
+                if ((hand != EquipmentSlot.HAND && hand != EquipmentSlot.OFF_HAND)
+                    || !Bukkit.isOwnedByCurrentRegion(player) || !Bukkit.isOwnedByCurrentRegion(location)
+                    || !ACTIVE_PLAYERS.add(player.getUniqueId())) return;
+                try {
+                    // PlayerInteractEvent may retain an old/detached ItemStack. Bind the
+                    // operation to its real hand before any barrel or inventory mutation.
+                    ItemStack actual = player.getInventory().getItem(hand);
+                    if (!itemStack.equals(actual)) return;
+                    ItemStack expected = ItemMoverStorage.snapshot(actual);
+                    if (hasPermission(player, location)) {
+                        if (!player.isSneaking()) {
+                            tryDepositIntoMover(player, hand, expected, location);
+                        } else {
+                            tryWithdrawFromMover(player, hand, expected, location);
+                        }
                     }
+                } finally {
+                    ACTIVE_PLAYERS.remove(player.getUniqueId());
                 }
             }
             e.cancel();
@@ -156,110 +174,39 @@ public class ItemMover extends SpecialSlimefunItem implements DistinctiveItem {
     }
 
     public static void setStoredItemStack(@Nullable ItemStack mover, @Nullable ItemStack itemStack) {
-        if (mover == null || mover.getType() == Material.AIR) {
-            return;
-        }
-
-        final ItemMeta itemMeta = mover.getItemMeta();
-        if (!mover.hasItemMeta() || itemMeta == null) {
-            return;
-        }
-
-        if (itemStack == null || itemStack.getType() == Material.AIR || itemStack.getAmount() != 1) {
-            clearPDC(mover);
-            return;
-        }
-
-        DataTypeMethods.setCustom(itemMeta, Keys.ITEM_MOVER_ITEM, DataType.ITEM_STACK, itemStack);
-        mover.setItemMeta(itemMeta);
+        if (mover == null || mover.getType().isAir()) return;
+        ItemStack before = ItemMoverStorage.snapshot(mover);
+        ItemMoverStorage.commit(mover, before, ItemMoverStorage.prepareTemplate(before, itemStack));
     }
 
     public static void setStoredAmount(@Nullable ItemStack mover, long amount) {
-        if (mover == null || mover.getType() == Material.AIR) {
-            return;
-        }
-
-        final ItemMeta itemMeta = mover.getItemMeta();
-        if (!mover.hasItemMeta() || itemMeta == null) {
-            return;
-        }
-
-        if (amount <= 0) {
-            clearPDC(mover);
-            return;
-        }
-
-        if (itemMeta.getPersistentDataContainer().getKeys().contains(Keys.ITEM_MOVER_AMOUNT)) {
-            DataTypeMethods.removeCustom(itemMeta, Keys.ITEM_MOVER_AMOUNT);
-        }
-        DataTypeMethods.setCustom(itemMeta, Keys.ITEM_MOVER_AMOUNT_LONG, PersistentDataType.LONG, amount);
-        mover.setItemMeta(itemMeta);
+        if (mover == null || mover.getType().isAir()) return;
+        ItemStack before = ItemMoverStorage.snapshot(mover);
+        ItemMoverStorage.commit(mover, before, ItemMoverStorage.prepareAmount(before, amount));
     }
 
     public static void depositItem(ItemStack mover, @Nullable ItemStack incoming) {
-        if (incoming == null || incoming.getType() == Material.AIR) {
-            return;
-        }
-
-        if (incoming.getAmount() > 0) {
-            ItemStack stored = getStoredItemStack(mover);
-            long storedAmount = getStoredAmount(mover);
-            if (stored == null || stored.getType() == Material.AIR) {
-                setStoredItemStack(mover, StackUtils.getAsQuantity(incoming, 1));
-                setStoredAmount(mover, incoming.getAmount());
-                incoming.setAmount(0);
-            } else if (StackUtils.itemsMatch(stored, incoming)) {
-                long maxCanReceive = Long.MAX_VALUE - storedAmount;
-                int incomingAmount = incoming.getAmount();
-                long canReceive = Math.min(maxCanReceive, incomingAmount);
-                setStoredAmount(mover, getStoredAmount(mover) + canReceive);
-                incoming.setAmount(Math.max(0, (int) (incomingAmount - canReceive)));
-            }
-        }
+        ItemMoverStorage.deposit(mover, incoming);
     }
 
-    private static void clearPDC(@Nullable ItemStack mover) {
-        if (mover == null || mover.getType() == Material.AIR) {
-            return;
-        }
-
-        final ItemMeta itemMeta = mover.getItemMeta();
-        if (!mover.hasItemMeta() || itemMeta == null) {
-            return;
-        }
-
-        DataTypeMethods.removeCustom(itemMeta, Keys.ITEM_MOVER_ITEM);
-        DataTypeMethods.removeCustom(itemMeta, Keys.ITEM_MOVER_AMOUNT);
-        DataTypeMethods.removeCustom(itemMeta, Keys.ITEM_MOVER_AMOUNT_LONG);
-
-        mover.setItemMeta(itemMeta);
-    }
-
-    @SuppressWarnings("deprecation")
     public static void updateLore(@Nullable ItemStack itemStack) {
-        if (itemStack == null || itemStack.getType() == Material.AIR) {
+        if (itemStack == null || itemStack.getType().isAir() || !itemStack.hasItemMeta()) return;
+        ItemStack before = ItemMoverStorage.snapshot(itemStack);
+        final ItemMoverStorage.State state;
+        try {
+            state = ItemMoverStorage.inspect(before);
+        } catch (IllegalArgumentException | IllegalStateException malformed) {
+            // Display refresh must never erase or relabel an unresolved balance.
             return;
         }
-
-        if (!itemStack.hasItemMeta() || itemStack.getItemMeta() == null) {
-            return;
-        }
-
-        final ItemMeta itemMeta = itemStack.getItemMeta();
-        final ItemStack storedItemStack = getStoredItemStack(itemMeta);
-        final long amount = getStoredAmount(itemMeta);
-
         List<String> lore = cloneDefaultLore();
-        if (storedItemStack != null && amount > 0) {
+        if (state.template() != null && state.amount() > 0) {
             lore.add(String.format(
                 Lang.getString("messages.normal-operation.item_mover.stored_item"),
-                DisplayNameUtils.getDisplayName(storedItemStack)));
-            lore.add(String.format(Lang.getString("messages.normal-operation.item_mover.stored_amount"), amount));
-        } else {
-            clearPDC(itemStack);
+                DisplayNameUtils.getDisplayName(state.template())));
+            lore.add(String.format(Lang.getString("messages.normal-operation.item_mover.stored_amount"), state.amount()));
         }
-        itemMeta.setLore(lore);
-        itemStack.setItemMeta(itemMeta);
+        ItemMoverStorage.commit(itemStack, before, ItemMoverStorage.prepareLore(before, lore));
     }
 
     @Nullable
@@ -328,29 +275,10 @@ public class ItemMover extends SpecialSlimefunItem implements DistinctiveItem {
 
     @Nullable
     private static FluffyBarrel getFluffyBarrel(@NotNull Location location, @NotNull Barrel barrel) {
-        Block block = location.getBlock();
-        ItemStack itemStack;
-        try {
-            itemStack = barrel.getStoredItem(block);
-        } catch (NullPointerException ignored) {
-            return null;
-        }
-
-        if (itemStack == null || itemStack.getType() == Material.AIR) {
-            return null;
-        }
-
-        final ItemStack clone = itemStack.clone();
-
-        int stored = barrel.getStored(block);
-
-        if (stored <= 0) {
-            return null;
-        }
-        int limit = barrel.getCapacity(block);
-        boolean voidExcess = Boolean.parseBoolean(StorageCacheUtils.getData(location, "trash"));
-
-        return new FluffyBarrel(location, clone, stored, limit, voidExcess);
+        BlockMenu menu = StorageCacheUtils.getMenu(location);
+        // Use the same read-only reserve/output discovery as network operations.
+        // The old constructor refreshed the live menu while merely inspecting it.
+        return menu == null ? null : FluffyBarrel.fromMenu(menu, barrel, false);
     }
 
     @Nullable
@@ -374,83 +302,63 @@ public class ItemMover extends SpecialSlimefunItem implements DistinctiveItem {
     }
 
     private static void tryDepositIntoMover(
-        @NotNull Player player, ItemStack mover, @NotNull Location clickedLocation) {
-        if (!hasPermission(player, clickedLocation)) {
-            return;
-        }
-        long storedAmount = getStoredAmount(mover);
-        ItemStack storedItemStack = getStoredItemStack(mover);
+        @NotNull Player player, @NotNull EquipmentSlot hand, ItemStack mover, @NotNull Location clickedLocation) {
+        if (!hasPermission(player, clickedLocation)) return;
         BarrelIdentity barrel = getBarrel(player, clickedLocation);
         if (barrel == null || barrel.getItemStack() == null || barrel.getAmount() <= 0) {
             player.sendMessage(Lang.getString("messages.unsupported-operation.item_mover.invalid_storage"));
             return;
         }
-
-        int have = barrel.getAmount() > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) barrel.getAmount();
-        if (have <= 0) {
-            player.sendMessage(Lang.getString("messages.unsupported-operation.item_mover.empty_storage"));
-            return;
-        }
-
-        ItemRequest itemRequest = new ItemRequest(barrel.getItemStack(), 0);
-        if (storedItemStack == null && storedAmount <= 0) {
-            itemRequest.setAmount(have);
-        } else if (StackUtils.itemsMatch(storedItemStack, barrel.getItemStack())) {
-            long maxCanReceive = Long.MAX_VALUE - storedAmount;
-            itemRequest.setAmount((int) Math.min(maxCanReceive, have));
-        }
-
-        ItemStack fetched = barrel.requestItem(itemRequest);
-
-        if (fetched == null || fetched.getType() == Material.AIR) {
-            player.sendMessage(Lang.getString("messages.unsupported-operation.item_mover.invalid_item"));
-            return;
-        }
-
-        int before = fetched.getAmount();
-        String name = DisplayNameUtils.getDisplayName(fetched);
-        depositItem(mover, fetched);
-        int after = fetched.getAmount();
+        int available = (int) Math.min(Integer.MAX_VALUE, barrel.getAmount());
+        ItemStack template = ItemMoverStorage.snapshot(barrel.getItemStack());
+        String name = DisplayNameUtils.getDisplayName(template);
+        int moved = ItemMoverStorage.transferFromSlot(mover,
+            () -> player.getInventory().getItem(hand), candidate -> player.getInventory().setItem(hand, candidate),
+            template, available,
+            requested -> barrel.requestItem(new ItemRequest(template, requested)));
         player.sendMessage(String.format(
-            Lang.getString("messages.completed-operation.item_mover.deposit_success"), name, before - after));
-        updateLore(mover);
+            Lang.getString("messages.completed-operation.item_mover.deposit_success"), name, moved));
+        updateHeldLore(player, hand);
     }
 
     private static void tryWithdrawFromMover(
-        @NotNull Player player, ItemStack mover, @NotNull Location clickedLocation) {
-        if (!hasPermission(player, clickedLocation)) {
-            return;
-        }
-        long storedAmountLong = getStoredAmount(mover);
-        int storedAmount = storedAmountLong > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) storedAmountLong;
-        ItemStack storedItemStack = getStoredItemStack(mover);
+        @NotNull Player player, @NotNull EquipmentSlot hand, ItemStack mover, @NotNull Location clickedLocation) {
+        if (!hasPermission(player, clickedLocation)) return;
+        ItemMoverStorage.State state = ItemMoverStorage.inspect(mover);
         BarrelIdentity barrel = getBarrel(player, clickedLocation);
         if (barrel == null) {
             player.sendMessage(Lang.getString("messages.unsupported-operation.item_mover.invalid_storage"));
             return;
         }
-
-        int have = barrel.getAmount() > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) barrel.getAmount();
-
-        if (storedItemStack == null || storedAmount <= 0) {
+        if (state.template() == null || state.amount() <= 0) {
             player.sendMessage(Lang.getString("messages.unsupported-operation.item_mover.empty_mover"));
             return;
         }
-
-        if (have >= barrel.getLimit()) {
+        long occupied = barrel.getAmount();
+        long limit = barrel.getLimit();
+        if (occupied < 0 || limit < occupied || occupied == limit) {
             player.sendMessage(Lang.getString("messages.unsupported-operation.item_mover.full_storage"));
             return;
         }
-
-        ItemStack clone = StackUtils.getAsQuantity(storedItemStack, storedAmount);
-        String name = DisplayNameUtils.getDisplayName(clone);
-        int before = clone.getAmount();
-        barrel.depositItemStack(clone);
-        int after = clone.getAmount();
-        setStoredAmount(mover, storedAmountLong - (before - after));
+        int maximum = (int) Math.min(Integer.MAX_VALUE, limit - occupied);
+        String name = DisplayNameUtils.getDisplayName(state.template());
+        int moved = ItemMoverStorage.transferToSlot(mover,
+            () -> player.getInventory().getItem(hand), candidate -> player.getInventory().setItem(hand, candidate),
+            maximum, barrel::depositItemStack);
         player.sendMessage(String.format(
-            Lang.getString("messages.completed-operation.item_mover.withdraw_success"), name, before - after));
-        updateLore(mover);
+            Lang.getString("messages.completed-operation.item_mover.withdraw_success"), name, moved));
+        updateHeldLore(player, hand);
+    }
+
+    private static void updateHeldLore(Player player, EquipmentSlot hand) {
+        ItemStack before = ItemMoverStorage.snapshot(player.getInventory().getItem(hand));
+        if (!(SlimefunItem.getByItem(before) instanceof ItemMover)) return;
+        ItemStack prepared = ItemMoverStorage.snapshot(before);
+        updateLore(prepared);
+        if (!before.equals(prepared)) {
+            ItemMoverStorage.commitSlot(() -> player.getInventory().getItem(hand),
+                candidate -> player.getInventory().setItem(hand, candidate), before, prepared);
+        }
     }
 
     private static @NotNull List<String> cloneDefaultLore() {

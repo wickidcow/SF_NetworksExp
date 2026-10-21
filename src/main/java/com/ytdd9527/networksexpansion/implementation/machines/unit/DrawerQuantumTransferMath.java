@@ -40,7 +40,7 @@ final class DrawerQuantumTransferMath {
         return before + actuallyWithdrawn;
     }
 
-    /** The receipt comes from the Drawer AFTER its synchronized source debit. */
+    /** Validates the exact offered stack while the Drawer retains source ownership. */
     static int verifiedReceipt(@NotNull ItemStack template, @Nullable ItemStack delivered, int planned) {
         if (delivered == null) {
             return 0;

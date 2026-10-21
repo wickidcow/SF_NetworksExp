@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.60 — coordinated storage and recipe completion
+
+- Verify authoritative Drawer GUI, Quantum and ItemMover endpoints before publishing opposite-side credits or debits; retain exact partial-write and long-balance receipts.
+- Preserve durable template/amount recovery and invalid saved balances, including negative and overcapacity records.
+- Repair real machine physical-input discovery and full-stack recipe-buffer counting; preserve settings and foreign control-slot items through block breaking.
+- Integrate the existing line-transfer performance work with operation-count tests, keeping routing and transfer budgets.
+- Coordinate with InfinityExpansion2 2.0.15; preserve all 289 IDs, recipes and Java 21 universal packaging.
+- Retain all release gates and documented Folia/forced-crash limitations. See the completion checkpoint for exact acceptance evidence.
+
 ## 1.0.59 — recipe buffering and transaction integrity
 
 - Add opt-in Recipe-Aware buffering for Network, More and Best Pushers, with per-machine targets of 1–64 recipe batches and bounded numeric chat settings.

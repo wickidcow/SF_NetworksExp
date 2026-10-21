@@ -141,7 +141,10 @@ final class NativeRecipeTransferProbe {
         for (int round = 0; round < 4; round++) tick(pusher, pusherLocation);
         ledger(protectedTarget);
         require(Arrays.equals(sourceAfterOff, snapshot(source)) && Arrays.equals(targetAfterOff, snapshot(target)),
-            "Re-enabling recipe mode must preserve the larger existing OFF buffer without consuming stock");
+            "Re-enabling recipe mode must preserve the larger existing OFF buffer without consuming stock; observed="
+                + ingredients.stream().map(ingredient -> label(ingredient)
+                    + " source=" + count(source, ingredient, allSlots(source))
+                    + " input=" + count(target, ingredient, machine.getInputSlots())).toList());
         return "PASS: native recipe transfer tier=" + pusher.getClass().getSimpleName()
             + " machine=" + machine.getId() + " ingredients=" + ingredients.stream().map(NativeRecipeTransferProbe::label).toList()
             + " batches=5 off-capacity=64 exact-stock=" + STOCK + " topology=cell+controller+pusher";

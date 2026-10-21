@@ -20,6 +20,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -48,6 +49,8 @@ public final class NativeRecipePusherProbe extends JavaPlugin implements Listene
     private int acceptedClicks;
     private int lastRaw;
     private String lastClick;
+    private int breakEvents;
+    private boolean lastBreakCancelled;
 
     private Path file(String name) { return getDataFolder().toPath().getParent().resolve("native-recipe-" + name); }
     private Location location(int index) { return new Location(Bukkit.getWorlds().getFirst(), 176 + 8 * index, 100, 176); }
@@ -152,6 +155,14 @@ public final class NativeRecipePusherProbe extends JavaPlugin implements Listene
             + " click=" + lastClick + " cancelled=" + event.isCancelled());
     }
 
+    @EventHandler(priority = EventPriority.MONITOR) public void onBreak(BlockBreakEvent event) {
+        if (finished || event.getPlayer() != player || tier >= TYPES.length
+            || !event.getBlock().getLocation().equals(location(tier))) return;
+        breakEvents++;
+        lastBreakCancelled = event.isCancelled();
+        getLogger().info("Actual recipe break tier=" + tier + " cancelled=" + lastBreakCancelled);
+    }
+
     @EventHandler public void onCommand(PlayerCommandPreprocessEvent event) {
         if (event.getPlayer() != player || !event.getMessage().startsWith("/recipefixture ")) return;
         event.setCancelled(true);
@@ -235,6 +246,17 @@ public final class NativeRecipePusherProbe extends JavaPlugin implements Listene
         stage = 1;
         require(token(FOREIGN_AMOUNT).equals(menu().getItemInSlot(slot())), "Foreign stack changed before its first viewer");
         require(count(player.getItemOnCursor()) == 0, "Cursor must be empty before next tier");
+        player.getInventory().setItemInMainHand(new ItemStack(Material.DIAMOND_PICKAXE));
+        int beforeBreakEvents = breakEvents;
+        Material beforeType = location(tier).getBlock().getType();
+        boolean broken = player.breakBlock(location(tier).getBlock());
+        require(breakEvents == beforeBreakEvents + 1, "Real player break must reach the native event pipeline");
+        require(!broken && lastBreakCancelled, "Breaking a pusher with a foreign control stack must be cancelled");
+        require(StorageCacheUtils.getMenu(location(tier)) == menu()
+                && StorageCacheUtils.isBlock(location(tier), pushers[tier].getId())
+                && location(tier).getBlock().getType() == beforeType,
+            "Foreign control stack break must preserve the actual block, data and canonical inventory");
+        requireLedger();
         menu().open(player);
         tick();
         require(token(FOREIGN_AMOUNT).equals(menu().getItemInSlot(slot())), "First viewer tick destroyed foreign stack");
@@ -295,7 +317,8 @@ public final class NativeRecipePusherProbe extends JavaPlugin implements Listene
         String report = "PASS: native-recipe-" + phase + " tiers=Classic,More,Best total=39"
             + " foreign-pdc-preserved=true mode=true batches=5"
             + " real-smeltery-inputs=true exact-ingredient-ledgers=true off-parity=true"
-            + (verify ? " independent-jvm=true" : " actual-clicks=" + clickCount + " exact-chat=true close-reopen=true") + "\n";
+            + (verify ? " independent-jvm=true" : " actual-clicks=" + clickCount
+                + " foreign-breaks-blocked=" + breakEvents + " exact-chat=true close-reopen=true") + "\n";
         Files.writeString(file("result.txt"), report);
         getLogger().info(report.trim()); signal("PASS");
         player.closeInventory(); player.saveData();

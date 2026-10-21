@@ -680,6 +680,9 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
 
         final StorageUnitData thisStorage = storages.get(location);
         final QuickTransferMode mode = quickTransferModes.get(location);
+        if (thisStorage == null || mode == null || StorageCacheUtils.getMenu(location) != blockMenu) {
+            return;
+        }
 
         if (isQuantum) {
             for (ItemContainer each : thisStorage.copyStoredItems()) {
@@ -766,42 +769,28 @@ public class NetworksDrawer extends SpecialSlimefunItem implements DistinctiveIt
                 if (StackUtils.itemsMatch(sample, toTransfer)) {
                     switch (mode) {
                         case FROM_QUANTUM -> {
-                            long exist = ItemMover.getStoredAmount(itemStack);
-                            ItemStack stored = StackUtils.getAsQuantity(
-                                ItemMover.getStoredItemStack(itemStack), exist > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int)exist);
-                            if (stored == null || stored.getType() == Material.AIR) {
-                                player.sendMessage(
-                                    Lang.getString("messages.unsupported-operation.drawer.item_mover_empty"));
+                            int moved = DrawerItemMoverTransfer.fromMover(
+                                blockMenu, QUANTUM_SLOT, location, thisStorage, each, itemStack,
+                                () -> storages.get(location) == thisStorage
+                                    && StorageCacheUtils.getMenu(location) == blockMenu);
+                            if (moved > 0) {
+                                player.sendMessage(String.format(
+                                    Lang.getString("messages.completed-operation.drawer.transferred_to_drawer"),
+                                    DisplayNameUtils.getDisplayName(sample), moved));
                             }
-                            int before = stored.getAmount();
-                            String name = DisplayNameUtils.getDisplayName(stored);
-                            thisStorage.depositItemStack0(location, stored, true);
-                            int left = stored.getAmount();
-                            ItemMover.setStoredAmount(itemStack, exist - (before - left));
-                            player.sendMessage(String.format(
-                                Lang.getString("messages.completed-operation.drawer.transferred_to_drawer"),
-                                name,
-                                before - left));
                         }
                         case TO_QUANTUM -> {
-                            ItemRequest itemRequest = new ItemRequest(sample, each.getAmount());
-                            int before = each.getAmount();
-                            ItemStack fetched = thisStorage.requestItem0(location, itemRequest, false);
-                            if (fetched != null) {
-                                String name = DisplayNameUtils.getDisplayName(fetched);
-                                ItemMover.depositItem(itemStack, fetched);
-                                int left = fetched.getAmount();
-                                if (fetched.getAmount() > 0) {
-                                    thisStorage.depositItemStack0(location, fetched, false);
-                                }
+                            int moved = DrawerItemMoverTransfer.toMover(
+                                blockMenu, QUANTUM_SLOT, location, thisStorage, each, itemStack,
+                                () -> storages.get(location) == thisStorage
+                                    && StorageCacheUtils.getMenu(location) == blockMenu);
+                            if (moved > 0) {
                                 player.sendMessage(String.format(
                                     Lang.getString("messages.completed-operation.drawer.transferred_to_item_mover"),
-                                    name,
-                                    before - left));
+                                    DisplayNameUtils.getDisplayName(sample), moved));
                             }
                         }
                     }
-                    ItemMover.updateLore(itemStack);
                     return;
                 }
             }

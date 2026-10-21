@@ -238,14 +238,14 @@ require("extends RecipeChoice.ExactChoice" not in simple_recipe_choice,
         "SimpleRecipeChoice still extends final RecipeChoice.ExactChoice")
 require("implements RecipeChoice" in simple_recipe_choice, "SimpleRecipeChoice no longer implements RecipeChoice")
 # Public release metadata must move as one unit so JAR/plugin/workflow versions cannot drift.
-require(public_version == "1.0.59", "stable release version must be 1.0.59")
-require('version = "1.0.59"' in build, "stable Gradle version must be 1.0.59")
-require('VERSION: "1.0.59"' in build_workflow
-        and 'OUTPUT_NAME: "SF_Networks1.0.59.jar"' in build_workflow,
-        "stable workflow version/JAR name must be 1.0.59")
-require('VERSION: "1.0.59"' in compatibility_workflow
-        and 'OUTPUT_NAME: "SF_Networks1.0.59.jar"' in compatibility_workflow,
-        "stable compatibility version/JAR name must be 1.0.59")
+require(public_version == "1.0.60", "stable release version must be 1.0.60")
+require('version = "1.0.60"' in build, "stable Gradle version must be 1.0.60")
+require('VERSION: "1.0.60"' in build_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.60.jar"' in build_workflow,
+        "stable workflow version/JAR name must be 1.0.60")
+require('VERSION: "1.0.60"' in compatibility_workflow
+        and 'OUTPUT_NAME: "SF_Networks1.0.60.jar"' in compatibility_workflow,
+        "stable compatibility version/JAR name must be 1.0.60")
 require("!contains(env.VERSION, '-rc')" in build_workflow,
         "RC builds must never publish a release even on manual/tag events")
 release_definition = yaml.safe_load(build_workflow)
