@@ -52,6 +52,7 @@ public final class NativeGridPlayerProbe extends JavaPlugin implements Listener 
     private boolean reenterCraft;
     private boolean finished;
     private TransferAudit.Snapshot shiftAuditBaseline;
+    private String shiftLowestState = "not-observed";
 
     private Path file(String name) { return getDataFolder().toPath().getParent().resolve("native-grid-" + name); }
     private Location storageLocation() { return new Location(Bukkit.getWorlds().getFirst(), 160, 100, 160); }
@@ -143,6 +144,33 @@ public final class NativeGridPlayerProbe extends JavaPlugin implements Listener 
         joining.teleport(gridLocation().add(0.5, 1, 1.5));
     }
 
+    @EventHandler(priority = EventPriority.LOWEST) public void observeShiftState(InventoryClickEvent event) {
+        if (event.getWhoClicked() == player && menu != null && event.isShiftClick()
+            && event.getView().getTopInventory() == menu.toInventory()) {
+            shiftLowestState = readOnlyRootState();
+        }
+    }
+
+    private String readOnlyRootState() {
+        try {
+            NetworkRoot current = root();
+            // Read the already-published field only. Calling its lazy getter here
+            // would prime discovery and could conceal the very failure under test.
+            var field = NetworkRoot.class.getDeclaredField("inputAbleBarrels");
+            field.setAccessible(true);
+            Object cached = field.get(current);
+            return "tick=" + Bukkit.getCurrentTick() + " root=" + System.identityHashCode(current)
+                + " cachedInputs=" + (cached instanceof java.util.Set<?> set ? set.size() : "unbuilt")
+                + " monitors=" + current.getMonitors().size()
+                + " inputMonitors=" + current.getInputOnlyMonitors().size()
+                + " inputCooldownAt=" + NetworkRoot.controlledAccessInputHistory.get(gridLocation())
+                + " inputMisses=" + NetworkRoot.transportMissInputHistory.get(gridLocation())
+                + " now=" + System.currentTimeMillis();
+        } catch (Exception | LinkageError failure) {
+            return "snapshot-unavailable=" + failure.getClass().getSimpleName();
+        }
+    }
+
     @EventHandler(priority = EventPriority.MONITOR) public void onClick(InventoryClickEvent event) {
         if (event.getWhoClicked() != player || menu == null) return;
         if (event.getView().getTopInventory() != menu.toInventory()) return;
@@ -152,6 +180,10 @@ public final class NativeGridPlayerProbe extends JavaPlugin implements Listener 
             + " clicked=" + (event.getClickedInventory() == player.getInventory() ? "player" : "menu")
             + " currentAmount=" + count(event.getCurrentItem())
             + " type=" + event.getClick() + " cancelled=" + event.isCancelled());
+        if (event.isShiftClick()) {
+            getLogger().info("Native Grid passive click state LOWEST=[" + shiftLowestState
+                + "] MONITOR=[" + readOnlyRootState() + "]");
+        }
     }
 
     @EventHandler public void onCraft(NetworkCraftEvent event) {
