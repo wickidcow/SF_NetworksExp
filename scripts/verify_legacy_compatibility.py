@@ -618,6 +618,13 @@ require("final Location location = data.getLocation();" in network_object
 require("blockMenu == null ? block.getLocation() : blockMenu.getLocation()" in network_directional
         and "addToRegistry(location);" in network_directional,
         "NetworkDirectional ticker must reuse the live menu location when available")
+require("LAST_TRANSFER_SERVER_TICK" not in abstract_transfer
+        and "Bukkit.getCurrentTick()" not in abstract_transfer
+        and "final Location location = block.getLocation();" in abstract_transfer
+        and "super.onTick(blockMenu, block);" in abstract_transfer
+        and "addItemHandler(new BlockTicker()" in network_directional
+        and "addItemHandler(new BlockTicker()" in advanced_directional,
+        "single-registered BlockTicker contract must avoid redundant per-tick transfer map work")
 auto_crafter_registry_check = auto_crafter.find("addToRegistry(location);")
 auto_crafter_blueprint_fast_path = auto_crafter.find(
     "final ItemStack blueprint = blockMenu.getItemInSlot(BLUEPRINT_SLOT);")

@@ -59,6 +59,18 @@ jobs:
           echo "Core repository: ${{ matrix.repository }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Core branch: ${{ matrix.ref }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Core commit: $(git -C .ci/slimefun-core rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify the core registers only one BlockTicker handler per item
+        shell: bash
+        run: |
+          set -euo pipefail
+          CORE_ITEM=.ci/slimefun-core/src/main/java/io/github/thebusybiscuit/slimefun4/api/items/SlimefunItem.java
+          CORE_TICKER=.ci/slimefun-core/src/main/java/me/mrCookieSlime/Slimefun/Objects/handlers/BlockTicker.java
+          test -s "$CORE_ITEM"
+          test -s "$CORE_TICKER"
+          grep -Fq 'itemHandlers.put(handler.getIdentifier(), handler);' "$CORE_ITEM"
+          grep -Fq 'blockTicker = ticker;' "$CORE_ITEM"
+          grep -Fq 'return BlockTicker.class;' "$CORE_TICKER"
+          echo 'One BlockTicker identifier per SlimefunItem confirmed; duplicate per-tick coalescer is unnecessary.' >> "$GITHUB_STEP_SUMMARY"
       - name: Set up Java ${{ matrix.core_java }} for the Slimefun core
         uses: actions/setup-java@v5
         with:
