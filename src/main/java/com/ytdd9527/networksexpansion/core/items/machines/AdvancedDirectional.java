@@ -77,7 +77,7 @@ public abstract class AdvancedDirectional extends NetworkDirectional {
         @NotNull RecipeType recipeType,
         ItemStack @NotNull [] recipe,
         NodeType type) {
-        this(itemGroup, item, recipeType, recipe, 1, type);
+        this(itemGroup, item, recipeType, recipe, 1, type, true);
     }
 
     protected AdvancedDirectional(
@@ -87,7 +87,35 @@ public abstract class AdvancedDirectional extends NetworkDirectional {
         ItemStack @NotNull [] recipe,
         @Range(from = 1, to = 64) int outputAmount,
         NodeType type) {
-        super(itemGroup, item, recipeType, recipe, type);
+        this(itemGroup, item, recipeType, recipe, outputAmount, type, true);
+    }
+
+    protected AdvancedDirectional(
+        @NotNull ItemGroup itemGroup,
+        @NotNull SlimefunItemStack item,
+        @NotNull RecipeType recipeType,
+        ItemStack @NotNull [] recipe,
+        NodeType type,
+        boolean installInheritedTicker) {
+        this(itemGroup, item, recipeType, recipe, 1, type, installInheritedTicker);
+    }
+
+    /**
+     * Existing AdvancedDirectional machines keep both historical registrations.
+     * AbstractTransfer opts out of the inherited directional ticker because its
+     * own ticker already supplies an every-tick transfer callback.
+     */
+    protected AdvancedDirectional(
+        @NotNull ItemGroup itemGroup,
+        @NotNull SlimefunItemStack item,
+        @NotNull RecipeType recipeType,
+        ItemStack @NotNull [] recipe,
+        @Range(from = 1, to = 64) int outputAmount,
+        NodeType type,
+        boolean installInheritedTicker) {
+        // Historically AdvancedDirectional forwarded the default output amount
+        // to NetworkDirectional; changing that is outside this performance fix.
+        super(itemGroup, item, recipeType, recipe, 1, type, installInheritedTicker);
 
         addItemHandler(new BlockTicker() {
             @Override

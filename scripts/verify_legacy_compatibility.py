@@ -618,6 +618,16 @@ require("final Location location = data.getLocation();" in network_object
 require("blockMenu == null ? block.getLocation() : blockMenu.getLocation()" in network_directional
         and "addToRegistry(location);" in network_directional,
         "NetworkDirectional ticker must reuse the live menu location when available")
+require("this(itemGroup, item, recipeType, recipe, outputAmount, type, true);" in network_directional
+        and "if (installDirectionalTicker) {" in network_directional
+        and "addItemSetting(this.tickRate);" in network_directional
+        and "super(itemGroup, item, recipeType, recipe, 1, type, installInheritedTicker);" in advanced_directional
+        and "this(itemGroup, item, recipeType, recipe, outputAmount, type, true);" in advanced_directional
+        and "super(itemGroup, item, recipeType, recipe, type, false);" in abstract_transfer
+        and advanced_directional.count("addItemHandler(new BlockTicker()") == 1
+        and network_directional.count("addItemHandler(new BlockTicker()") == 1
+        and "LAST_TRANSFER_SERVER_TICK.put(location, currentServerTick)" in abstract_transfer,
+        "transfer machines must opt out of the redundant inherited ticker without changing other directional tickers")
 auto_crafter_registry_check = auto_crafter.find("addToRegistry(location);")
 auto_crafter_blueprint_fast_path = auto_crafter.find(
     "final ItemStack blueprint = blockMenu.getItemInSlot(BLUEPRINT_SLOT);")

@@ -99,7 +99,10 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
         ItemStack[] recipe,
         int outputAmount,
         NodeType type) {
-        super(itemGroup, item, recipeType, recipe, type);
+        // AdvancedDirectional owns the sole transfer ticker. The inherited
+        // NetworkDirectional ticker used to invoke a redundant callback that
+        // the same-server-tick guard then discarded.
+        super(itemGroup, item, recipeType, recipe, type, false);
         this.config = TransferConfigFactory.getTransferConfiguration(getTransferType(), checkPlus(item.getItemId()));
     }
 

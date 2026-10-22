@@ -93,11 +93,28 @@ public abstract class NetworkDirectional extends NetworkObject {
         ItemStack @NotNull [] recipe,
         @Range(from = 1, to = 64) int outputAmount,
         NodeType type) {
+        this(itemGroup, item, recipeType, recipe, outputAmount, type, true);
+    }
+
+    /**
+     * Retains the public directional constructor while allowing subclasses that
+     * already install their own ticker to avoid a redundant inherited callback.
+     * The tick_rate item setting is still registered for saved-item compatibility.
+     */
+    protected NetworkDirectional(
+        @NotNull ItemGroup itemGroup,
+        @NotNull SlimefunItemStack item,
+        @NotNull RecipeType recipeType,
+        ItemStack @NotNull [] recipe,
+        @Range(from = 1, to = 64) int outputAmount,
+        NodeType type,
+        boolean installDirectionalTicker) {
         super(itemGroup, item, recipeType, recipe, outputAmount, type);
         this.tickRate = new IntRangeSetting(this, "tick_rate", 1, 1, 10);
         addItemSetting(this.tickRate);
 
-        addItemHandler(new BlockTicker() {
+        if (installDirectionalTicker) {
+            addItemHandler(new BlockTicker() {
 
             private int tick = 1;
 
@@ -120,7 +137,8 @@ public abstract class NetworkDirectional extends NetworkObject {
                     onUniqueTick();
                 }
             }
-        });
+            });
+        }
     }
 
     @NotNull
