@@ -21,7 +21,6 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.attributes.RecipeDisplayItem;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -37,7 +36,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 @SuppressWarnings("DuplicatedCode")
@@ -55,7 +53,6 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
     private static final Map<Location, Integer> PUSH_TEMPLATE_CURSOR_MAP = new HashMap<>();
     private static final Map<Location, Integer> PUSH_LINE_CURSOR_MAP = new HashMap<>();
     private static final Map<Location, Integer> GRAB_LINE_CURSOR_MAP = new HashMap<>();
-    private static final Map<Location, Integer> LAST_TRANSFER_SERVER_TICK = new ConcurrentHashMap<>();
     private final TransferConfiguration config;
 
     /**
@@ -136,18 +133,13 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
     @Override
     protected void onTick(@Nullable BlockMenu blockMenu, @NotNull Block block) {
         /*
-         * AdvancedDirectional inherits the NetworkDirectional ticker and historically also registered a
-         * second directional ticker. Coalesce both callbacks here so NTW transfer machines perform at most
-         * one transfer pass in a server tick. This preserves configured transfer cadence and transport
-         * semantics while avoiding duplicate line scans and duplicate network work.
+         * SlimefunItem stores a single BlockTicker under the BlockTicker.class
+         * handler identifier. AdvancedDirectional's later ticker replaces the
+         * inherited one on each supported Slimefun core, so there cannot be a
+         * second registered transfer pass to coalesce. Do not allocate a boxed
+         * tick number or update a Location-keyed map for each active transfer.
          */
         final Location location = block.getLocation();
-        final int currentServerTick = Bukkit.getCurrentTick();
-        final Integer previousServerTick = LAST_TRANSFER_SERVER_TICK.put(location, currentServerTick);
-        if (previousServerTick != null && previousServerTick == currentServerTick) {
-            return;
-        }
-
         super.onTick(blockMenu, block);
         sendFeedback(location, FeedbackType.TRANSFER_TICKING);
 
@@ -633,7 +625,6 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
         PUSH_TEMPLATE_CURSOR_MAP.remove(location);
         PUSH_LINE_CURSOR_MAP.remove(location);
         GRAB_LINE_CURSOR_MAP.remove(location);
-        LAST_TRANSFER_SERVER_TICK.remove(location);
     }
 
     @Override
