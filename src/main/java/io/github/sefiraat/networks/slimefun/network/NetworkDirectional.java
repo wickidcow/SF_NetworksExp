@@ -116,27 +116,27 @@ public abstract class NetworkDirectional extends NetworkObject {
         if (installDirectionalTicker) {
             addItemHandler(new BlockTicker() {
 
-            private int tick = 1;
+                private int tick = 1;
 
-            @Override
-            public boolean isSynchronized() {
-                return runSync();
-            }
-
-            @Override
-            public void tick(@NotNull Block block, SlimefunItem slimefunItem, @NotNull SlimefunBlockData data) {
-                if (tick <= 1) {
-                    onTick(data.getBlockMenu(), block);
+                @Override
+                public boolean isSynchronized() {
+                    return runSync();
                 }
-            }
 
-            @Override
-            public void uniqueTick() {
-                tick = tick <= 1 ? tickRate.getValue() : tick - 1;
-                if (tick <= 1) {
-                    onUniqueTick();
+                @Override
+                public void tick(@NotNull Block block, SlimefunItem slimefunItem, @NotNull SlimefunBlockData data) {
+                    if (tick <= 1) {
+                        onTick(data.getBlockMenu(), block);
+                    }
                 }
-            }
+
+                @Override
+                public void uniqueTick() {
+                    tick = tick <= 1 ? tickRate.getValue() : tick - 1;
+                    if (tick <= 1) {
+                        onUniqueTick();
+                    }
+                }
             });
         }
     }
