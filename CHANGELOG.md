@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.61 — transfer-ticker overhead reduction
+
+- Remove unnecessary `LAST_TRANSFER_SERVER_TICK` map writes, boxing and server-tick lookups from active Networks transfer machines. On Slimefun Legacy, United and GuGu the BlockTicker registry keeps only the latest BlockTicker for each item.
+- Gate all three Slimefun implementations on that registry behavior before packaging. Keep the actual directional/transfer ticker and all existing transport event semantics unchanged.
+- Preserve push/grab cadence, target order, templates, quantities, priorities, energy usage, P2P positions, database data, recovery receipts and all 289 Networks item IDs.
+- Require Java 21 universal JAR verification, Paper 26.3 compilation, and native Purpur/Paper Quantum Storage conservation and independent-restart tests before publication.
+- Do not claim a TPS percentage: fewer bookkeeping operations are not a measured MSPT gain. Folia cross-region Networks transactions remain unsupported.
+
+Networks 1.0.61 requires no data migration and may be installed with Slimefun Legacy 4.1.76 and optional InfinityExpansion2 2.0.15. Back up live server storage before upgrading. Public 1.0.60 artifacts remain unchanged.
+
 ## 1.0.60 — coordinated storage and recipe completion
 
 - Verify authoritative Drawer GUI, Quantum and ItemMover endpoints before publishing opposite-side credits or debits; retain exact partial-write and long-balance receipts.
