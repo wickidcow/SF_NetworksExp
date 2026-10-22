@@ -1,5 +1,7 @@
 # Networks Expansion completion checkpoint
 
+> **Current development, October 22, 2026:** Networks 1.0.60 and InfinityExpansion2 2.0.15 remain the published storage-repair pair. Networks PR #108 merged transfer-tick optimization as `ec4daa63` with successful exact-source post-merge CI ([workflow 39861167652](https://github.com/wickidcow/SF_NetworksExp/actions/runs/39861167652)). **Versioned 1.0.61 is a release candidate** pending its own build and native tests, not a public artifact. Slimefun Legacy core v4.1.76 and addon bundle r147 are already published; the older r145 publication hold below is historical. Never overwrite the existing 1.0.60 public JAR.
+
 Updated: **2026-10-21 UTC**. This records the published addon repairs, accepted historical r143 integration, and the subsequent held Slimefun Legacy 4.1.76 / r145 candidate. Earlier investigation queues are superseded by the evidence below; the [previous checkpoint remains in Git history](https://github.com/wickidcow/SF_NetworksExp/blob/175dcae24fd311bef0b3daf2bafb1a51af913e07/NETWORKS_EXPANSION_COMPLETION.md).
 
 ## Resume here
