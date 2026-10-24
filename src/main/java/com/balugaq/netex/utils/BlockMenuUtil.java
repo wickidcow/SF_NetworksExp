@@ -232,7 +232,6 @@ public class BlockMenuUtil {
         }
 
         int leftAmount = item.getAmount();
-        boolean changed = false;
 
         for (final int slot : slots) {
             if (leftAmount <= 0) {
@@ -247,7 +246,6 @@ public class BlockMenuUtil {
             if (existing == null || existing.getType() == Material.AIR) {
                 final int received = Math.min(leftAmount, item.getMaxStackSize());
                 blockMenu.replaceExistingItem(slot, StackUtils.getAsQuantity(item, received));
-                changed = received > 0;
                 leftAmount -= received;
                 item.setAmount(Math.max(0, leftAmount));
             } else {
@@ -262,15 +260,21 @@ public class BlockMenuUtil {
 
                 final int received = Math.max(0, Math.min(item.getMaxStackSize() - existingAmount, leftAmount));
                 leftAmount -= received;
-                existing.setAmount(existingAmount + received);
-                changed |= received > 0;
+                if (received > 0) {
+                    existing.setAmount(existingAmount + received);
+                    // Inventory slot reads may return detached copies, so an
+                    // in-memory change alone can report items moved without
+                    // persisting them. Commit the merged stack explicitly.
+                    // Existing-slot merges historically did not fire preset
+                    // callbacks; event=false preserves that contract.
+                    blockMenu.replaceExistingItem(slot, existing, false);
+                }
                 item.setAmount(leftAmount);
             }
         }
 
-        if (changed) {
-            blockMenu.markDirty();
-        }
+        // replaceExistingItem marks successful empty-slot and merged-slot
+        // writes dirty already. Do not record another logical mutation here.
 
         if (leftAmount > 0) {
             return new CustomItemStack(item, leftAmount);
