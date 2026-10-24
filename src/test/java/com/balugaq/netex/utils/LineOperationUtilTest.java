@@ -20,6 +20,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 import org.mockito.MockedConstruction;
 import org.mockito.MockedStatic;
 
@@ -419,6 +421,117 @@ class LineOperationUtilTest {
             verify(menu, never()).getItemInSlot(2);
             verify(root, never()).getItemStack0(any(), any());
         }
+    }
+
+    @Test
+    void networksMenuPushPersistsDetachedExistingStackMerge() {
+        AtomicReferenceArray<ItemStack> physical = new AtomicReferenceArray<>(9);
+        AtomicInteger commits = new AtomicInteger();
+        stubCopyOnReadMenu(physical, commits);
+        physical.set(0, mutableStack(Material.STONE, 60));
+        ItemStack incoming = mutableStack(Material.STONE, 4);
+
+        try (MockedStatic<StackUtils> matching = mockStatic(StackUtils.class)) {
+            matchSameMaterial(matching);
+            assertNull(BlockMenuUtil.pushItem(menu, incoming, 0));
+
+            assertEquals(64, physical.get(0).getAmount(), "Physical inventory must reflect accepted items");
+            assertEquals(0, incoming.getAmount(), "Keep historical source-amount decrement behavior");
+            assertEquals(1, commits.get());
+            verify(menu).replaceExistingItem(eq(0), any(ItemStack.class), eq(false));
+            verify(menu, never()).markDirty();
+        }
+    }
+
+    @Test
+    void networksMenuPushPersistsBothPartialStacksWithoutLoss() {
+        AtomicReferenceArray<ItemStack> physical = new AtomicReferenceArray<>(9);
+        AtomicInteger commits = new AtomicInteger();
+        stubCopyOnReadMenu(physical, commits);
+        physical.set(0, mutableStack(Material.COBBLESTONE, 63));
+        physical.set(1, mutableStack(Material.COBBLESTONE, 62));
+        ItemStack incoming = mutableStack(Material.COBBLESTONE, 3);
+
+        try (MockedStatic<StackUtils> matching = mockStatic(StackUtils.class)) {
+            matchSameMaterial(matching);
+            assertNull(BlockMenuUtil.pushItem(menu, incoming, 0, 1));
+
+            assertEquals(64, physical.get(0).getAmount());
+            assertEquals(64, physical.get(1).getAmount());
+            assertEquals(0, incoming.getAmount());
+            assertEquals(2, commits.get(), "Each accepted merge must persist once");
+            verify(menu).replaceExistingItem(eq(0), any(ItemStack.class), eq(false));
+            verify(menu).replaceExistingItem(eq(1), any(ItemStack.class), eq(false));
+            verify(menu, never()).markDirty();
+        }
+    }
+
+    @Test
+    void networksMenuPushSkipsFullSlotAndWritesOnlyAcceptedEmptySlot() {
+        AtomicReferenceArray<ItemStack> physical = new AtomicReferenceArray<>(9);
+        AtomicInteger commits = new AtomicInteger();
+        stubCopyOnReadMenu(physical, commits);
+        physical.set(0, mutableStack(Material.STONE, 64));
+        ItemStack incoming = mutableStack(Material.STONE, 2);
+
+        try (MockedStatic<StackUtils> matching = mockStatic(StackUtils.class)) {
+            matchSameMaterial(matching);
+            matching.when(() -> StackUtils.getAsQuantity(any(ItemStack.class), anyInt()))
+                .thenAnswer(call -> mutableStack(Material.STONE, call.getArgument(1)));
+
+            assertNull(BlockMenuUtil.pushItem(menu, incoming, 0, 1));
+
+            assertEquals(64, physical.get(0).getAmount());
+            assertEquals(2, physical.get(1).getAmount());
+            assertEquals(0, incoming.getAmount());
+            assertEquals(1, commits.get());
+            verify(menu, never()).replaceExistingItem(eq(0), any(ItemStack.class), eq(false));
+            verify(menu).replaceExistingItem(eq(1), any(ItemStack.class));
+            verify(menu, never()).markDirty();
+        }
+    }
+
+    private void stubCopyOnReadMenu(AtomicReferenceArray<ItemStack> physical, AtomicInteger commits) {
+        when(menu.getSize()).thenReturn(9);
+        when(menu.getItemInSlot(anyInt())).thenAnswer(call -> {
+            int slot = call.getArgument(0);
+            ItemStack stack = physical.get(slot);
+            return stack == null ? null : stack.clone();
+        });
+        doAnswer(call -> {
+            int slot = call.getArgument(0);
+            ItemStack updated = call.getArgument(1);
+            physical.set(slot, updated == null ? null : updated.clone());
+            commits.incrementAndGet();
+            return null;
+        }).when(menu).replaceExistingItem(anyInt(), any(ItemStack.class), eq(false));
+        doAnswer(call -> {
+            int slot = call.getArgument(0);
+            ItemStack updated = call.getArgument(1);
+            physical.set(slot, updated == null ? null : updated.clone());
+            commits.incrementAndGet();
+            return null;
+        }).when(menu).replaceExistingItem(anyInt(), any(ItemStack.class));
+    }
+
+    private static ItemStack mutableStack(Material material, int quantity) {
+        ItemStack stack = mock(ItemStack.class);
+        AtomicInteger amount = new AtomicInteger(quantity);
+        when(stack.getType()).thenReturn(material);
+        when(stack.getMaxStackSize()).thenReturn(64);
+        when(stack.getAmount()).thenAnswer(call -> amount.get());
+        doAnswer(call -> {
+            amount.set((Integer) call.getArgument(0));
+            return null;
+        }).when(stack).setAmount(anyInt());
+        when(stack.clone()).thenAnswer(call -> mutableStack(material, amount.get()));
+        return stack;
+    }
+
+    private static void matchSameMaterial(MockedStatic<StackUtils> matching) {
+        matching.when(() -> StackUtils.itemsMatch(any(ItemStack.class), any(ItemStack.class)))
+            .thenAnswer(call -> ((ItemStack) call.getArgument(0)).getType()
+                == ((ItemStack) call.getArgument(1)).getType());
     }
 
     private MockedStatic<BlockMenuUtil> slots(int... values) {
