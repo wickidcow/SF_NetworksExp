@@ -322,7 +322,11 @@ class NetworkTransferUtilsTest {
         assertEquals(89, stored.getAmount() + remaining());
         assertTrue(original.isSimilar(stored));
         assertTrue(original.isSimilar(source.get()));
-        verify(destination).markDirty();
+        // A successful occupied-slot merge is explicitly written back.
+        // DirtyChestMenu.replaceExistingItem(..., false) already records the
+        // mutation; the helper must not issue an extra markDirty() call.
+        verify(destination).replaceExistingItem(eq(0), same(stored), eq(false));
+        verify(destination, never()).markDirty();
         verify(broken).canAccept(any(ItemStack.class));
         assertEquals(7, TransferAudit.snapshot().depositCommitted());
         assertEquals(1, TransferAudit.snapshot().failures());
