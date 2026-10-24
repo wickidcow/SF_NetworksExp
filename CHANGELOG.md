@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.62 — exact item conservation and specified-quantity performance
+
+- Explicitly write back successful Networks Cargo/menu merges even when a destination returns detached ItemStack copies. Preserve existing-slot no-callback behavior and prevent duplicate dirty bookkeeping.
+- Scan `SPECIFIED_QUANTITY` line-pusher destinations once instead of twice when the configured target needs items. Preserve exact request/withdrawal limits, existing template order and rollback boundaries.
+- Add detached-inventory and bounded transfer regression tests; keep storage formats, plugin IDs, recipes, network topology, machine cadence and Java 21 universal compatibility unchanged.
+- Gate Legacy, United, Gugu, Paper 26.3 compile, Purpur 1.21.11 and native Paper 26.3 (build 176/194) storage persistence checks before the official v1.0.62 publication.
+
+This version addresses item-conservation correctness. **No measured TPS/MSPT improvement is claimed.** Compare the earlier 400-autocrafter/13-line-pusher Slimefun profiler baseline on like-for-like workloads after updating. Cross-region Folia transaction support remains unverified. Back up databases, worlds and plugin configuration before upgrading.
+
 ## 1.0.61 — transfer-ticker overhead reduction
 
 - Remove unnecessary `LAST_TRANSFER_SERVER_TICK` map writes, boxing and server-tick lookups from active Networks transfer machines. On Slimefun Legacy, United and GuGu the BlockTicker registry keeps only the latest BlockTicker for each item.
