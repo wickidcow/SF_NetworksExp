@@ -307,6 +307,95 @@ class LineOperationUtilTest {
     }
 
     @Test
+    void unsatisfiedSpecifiedQuantityReadsEachTargetSlotOnlyOnce() {
+        when(root.allowAccessOutput(ACCESSOR)).thenReturn(true);
+        ItemStack template = stack(1);
+        when(template.getMaxStackSize()).thenReturn(64);
+        ItemStack partial = stack(6);
+        when(partial.getMaxStackSize()).thenReturn(64);
+        ItemStack incompatible = stack(32);
+        when(menu.getItemInSlot(0)).thenReturn(partial);
+        when(menu.getItemInSlot(2)).thenReturn(incompatible);
+
+        try (MockedConstruction<ItemRequest> constructors = mockConstruction(
+                 ItemRequest.class, (mock, context) -> when(mock.getAmount()).thenReturn(64));
+             MockedStatic<BlockMenuUtil> slotResolver = mockStatic(BlockMenuUtil.class);
+             MockedStatic<StackUtils> stackMatching = mockStatic(StackUtils.class)) {
+            slotResolver.when(() -> BlockMenuUtil.getSafeTransportSlots(
+                menu, ItemTransportFlow.INSERT, template)).thenReturn(new int[]{0, 1, 2});
+            stackMatching.when(() -> StackUtils.itemsMatch(
+                any(ItemRequest.class), eq(partial))).thenReturn(true);
+            stackMatching.when(() -> StackUtils.itemsMatch(
+                any(ItemRequest.class), eq(incompatible))).thenReturn(false);
+
+            LineOperationUtil.pushItem(ACCESSOR, root, menu, template, 0,
+                TransportMode.SPECIFIED_QUANTITY, 10, null);
+
+            assertEquals(1, constructors.constructed().size());
+            ItemRequest request = constructors.constructed().get(0);
+            verify(request).setAmount(4);
+            verify(root).getItemStack0(ACCESSOR, request);
+            verify(menu, times(1)).getItemInSlot(0);
+            verify(menu, times(1)).getItemInSlot(1);
+            verify(menu, times(1)).getItemInSlot(2);
+            stackMatching.verify(() -> StackUtils.itemsMatch(request, partial), times(1));
+            stackMatching.verify(() -> StackUtils.itemsMatch(request, incompatible), times(1));
+        }
+    }
+
+    @Test
+    void specifiedQuantityCapsWithdrawalToOneRemainingPhysicalSlot() {
+        when(root.allowAccessOutput(ACCESSOR)).thenReturn(true);
+        ItemStack template = stack(1);
+        when(template.getMaxStackSize()).thenReturn(64);
+        ItemStack partial = stack(63);
+        when(partial.getMaxStackSize()).thenReturn(64);
+        ItemStack incompatible = stack(64);
+        when(menu.getItemInSlot(0)).thenReturn(partial);
+        when(menu.getItemInSlot(1)).thenReturn(incompatible);
+
+        try (MockedConstruction<ItemRequest> constructors = mockConstruction(
+                 ItemRequest.class, (mock, context) -> when(mock.getAmount()).thenReturn(64));
+             MockedStatic<BlockMenuUtil> slotResolver = mockStatic(BlockMenuUtil.class);
+             MockedStatic<StackUtils> stackMatching = mockStatic(StackUtils.class)) {
+            slotResolver.when(() -> BlockMenuUtil.getSafeTransportSlots(
+                menu, ItemTransportFlow.INSERT, template)).thenReturn(new int[]{0, 1});
+            stackMatching.when(() -> StackUtils.itemsMatch(
+                any(ItemRequest.class), eq(partial))).thenReturn(true);
+
+            LineOperationUtil.pushItem(ACCESSOR, root, menu, template, 0,
+                TransportMode.SPECIFIED_QUANTITY, 64, null);
+
+            ItemRequest request = constructors.constructed().get(0);
+            verify(request).setAmount(1);
+            verify(root).getItemStack0(ACCESSOR, request);
+            verify(menu, times(1)).getItemInSlot(0);
+            verify(menu, times(1)).getItemInSlot(1);
+        }
+    }
+
+    @Test
+    void zeroSpecifiedQuantityNeverWithdrawsEvenWhenTargetIsEmpty() {
+        when(root.allowAccessOutput(ACCESSOR)).thenReturn(true);
+        ItemStack template = stack(1);
+        when(template.getMaxStackSize()).thenReturn(64);
+
+        try (MockedConstruction<ItemRequest> constructors = mockConstruction(ItemRequest.class);
+             MockedStatic<BlockMenuUtil> slotResolver = mockStatic(BlockMenuUtil.class)) {
+            slotResolver.when(() -> BlockMenuUtil.getSafeTransportSlots(
+                menu, ItemTransportFlow.INSERT, template)).thenReturn(new int[]{0, 1});
+
+            LineOperationUtil.pushItem(ACCESSOR, root, menu, template, 0,
+                TransportMode.SPECIFIED_QUANTITY, 0, null);
+
+            verify(root, never()).getItemStack0(any(), any());
+            verify(menu, times(1)).getItemInSlot(0);
+            verify(menu, times(1)).getItemInSlot(1);
+            assertEquals(1, constructors.constructed().size());
+        }
+    }
+
+    @Test
     void satisfiedSpecifiedQuantitySkipsRemainingSlotsAndNetworkWithdrawal() {
         when(root.allowAccessOutput(ACCESSOR)).thenReturn(true);
         ItemStack template = stack(1);
