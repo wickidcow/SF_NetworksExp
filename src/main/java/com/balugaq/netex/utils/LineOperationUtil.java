@@ -875,29 +875,26 @@ public class LineOperationUtil {
             }
             case SPECIFIED_QUANTITY -> {
                 int existingCount = 0;
+                int availableSpace = 0;
+                // Count existing matching items and available room in one pass.
+                // Previously an unsatisfied target read every slot twice and
+                // repeated costly metadata matching for every nonempty match.
+                // Preserve the immediate exit once the configured stock is met.
                 for (int slot : slots) {
                     final ItemStack itemStack = blockMenu.getItemInSlot(slot);
-                    if (itemStack != null && itemStack.getType() != Material.AIR) {
-                        if (StackUtils.itemsMatch(itemRequest, itemStack)) {
-                            existingCount += itemStack.getAmount();
-                            if (existingCount >= limitQuantity) {
-                                // Nothing to withdraw: later slots can only raise this total.
-                                return;
-                            }
+                    if (itemStack == null || itemStack.getType() == Material.AIR) {
+                        availableSpace += template.getMaxStackSize();
+                    } else if (StackUtils.itemsMatch(itemRequest, itemStack)) {
+                        existingCount += itemStack.getAmount();
+                        if (existingCount >= limitQuantity) {
+                            // Nothing to withdraw: later slots can only raise this total.
+                            return;
                         }
+                        availableSpace += Math.max(0, itemStack.getMaxStackSize() - itemStack.getAmount());
                     }
                 }
                 if (existingCount < limitQuantity) {
                     final int deficit = limitQuantity - existingCount;
-                    int availableSpace = 0;
-                    for (int slot : slots) {
-                        final ItemStack itemStack = blockMenu.getItemInSlot(slot);
-                        if (itemStack == null || itemStack.getType() == Material.AIR) {
-                            availableSpace += template.getMaxStackSize();
-                        } else if (StackUtils.itemsMatch(itemRequest, itemStack)) {
-                            availableSpace += Math.max(0, itemStack.getMaxStackSize() - itemStack.getAmount());
-                        }
-                    }
                     if (availableSpace <= 0) {
                         return;
                     }
