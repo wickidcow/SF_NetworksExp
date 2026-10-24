@@ -346,8 +346,8 @@ jobs:
           set -euo pipefail
           test -s .ci/release-core/Slimefun-Legacy-Core.jar
           test -s ".ci/networks-candidate/$OUTPUT_NAME"
-          test "$OUTPUT_NAME" = "SF_Networks1.0.61.jar"
-          test "$(unzip -p ".ci/networks-candidate/$OUTPUT_NAME" plugin.yml | awk -F': *' '/^version:/ {print $2; exit}')" = "1.0.61"
+          test "$OUTPUT_NAME" = "SF_Networks${VERSION}.jar"
+          test "$(unzip -p ".ci/networks-candidate/$OUTPUT_NAME" plugin.yml | awk -F': *' '/^version:/ {print $2; exit}')" = "$VERSION"
           curl --fail --location --silent --show-error --retry 3 \
             --retry-all-errors --retry-delay 2 --max-time 120 \
             -H "User-Agent: SF_NetworksExp-CI/1.0 (https://github.com/wickidcow/SF_NetworksExp)" \
