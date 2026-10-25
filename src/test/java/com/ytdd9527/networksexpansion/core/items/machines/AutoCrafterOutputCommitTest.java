@@ -6,16 +6,43 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import com.balugaq.netex.api.enums.MinecraftVersion;
+import com.balugaq.netex.api.interfaces.SoftCellBannable;
 import com.balugaq.netex.utils.BlockMenuUtil;
+import com.ytdd9527.networksexpansion.core.managers.ConfigManager;
+import io.github.sefiraat.networks.Networks;
+import io.github.sefiraat.networks.utils.StackUtils;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 
 /** Output persistence must be recorded only by successful physical menu writes. */
 class AutoCrafterOutputCommitTest {
+
+    @BeforeAll
+    static void initializeNetworksConfigurationBeforeAutocrafterClass() throws ClassNotFoundException {
+        // AutoCrafter implements SoftCellBannable, whose interface constants
+        // read Networks' configuration once at class initialization. Initialize
+        // them under the same fixture as the existing multi-core Networks tests
+        // instead of poisoning the entire test JVM with a failed class init.
+        try (MockedStatic<Networks> networks = mockStatic(Networks.class)) {
+            ConfigManager config = mock(ConfigManager.class);
+            Networks plugin = mock(Networks.class);
+            networks.when(Networks::getConfigManager).thenReturn(config);
+            networks.when(Networks::getInstance).thenReturn(plugin);
+            when(config.isSoftCellBan()).thenReturn(false);
+            when(config.getSoftCellBanThreshold()).thenReturn(64);
+            when(plugin.getMCVersion()).thenReturn(MinecraftVersion.UNKNOWN);
+            Class.forName(SoftCellBannable.class.getName());
+            Class.forName(StackUtils.class.getName());
+            Class.forName(AutoCrafter.class.getName());
+        }
+    }
 
     @Test
     void acceptedOutputDoesNotAddAnotherDirtyMutation() {
