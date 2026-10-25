@@ -168,6 +168,16 @@ public class ConfigManager {
         return Networks.getInstance().getConfig().getInt("speed-down.transport-miss-threshold", 120);
     }
 
+    /**
+     * Keeps dense lines from waking all of their expensive transport searches
+     * on the same server tick when an interval greater than one is configured.
+     * The old zero-phase behavior remains available for compatibility.
+     */
+    public boolean isTransferTickStaggerEnabled() {
+        return Networks.getInstance().getConfig().getBoolean(
+            "stability.transfer-tick-stagger.enabled", true);
+    }
+
     public long getRecordGCThreshold() {
         return Networks.getInstance().getConfig().getLong("record-gc.threshold", 131072);
     }

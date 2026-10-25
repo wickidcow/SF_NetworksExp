@@ -68,6 +68,13 @@ stability:
   # before marking an already-live controller dirty. Removals and chunk unloads are still handled immediately.
   topology:
     rebuild-debounce-sf-ticks: 2
+  # Spread 2+ tick transfer intervals across different server ticks based on
+  # the machine's coordinates, rather than letting a huge base fire every
+  # line-transfer machine in the same tick. Keeps the same average rate,
+  # output quantities and push/grab alignment. Ignored for 1-tick intervals.
+  # Set false to restore the old all-machines-start-at-zero timing.
+  transfer-tick-stagger:
+    enabled: true
 
 # Drawer database safety. Existing CargoStorageUnits.db paths and schemas are preserved.
 database:
