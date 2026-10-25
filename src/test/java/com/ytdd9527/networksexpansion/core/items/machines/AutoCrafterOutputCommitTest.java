@@ -102,7 +102,9 @@ class AutoCrafterOutputCommitTest {
     @Test
     void emptyAndAirResultsDoNotCallMenuInsertionOrDirtyTheMenu() {
         BlockMenu menu = mock(BlockMenu.class);
-        ItemStack empty = new ItemStack(Material.STONE, 0);
+        // Bukkit rejects zero as a constructor amount; set it after creating a valid stack.
+        ItemStack empty = new ItemStack(Material.STONE, 1);
+        empty.setAmount(0);
         ItemStack air = new ItemStack(Material.AIR);
 
         try (MockedStatic<BlockMenuUtil> menus = mockStatic(BlockMenuUtil.class)) {
