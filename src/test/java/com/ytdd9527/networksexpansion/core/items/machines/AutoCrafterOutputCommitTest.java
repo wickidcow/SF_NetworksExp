@@ -105,7 +105,9 @@ class AutoCrafterOutputCommitTest {
         // Bukkit rejects zero as a constructor amount; set it after creating a valid stack.
         ItemStack empty = new ItemStack(Material.STONE, 1);
         empty.setAmount(0);
-        ItemStack air = new ItemStack(Material.AIR);
+        // AIR ItemStack construction invokes Bukkit.getUnsafe() without a mock server.
+        ItemStack air = mock(ItemStack.class);
+        when(air.getType()).thenReturn(Material.AIR);
 
         try (MockedStatic<BlockMenuUtil> menus = mockStatic(BlockMenuUtil.class)) {
             assertSame(empty, AutoCrafter.commitCraftedOutput(menu, empty));
