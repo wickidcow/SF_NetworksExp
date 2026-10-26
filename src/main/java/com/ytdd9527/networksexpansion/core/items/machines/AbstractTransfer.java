@@ -253,20 +253,35 @@ public abstract class AbstractTransfer extends AdvancedDirectional implements Re
         final Integer ticker = PUSH_TICKER_MAP.get(location);
         if (ticker != null) {
             return ticker;
-        } else {
-            PUSH_TICKER_MAP.put(location, 0);
-            return 0;
         }
+
+        final int start = initialTickCounter(location, config.defaultPushTick);
+        // The map owns this key independently of the BlockMenu's mutable location.
+        PUSH_TICKER_MAP.put(location.clone(), start);
+        return start;
     }
 
     private int getGrabTickCounter(Location location) {
         final Integer ticker = GRAB_TICKER_MAP.get(location);
         if (ticker != null) {
             return ticker;
-        } else {
-            GRAB_TICKER_MAP.put(location, 0);
+        }
+
+        // Use the same coordinate phase as push to retain the single-traversal
+        // push+grab optimization for bidirectional machines with equal periods.
+        final int start = initialTickCounter(location, config.defaultGrabTick);
+        GRAB_TICKER_MAP.put(location.clone(), start);
+        return start;
+    }
+
+    private int initialTickCounter(Location location, int interval) {
+        if (interval <= 1) {
             return 0;
         }
+
+        return TransferTickPhases.initialCounter(
+            location.getBlockX(), location.getBlockY(), location.getBlockZ(), interval,
+            io.github.sefiraat.networks.Networks.getConfigManager().isTransferTickStaggerEnabled());
     }
 
     private void updatePushTickCounter(Location location, int pushTick) {

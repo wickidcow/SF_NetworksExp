@@ -402,20 +402,35 @@ public class AutoCrafter extends NetworkObject implements SoftCellBannable, Craf
             root.uncontrolAccessInput(location);
             root.addItemStack0(location, crafted);
         }
-        if (crafted.getType() != Material.AIR && crafted.getAmount() > 0) {
-            final ItemStack remainder = BlockMenuUtil.pushItem(blockMenu, crafted, OUTPUT_SLOT);
-            if (remainder == null || remainder.getAmount() <= 0) {
-                crafted.setAmount(0);
-            } else {
-                crafted = remainder;
-            }
-            blockMenu.markDirty();
-        }
+        crafted = commitCraftedOutput(blockMenu, crafted);
         if (crafted.getAmount() > 0) {
             NetworkTransferUtils.rollbackNetworkWithdrawal(root, location, crafted, location, "auto-crafter output");
         }
         sendFeedback(location, FeedbackType.WORKING);
         return true;
+    }
+
+    /**
+     * Commits one finished result without adding another dirty mark to the
+     * writes already performed by BlockMenuUtil.pushItem. A physical slot
+     * replacement marks the menu dirty, while a fully rejected insertion
+     * does not mutate the destination at all.
+     *
+     * <p>Return the exact uninserted quantity so the existing caller can
+     * restore it to the network through its transaction-safe rollback path.</p>
+     */
+    static @NotNull ItemStack commitCraftedOutput(@NotNull BlockMenu menu, @NotNull ItemStack crafted) {
+        if (crafted.getType() == Material.AIR || crafted.getAmount() <= 0) {
+            return crafted;
+        }
+
+        final ItemStack remainder = BlockMenuUtil.pushItem(menu, crafted, OUTPUT_SLOT);
+        if (remainder == null || remainder.getAmount() <= 0) {
+            crafted.setAmount(0);
+            return crafted;
+        }
+
+        return remainder;
     }
 
     private static @NotNull List<IngredientRequest> getOrCreateIngredientPlan(
