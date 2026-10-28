@@ -118,6 +118,8 @@ jobs:
           fi
       - name: Verify Networks source contract
         run: python3 scripts/verify_legacy_compatibility.py
+      - name: Test fail-closed ticker profiler comparisons
+        run: python3 -m unittest discover -s scripts -p 'test_compare_slimefun_tick_profiles.py'
       - name: Set up Java 21 for Networks
         uses: actions/setup-java@v5
         with:
