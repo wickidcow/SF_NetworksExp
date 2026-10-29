@@ -62,13 +62,21 @@ def main():
     classpath = os.pathsep.join(map(str, [core, networks, *sorted((work / "libraries").rglob("*.jar"))]))
     subprocess.run([javac, "--release", "25" if version == "26.3" else "21",
                     "-cp", classpath, "-d", str(classes),
-                    str(ROOT / "tests/runtime/CrafterManagerDisplayProbe.java")], check=True)
+                    str(ROOT / "tests/runtime/CrafterManagerDisplayProbe.java"),
+                    str(ROOT / "tests/runtime/TropicalFishMetadataProbe.java")], check=True)
     with zipfile.ZipFile(plugins / "NetworksDisplayProbe.jar", "w") as archive:
         for path in sorted(classes.rglob("*.class")):
-            archive.write(path, path.relative_to(classes))
+            if not path.name.startswith("TropicalFishMetadataProbe"):
+                archive.write(path, path.relative_to(classes))
         archive.writestr("plugin.yml", 'name: NetworksDisplayProbe\nversion: 1.0\n'
                          'main: networksprobe.CrafterManagerDisplayProbe\napi-version: "1.21"\n'
                          'depend: [Slimefun, Networks]\n')
+    with zipfile.ZipFile(plugins / "NetworksMetadataProbe.jar", "w") as archive:
+        for path in sorted(classes.rglob("TropicalFishMetadataProbe*.class")):
+            archive.write(path, path.relative_to(classes))
+        archive.writestr("plugin.yml", 'name: NetworksMetadataProbe\nversion: 1.0\n'
+                         'main: networksprobe.TropicalFishMetadataProbe\napi-version: "1.21"\n'
+                         'depend: [Slimefun, Networks, NetworksDisplayProbe]\n')
     (work / "eula.txt").write_text("eula=true\n")
     (work / "server.properties").write_text("online-mode=false\nserver-ip=127.0.0.1\nserver-port=0\n"
                                            "level-name=fixture\nlevel-type=minecraft:flat\n"
@@ -100,6 +108,17 @@ def main():
     print(report.strip())
     if not report.startswith("PASS:"):
         raise SystemExit(1)
+    metadata_result = plugins / "tropical-fish-metadata-result.txt"
+    if not metadata_result.is_file():
+        result.write_text("FAIL: native tropical-fish metadata probe did not execute\n" + report)
+        raise SystemExit("Native tropical-fish metadata probe did not execute")
+    metadata_report = metadata_result.read_text()
+    print(metadata_report.strip())
+    if not metadata_report.startswith("PASS: native tropical-fish metadata comparisons="):
+        result.write_text("FAIL: native tropical-fish metadata comparison\n" + metadata_report + "\n" + report)
+        raise SystemExit("Native tropical-fish metadata comparison failed")
+    # Retain both mandatory results in the artifact already collected by the workflow.
+    result.write_text(report.rstrip() + "\n" + metadata_report)
 
 
 if __name__ == "__main__":

@@ -521,17 +521,9 @@ public class ItemDifferenter extends NetworkObject {
         // Fish Bucket
         if (metaOne instanceof TropicalFishBucketMeta instanceOne
             && metaTwo instanceof TropicalFishBucketMeta instanceTwo) {
-            if (instanceOne.hasVariant() != instanceTwo.hasVariant()) {
-                return "neq.tropical.variant.has";
-            }
-            if (!instanceOne.getPattern().equals(instanceTwo.getPattern())) {
-                return "neq.tropical.pattern.get";
-            }
-            if (!instanceOne.getBodyColor().equals(instanceTwo.getBodyColor())) {
-                return "neq.tropical.bodycolor.get";
-            }
-            if (!instanceOne.getPatternColor().equals(instanceTwo.getPatternColor())) {
-                return "neq.tropical.patterncolor.get";
+            String difference = TropicalFishMetadataComparison.difference(instanceOne, instanceTwo);
+            if (difference != null) {
+                return difference;
             }
         }
 
