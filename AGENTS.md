@@ -10,7 +10,7 @@ Use the Gradle wrapper and a known exact Slimefun core JAR:
 ./gradlew clean build --no-daemon -PslimefunCoreJar=/absolute/path/core.jar -PjegJar=/absolute/path/SF_JustEnoughGuide2.1.67.jar -PstrictDeprecation=true
 python3 scripts/verify_legacy_compatibility.py
 python3 scripts/verify_java21_bytecode.py build/libs/SF_Networks1.0.63.jar
-python3 scripts/verify_universal_jar.py build/libs/SF_Networks1.0.63.jar 1.0.45
+python3 scripts/verify_universal_jar.py build/libs/SF_Networks1.0.63.jar 1.0.63
 ```
 
 The current build uses a Java 25 toolchain and emits Java 21 bytecode. Retain the historical JAR property aliases. Keep version, CI output names and the release contract synchronized when preparing an actual version bump; do not publish a new stable release from an unvalidated development patch. Deliver raw plugin JARs, not source archives disguised as installable plugins.
