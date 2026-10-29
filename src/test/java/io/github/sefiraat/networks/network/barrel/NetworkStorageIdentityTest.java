@@ -140,7 +140,9 @@ class NetworkStorageIdentityTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
+    // This regression intentionally calls the deprecated binary compatibility entry point.
+    // Suppress javac's specific for-removal diagnostic without deleting that coverage.
+    @SuppressWarnings({"deprecation", "removal"})
     void networkRootRejectsMismatchedResultInLegacyAndAccessorPaths() {
         NetworkRoot root = spy(new NetworkRoot(location, NodeType.CONTROLLER, 100));
         BarrelIdentity barrel = mock(BarrelIdentity.class);
