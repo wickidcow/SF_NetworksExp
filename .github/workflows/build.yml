@@ -58,12 +58,25 @@ jobs:
           chmod +x gradlew
           test -s .ci/release-core/Slimefun-Legacy-Core.jar
           test -s .ci/jeg/SF_JustEnoughGuide2.1.67.jar
-          ./gradlew clean compileJava --no-daemon \
+          python3 -m unittest discover -s scripts -p 'test_verify_paper26_3_deprecations.py' -v
+          ./gradlew clean compileJava --no-daemon --console=plain \
             -PslimefunCoreJar="$PWD/.ci/release-core/Slimefun-Legacy-Core.jar" \
             -PjegJar="$PWD/.ci/jeg/SF_JustEnoughGuide2.1.67.jar" \
             -PpaperApiVersion=26.3.build.176-stable \
             -Ppaper26_3Compile=true \
-            -PstrictDeprecation=false
+            -PstrictDeprecation=false 2>&1 | tee .ci/paper-26.3-compile.log
+          python3 scripts/verify_paper26_3_deprecations.py \
+            .ci/paper-26.3-compile.log --report .ci/paper-26.3-deprecations.json
+      - name: Retain Paper 26.3 compiler diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: networks-paper-26.3-compiler-diagnostics
+          path: |
+            .ci/paper-26.3-compile.log
+            .ci/paper-26.3-deprecations.json
+          if-no-files-found: warn
+          retention-days: 14
 
   build:
     name: Build Networks JAR
