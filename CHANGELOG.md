@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.63 — metadata-presence safety and verified Gradle wrapper
+
+- Compare tropical-fish bucket variant metadata only when the relevant component is present; retain distinct absent and present values and the existing item-differentiator policy. Add focused regression coverage for absent variants and mismatching metadata.
+- Migrate the verified Gradle wrapper to version 9.8.2 with its official SHA-256, preserving Java 21 distributable output.
+- Add fail-closed matched Auto Crafter profiler comparison reports without inferring any measured TPS/MSPT benefit.
+- Synchronize the Gradle, compatibility/release workflows, changelog, source verification and new-release documentation for distinct SF_Networks1.0.63.jar. Preserve immutable published v1.0.62 assets.
+
+No saved network item/blueprint IDs, database formats, recipes, transfer rates, quantities, machines or persistent metadata keys change. Exact-source three-core compatibility, native 1.21.11/26.3 restart receipts, Java 21 package identity and paired-addon recovery gates must still pass before merging or publishing. Cross-region Folia behavior and old-world rollback are not certified by this source edit.
+
 ## 1.0.62 — exact item conservation and specified-quantity performance
 
 - Explicitly write back successful Networks Cargo/menu merges even when a destination returns detached ItemStack copies. Preserve existing-slot no-callback behavior and prevent duplicate dirty bookkeeping.
