@@ -233,7 +233,8 @@ require(
     "deprecated Slimefun Dough CustomItemStack alias returned in: "
     + ", ".join(legacy_custom_item_stack_files),
 )
-require("services.gradle.org/distributions/gradle-9.4.1-bin.zip" in wrapper, "official Gradle wrapper URL is missing")
+require("services.gradle.org/distributions/gradle-9.8.2-bin.zip" in wrapper, "verified Gradle 9.8.2 wrapper URL is missing")
+require("distributionSha256Sum=21bd5da2de49b642904077f38c0efdc7778e92b3ed0889392dca61b97e389607" in wrapper, "official Gradle 9.8.2 distribution checksum is missing")
 require("extends RecipeChoice.ExactChoice" not in simple_recipe_choice,
         "SimpleRecipeChoice still extends final RecipeChoice.ExactChoice")
 require("implements RecipeChoice" in simple_recipe_choice, "SimpleRecipeChoice no longer implements RecipeChoice")
