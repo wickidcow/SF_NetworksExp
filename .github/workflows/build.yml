@@ -144,6 +144,8 @@ jobs:
         run: |
           bash scripts/download_jeg.sh
           echo "JEG_JAR=$PWD/.ci/jeg/SF_JustEnoughGuide2.1.67.jar" >> "$GITHUB_ENV"
+      - name: Verify all-class Java 21 packaging gate regressions
+        run: python3 -m unittest discover -s scripts -p 'test_verify_java21_bytecode.py' -v
       - name: Build and test Networks
         shell: bash
         run: |
