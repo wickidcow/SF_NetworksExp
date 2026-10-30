@@ -370,7 +370,9 @@ public class ItemDifferenter extends NetworkObject {
                 return "neq.blockstate.has";
             }
 
-            if (!instanceOne.getBlockState().equals(instanceTwo.getBlockState())) {
+            // Both absent states are equivalent and must not be read.
+            if (instanceOne.hasBlockState()
+                && !Objects.equals(instanceOne.getBlockState(), instanceTwo.getBlockState())) {
                 return "neq.blockstate.get";
             }
         }
