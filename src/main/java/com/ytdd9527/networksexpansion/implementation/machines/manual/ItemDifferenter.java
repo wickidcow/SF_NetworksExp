@@ -340,11 +340,8 @@ public class ItemDifferenter extends NetworkObject {
                 return "neq.axolotl.variant.has";
             }
 
-            if (!instanceOne.hasVariant() || !instanceTwo.hasVariant()) {
-                return "neq.axolotl.variant.has";
-            }
-
-            if (instanceOne.getVariant() != instanceTwo.getVariant()) {
+            // When both variants are absent, neither is a mismatch nor safe to read.
+            if (instanceOne.hasVariant() && instanceOne.getVariant() != instanceTwo.getVariant()) {
                 return "neq.axolotl.variant.get";
             }
         }
