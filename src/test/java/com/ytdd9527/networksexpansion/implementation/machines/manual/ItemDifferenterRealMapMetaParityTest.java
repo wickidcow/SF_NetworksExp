@@ -58,6 +58,47 @@ class ItemDifferenterRealMapMetaParityTest {
         assertNull(ItemDifferenter.canQuickEscapeMetaVariant(first, second));
     }
 
+    @Test
+    void distinctHistoricalTintsRemainDistinctAfterBinaryItemSerialization() {
+        MapMeta red = serializedMeta(tintedMap(Color.RED));
+        MapMeta green = serializedMeta(tintedMap(Color.GREEN));
+
+        assertTrue(red.hasColor(), "Binary item serialization discarded the red map tint");
+        assertTrue(green.hasColor(), "Binary item serialization discarded the green map tint");
+        assertEquals(Color.RED, red.getColor());
+        assertEquals(Color.GREEN, green.getColor());
+        assertEquals("neq.map.color.get", ItemDifferenter.canQuickEscapeMetaVariant(red, green));
+    }
+
+    @Test
+    void absentAndPresentHistoricalTintsRemainDistinctAfterBinarySerialization() {
+        MapMeta absent = serializedMeta(new ItemStack(Material.FILLED_MAP));
+        MapMeta green = serializedMeta(tintedMap(Color.GREEN));
+
+        assertFalse(absent.hasColor());
+        assertTrue(green.hasColor(), "Binary item serialization discarded the green map tint");
+        assertEquals("neq.map.color.has", ItemDifferenter.canQuickEscapeMetaVariant(absent, green));
+    }
+
+    @Test
+    void equalHistoricalTintsRemainEquivalentAfterBinarySerialization() {
+        MapMeta first = serializedMeta(tintedMap(Color.GREEN));
+        MapMeta second = serializedMeta(tintedMap(Color.GREEN));
+
+        assertEquals(Color.GREEN, first.getColor());
+        assertEquals(Color.GREEN, second.getColor());
+        assertNull(ItemDifferenter.canQuickEscapeMetaVariant(first, second));
+    }
+
+    // This is a same-version 1.21.11 MockBukkit binary roundtrip, not a Paper 26.3
+    // migration, native-world restart, or cross-fork compatibility claim.
+    private static MapMeta serializedMeta(ItemStack original) {
+        ItemStack restored = ItemStack.deserializeBytes(original.serializeAsBytes());
+        MapMeta meta = (MapMeta) restored.getItemMeta();
+        assertNotNull(meta);
+        return meta;
+    }
+
     private static ItemStack tintedMap(Color color) {
         ItemStack item = new ItemStack(Material.FILLED_MAP);
         MapMeta meta = (MapMeta) item.getItemMeta();
