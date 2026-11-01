@@ -2,7 +2,10 @@ package com.ytdd9527.networksexpansion.implementation.machines.manual;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.Objects;
 import org.bukkit.Material;
+import org.bukkit.Tag;
+import org.bukkit.damage.DamageType;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.tag.DamageTypeTags;
@@ -40,16 +43,33 @@ class ItemDifferenterRealDamageResistanceParityTest {
     }
 
     @Test
-    void explicitFireTagSurvivesCloneAndBinarySerialization() {
+    void explicitFireTagKeyAndHistoricalPredicateSurviveCopyAndBinarySerialization() {
         ItemStack original = new ItemStack(Material.NETHERITE_SWORD);
         ItemMeta meta = original.getItemMeta();
         assertNotNull(meta);
         meta.setDamageResistant(DamageTypeTags.IS_FIRE);
         assertTrue(original.setItemMeta(meta));
 
-        assertTrue(isFireResistant(original.getItemMeta()));
-        assertTrue(isFireResistant(original.clone().getItemMeta()));
-        assertTrue(isFireResistant(roundTrip(original).getItemMeta()));
+        assertFireTagContract(original.getItemMeta());
+        assertFireTagContract(original.clone().getItemMeta());
+        assertFireTagContract(roundTrip(original).getItemMeta());
+    }
+
+    private static void assertFireTagContract(ItemMeta meta) {
+        assertNotNull(meta);
+        assertTrue(meta.hasDamageResistant(), "Explicit resistance must remain present");
+        Tag<DamageType> tag = meta.getDamageResistant();
+        assertNotNull(tag, "Explicit resistance tag must remain readable");
+        assertEquals(DamageTypeTags.IS_FIRE.getKey(), tag.getKey(),
+            "Clone/serialization must preserve the exact historical fire tag key");
+
+        // MockBukkit resolves ItemMetaMock#getDamageResistant via Bukkit.getTag,
+        // which need not return the DamageTypeTags.IS_FIRE singleton. The legacy
+        // production predicate compares Tag objects, not just their keys.
+        // Assert its exact pre-migration contract; the separate Mockito parity
+        // test proves that the canonical singleton is classified as fire.
+        assertEquals(Objects.equals(tag, DamageTypeTags.IS_FIRE), isFireResistant(meta),
+            "Do not silently change the historical tag-object equality rule");
     }
 
     private static ItemStack roundTrip(ItemStack item) {
