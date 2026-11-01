@@ -43,25 +43,41 @@ class ItemDifferenterRealDamageResistanceParityTest {
     }
 
     @Test
-    void explicitFireTagKeyAndHistoricalPredicateSurviveCopyAndBinarySerialization() {
+    void explicitFireTagIsReadableImmediatelyAfterSetItemMeta() {
+        ItemStack original = fireResistantSword();
+        assertFireTagContract(original.getItemMeta(), "original after setItemMeta");
+    }
+
+    @Test
+    void explicitFireTagSurvivesItemStackClone() {
+        ItemStack original = fireResistantSword();
+        assertFireTagContract(original.getItemMeta(), "original before clone");
+        assertFireTagContract(original.clone().getItemMeta(), "ItemStack.clone");
+    }
+
+    @Test
+    void explicitFireTagSurvivesBinarySerialization() {
+        ItemStack original = fireResistantSword();
+        assertFireTagContract(original.getItemMeta(), "original before serializeAsBytes");
+        assertFireTagContract(roundTrip(original).getItemMeta(), "deserializeBytes(serializeAsBytes)");
+    }
+
+    private static ItemStack fireResistantSword() {
         ItemStack original = new ItemStack(Material.NETHERITE_SWORD);
         ItemMeta meta = original.getItemMeta();
         assertNotNull(meta);
         meta.setDamageResistant(DamageTypeTags.IS_FIRE);
-        assertTrue(original.setItemMeta(meta));
-
-        assertFireTagContract(original.getItemMeta());
-        assertFireTagContract(original.clone().getItemMeta());
-        assertFireTagContract(roundTrip(original).getItemMeta());
+        assertTrue(original.setItemMeta(meta), "Test fixture must accept explicit fire-resistance metadata");
+        return original;
     }
 
-    private static void assertFireTagContract(ItemMeta meta) {
-        assertNotNull(meta);
-        assertTrue(meta.hasDamageResistant(), "Explicit resistance must remain present");
+    private static void assertFireTagContract(ItemMeta meta, String phase) {
+        assertNotNull(meta, phase + ": item metadata must remain readable");
+        assertTrue(meta.hasDamageResistant(), phase + ": explicit resistance must remain present");
         Tag<DamageType> tag = meta.getDamageResistant();
-        assertNotNull(tag, "Explicit resistance tag must remain readable");
+        assertNotNull(tag, phase + ": explicit resistance tag must remain readable");
         assertEquals(DamageTypeTags.IS_FIRE.getKey(), tag.getKey(),
-            "Clone/serialization must preserve the exact historical fire tag key");
+            phase + ": preserve the exact historical fire tag key");
 
         // MockBukkit resolves ItemMetaMock#getDamageResistant via Bukkit.getTag,
         // which need not return the DamageTypeTags.IS_FIRE singleton. The legacy
@@ -69,7 +85,7 @@ class ItemDifferenterRealDamageResistanceParityTest {
         // Assert its exact pre-migration contract; the separate Mockito parity
         // test proves that the canonical singleton is classified as fire.
         assertEquals(Objects.equals(tag, DamageTypeTags.IS_FIRE), isFireResistant(meta),
-            "Do not silently change the historical tag-object equality rule");
+            phase + ": do not silently change the historical tag-object equality rule");
     }
 
     private static ItemStack roundTrip(ItemStack item) {
