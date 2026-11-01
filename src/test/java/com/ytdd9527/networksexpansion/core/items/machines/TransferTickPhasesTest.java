@@ -58,6 +58,32 @@ class TransferTickPhasesTest {
     }
 
     @Test
+    void largeWorldCoordinatesPreserveMathematicalPhaseWithoutIntegerOverflow() {
+        int[] coordinates = {-30_000_000, -29_999_999, 0, 29_999_999, 30_000_000};
+        int[] heights = {-64, 0, 320};
+        for (int interval : new int[] {2, 3, 4, 7, 10, 64, 131}) {
+            for (int x : coordinates) {
+                for (int y : heights) {
+                    for (int z : coordinates) {
+                        long weightedPosition = (long) x + 31L * y + 131L * z;
+                        int expected = (int) Math.floorMod(weightedPosition, interval);
+                        assertEquals(
+                            expected,
+                            TransferTickPhases.initialCounter(x, y, z, interval, true),
+                            "Phase must use full-width coordinates at the world border");
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    void staggerOptOutStillPreservesLegacyImmediateWakeupAtWorldBorder() {
+        assertEquals(0, TransferTickPhases.initialCounter(30_000_000, 320, -30_000_000, 3, false));
+        assertEquals(0, TransferTickPhases.initialCounter(30_000_000, 320, -30_000_000, 1, true));
+    }
+
+    @Test
     void equalPushAndGrabPeriodsUseTheSamePhaseToReuseLineTraversals() {
         for (int x = -5328; x <= -5312; x++) {
             int push = TransferTickPhases.initialCounter(x, -57, -5569, 4, true);

@@ -25,6 +25,8 @@ public final class TransferTickPhases {
         if (!staggerEnabled || interval <= 1) {
             return 0;
         }
-        return Math.floorMod(x + 31 * y + 131 * z, interval);
+        // Coordinates near the world border overflow int multiplication. Keep the
+        // documented weighted phase stable without changing transfer cadence.
+        return (int) Math.floorMod((long) x + 31L * y + 131L * z, interval);
     }
 }
