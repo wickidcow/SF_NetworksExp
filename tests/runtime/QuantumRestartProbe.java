@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletionException;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import net.kyori.adventure.text.Component;
@@ -28,6 +29,7 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.NamespacedKey;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.tag.DamageTypeTags;
 
 /**
  * A two-process Slimefun storage persistence test. This plugin is included ONLY
@@ -52,6 +54,7 @@ public final class QuantumRestartProbe extends JavaPlugin {
         Bukkit.getScheduler().runTaskLater(this, () -> {
             try {
                 final String phase = Files.readString(phaseFile(), StandardCharsets.UTF_8).trim();
+                verifyNativeFireResistance(phase);
                 if ("seed".equals(phase)) {
                     seed();
                 } else if ("verify".equals(phase)) {
@@ -63,6 +66,54 @@ public final class QuantumRestartProbe extends JavaPlugin {
                 fail("startup phase", failure);
             }
         }, 20L);
+    }
+
+    /**
+     * Real Paper/Purpur ItemStack metadata test, not a MockBukkit approximation.
+     * Keep the legacy IS_FIRE predicate exactly as used by ItemDifferenter;
+     * the modern API must not replace it until equivalent saved-item behavior
+     * is demonstrated on both supported server families.
+     *
+     * The seed JVM writes Bukkit's binary ItemStack representation. The verify
+     * JVM reads those exact bytes after a clean server restart, so the positive
+     * fire-resistance fixture is checked across an actual process boundary.
+     */
+    @SuppressWarnings("deprecation")
+    private void verifyNativeFireResistance(String phase) throws Exception {
+        final Path fixture = getDataFolder().toPath().getParent()
+            .resolve("native-fire-resistance-item.bin");
+        final ItemStack original = new ItemStack(Material.NETHERITE_SWORD);
+        final ItemMeta meta = original.getItemMeta();
+        require(meta != null, "Native sword must expose ItemMeta");
+        meta.setDamageResistant(DamageTypeTags.IS_FIRE);
+        require(hasFireResistance(meta), "Explicit native fire tag was not retained by ItemMeta");
+        require(original.setItemMeta(meta), "Native ItemStack refused fire-resistant metadata");
+        require(hasFireResistance(original.getItemMeta()),
+            "Native ItemStack lost the positive fire tag during metadata copy");
+        require(hasFireResistance(original.clone().getItemMeta()),
+            "Native ItemStack clone lost the positive fire tag");
+        final byte[] bytes = original.serializeAsBytes();
+        require(hasFireResistance(ItemStack.deserializeBytes(bytes).getItemMeta()),
+            "Native binary ItemStack roundtrip lost the positive fire tag");
+        if ("seed".equals(phase)) {
+            Files.write(fixture, bytes);
+        } else if ("verify".equals(phase)) {
+            require(Files.isRegularFile(fixture),
+                "Native fire tag fixture missing after separate JVM restart");
+            require(hasFireResistance(ItemStack.deserializeBytes(Files.readAllBytes(fixture)).getItemMeta()),
+                "Native fire tag did not survive persisted binary bytes and JVM restart");
+        } else {
+            throw new AssertionError("Unknown native fire tag phase: " + phase);
+        }
+        getLogger().info("NATIVE FIRE TAG PASS phase=" + phase
+            + " positive-meta=true clone=true binary=true restart="
+            + ("verify".equals(phase)));
+    }
+
+    @SuppressWarnings("deprecation")
+    private static boolean hasFireResistance(ItemMeta meta) {
+        return meta != null && meta.hasDamageResistant()
+            && Objects.equals(meta.getDamageResistant(), DamageTypeTags.IS_FIRE);
     }
 
     private Path phaseFile() {
