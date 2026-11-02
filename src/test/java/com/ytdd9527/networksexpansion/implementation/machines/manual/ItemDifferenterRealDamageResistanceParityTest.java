@@ -70,6 +70,11 @@ class ItemDifferenterRealDamageResistanceParityTest {
         assertTrue(meta.hasDamageResistant(),
             "MockBukkit must retain explicit damage resistance on the metadata object before setItemMeta");
         assertTrue(original.setItemMeta(meta), "Test fixture must accept explicit fire-resistance metadata");
+        // Keep the original ItemMeta reference: the mock setter retains the flag,
+        // but the ItemStack readback currently does not. This separates the
+        // metadata-copy boundary from cloning and binary serialization.
+        assertTrue(meta.hasDamageResistant(),
+            "The source metadata must still retain the explicit resistance after setItemMeta");
         return original;
     }
 
