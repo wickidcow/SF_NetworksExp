@@ -17,9 +17,12 @@ import org.mockbukkit.mockbukkit.MockBukkit;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Pin real 1.21.11 ItemStack metadata copy/serialization behavior before
+ * Pin MockBukkit 1.21.11 ItemMeta predicate behavior before
  * replacing the deprecated damage-resistance reader on Paper 26.3.
  *
+ * MockBukkit currently discards damage resistance when ItemMeta is copied
+ * into an ItemStack. Positive ItemStack clone/serialization parity must be
+ * exercised by native Paper runtime tests, not asserted against this mock.
  * This does not establish native 26.3 deserialization, a world restart, or
  * cross-fork storage compatibility.
  */
@@ -43,39 +46,14 @@ class ItemDifferenterRealDamageResistanceParityTest {
     }
 
     @Test
-    void explicitFireTagIsReadableImmediatelyAfterSetItemMeta() {
-        ItemStack original = fireResistantSword();
-        assertFireTagContract(original.getItemMeta(), "original after setItemMeta");
-    }
-
-    @Test
-    void explicitFireTagSurvivesItemStackClone() {
-        ItemStack original = fireResistantSword();
-        assertFireTagContract(original.getItemMeta(), "original before clone");
-        assertFireTagContract(original.clone().getItemMeta(), "ItemStack.clone");
-    }
-
-    @Test
-    void explicitFireTagSurvivesBinarySerialization() {
-        ItemStack original = fireResistantSword();
-        assertFireTagContract(original.getItemMeta(), "original before serializeAsBytes");
-        assertFireTagContract(roundTrip(original).getItemMeta(), "deserializeBytes(serializeAsBytes)");
-    }
-
-    private static ItemStack fireResistantSword() {
+    void explicitFireTagPreservesLegacyPredicateOnMetadata() {
         ItemStack original = new ItemStack(Material.NETHERITE_SWORD);
         ItemMeta meta = original.getItemMeta();
         assertNotNull(meta);
         meta.setDamageResistant(DamageTypeTags.IS_FIRE);
-        assertTrue(meta.hasDamageResistant(),
-            "MockBukkit must retain explicit damage resistance on the metadata object before setItemMeta");
-        assertTrue(original.setItemMeta(meta), "Test fixture must accept explicit fire-resistance metadata");
-        // Keep the original ItemMeta reference: the mock setter retains the flag,
-        // but the ItemStack readback currently does not. This separates the
-        // metadata-copy boundary from cloning and binary serialization.
-        assertTrue(meta.hasDamageResistant(),
-            "The source metadata must still retain the explicit resistance after setItemMeta");
-        return original;
+        assertFireTagContract(meta, "explicit source metadata");
+        assertTrue(original.setItemMeta(meta), "Fixture must accept metadata");
+        assertFireTagContract(meta, "source metadata after setItemMeta");
     }
 
     private static void assertFireTagContract(ItemMeta meta, String phase) {
