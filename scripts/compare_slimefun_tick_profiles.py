@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import asdict, dataclass
 import json
+import math
 from pathlib import Path
 import re
 import statistics
@@ -43,7 +44,10 @@ def metric(value: str, name: str) -> float:
     found = MILLIS.fullmatch(value.strip())
     if not found:
         raise ProfileError(f"Missing/invalid {name} time: {value!r}")
-    return float(found.group(1))
+    millis = float(found.group(1))
+    if not math.isfinite(millis):
+        raise ProfileError(f"Non-finite {name} time: {value!r}")
+    return millis
 
 
 def parse_profiles(content: str, item_id: str = "NTW_AUTO_CRAFTER") -> list[Sample]:
@@ -107,9 +111,12 @@ def parse_profiles(content: str, item_id: str = "NTW_AUTO_CRAFTER") -> list[Samp
             average_ms = fields["average"]
         if total_ms < 0 or average_ms < 0 or fields["p95"] > fields["maximum"]:
             raise ProfileError(f"Sample {number}: inconsistent item timing")
+        all_slimefun_ms = float(work_match.group(1))
+        if not math.isfinite(all_slimefun_ms):
+            raise ProfileError(f"Sample {number}: non-finite total callback work")
         result.append(Sample(
             machines, ticker_ticks, total_ms, average_ms, fields["p95"],
-            fields["maximum"], float(work_match.group(1)),
+            fields["maximum"], all_slimefun_ms,
         ))
     return result
 
