@@ -89,7 +89,8 @@ public final class QuantumRestartProbe extends JavaPlugin {
         require(hasFireResistance(meta), "Explicit native fire tag was not retained by ItemMeta");
         require(original.setItemMeta(meta), "Native ItemStack refused fire-resistant metadata");
         require(hasFireResistance(original.getItemMeta()),
-            "Native ItemStack lost the positive fire tag during metadata copy");
+            "Native ItemStack positive fire-tag contract after metadata copy: "
+                + describeFireResistance(original.getItemMeta()));
         require(hasFireResistance(original.clone().getItemMeta()),
             "Native ItemStack clone lost the positive fire tag");
         final byte[] bytes = original.serializeAsBytes();
@@ -114,6 +115,21 @@ public final class QuantumRestartProbe extends JavaPlugin {
     private static boolean hasFireResistance(ItemMeta meta) {
         return meta != null && meta.hasDamageResistant()
             && Objects.equals(meta.getDamageResistant(), DamageTypeTags.IS_FIRE);
+    }
+
+    @SuppressWarnings("deprecation")
+    private static String describeFireResistance(ItemMeta meta) {
+        if (meta == null) {
+            return "meta=null";
+        }
+        if (!meta.hasDamageResistant()) {
+            return "hasDamageResistant=false";
+        }
+        final var actual = meta.getDamageResistant();
+        return "hasDamageResistant=true, actualKey="
+            + (actual == null ? "null" : actual.getKey())
+            + ", expectedKey=" + DamageTypeTags.IS_FIRE.getKey()
+            + ", legacyEquals=" + Objects.equals(actual, DamageTypeTags.IS_FIRE);
     }
 
     private Path phaseFile() {
