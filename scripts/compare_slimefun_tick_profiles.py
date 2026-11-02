@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import asdict, dataclass
 import json
+import math
 from pathlib import Path
 import re
 import statistics
@@ -43,7 +44,10 @@ def metric(value: str, name: str) -> float:
     found = MILLIS.fullmatch(value.strip())
     if not found:
         raise ProfileError(f"Missing/invalid {name} time: {value!r}")
-    return float(found.group(1))
+    millis = float(found.group(1))
+    if not math.isfinite(millis):
+        raise ProfileError(f"Non-finite {name} time: {value!r}")
+    return millis
 
 
 def parse_profiles(content: str, item_id: str = "NTW_AUTO_CRAFTER") -> list[Sample]:
@@ -90,6 +94,12 @@ def parse_profiles(content: str, item_id: str = "NTW_AUTO_CRAFTER") -> list[Samp
                 raise ProfileError(f"Sample {number}: duplicate leading timing")
         if initial is None or "p95" not in fields or "maximum" not in fields:
             raise ProfileError(f"Sample {number}: incomplete item timing fields")
+        # A timing line has one unlabelled leading value and exactly one
+        # complementary labelled total/average. If both are present, the
+        # old parser silently discarded the labelled average, making a
+        # malformed sample look comparable to a valid profiler reading.
+        if "total" in fields and "average" in fields:
+            raise ProfileError(f"Sample {number}: ambiguous total/average timing fields")
         # Both the default total-first and the average-ordered profiler output.
         if "total" in fields:
             average_ms = initial
@@ -101,9 +111,12 @@ def parse_profiles(content: str, item_id: str = "NTW_AUTO_CRAFTER") -> list[Samp
             average_ms = fields["average"]
         if total_ms < 0 or average_ms < 0 or fields["p95"] > fields["maximum"]:
             raise ProfileError(f"Sample {number}: inconsistent item timing")
+        all_slimefun_ms = float(work_match.group(1))
+        if not math.isfinite(all_slimefun_ms):
+            raise ProfileError(f"Sample {number}: non-finite total callback work")
         result.append(Sample(
             machines, ticker_ticks, total_ms, average_ms, fields["p95"],
-            fields["maximum"], float(work_match.group(1)),
+            fields["maximum"], all_slimefun_ms,
         ))
     return result
 
