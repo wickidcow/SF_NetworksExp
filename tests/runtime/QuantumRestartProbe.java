@@ -18,6 +18,7 @@ import java.util.concurrent.CompletionException;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
+import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -25,6 +26,7 @@ import org.bukkit.entity.Item;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.MapMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.NamespacedKey;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -55,6 +57,7 @@ public final class QuantumRestartProbe extends JavaPlugin {
             try {
                 final String phase = Files.readString(phaseFile(), StandardCharsets.UTF_8).trim();
                 verifyNativeFireResistance(phase);
+                verifyNativeMapTint(phase);
                 if ("seed".equals(phase)) {
                     seed();
                 } else if ("verify".equals(phase)) {
@@ -124,6 +127,75 @@ public final class QuantumRestartProbe extends JavaPlugin {
         getLogger().info("NATIVE FIRE TAG OBSERVED phase=" + phase
             + " retainedAfterCopy=" + retained + " state=" + copiedState
             + " cloneBinaryRestartParity=true");
+    }
+
+    /**
+     * Native historical-map-color compatibility probe on the actual server API.
+     * 1.21.11 exposes a functional map tint; 26.3 documents a no-op accessor.
+     * Preserve both observations rather than pretending 26.3 supports tint.
+     * The same bytes are loaded by a separate server JVM in the verify phase.
+     */
+    @SuppressWarnings("deprecation")
+    private void verifyNativeMapTint(String phase) throws Exception {
+        final Path directory = getDataFolder().toPath().getParent();
+        final Path fixture = directory.resolve("native-map-tint-item.bin");
+        final Path stateFile = directory.resolve("native-map-tint-observed.txt");
+        final ItemStack original = new ItemStack(Material.FILLED_MAP);
+        final ItemMeta base = original.getItemMeta();
+        require(base instanceof MapMeta, "Native filled map must expose MapMeta");
+        final MapMeta map = (MapMeta) base;
+        map.setColor(Color.RED);
+        map.getPersistentDataContainer().set(ownerKey(), PersistentDataType.STRING, "native-map-tint");
+        final boolean sourceHasTint = map.hasColor() && Color.RED.equals(map.getColor());
+        if (Bukkit.getMinecraftVersion().equals("1.21.11")) {
+            require(sourceHasTint, "Paper/Purpur 1.21.11 source MapMeta lost explicit red tint");
+        }
+        require(original.setItemMeta(map), "Native ItemStack refused map metadata");
+        requireNativeMapSentinel(original, "metadata copy");
+        final String observed = nativeMapTint(original);
+        final ItemStack cloned = original.clone();
+        final byte[] bytes = original.serializeAsBytes();
+        final ItemStack decoded = ItemStack.deserializeBytes(bytes);
+        requireNativeMapSentinel(cloned, "clone");
+        requireNativeMapSentinel(decoded, "binary roundtrip");
+        require(observed.equals(nativeMapTint(cloned)), "Map tint changed during native clone");
+        require(observed.equals(nativeMapTint(decoded)), "Map tint changed during binary roundtrip");
+        if ("seed".equals(phase)) {
+            Files.write(fixture, bytes);
+            Files.writeString(stateFile, observed, StandardCharsets.UTF_8);
+        } else if ("verify".equals(phase)) {
+            require(Files.isRegularFile(fixture) && Files.isRegularFile(stateFile),
+                "Native map tint fixture or expected state missing after JVM restart");
+            final String expected = Files.readString(stateFile, StandardCharsets.UTF_8).trim();
+            require(expected.equals(observed), "Native map tint copy state changed across JVM restart");
+            final ItemStack restored = ItemStack.deserializeBytes(Files.readAllBytes(fixture));
+            requireNativeMapSentinel(restored, "separate JVM restart");
+            require(expected.equals(nativeMapTint(restored)),
+                "Native map tint changed across persisted bytes and separate JVM restart");
+        } else {
+            throw new AssertionError("Unknown native map tint phase: " + phase);
+        }
+        getLogger().info("NATIVE MAP TINT OBSERVED phase=" + phase
+            + " runtime=" + Bukkit.getMinecraftVersion()
+            + " sourceHasRedTint=" + sourceHasTint
+            + " retainedAfterCopy=" + observed
+            + " cloneBinaryRestartParity=true");
+    }
+
+    @SuppressWarnings("deprecation")
+    private static String nativeMapTint(ItemStack item) {
+        final ItemMeta meta = item.getItemMeta();
+        if (!(meta instanceof MapMeta map) || !map.hasColor() || map.getColor() == null) {
+            return "absent";
+        }
+        return Integer.toString(map.getColor().asRGB());
+    }
+
+    private void requireNativeMapSentinel(ItemStack item, String stage) {
+        final ItemMeta meta = item.getItemMeta();
+        require(meta != null && "native-map-tint".equals(meta.getPersistentDataContainer()
+                .get(ownerKey(), PersistentDataType.STRING)),
+            "Native map PDC sentinel lost during " + stage);
     }
 
     private void requireNativeSentinel(ItemStack item, String stage) {
