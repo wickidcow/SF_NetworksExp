@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletionException;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import net.kyori.adventure.text.Component;
@@ -28,6 +29,7 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.NamespacedKey;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.tag.DamageTypeTags;
 
 /**
  * A two-process Slimefun storage persistence test. This plugin is included ONLY
@@ -52,6 +54,7 @@ public final class QuantumRestartProbe extends JavaPlugin {
         Bukkit.getScheduler().runTaskLater(this, () -> {
             try {
                 final String phase = Files.readString(phaseFile(), StandardCharsets.UTF_8).trim();
+                verifyNativeFireResistance(phase);
                 if ("seed".equals(phase)) {
                     seed();
                 } else if ("verify".equals(phase)) {
@@ -63,6 +66,92 @@ public final class QuantumRestartProbe extends JavaPlugin {
                 fail("startup phase", failure);
             }
         }, 20L);
+    }
+
+    /**
+     * Real Paper/Purpur ItemStack metadata test, not a MockBukkit approximation.
+     * Keep the legacy IS_FIRE predicate exactly as used by ItemDifferenter;
+     * the modern API must not replace it until equivalent saved-item behavior
+     * is demonstrated on both supported server families.
+     *
+     * The seed JVM writes Bukkit's binary ItemStack representation. The verify
+     * JVM reads those exact bytes after a clean server restart. A positive PDC
+     * sentinel must survive each step, while the server's observed post-copy
+     * fire-resistance state is recorded and checked for restart parity.
+     */
+    @SuppressWarnings("deprecation")
+    private void verifyNativeFireResistance(String phase) throws Exception {
+        final Path fixture = getDataFolder().toPath().getParent()
+            .resolve("native-fire-resistance-item.bin");
+        final ItemStack original = new ItemStack(Material.NETHERITE_SWORD);
+        final ItemMeta meta = original.getItemMeta();
+        require(meta != null, "Native sword must expose ItemMeta");
+        meta.setDamageResistant(DamageTypeTags.IS_FIRE);
+        meta.getPersistentDataContainer().set(ownerKey(), PersistentDataType.STRING, "native-fire-metadata");
+        require(hasFireResistance(meta), "Explicit native fire tag was not retained by ItemMeta");
+        require(original.setItemMeta(meta), "Native ItemStack refused fire-resistant metadata");
+        // Paper/Purpur may discard this tag when copying ItemMeta into ItemStack.
+        // Record that server behavior rather than asserting a positive tag survives.
+        // Never interpret this fixture as proof of positive-tag persistence.
+        requireNativeSentinel(original, "metadata copy");
+        final boolean retained = hasFireResistance(original.getItemMeta());
+        final String copiedState = describeFireResistance(original.getItemMeta());
+        final byte[] bytes = original.serializeAsBytes();
+        requireNativeSentinel(original.clone(), "clone");
+        requireNativeSentinel(ItemStack.deserializeBytes(bytes), "binary roundtrip");
+        require(hasFireResistance(original.clone().getItemMeta()) == retained,
+            "Native clone changed the server's post-copy resistance state");
+        require(hasFireResistance(ItemStack.deserializeBytes(bytes).getItemMeta()) == retained,
+            "Native binary roundtrip changed the server's post-copy resistance state");
+        final Path stateFile = getDataFolder().toPath().getParent()
+            .resolve("native-fire-resistance-retained.txt");
+        if ("seed".equals(phase)) {
+            Files.write(fixture, bytes);
+            Files.writeString(stateFile, Boolean.toString(retained), StandardCharsets.UTF_8);
+        } else if ("verify".equals(phase)) {
+            require(Files.isRegularFile(fixture) && Files.isRegularFile(stateFile),
+                "Native resistance fixture or expected server state missing after JVM restart");
+            final boolean expected = Boolean.parseBoolean(
+                Files.readString(stateFile, StandardCharsets.UTF_8).trim());
+            require(expected == retained,
+                "Server post-copy fire resistance changed across JVM restart");
+            requireNativeSentinel(ItemStack.deserializeBytes(Files.readAllBytes(fixture)), "separate JVM restart");
+            require(hasFireResistance(ItemStack.deserializeBytes(Files.readAllBytes(fixture)).getItemMeta()) == expected,
+                "Native fire resistance state changed across persisted bytes and JVM restart");
+        } else {
+            throw new AssertionError("Unknown native fire tag phase: " + phase);
+        }
+        getLogger().info("NATIVE FIRE TAG OBSERVED phase=" + phase
+            + " retainedAfterCopy=" + retained + " state=" + copiedState
+            + " cloneBinaryRestartParity=true");
+    }
+
+    private void requireNativeSentinel(ItemStack item, String stage) {
+        final ItemMeta meta = item.getItemMeta();
+        require(meta != null && "native-fire-metadata".equals(meta.getPersistentDataContainer()
+                .get(ownerKey(), PersistentDataType.STRING)),
+            "Native positive PDC sentinel lost during " + stage);
+    }
+
+    @SuppressWarnings("deprecation")
+    private static boolean hasFireResistance(ItemMeta meta) {
+        return meta != null && meta.hasDamageResistant()
+            && Objects.equals(meta.getDamageResistant(), DamageTypeTags.IS_FIRE);
+    }
+
+    @SuppressWarnings("deprecation")
+    private static String describeFireResistance(ItemMeta meta) {
+        if (meta == null) {
+            return "meta=null";
+        }
+        if (!meta.hasDamageResistant()) {
+            return "hasDamageResistant=false";
+        }
+        final var actual = meta.getDamageResistant();
+        return "hasDamageResistant=true, actualKey="
+            + (actual == null ? "null" : actual.getKey())
+            + ", expectedKey=" + DamageTypeTags.IS_FIRE.getKey()
+            + ", legacyEquals=" + Objects.equals(actual, DamageTypeTags.IS_FIRE);
     }
 
     private Path phaseFile() {
