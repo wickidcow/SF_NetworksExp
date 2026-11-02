@@ -75,8 +75,9 @@ public final class QuantumRestartProbe extends JavaPlugin {
      * is demonstrated on both supported server families.
      *
      * The seed JVM writes Bukkit's binary ItemStack representation. The verify
-     * JVM reads those exact bytes after a clean server restart, so the positive
-     * observed post-copy resistance state is checked across a process boundary.
+     * JVM reads those exact bytes after a clean server restart. A positive PDC
+     * sentinel must survive each step, while the server's observed post-copy
+     * fire-resistance state is recorded and checked for restart parity.
      */
     @SuppressWarnings("deprecation")
     private void verifyNativeFireResistance(String phase) throws Exception {
@@ -86,14 +87,18 @@ public final class QuantumRestartProbe extends JavaPlugin {
         final ItemMeta meta = original.getItemMeta();
         require(meta != null, "Native sword must expose ItemMeta");
         meta.setDamageResistant(DamageTypeTags.IS_FIRE);
+        meta.getPersistentDataContainer().set(ownerKey(), PersistentDataType.STRING, "native-fire-metadata");
         require(hasFireResistance(meta), "Explicit native fire tag was not retained by ItemMeta");
         require(original.setItemMeta(meta), "Native ItemStack refused fire-resistant metadata");
         // Paper/Purpur may discard this tag when copying ItemMeta into ItemStack.
         // Record that server behavior rather than asserting a positive tag survives.
         // Never interpret this fixture as proof of positive-tag persistence.
+        requireNativeSentinel(original, "metadata copy");
         final boolean retained = hasFireResistance(original.getItemMeta());
         final String copiedState = describeFireResistance(original.getItemMeta());
         final byte[] bytes = original.serializeAsBytes();
+        requireNativeSentinel(original.clone(), "clone");
+        requireNativeSentinel(ItemStack.deserializeBytes(bytes), "binary roundtrip");
         require(hasFireResistance(original.clone().getItemMeta()) == retained,
             "Native clone changed the server's post-copy resistance state");
         require(hasFireResistance(ItemStack.deserializeBytes(bytes).getItemMeta()) == retained,
@@ -110,6 +115,7 @@ public final class QuantumRestartProbe extends JavaPlugin {
                 Files.readString(stateFile, StandardCharsets.UTF_8).trim());
             require(expected == retained,
                 "Server post-copy fire resistance changed across JVM restart");
+            requireNativeSentinel(ItemStack.deserializeBytes(Files.readAllBytes(fixture)), "separate JVM restart");
             require(hasFireResistance(ItemStack.deserializeBytes(Files.readAllBytes(fixture)).getItemMeta()) == expected,
                 "Native fire resistance state changed across persisted bytes and JVM restart");
         } else {
@@ -118,6 +124,13 @@ public final class QuantumRestartProbe extends JavaPlugin {
         getLogger().info("NATIVE FIRE TAG OBSERVED phase=" + phase
             + " retainedAfterCopy=" + retained + " state=" + copiedState
             + " cloneBinaryRestartParity=true");
+    }
+
+    private void requireNativeSentinel(ItemStack item, String stage) {
+        final ItemMeta meta = item.getItemMeta();
+        require(meta != null && "native-fire-metadata".equals(meta.getPersistentDataContainer()
+                .get(ownerKey(), PersistentDataType.STRING)),
+            "Native positive PDC sentinel lost during " + stage);
     }
 
     @SuppressWarnings("deprecation")
