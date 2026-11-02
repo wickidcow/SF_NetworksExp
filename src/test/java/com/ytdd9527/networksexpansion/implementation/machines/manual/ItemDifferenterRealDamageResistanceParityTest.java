@@ -67,6 +67,8 @@ class ItemDifferenterRealDamageResistanceParityTest {
         ItemMeta meta = original.getItemMeta();
         assertNotNull(meta);
         meta.setDamageResistant(DamageTypeTags.IS_FIRE);
+        assertTrue(meta.hasDamageResistant(),
+            "MockBukkit must retain explicit damage resistance on the metadata object before setItemMeta");
         assertTrue(original.setItemMeta(meta), "Test fixture must accept explicit fire-resistance metadata");
         return original;
     }
