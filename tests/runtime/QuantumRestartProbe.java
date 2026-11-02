@@ -76,7 +76,7 @@ public final class QuantumRestartProbe extends JavaPlugin {
      *
      * The seed JVM writes Bukkit's binary ItemStack representation. The verify
      * JVM reads those exact bytes after a clean server restart, so the positive
-     * fire-resistance fixture is checked across an actual process boundary.
+     * observed post-copy resistance state is checked across a process boundary.
      */
     @SuppressWarnings("deprecation")
     private void verifyNativeFireResistance(String phase) throws Exception {
