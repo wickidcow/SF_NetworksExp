@@ -35,6 +35,19 @@ class TickerProfileComparisonTests(unittest.TestCase):
         self.assertEqual(32.31, parsed[0].total_ms)
         self.assertEqual(0.08, parsed[0].average_ms)
 
+    def test_rejects_ambiguous_double_labelled_total_and_average(self):
+        # Both display orders have one leading timing and ONE labelled
+        # complement. A second label used to be silently ignored, so a
+        # corrupted profile could appear to prove a performance change.
+        total_first = snapshot().replace(
+            "Average: 0.08ms", "Average: 0.08ms | Total: 32.31ms")
+        average_first = snapshot(order="average").replace(
+            "Total: 32.31ms", "Total: 32.31ms | Average: 99ms")
+        for malformed in (total_first, average_first):
+            with self.subTest(malformed=malformed):
+                with self.assertRaisesRegex(ProfileError, "ambiguous total/average"):
+                    parse_profiles(malformed)
+
     def test_medians_compare_400_machines_without_claiming_tps(self):
         before = parse_profiles(snapshot("30") + snapshot("32.31") + snapshot("35"))
         after = parse_profiles(snapshot("24") + snapshot("25") + snapshot("27"))
