@@ -46,6 +46,16 @@ class ItemDifferenterRealDamageResistanceParityTest {
     }
 
     @Test
+    void nonFireDamageTagDoesNotMatchFireResistance() {
+        ItemStack item = new ItemStack(Material.NETHERITE_SWORD);
+        ItemMeta meta = item.getItemMeta();
+        assertNotNull(meta);
+        meta.setDamageResistant(DamageTypeTags.IS_EXPLOSION);
+        assertTrue(meta.hasDamageResistant());
+        assertFalse(isFireResistant(meta), "Non-fire resistance must not be classified as fire");
+    }
+
+    @Test
     void explicitFireTagPreservesLegacyPredicateOnMetadata() {
         ItemStack original = new ItemStack(Material.NETHERITE_SWORD);
         ItemMeta meta = original.getItemMeta();
