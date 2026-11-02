@@ -90,6 +90,12 @@ def parse_profiles(content: str, item_id: str = "NTW_AUTO_CRAFTER") -> list[Samp
                 raise ProfileError(f"Sample {number}: duplicate leading timing")
         if initial is None or "p95" not in fields or "maximum" not in fields:
             raise ProfileError(f"Sample {number}: incomplete item timing fields")
+        # A timing line has one unlabelled leading value and exactly one
+        # complementary labelled total/average. If both are present, the
+        # old parser silently discarded the labelled average, making a
+        # malformed sample look comparable to a valid profiler reading.
+        if "total" in fields and "average" in fields:
+            raise ProfileError(f"Sample {number}: ambiguous total/average timing fields")
         # Both the default total-first and the average-ordered profiler output.
         if "total" in fields:
             average_ms = initial
