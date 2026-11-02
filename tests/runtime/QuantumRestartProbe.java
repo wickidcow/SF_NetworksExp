@@ -1,6 +1,7 @@
 package networksprobe;
 
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
+import com.ytdd9527.networksexpansion.implementation.machines.manual.ItemDifferenter;
 import io.github.sefiraat.networks.network.stackcaches.QuantumCache;
 import io.github.sefiraat.networks.slimefun.NetworkSlimefunItems;
 import io.github.sefiraat.networks.slimefun.network.NetworkQuantumStorage;
@@ -27,6 +28,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.MapMeta;
+import org.bukkit.inventory.meta.components.CustomModelDataComponent;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.NamespacedKey;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -58,6 +60,7 @@ public final class QuantumRestartProbe extends JavaPlugin {
                 final String phase = Files.readString(phaseFile(), StandardCharsets.UTF_8).trim();
                 verifyNativeFireResistance(phase);
                 verifyNativeMapTint(phase);
+                verifyNativeVanillaCustomModels(phase);
                 if ("seed".equals(phase)) {
                     seed();
                 } else if ("verify".equals(phase)) {
@@ -127,6 +130,110 @@ public final class QuantumRestartProbe extends JavaPlugin {
         getLogger().info("NATIVE FIRE TAG OBSERVED phase=" + phase
             + " retainedAfterCopy=" + retained + " state=" + copiedState
             + " cloneBinaryRestartParity=true");
+    }
+
+    /**
+     * Check the four vanilla CustomModelDataComponent channels using real Paper
+     * item metadata. This protects ItemDifferenter.calc's non-Slimefun branch
+     * beyond mocked JUnit calls. Each supported runtime uses its own seed and
+     * verify JVM pair; this does not claim cross-version item migration.
+     */
+    private void verifyNativeVanillaCustomModels(String phase) throws Exception {
+        final Path fixture = getDataFolder().toPath().getParent()
+            .resolve("native-vanilla-custom-model-item.bin");
+        final ItemStack original = new ItemStack(Material.DIAMOND);
+        final ItemMeta metadata = original.getItemMeta();
+        require(metadata != null, "Vanilla diamond must expose ItemMeta");
+        final CustomModelDataComponent model = metadata.getCustomModelDataComponent();
+        model.setFloats(List.of(1.25f));
+        model.setFlags(List.of(true));
+        model.setStrings(List.of("networks:vanilla_model"));
+        model.setColors(List.of(Color.RED));
+        metadata.setCustomModelDataComponent(model);
+        metadata.getPersistentDataContainer().set(ownerKey(), PersistentDataType.STRING, "native-vanilla-model");
+        require(original.setItemMeta(metadata), "Could not attach vanilla custom model to ItemStack");
+
+        requireNativeVanillaModel(original, "setItemMeta");
+        final ItemStack cloned = original.clone();
+        final byte[] bytes = original.serializeAsBytes();
+        final ItemStack decoded = ItemStack.deserializeBytes(bytes);
+        requireNativeVanillaModel(cloned, "clone");
+        requireNativeVanillaModel(decoded, "binary roundtrip");
+        require(sameNativeCustomModels(original, cloned), "Vanilla model changed during clone");
+        require(sameNativeCustomModels(original, decoded), "Vanilla model changed during binary roundtrip");
+        require("eq".equals(ItemDifferenter.calc(original, cloned)),
+            "Identical cloned vanilla custom model must compare equal");
+        require("eq".equals(ItemDifferenter.calc(original, decoded)),
+            "Identical serialized vanilla custom model must compare equal");
+
+        for (int channel = 0; channel < 4; channel++) {
+            final ItemStack changed = original.clone();
+            final ItemMeta changedMeta = changed.getItemMeta();
+            require(changedMeta != null, "Model mutation lost ItemMeta");
+            final CustomModelDataComponent changedModel = changedMeta.getCustomModelDataComponent();
+            switch (channel) {
+                case 0 -> changedModel.setFloats(List.of(2.25f));
+                case 1 -> changedModel.setFlags(List.of(false));
+                case 2 -> changedModel.setStrings(List.of("networks:other_model"));
+                case 3 -> changedModel.setColors(List.of(Color.BLUE));
+                default -> throw new AssertionError("Unknown vanilla model channel " + channel);
+            }
+            changedMeta.setCustomModelDataComponent(changedModel);
+            require(changed.setItemMeta(changedMeta), "Native custom model mutation was rejected");
+            require(!sameNativeCustomModels(original, changed),
+                "Native custom model channel " + channel + " did not retain its mutation");
+            require("neq.custommodeldata".equals(ItemDifferenter.calc(original, changed)),
+                "Item Differenter missed native custom model channel " + channel);
+            require("neq.custommodeldata".equals(ItemDifferenter.calc(changed, original)),
+                "Item Differenter custom model comparison was asymmetric for channel " + channel);
+        }
+
+        if ("seed".equals(phase)) {
+            Files.write(fixture, bytes);
+        } else if ("verify".equals(phase)) {
+            require(Files.isRegularFile(fixture), "Vanilla custom model fixture missing after JVM restart");
+            final ItemStack restored = ItemStack.deserializeBytes(Files.readAllBytes(fixture));
+            requireNativeVanillaModel(restored, "separate JVM restart");
+            require(sameNativeCustomModels(original, restored),
+                "Vanilla custom model changed across persisted bytes and a separate JVM");
+            require("eq".equals(ItemDifferenter.calc(original, restored)),
+                "Restored vanilla custom model must compare equal after separate JVM restart");
+        } else {
+            throw new AssertionError("Unknown vanilla custom model phase: " + phase);
+        }
+        getLogger().info("NATIVE VANILLA CUSTOM MODEL phase=" + phase
+            + " fourChannels=4 cloneBinaryRestartParity=true itemDifferenterSymmetry=true");
+    }
+
+    private void requireNativeVanillaModel(ItemStack item, String stage) {
+        final ItemMeta meta = item.getItemMeta();
+        require(meta != null, "Native custom model missing ItemMeta during " + stage);
+        require("native-vanilla-model".equals(meta.getPersistentDataContainer()
+            .get(ownerKey(), PersistentDataType.STRING)),
+            "Native custom model PDC sentinel missing during " + stage);
+        require(meta.hasCustomModelDataComponent(), "Native custom model disappeared during " + stage);
+        final CustomModelDataComponent component = meta.getCustomModelDataComponent();
+        require(component.getFloats().equals(List.of(1.25f))
+            && component.getFlags().equals(List.of(true))
+            && component.getStrings().equals(List.of("networks:vanilla_model"))
+            && component.getColors().equals(List.of(Color.RED)),
+            "Native vanilla custom model values changed during " + stage);
+    }
+
+    private static boolean sameNativeCustomModels(ItemStack first, ItemStack second) {
+        final ItemMeta firstMeta = first.getItemMeta();
+        final ItemMeta secondMeta = second.getItemMeta();
+        if (firstMeta == null || secondMeta == null
+                || !firstMeta.hasCustomModelDataComponent()
+                || !secondMeta.hasCustomModelDataComponent()) {
+            return false;
+        }
+        final CustomModelDataComponent a = firstMeta.getCustomModelDataComponent();
+        final CustomModelDataComponent b = secondMeta.getCustomModelDataComponent();
+        return a.getFloats().equals(b.getFloats())
+            && a.getFlags().equals(b.getFlags())
+            && a.getStrings().equals(b.getStrings())
+            && a.getColors().equals(b.getColors());
     }
 
     /**
