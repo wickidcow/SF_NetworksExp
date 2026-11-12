@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.64 — Source-pinned 4.1.80 compatibility candidate
+
+- Assign the next distinct distributable version to the merged post-1.0.63 Networks source, including restart and item-identity diagnostics that cannot be republished under the immutable v1.0.63 tag.
+- Synchronize the Gradle version and CI artifact identities as `SF_Networks1.0.64.jar`; preserve all registered items, recipes, ownership, stored quantities, and the 1.21.11 minimum.
+- Release is **blocked** until this exact source passes its build, Paper/Purpur and network/storage native round-trip gates and Slimefun Legacy's canonical 44-addon bundle verification. No migration or prior-asset replacement.
+
 ## 1.0.63 — metadata-presence safety and verified Gradle wrapper
 
 - Compare tropical-fish bucket variant metadata only when the relevant component is present; retain distinct absent and present values and the existing item-differentiator policy. Add focused regression coverage for absent variants and mismatching metadata.
