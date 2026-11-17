@@ -59,6 +59,7 @@ public final class QuantumRestartProbe extends JavaPlugin {
             try {
                 final String phase = Files.readString(phaseFile(), StandardCharsets.UTF_8).trim();
                 verifyNativeFireResistance(phase);
+                verifyNativeNegativeDamageResistance(phase);
                 verifyNativeMapTint(phase);
                 verifyNativeVanillaCustomModels(phase);
                 if ("seed".equals(phase)) {
@@ -95,12 +96,16 @@ public final class QuantumRestartProbe extends JavaPlugin {
         meta.setDamageResistant(DamageTypeTags.IS_FIRE);
         meta.getPersistentDataContainer().set(ownerKey(), PersistentDataType.STRING, "native-fire-metadata");
         require(hasFireResistance(meta), "Explicit native fire tag was not retained by ItemMeta");
+        require(productionIsFireResistant(meta),
+            "Production ItemDifferenter must classify the original explicit native fire tag");
         require(original.setItemMeta(meta), "Native ItemStack refused fire-resistant metadata");
         // Paper/Purpur may discard this tag when copying ItemMeta into ItemStack.
         // Record that server behavior rather than asserting a positive tag survives.
         // Never interpret this fixture as proof of positive-tag persistence.
         requireNativeSentinel(original, "metadata copy");
         final boolean retained = hasFireResistance(original.getItemMeta());
+        require(productionIsFireResistant(original.getItemMeta()) == retained,
+            "Production fire classifier disagrees with native post-copy metadata");
         final String copiedState = describeFireResistance(original.getItemMeta());
         final byte[] bytes = original.serializeAsBytes();
         requireNativeSentinel(original.clone(), "clone");
@@ -130,6 +135,103 @@ public final class QuantumRestartProbe extends JavaPlugin {
         getLogger().info("NATIVE FIRE TAG OBSERVED phase=" + phase
             + " retainedAfterCopy=" + retained + " state=" + copiedState
             + " cloneBinaryRestartParity=true");
+    }
+
+    /**
+     * A native negative control for issue #122. The old ItemDifferenter
+     * predicate must distinguish explicit IS_FIRE from IS_EXPLOSION and from
+     * absent damage resistance, including when native ItemStack metadata
+     * copying discards a tag. Compare the ORIGINAL production predicate, not
+     * a substitute accessor that could accidentally broaden item matching.
+     *
+     * These fixtures and their typed PDC sentinels persist into the second
+     * clean server JVM. No live inventories or player worlds are involved.
+     */
+    @SuppressWarnings("deprecation")
+    private void verifyNativeNegativeDamageResistance(String phase) throws Exception {
+        final Path directory = getDataFolder().toPath().getParent();
+        final Path nonFireFixture = directory.resolve("native-nonfire-resistance-item.bin");
+        final Path absentFixture = directory.resolve("native-absent-resistance-item.bin");
+        final Path stateFile = directory.resolve("native-negative-resistance-observed.txt");
+
+        final ItemStack nonFire = new ItemStack(Material.NETHERITE_SWORD);
+        final ItemMeta nonFireMeta = nonFire.getItemMeta();
+        require(nonFireMeta != null, "Native non-fire control must expose ItemMeta");
+        nonFireMeta.setDamageResistant(DamageTypeTags.IS_EXPLOSION);
+        nonFireMeta.getPersistentDataContainer().set(
+            ownerKey(), PersistentDataType.STRING, "native-negative-resistance");
+        require(nonFireMeta.hasDamageResistant(),
+            "Explicit native explosion tag must exist on source ItemMeta");
+        require(!productionIsFireResistant(nonFireMeta),
+            "ItemDifferenter incorrectly classified source explosion resistance as fire");
+        require(nonFire.setItemMeta(nonFireMeta), "Native non-fire ItemMeta copy was rejected");
+
+        final ItemStack absent = new ItemStack(Material.NETHERITE_SWORD);
+        final ItemMeta absentMeta = absent.getItemMeta();
+        require(absentMeta != null, "Native absent control must expose ItemMeta");
+        absentMeta.getPersistentDataContainer().set(
+            ownerKey(), PersistentDataType.STRING, "native-negative-resistance");
+        require(!absentMeta.hasDamageResistant(), "Unmodified source metadata has unexpected resistance");
+        require(absent.setItemMeta(absentMeta), "Native absent ItemMeta copy was rejected");
+
+        final byte[] nonFireBytes = nonFire.serializeAsBytes();
+        final byte[] absentBytes = absent.serializeAsBytes();
+        requireNegativeDamageControl(nonFire, "non-fire copy");
+        requireNegativeDamageControl(absent, "absent copy");
+        requireNegativeDamageControl(nonFire.clone(), "non-fire clone");
+        requireNegativeDamageControl(absent.clone(), "absent clone");
+        requireNegativeDamageControl(ItemStack.deserializeBytes(nonFireBytes), "non-fire binary");
+        requireNegativeDamageControl(ItemStack.deserializeBytes(absentBytes), "absent binary");
+
+        // Exact existing comparison semantics: neither non-fire nor absent
+        // resistance may be reported as a fire-only mismatch.
+        require(!"neq.fireresistant".equals(ItemDifferenter.calc(nonFire, absent)),
+            "ItemDifferenter incorrectly distinguished non-fire vs absent as fire");
+        require(!"neq.fireresistant".equals(ItemDifferenter.calc(absent, nonFire)),
+            "ItemDifferenter negative-control predicate was asymmetric");
+
+        final String observed = describeFireResistance(nonFire.getItemMeta()) + "\n"
+            + describeFireResistance(absent.getItemMeta());
+        if ("seed".equals(phase)) {
+            Files.write(nonFireFixture, nonFireBytes);
+            Files.write(absentFixture, absentBytes);
+            Files.writeString(stateFile, observed, StandardCharsets.UTF_8);
+        } else if ("verify".equals(phase)) {
+            require(Files.isRegularFile(nonFireFixture) && Files.isRegularFile(absentFixture)
+                    && Files.isRegularFile(stateFile),
+                "Native negative-resistance fixtures missing after independent JVM restart");
+            require(observed.equals(Files.readString(stateFile, StandardCharsets.UTF_8)),
+                "Native negative-resistance metadata changed across separate JVM startup");
+            final ItemStack restoredNonFire = ItemStack.deserializeBytes(Files.readAllBytes(nonFireFixture));
+            final ItemStack restoredAbsent = ItemStack.deserializeBytes(Files.readAllBytes(absentFixture));
+            requireNegativeDamageControl(restoredNonFire, "non-fire restart");
+            requireNegativeDamageControl(restoredAbsent, "absent restart");
+            require(observed.equals(describeFireResistance(restoredNonFire.getItemMeta())
+                    + "\n" + describeFireResistance(restoredAbsent.getItemMeta())),
+                "Native negative-resistance bytes changed after independent JVM restart");
+        } else {
+            throw new AssertionError("Unknown native negative resistance phase: " + phase);
+        }
+        getLogger().info("NATIVE NEGATIVE FIRE TAG phase=" + phase
+            + " nonFireState=" + describeFireResistance(nonFire.getItemMeta())
+            + " absentState=" + describeFireResistance(absent.getItemMeta())
+            + " nativePredicateAndRestartParity=true");
+    }
+
+    private void requireNegativeDamageControl(ItemStack item, String stage) throws Exception {
+        final ItemMeta meta = item.getItemMeta();
+        require(item.getAmount() == 1 && meta != null, "Negative resistance stack lost amount/meta: " + stage);
+        require("native-negative-resistance".equals(meta.getPersistentDataContainer()
+                .get(ownerKey(), PersistentDataType.STRING)),
+            "Native negative resistance lost typed PDC: " + stage);
+        require(!productionIsFireResistant(meta),
+            "Actual ItemDifferenter misclassified non-fire/absent resistance: " + stage);
+    }
+
+    private static boolean productionIsFireResistant(ItemMeta meta) throws Exception {
+        final Method method = ItemDifferenter.class.getDeclaredMethod("isFireResistant", ItemMeta.class);
+        method.setAccessible(true);
+        return (Boolean) method.invoke(null, meta);
     }
 
     /**
