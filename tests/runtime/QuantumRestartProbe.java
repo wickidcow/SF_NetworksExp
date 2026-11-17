@@ -96,12 +96,16 @@ public final class QuantumRestartProbe extends JavaPlugin {
         meta.setDamageResistant(DamageTypeTags.IS_FIRE);
         meta.getPersistentDataContainer().set(ownerKey(), PersistentDataType.STRING, "native-fire-metadata");
         require(hasFireResistance(meta), "Explicit native fire tag was not retained by ItemMeta");
+        require(productionIsFireResistant(meta),
+            "Production ItemDifferenter must classify the original explicit native fire tag");
         require(original.setItemMeta(meta), "Native ItemStack refused fire-resistant metadata");
         // Paper/Purpur may discard this tag when copying ItemMeta into ItemStack.
         // Record that server behavior rather than asserting a positive tag survives.
         // Never interpret this fixture as proof of positive-tag persistence.
         requireNativeSentinel(original, "metadata copy");
         final boolean retained = hasFireResistance(original.getItemMeta());
+        require(productionIsFireResistant(original.getItemMeta()) == retained,
+            "Production fire classifier disagrees with native post-copy metadata");
         final String copiedState = describeFireResistance(original.getItemMeta());
         final byte[] bytes = original.serializeAsBytes();
         requireNativeSentinel(original.clone(), "clone");
