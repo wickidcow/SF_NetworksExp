@@ -1,6 +1,7 @@
 package networksprobe;
 
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
+import com.ytdd9527.networksexpansion.implementation.machines.manual.ItemDifferenter;
 import io.github.sefiraat.networks.network.stackcaches.QuantumCache;
 import io.github.sefiraat.networks.slimefun.NetworkSlimefunItems;
 import io.github.sefiraat.networks.slimefun.network.NetworkQuantumStorage;
@@ -13,10 +14,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletionException;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
+import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -24,10 +27,13 @@ import org.bukkit.entity.Item;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.MapMeta;
+import org.bukkit.inventory.meta.components.CustomModelDataComponent;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.NamespacedKey;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.tag.DamageTypeTags;
 
 /**
  * A two-process Slimefun storage persistence test. This plugin is included ONLY
@@ -52,6 +58,9 @@ public final class QuantumRestartProbe extends JavaPlugin {
         Bukkit.getScheduler().runTaskLater(this, () -> {
             try {
                 final String phase = Files.readString(phaseFile(), StandardCharsets.UTF_8).trim();
+                verifyNativeFireResistance(phase);
+                verifyNativeMapTint(phase);
+                verifyNativeVanillaCustomModels(phase);
                 if ("seed".equals(phase)) {
                     seed();
                 } else if ("verify".equals(phase)) {
@@ -63,6 +72,265 @@ public final class QuantumRestartProbe extends JavaPlugin {
                 fail("startup phase", failure);
             }
         }, 20L);
+    }
+
+    /**
+     * Real Paper/Purpur ItemStack metadata test, not a MockBukkit approximation.
+     * Keep the legacy IS_FIRE predicate exactly as used by ItemDifferenter;
+     * the modern API must not replace it until equivalent saved-item behavior
+     * is demonstrated on both supported server families.
+     *
+     * The seed JVM writes Bukkit's binary ItemStack representation. The verify
+     * JVM reads those exact bytes after a clean server restart. A positive PDC
+     * sentinel must survive each step, while the server's observed post-copy
+     * fire-resistance state is recorded and checked for restart parity.
+     */
+    @SuppressWarnings("deprecation")
+    private void verifyNativeFireResistance(String phase) throws Exception {
+        final Path fixture = getDataFolder().toPath().getParent()
+            .resolve("native-fire-resistance-item.bin");
+        final ItemStack original = new ItemStack(Material.NETHERITE_SWORD);
+        final ItemMeta meta = original.getItemMeta();
+        require(meta != null, "Native sword must expose ItemMeta");
+        meta.setDamageResistant(DamageTypeTags.IS_FIRE);
+        meta.getPersistentDataContainer().set(ownerKey(), PersistentDataType.STRING, "native-fire-metadata");
+        require(hasFireResistance(meta), "Explicit native fire tag was not retained by ItemMeta");
+        require(original.setItemMeta(meta), "Native ItemStack refused fire-resistant metadata");
+        // Paper/Purpur may discard this tag when copying ItemMeta into ItemStack.
+        // Record that server behavior rather than asserting a positive tag survives.
+        // Never interpret this fixture as proof of positive-tag persistence.
+        requireNativeSentinel(original, "metadata copy");
+        final boolean retained = hasFireResistance(original.getItemMeta());
+        final String copiedState = describeFireResistance(original.getItemMeta());
+        final byte[] bytes = original.serializeAsBytes();
+        requireNativeSentinel(original.clone(), "clone");
+        requireNativeSentinel(ItemStack.deserializeBytes(bytes), "binary roundtrip");
+        require(hasFireResistance(original.clone().getItemMeta()) == retained,
+            "Native clone changed the server's post-copy resistance state");
+        require(hasFireResistance(ItemStack.deserializeBytes(bytes).getItemMeta()) == retained,
+            "Native binary roundtrip changed the server's post-copy resistance state");
+        final Path stateFile = getDataFolder().toPath().getParent()
+            .resolve("native-fire-resistance-retained.txt");
+        if ("seed".equals(phase)) {
+            Files.write(fixture, bytes);
+            Files.writeString(stateFile, Boolean.toString(retained), StandardCharsets.UTF_8);
+        } else if ("verify".equals(phase)) {
+            require(Files.isRegularFile(fixture) && Files.isRegularFile(stateFile),
+                "Native resistance fixture or expected server state missing after JVM restart");
+            final boolean expected = Boolean.parseBoolean(
+                Files.readString(stateFile, StandardCharsets.UTF_8).trim());
+            require(expected == retained,
+                "Server post-copy fire resistance changed across JVM restart");
+            requireNativeSentinel(ItemStack.deserializeBytes(Files.readAllBytes(fixture)), "separate JVM restart");
+            require(hasFireResistance(ItemStack.deserializeBytes(Files.readAllBytes(fixture)).getItemMeta()) == expected,
+                "Native fire resistance state changed across persisted bytes and JVM restart");
+        } else {
+            throw new AssertionError("Unknown native fire tag phase: " + phase);
+        }
+        getLogger().info("NATIVE FIRE TAG OBSERVED phase=" + phase
+            + " retainedAfterCopy=" + retained + " state=" + copiedState
+            + " cloneBinaryRestartParity=true");
+    }
+
+    /**
+     * Check the four vanilla CustomModelDataComponent channels using real Paper
+     * item metadata. This protects ItemDifferenter.calc's non-Slimefun branch
+     * beyond mocked JUnit calls. Each supported runtime uses its own seed and
+     * verify JVM pair; this does not claim cross-version item migration.
+     */
+    private void verifyNativeVanillaCustomModels(String phase) throws Exception {
+        final Path fixture = getDataFolder().toPath().getParent()
+            .resolve("native-vanilla-custom-model-item.bin");
+        final ItemStack original = new ItemStack(Material.DIAMOND);
+        final ItemMeta metadata = original.getItemMeta();
+        require(metadata != null, "Vanilla diamond must expose ItemMeta");
+        final CustomModelDataComponent model = metadata.getCustomModelDataComponent();
+        model.setFloats(List.of(1.25f));
+        model.setFlags(List.of(true));
+        model.setStrings(List.of("networks:vanilla_model"));
+        model.setColors(List.of(Color.RED));
+        metadata.setCustomModelDataComponent(model);
+        metadata.getPersistentDataContainer().set(ownerKey(), PersistentDataType.STRING, "native-vanilla-model");
+        require(original.setItemMeta(metadata), "Could not attach vanilla custom model to ItemStack");
+
+        requireNativeVanillaModel(original, "setItemMeta");
+        final ItemStack cloned = original.clone();
+        final byte[] bytes = original.serializeAsBytes();
+        final ItemStack decoded = ItemStack.deserializeBytes(bytes);
+        requireNativeVanillaModel(cloned, "clone");
+        requireNativeVanillaModel(decoded, "binary roundtrip");
+        require(sameNativeCustomModels(original, cloned), "Vanilla model changed during clone");
+        require(sameNativeCustomModels(original, decoded), "Vanilla model changed during binary roundtrip");
+        require("eq".equals(ItemDifferenter.calc(original, cloned)),
+            "Identical cloned vanilla custom model must compare equal");
+        require("eq".equals(ItemDifferenter.calc(original, decoded)),
+            "Identical serialized vanilla custom model must compare equal");
+
+        for (int channel = 0; channel < 4; channel++) {
+            final ItemStack changed = original.clone();
+            final ItemMeta changedMeta = changed.getItemMeta();
+            require(changedMeta != null, "Model mutation lost ItemMeta");
+            final CustomModelDataComponent changedModel = changedMeta.getCustomModelDataComponent();
+            switch (channel) {
+                case 0 -> changedModel.setFloats(List.of(2.25f));
+                case 1 -> changedModel.setFlags(List.of(false));
+                case 2 -> changedModel.setStrings(List.of("networks:other_model"));
+                case 3 -> changedModel.setColors(List.of(Color.BLUE));
+                default -> throw new AssertionError("Unknown vanilla model channel " + channel);
+            }
+            changedMeta.setCustomModelDataComponent(changedModel);
+            require(changed.setItemMeta(changedMeta), "Native custom model mutation was rejected");
+            require(!sameNativeCustomModels(original, changed),
+                "Native custom model channel " + channel + " did not retain its mutation");
+            require("neq.custommodeldata".equals(ItemDifferenter.calc(original, changed)),
+                "Item Differenter missed native custom model channel " + channel);
+            require("neq.custommodeldata".equals(ItemDifferenter.calc(changed, original)),
+                "Item Differenter custom model comparison was asymmetric for channel " + channel);
+        }
+
+        if ("seed".equals(phase)) {
+            Files.write(fixture, bytes);
+        } else if ("verify".equals(phase)) {
+            require(Files.isRegularFile(fixture), "Vanilla custom model fixture missing after JVM restart");
+            final ItemStack restored = ItemStack.deserializeBytes(Files.readAllBytes(fixture));
+            requireNativeVanillaModel(restored, "separate JVM restart");
+            require(sameNativeCustomModels(original, restored),
+                "Vanilla custom model changed across persisted bytes and a separate JVM");
+            require("eq".equals(ItemDifferenter.calc(original, restored)),
+                "Restored vanilla custom model must compare equal after separate JVM restart");
+        } else {
+            throw new AssertionError("Unknown vanilla custom model phase: " + phase);
+        }
+        getLogger().info("NATIVE VANILLA CUSTOM MODEL phase=" + phase
+            + " fourChannels=4 cloneBinaryRestartParity=true itemDifferenterSymmetry=true");
+    }
+
+    private void requireNativeVanillaModel(ItemStack item, String stage) {
+        final ItemMeta meta = item.getItemMeta();
+        require(meta != null, "Native custom model missing ItemMeta during " + stage);
+        require("native-vanilla-model".equals(meta.getPersistentDataContainer()
+            .get(ownerKey(), PersistentDataType.STRING)),
+            "Native custom model PDC sentinel missing during " + stage);
+        require(meta.hasCustomModelDataComponent(), "Native custom model disappeared during " + stage);
+        final CustomModelDataComponent component = meta.getCustomModelDataComponent();
+        require(component.getFloats().equals(List.of(1.25f))
+            && component.getFlags().equals(List.of(true))
+            && component.getStrings().equals(List.of("networks:vanilla_model"))
+            && component.getColors().equals(List.of(Color.RED)),
+            "Native vanilla custom model values changed during " + stage);
+    }
+
+    private static boolean sameNativeCustomModels(ItemStack first, ItemStack second) {
+        final ItemMeta firstMeta = first.getItemMeta();
+        final ItemMeta secondMeta = second.getItemMeta();
+        if (firstMeta == null || secondMeta == null
+                || !firstMeta.hasCustomModelDataComponent()
+                || !secondMeta.hasCustomModelDataComponent()) {
+            return false;
+        }
+        final CustomModelDataComponent a = firstMeta.getCustomModelDataComponent();
+        final CustomModelDataComponent b = secondMeta.getCustomModelDataComponent();
+        return a.getFloats().equals(b.getFloats())
+            && a.getFlags().equals(b.getFlags())
+            && a.getStrings().equals(b.getStrings())
+            && a.getColors().equals(b.getColors());
+    }
+
+    /**
+     * Native historical-map-color compatibility probe on the actual server API.
+     * 1.21.11 exposes a functional map tint; 26.3 documents a no-op accessor.
+     * Preserve both observations rather than pretending 26.3 supports tint.
+     * The same bytes are loaded by a separate server JVM in the verify phase.
+     */
+    @SuppressWarnings("deprecation")
+    private void verifyNativeMapTint(String phase) throws Exception {
+        final Path directory = getDataFolder().toPath().getParent();
+        final Path fixture = directory.resolve("native-map-tint-item.bin");
+        final Path stateFile = directory.resolve("native-map-tint-observed.txt");
+        final ItemStack original = new ItemStack(Material.FILLED_MAP);
+        final ItemMeta base = original.getItemMeta();
+        require(base instanceof MapMeta, "Native filled map must expose MapMeta");
+        final MapMeta map = (MapMeta) base;
+        map.setColor(Color.RED);
+        map.getPersistentDataContainer().set(ownerKey(), PersistentDataType.STRING, "native-map-tint");
+        final boolean sourceHasTint = map.hasColor() && Color.RED.equals(map.getColor());
+        if (Bukkit.getMinecraftVersion().equals("1.21.11")) {
+            require(sourceHasTint, "Paper/Purpur 1.21.11 source MapMeta lost explicit red tint");
+        }
+        require(original.setItemMeta(map), "Native ItemStack refused map metadata");
+        requireNativeMapSentinel(original, "metadata copy");
+        final String observed = nativeMapTint(original);
+        final ItemStack cloned = original.clone();
+        final byte[] bytes = original.serializeAsBytes();
+        final ItemStack decoded = ItemStack.deserializeBytes(bytes);
+        requireNativeMapSentinel(cloned, "clone");
+        requireNativeMapSentinel(decoded, "binary roundtrip");
+        require(observed.equals(nativeMapTint(cloned)), "Map tint changed during native clone");
+        require(observed.equals(nativeMapTint(decoded)), "Map tint changed during binary roundtrip");
+        if ("seed".equals(phase)) {
+            Files.write(fixture, bytes);
+            Files.writeString(stateFile, observed, StandardCharsets.UTF_8);
+        } else if ("verify".equals(phase)) {
+            require(Files.isRegularFile(fixture) && Files.isRegularFile(stateFile),
+                "Native map tint fixture or expected state missing after JVM restart");
+            final String expected = Files.readString(stateFile, StandardCharsets.UTF_8).trim();
+            require(expected.equals(observed), "Native map tint copy state changed across JVM restart");
+            final ItemStack restored = ItemStack.deserializeBytes(Files.readAllBytes(fixture));
+            requireNativeMapSentinel(restored, "separate JVM restart");
+            require(expected.equals(nativeMapTint(restored)),
+                "Native map tint changed across persisted bytes and separate JVM restart");
+        } else {
+            throw new AssertionError("Unknown native map tint phase: " + phase);
+        }
+        getLogger().info("NATIVE MAP TINT OBSERVED phase=" + phase
+            + " runtime=" + Bukkit.getMinecraftVersion()
+            + " sourceHasRedTint=" + sourceHasTint
+            + " retainedAfterCopy=" + observed
+            + " cloneBinaryRestartParity=true");
+    }
+
+    @SuppressWarnings("deprecation")
+    private static String nativeMapTint(ItemStack item) {
+        final ItemMeta meta = item.getItemMeta();
+        if (!(meta instanceof MapMeta map) || !map.hasColor() || map.getColor() == null) {
+            return "absent";
+        }
+        return Integer.toString(map.getColor().asRGB());
+    }
+
+    private void requireNativeMapSentinel(ItemStack item, String stage) {
+        final ItemMeta meta = item.getItemMeta();
+        require(meta != null && "native-map-tint".equals(meta.getPersistentDataContainer()
+                .get(ownerKey(), PersistentDataType.STRING)),
+            "Native map PDC sentinel lost during " + stage);
+    }
+
+    private void requireNativeSentinel(ItemStack item, String stage) {
+        final ItemMeta meta = item.getItemMeta();
+        require(meta != null && "native-fire-metadata".equals(meta.getPersistentDataContainer()
+                .get(ownerKey(), PersistentDataType.STRING)),
+            "Native positive PDC sentinel lost during " + stage);
+    }
+
+    @SuppressWarnings("deprecation")
+    private static boolean hasFireResistance(ItemMeta meta) {
+        return meta != null && meta.hasDamageResistant()
+            && Objects.equals(meta.getDamageResistant(), DamageTypeTags.IS_FIRE);
+    }
+
+    @SuppressWarnings("deprecation")
+    private static String describeFireResistance(ItemMeta meta) {
+        if (meta == null) {
+            return "meta=null";
+        }
+        if (!meta.hasDamageResistant()) {
+            return "hasDamageResistant=false";
+        }
+        final var actual = meta.getDamageResistant();
+        return "hasDamageResistant=true, actualKey="
+            + (actual == null ? "null" : actual.getKey())
+            + ", expectedKey=" + DamageTypeTags.IS_FIRE.getKey()
+            + ", legacyEquals=" + Objects.equals(actual, DamageTypeTags.IS_FIRE);
     }
 
     private Path phaseFile() {

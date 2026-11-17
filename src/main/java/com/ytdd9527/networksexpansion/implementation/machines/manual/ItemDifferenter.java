@@ -271,21 +271,18 @@ public class ItemDifferenter extends NetworkObject {
         }
         if (optionalStackId1.isPresent()) {
             if (optionalStackId1.get().equals(optionalStackId2.get())) {
-                final boolean hasCustomOne = itemMeta.hasCustomModelDataComponent();
-                final boolean hasCustomTwo = cachedMeta.hasCustomModelDataComponent();
-                if (hasCustomOne) {
-                    if (!hasCustomTwo
-                        || !sameCustomModelData(
-                            itemMeta.getCustomModelDataComponent(),
-                            cachedMeta.getCustomModelDataComponent())) {
-                        return "neq.custommodeldata";
-                    }
-                } else if (hasCustomTwo) {
+                if (!sameCustomModelDataState(itemMeta, cachedMeta)) {
                     return "neq.custommodeldata";
                 }
                 return "eq";
             }
             return "neq.sfid";
+        }
+
+        // Vanilla and other non-Slimefun items can also carry custom model data.
+        // Do not report equality when any of the four component channels differ.
+        if (!sameCustomModelDataState(itemMeta, cachedMeta)) {
+            return "neq.custommodeldata";
         }
 
         // Check the display name
@@ -300,6 +297,16 @@ public class ItemDifferenter extends NetworkObject {
 
     private static boolean isFireResistant(@NotNull ItemMeta meta) {
         return meta.hasDamageResistant() && Objects.equals(meta.getDamageResistant(), DamageTypeTags.IS_FIRE);
+    }
+
+    static boolean sameCustomModelDataState(@NotNull ItemMeta first, @NotNull ItemMeta second) {
+        final boolean firstHas = first.hasCustomModelDataComponent();
+        final boolean secondHas = second.hasCustomModelDataComponent();
+        if (firstHas != secondHas) {
+            return false;
+        }
+        return !firstHas || sameCustomModelData(
+            first.getCustomModelDataComponent(), second.getCustomModelDataComponent());
     }
 
     private static boolean sameCustomModelData(
