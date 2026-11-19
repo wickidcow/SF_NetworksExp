@@ -1,13 +1,16 @@
 package com.ytdd9527.networksexpansion.implementation.machines.manual;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import io.github.sefiraat.networks.utils.StackUtils;
 import io.github.thebusybiscuit.slimefun4.core.services.CustomItemDataService;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -15,6 +18,7 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -66,21 +70,72 @@ class ItemDifferenterHistoricalNameIdentityTest {
     }
 
     /**
-     * Exercise the real public comparator while mocking only the registry and
-     * network blacklist singleton lookups, which need a live server plugin.
+     * MockBukkit's copied PersistentDataContainerMock objects do not implement
+     * Paper's value-equality comparison: distinct metadata copies can report
+     * unequal PDC even with the same keys, types and values. Use real ItemStack
+     * metadata for the source fixtures and serialized-byte receipts, but model
+     * that single PDC equals boundary with a shared mock ONLY when every typed
+     * fixture value and key is equal. The production comparator is unchanged.
      */
     private static String compare(ItemStack left, ItemStack right) {
+        ItemMeta realLeft = left.getItemMeta();
+        ItemMeta realRight = right.getItemMeta();
+        PersistentDataContainer first = mock(PersistentDataContainer.class);
+        PersistentDataContainer second = typedPdcEquals(realLeft, realRight)
+            ? first : mock(PersistentDataContainer.class);
+        ItemMeta leftMeta = comparisonMeta(realLeft, first);
+        ItemMeta rightMeta = comparisonMeta(realRight, second);
+        ItemStack leftSnapshot = comparisonStack(left, leftMeta);
+        ItemStack rightSnapshot = comparisonStack(right, rightMeta);
         CustomItemDataService service = mock(CustomItemDataService.class);
-        when(service.getItemData(any(ItemMeta.class))).thenAnswer(invocation -> {
-            ItemMeta meta = invocation.getArgument(0);
-            return Optional.ofNullable(meta.getPersistentDataContainer()
-                .get(ID, PersistentDataType.STRING));
-        });
+        when(service.getItemData(leftMeta)).thenReturn(Optional.ofNullable(
+            realLeft.getPersistentDataContainer().get(ID, PersistentDataType.STRING)));
+        when(service.getItemData(rightMeta)).thenReturn(Optional.ofNullable(
+            realRight.getPersistentDataContainer().get(ID, PersistentDataType.STRING)));
         try (MockedStatic<Slimefun> slimefun = mockStatic(Slimefun.class);
              MockedStatic<StackUtils> stackUtils = mockStatic(StackUtils.class)) {
             slimefun.when(Slimefun::getItemDataService).thenReturn(service);
-            return ItemDifferenter.calc(left, right);
+            return ItemDifferenter.calc(leftSnapshot, rightSnapshot);
         }
+    }
+
+    private static boolean typedPdcEquals(ItemMeta left, ItemMeta right) {
+        var a = left.getPersistentDataContainer();
+        var b = right.getPersistentDataContainer();
+        return a.getKeys().equals(b.getKeys())
+            && Objects.equals(a.get(ID, PersistentDataType.STRING),
+                b.get(ID, PersistentDataType.STRING))
+            && Objects.equals(a.get(OWNER, PersistentDataType.STRING),
+                b.get(OWNER, PersistentDataType.STRING))
+            && Objects.equals(a.get(LEDGER, PersistentDataType.LONG),
+                b.get(LEDGER, PersistentDataType.LONG))
+            && Arrays.equals(a.get(BYTES, PersistentDataType.BYTE_ARRAY),
+                b.get(BYTES, PersistentDataType.BYTE_ARRAY));
+    }
+
+    private static ItemMeta comparisonMeta(ItemMeta source, PersistentDataContainer pdc) {
+        ItemMeta snapshot = mock(ItemMeta.class);
+        when(snapshot.getPersistentDataContainer()).thenReturn(pdc);
+        when(snapshot.getEnchants()).thenReturn(Map.of());
+        when(snapshot.getItemFlags()).thenReturn(Set.of());
+        when(snapshot.hasDisplayName()).thenReturn(source.hasDisplayName());
+        when(snapshot.displayName()).thenReturn(source.displayName());
+        when(snapshot.hasItemName()).thenReturn(source.hasItemName());
+        if (source.hasItemName()) {
+            when(snapshot.itemName()).thenReturn(source.itemName());
+        }
+        when(snapshot.hasLore()).thenReturn(source.hasLore());
+        when(snapshot.lore()).thenReturn(source.lore());
+        return snapshot;
+    }
+
+    private static ItemStack comparisonStack(ItemStack original, ItemMeta snapshot) {
+        ItemStack copy = mock(ItemStack.class);
+        when(copy.getType()).thenReturn(original.getType());
+        when(copy.getAmount()).thenReturn(original.getAmount());
+        when(copy.hasItemMeta()).thenReturn(original.hasItemMeta());
+        when(copy.getItemMeta()).thenReturn(snapshot);
+        return copy;
     }
 
     private static void assertReadOnly(ItemStack left, ItemStack right, String expected) {
