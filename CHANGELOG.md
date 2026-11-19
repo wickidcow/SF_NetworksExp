@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.65 — accurate historical Adventure name comparison
+
+- Fix the read-only Networks Item Differenter misreporting `eq` for same-Slimefun-ID items with different Adventure display-name component trees; also distinguish explicitly set `ItemMeta.itemName()` presence and values on Paper 1.21.11+.
+- Preserve the previous checks for material, PDC typed owner/storage fields, Slimefun ID, custom-model data, lore and other metadata. No change to the actual network/recipe/cargo item matchers or player inventories, and no silent normalization of old items.
+- Extend MockBukkit regression checks with real `PLAYER_HEAD` old/new source bytes and typed PDC fixtures; retain production PDC equality, modeling only the MockBukkit copied-PDC limitation in test boundaries.
+- Add native Paper two-process registered `SMALL_URANIUM` item-name/display-name identity tests, with byte-exact source snapshots, typed owner `STRING`, ledger `LONG` and binary PDC, and restart deserialization. Actual AlbionMC historical item bytes and QuickShop-Hikari matcher parity remain unproven.
+- Include since-1.0.64 native damage-resistance parity and MockBukkit fixtures without changing the legacy production fire-tag matcher. Paper 26.3 deprecations remain documented separately in #122.
+- Publish only a distinct verified `SF_Networks1.0.65.jar` from a source-pinned current master commit after strict Java 21 Gradle, Legacy/United/Gugu, native Paper 26.3 build 176/194 and storage/restart conservation, immutable source and SHA-256 release gates. No change to item IDs, blueprints, world data, recipe throughput or existing v1.0.64 assets. No measured Auto Crafter TPS/MSPT improvement is claimed; issue #111 still requires real comparable profiler data.
+
 ## 1.0.64 — Source-pinned 4.1.80 compatibility candidate
 
 - Assign the next distinct distributable version to the merged post-1.0.63 Networks source, including restart and item-identity diagnostics that cannot be republished under the immutable v1.0.63 tag.
