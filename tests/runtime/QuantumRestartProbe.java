@@ -2,6 +2,7 @@ package networksprobe;
 
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import com.ytdd9527.networksexpansion.implementation.machines.manual.ItemDifferenter;
+import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.sefiraat.networks.network.stackcaches.QuantumCache;
 import io.github.sefiraat.networks.slimefun.NetworkSlimefunItems;
 import io.github.sefiraat.networks.slimefun.network.NetworkQuantumStorage;
@@ -13,11 +14,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletionException;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
@@ -62,6 +66,7 @@ public final class QuantumRestartProbe extends JavaPlugin {
                 verifyNativeNegativeDamageResistance(phase);
                 verifyNativeMapTint(phase);
                 verifyNativeVanillaCustomModels(phase);
+                verifyNativeHistoricalNameIdentity(phase);
                 if ("seed".equals(phase)) {
                     seed();
                 } else if ("verify".equals(phase)) {
@@ -433,6 +438,112 @@ public final class QuantumRestartProbe extends JavaPlugin {
             + (actual == null ? "null" : actual.getKey())
             + ", expectedKey=" + DamageTypeTags.IS_FIRE.getKey()
             + ", legacyEquals=" + Objects.equals(actual, DamageTypeTags.IS_FIRE);
+    }
+
+    /**
+     * Real native Paper identity control: same trusted Slimefun ID, same owner
+     * and ledger PDC, but an older nested Adventure display-name shape.
+     * It must not be reported as equal merely because the ID matches. No
+     * inventory is rewritten; the bytes are persisted as a disposable probe
+     * fixture and reconstructed after a separate JVM boot.
+     */
+    private void verifyNativeHistoricalNameIdentity(String phase) throws Exception {
+        final SlimefunItem uranium = SlimefunItem.getById("SMALL_URANIUM");
+        require(uranium != null, "Native historical identity requires registered SMALL_URANIUM");
+        final NamespacedKey ledgerKey = new NamespacedKey("networkstest", "historical_ledger");
+        final NamespacedKey byteKey = new NamespacedKey("networkstest", "historical_bytes");
+        final ItemStack registered = uranium.getItem().clone();
+        final byte[] registeredBefore = registered.serializeAsBytes();
+        final ItemStack fresh = registered.clone();
+        fresh.setAmount(7);
+        final ItemMeta freshMeta = fresh.getItemMeta();
+        require(freshMeta != null, "Native uranium source has no item metadata");
+        freshMeta.displayName(Component.text("Small Chunk of Uranium", NamedTextColor.RED)
+            .decoration(TextDecoration.BOLD, TextDecoration.State.TRUE));
+        freshMeta.getPersistentDataContainer().set(
+            ownerKey(), PersistentDataType.STRING, "unchanged-historical-owner");
+        freshMeta.getPersistentDataContainer().set(
+            ledgerKey, PersistentDataType.LONG, 9876543210123L);
+        freshMeta.getPersistentDataContainer().set(
+            byteKey, PersistentDataType.BYTE_ARRAY, new byte[]{-1, 0, 42});
+        require(fresh.setItemMeta(freshMeta), "Could not add native historical identity fixture metadata");
+        final ItemStack old = fresh.clone();
+        final ItemMeta oldMeta = old.getItemMeta();
+        require(oldMeta != null, "Historical clone lost item metadata");
+        oldMeta.displayName(Component.text("").append(
+            Component.text("Small Chunk of Uranium", NamedTextColor.RED)
+                .decoration(TextDecoration.BOLD, TextDecoration.State.FALSE)));
+        require(old.setItemMeta(oldMeta), "Native historical nested name rejected");
+
+        require("SMALL_URANIUM".equals(Slimefun.getItemDataService()
+                .getItemData(fresh.getItemMeta()).orElse(null)),
+            "Fresh native identity lost registered Slimefun ID");
+        require("SMALL_URANIUM".equals(Slimefun.getItemDataService()
+                .getItemData(old.getItemMeta()).orElse(null)),
+            "Old native identity lost registered Slimefun ID");
+        require(!fresh.isSimilar(old),
+            "Distinct nested historical Adventure display names must not stack");
+        final byte[] newBytes = fresh.serializeAsBytes();
+        final byte[] oldBytes = old.serializeAsBytes();
+        require("neq.displayname".equals(ItemDifferenter.calc(fresh, old)),
+            "Real native Item Differenter concealed a historical Adventure name difference");
+        require("neq.displayname".equals(ItemDifferenter.calc(old, fresh)),
+            "Real native historical name diagnosis is asymmetric");
+        require(Arrays.equals(newBytes, fresh.serializeAsBytes())
+                && Arrays.equals(oldBytes, old.serializeAsBytes())
+                && Arrays.equals(registeredBefore, registered.serializeAsBytes()),
+            "Native comparison changed registered, old or new item serialized bytes");
+        require(fresh.getAmount() == 7 && old.getAmount() == 7,
+            "Native historical diagnostic changed output quantity");
+        require("unchanged-historical-owner".equals(old.getItemMeta()
+                .getPersistentDataContainer().get(ownerKey(), PersistentDataType.STRING))
+                && Long.valueOf(9876543210123L).equals(old.getItemMeta()
+                    .getPersistentDataContainer().get(ledgerKey, PersistentDataType.LONG))
+                && Arrays.equals(new byte[]{-1, 0, 42}, old.getItemMeta()
+                    .getPersistentDataContainer().get(byteKey, PersistentDataType.BYTE_ARRAY)),
+            "Native historical diagnostic changed typed owner, ledger or byte PDC");
+
+        final ItemStack namedOne = fresh.clone();
+        namedOne.editMeta(meta -> meta.itemName(Component.text("First item-name", NamedTextColor.GOLD)));
+        final ItemStack namedTwo = fresh.clone();
+        namedTwo.editMeta(meta -> meta.itemName(Component.text("Second item-name", NamedTextColor.GOLD)));
+        require(!namedOne.isSimilar(namedTwo)
+                && "neq.itemname".equals(ItemDifferenter.calc(namedOne, namedTwo))
+                && "neq.itemname".equals(ItemDifferenter.calc(namedTwo, namedOne)),
+            "Native Item Differenter ignored a distinct item-name Adventure component");
+        final ItemStack otherOwner = fresh.clone();
+        otherOwner.editMeta(meta -> meta.getPersistentDataContainer().set(
+            ownerKey(), PersistentDataType.STRING, "another-owner"));
+        require(!fresh.isSimilar(otherOwner)
+                && "neq.pdc".equals(ItemDifferenter.calc(fresh, otherOwner)),
+            "Native Item Differenter must reject distinct typed PDC owners");
+
+        final Path persisted = getDataFolder().toPath().getParent()
+            .resolve("native-historical-name-item.bin");
+        if ("seed".equals(phase)) {
+            Files.write(persisted, oldBytes);
+        } else if ("verify".equals(phase)) {
+            require(Files.isRegularFile(persisted),
+                "Native historical item fixture missing after process restart");
+            final ItemStack restored = ItemStack.deserializeBytes(Files.readAllBytes(persisted));
+            require(restored.getAmount() == 7 && restored.isSimilar(old)
+                    && !restored.isSimilar(fresh),
+                "Native historical item lost identity or amount after separate-JVM byte deserialize");
+            require("neq.displayname".equals(ItemDifferenter.calc(fresh, restored)),
+                "Item Differenter lost historical distinction after process restart");
+            require("unchanged-historical-owner".equals(restored.getItemMeta()
+                    .getPersistentDataContainer().get(ownerKey(), PersistentDataType.STRING))
+                    && Long.valueOf(9876543210123L).equals(restored.getItemMeta()
+                        .getPersistentDataContainer().get(ledgerKey, PersistentDataType.LONG))
+                    && Arrays.equals(new byte[]{-1, 0, 42}, restored.getItemMeta()
+                        .getPersistentDataContainer().get(byteKey, PersistentDataType.BYTE_ARRAY)),
+                "Restart deserialization lost typed owner, ledger or byte PDC");
+        } else {
+            throw new AssertionError("Unknown native historical name phase " + phase);
+        }
+        getLogger().info("NATIVE HISTORICAL ITEM IDENTITY phase=" + phase
+            + " originalBytesUntouched=true oldNewDisplayDiffer=true itemNameDiffer=true"
+            + " ownerAndLedgerPdcUntouched=true quantityConserved=true");
     }
 
     private Path phaseFile() {

@@ -274,7 +274,11 @@ public class ItemDifferenter extends NetworkObject {
                 if (!sameCustomModelDataState(itemMeta, cachedMeta)) {
                     return "neq.custommodeldata";
                 }
-                return "eq";
+                // The Slimefun ID is not the complete ItemStack identity.
+                // Historical serialized display-name and item-name Adventure
+                // trees may differ while PDC and visible text still match.
+                final String nameDifference = nameDifference(itemMeta, cachedMeta);
+                return nameDifference == null ? "eq" : nameDifference;
             }
             return "neq.sfid";
         }
@@ -285,14 +289,29 @@ public class ItemDifferenter extends NetworkObject {
             return "neq.custommodeldata";
         }
 
-        // Check the display name
-        if (!itemMeta.hasDisplayName() || Objects.equals(itemMeta.displayName(), cachedMeta.displayName())) {
-            return "eq";
-        } else {
+        final String nameDifference = nameDifference(itemMeta, cachedMeta);
+        return nameDifference == null ? "eq" : nameDifference;
+    }
+
+    /**
+     * Diagnostic only: preserve component-tree equality for both legacy
+     * display names and 1.21.11+ item-name components. This does not approve
+     * any network transfer, normalize old stacks or replace owner metadata.
+     */
+    static String nameDifference(@NotNull ItemMeta first, @NotNull ItemMeta second) {
+        if (first.hasItemName() != second.hasItemName()) {
+            return "neq.hasitemname";
+        }
+        if (first.hasItemName() && !Objects.equals(first.itemName(), second.itemName())) {
+            return "neq.itemname";
+        }
+        if (first.hasDisplayName() != second.hasDisplayName()) {
+            return "neq.hasdisplayname";
+        }
+        if (first.hasDisplayName() && !Objects.equals(first.displayName(), second.displayName())) {
             return "neq.displayname";
         }
-
-        // Everything should match if we've managed to get here
+        return null;
     }
 
     private static boolean isFireResistant(@NotNull ItemMeta meta) {
