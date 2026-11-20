@@ -104,7 +104,8 @@ public class ItemDifferenter extends NetworkObject {
                     if (i1 == null || i1.getType().isAir() || i2 == null || i2.getType().isAir()) {
                         return setResult(menu, "no-item", false);
                     }
-                    return setResult(menu, calc(i1, i2), i1.isSimilar(i2));
+                    boolean isSimilar = i1.isSimilar(i2);
+                    return setResult(menu, reconcileUnclassifiedIdentity(calc(i1, i2), isSimilar), isSimilar);
                 });
                 menu.addMenuClickHandler(RESULT_SLOT, ChestMenuUtils.getEmptyClickHandler());
             }
@@ -129,6 +130,19 @@ public class ItemDifferenter extends NetworkObject {
             (result.equals("no-item") ? "" : ("isSimilar: " + isSimilar + " | ")) + currentName + result));
         i.setItemMeta(meta);
         return i;
+    }
+
+    /**
+     * The Item Differenter is read-only. Its hand-maintained diagnostic categories
+     * cannot anticipate every native Paper item component (including future
+     * serialized presentation data). Never print "eq" next to Bukkit's authoritative
+     * isSimilar=false just because a field lacks a dedicated explanation.
+     *
+     * This is diagnostic display only; Networks crafting, Cargo, ownership,
+     * storage and item matchers are not changed by this fallback.
+     */
+    static String reconcileUnclassifiedIdentity(String reason, boolean isSimilar) {
+        return "eq".equals(reason) && !isSimilar ? "neq.unclassified-meta" : reason;
     }
 
     public static String calc(ItemStack i1, ItemStack i2) {
