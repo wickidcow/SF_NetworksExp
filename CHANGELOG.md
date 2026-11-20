@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.66 — fail-closed Item Differenter residual metadata diagnostics
+
+- Fix read-only Item Differenter GUI reporting `isSimilar: false | eq` when Bukkit's native metadata comparison finds a meaningful unknown item component not covered by the human-readable category list. Display `neq.unclassified-meta` while preserving all existing more specific mismatches.
+- Preserve strict typed PDC, registered Slimefun ID, Adventure name/lore, owner, glint, enchantment, model, skull and quantity semantics. There are no changes to actual network insertion, cargo, ItemStack matching, Auto Crafter throughput, machine recipes, saved items, QuickShop or optional migration.
+- Add real MockBukkit PLAYER_HEAD regression fixtures with unchanged `serializeAsBytes()`, typed STRING/LONG/BYTE_ARRAY PDC, explicitly different enchantment-glint metadata, original amounts, and unchanged classifications of existing known mismatches. These are synthetic representative identities, not the actual old AlbionMC serialized bytes.
+- A separate full exact-head Legacy/United/Gugu, Java 21 distributable, native Paper 26.3 / Purpur 1.21.11 Quantum/drawer/restart and source-provenance CI run must pass before an immutable distinct raw JAR can be released. No claim of increased TPS or MSPT; Networks #111 still needs matched live 400-Auto-Crafter samples. The six Paper26.3 metadata deprecations in #122 remain a distinct parity issue.
+
 ## 1.0.65 — accurate historical Adventure name comparison
 
 - Fix the read-only Networks Item Differenter misreporting `eq` for same-Slimefun-ID items with different Adventure display-name component trees; also distinguish explicitly set `ItemMeta.itemName()` presence and values on Paper 1.21.11+.
