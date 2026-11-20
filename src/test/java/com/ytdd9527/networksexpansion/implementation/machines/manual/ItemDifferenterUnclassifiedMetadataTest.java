@@ -2,7 +2,6 @@ package com.ytdd9527.networksexpansion.implementation.machines.manual;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.util.Arrays;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
