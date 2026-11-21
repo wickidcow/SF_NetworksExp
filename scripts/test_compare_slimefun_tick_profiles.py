@@ -2,7 +2,11 @@
 """Offline compatibility and strict evidence tests for ticker profile comparison."""
 import unittest
 
-from compare_slimefun_tick_profiles import ProfileError, compare, parse_profiles
+from compare_slimefun_tick_profiles import ProfileError, compare, parse_profiles, summarize_hotspots, main
+from contextlib import redirect_stdout, redirect_stderr
+from io import StringIO
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 ITEM = "NTW_AUTO_CRAFTER"
 
@@ -104,6 +108,67 @@ class TickerProfileComparisonTests(unittest.TestCase):
         after = parse_profiles(snapshot("10") * 3)
         report = compare(before, after)
         self.assertIsNone(report["metrics"]["total_ms"]["change_percent"])
+
+
+    def test_hotspot_coordinates_are_parsed_but_never_exposed_by_default(self):
+        before = parse_profiles(snapshot() * 3)
+        after = parse_profiles(snapshot(total="31") * 3)
+        self.assertEqual("world -1300,63,801", before[0].hotspot)
+        default = compare(before, after, require_count=400)
+        self.assertNotIn("hotspots", default)
+        self.assertNotIn("-1300", str(default))
+
+    def test_opt_in_hotspot_frequencies_identify_repeated_hottest_block(self):
+        old = snapshot() * 2 + snapshot().replace("-1300,63,801", "-1302,63,802")
+        new = snapshot().replace("-1300,63,801", "-1302,63,802") * 3
+        report = summarize_hotspots(parse_profiles(old), parse_profiles(new))
+        self.assertEqual(
+            [{"location": "world -1300,63,801", "samples": 2, "share_percent": 66.67},
+             {"location": "world -1302,63,802", "samples": 1, "share_percent": 33.33}],
+            report["before"])
+        self.assertEqual(
+            [{"location": "world -1302,63,802", "samples": 3, "share_percent": 100.0}],
+            report["after"])
+        self.assertIn("NOT a spark CPU trace", report["warning"])
+
+    def test_opt_in_hotspots_refuse_missing_malformed_or_partial_receipts(self):
+        valid = parse_profiles(snapshot() * 3)
+        no_location = parse_profiles(snapshot().replace(
+            " @ world -1300,63,801", "") * 3)
+        malformed = parse_profiles(snapshot().replace(
+            " @ world -1300,63,801", " @ world unknown-coordinates") * 3)
+        for missing in (no_location, malformed):
+            self.assertIsNone(missing[0].hotspot)
+            with self.assertRaisesRegex(ProfileError, "missing/malformed max location"):
+                summarize_hotspots(valid, missing)
+        with self.assertRaisesRegex(ProfileError, "positive"):
+            summarize_hotspots(valid, valid, limit=0)
+
+    def test_hotspot_summary_is_bounded_without_fabricating_other_locations(self):
+        samples = (snapshot().replace("-1300,63,801", "-1301,63,801") +
+                   snapshot().replace("-1300,63,801", "-1302,63,801") +
+                   snapshot().replace("-1300,63,801", "-1303,63,801"))
+        current = parse_profiles(samples)
+        report = summarize_hotspots(current, current, limit=2)
+        self.assertEqual(2, len(report["before"]))
+        self.assertEqual(2, len(report["after"]))
+        self.assertEqual(1, report["before"][0]["samples"])
+
+    def test_cli_never_prints_coordinates_without_explicit_opt_in(self):
+        with TemporaryDirectory() as temporary:
+            before = Path(temporary) / "before.log"
+            after = Path(temporary) / "after.log"
+            before.write_text(snapshot() * 3, encoding="utf-8")
+            after.write_text(snapshot(total="30") * 3, encoding="utf-8")
+            for include in (False, True):
+                stdout, stderr = StringIO(), StringIO()
+                argv = ["--before", str(before), "--after", str(after), "--require-count", "400"]
+                if include:
+                    argv.append("--include-hotspots")
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    code = main(argv)
+                self.assertEqual(0, code, stderr.getvalue())
+                self.assertEqual(include, "world -1300,63,801" in stdout.getvalue())
 
 
 if __name__ == "__main__":
