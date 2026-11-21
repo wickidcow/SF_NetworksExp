@@ -6,6 +6,7 @@ Read-only offline helper: no server access, plugin actions, or gameplay changes.
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from dataclasses import asdict, dataclass
 import json
 import math
@@ -17,6 +18,13 @@ import sys
 HEADER = "===== Slimefun Performance Profiler ====="
 COLOR = re.compile(r"\x1b\[[0-9;]*m|§.")
 MILLIS = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*ms(?:\s*@.*)?\s*$", re.I)
+# Only opt-in reports expose coordinates. An absent or malformed location
+# must never be guessed or silently counted as a different machine.
+MAX_HOTSPOT = re.compile(
+    r"^\s*\d+(?:\.\d+)?\s*ms\s*@\s*"
+    r"(?P<world>[A-Za-z0-9_.:-]+)\s+"
+    r"(?P<x>-?\d+),(?P<y>-?\d+),(?P<z>-?\d+)\s*$", re.I,
+)
 INTERVAL = re.compile(r"Ticker interval:\s*(\d+)\s*ticks", re.I)
 OLD_INTERVAL = re.compile(r"Ticker runtime:[^\n]*\((\d+)\s*ticks\)", re.I)
 CALLBACK_WORK = re.compile(
@@ -38,6 +46,7 @@ class Sample:
     p95_ms: float
     maximum_ms: float
     all_slimefun_ms: float
+    hotspot: str | None = None
 
 
 def metric(value: str, name: str) -> float:
@@ -78,6 +87,7 @@ def parse_profiles(content: str, item_id: str = "NTW_AUTO_CRAFTER") -> list[Samp
             raise ProfileError(f"Sample {number}: invalid ticker interval")
         fields: dict[str, float] = {}
         initial: float | None = None
+        hotspot: str | None = None
         for component in matches[0][1].split("|"):
             component = component.strip()
             if ":" in component:
@@ -88,6 +98,13 @@ def parse_profiles(content: str, item_id: str = "NTW_AUTO_CRAFTER") -> list[Samp
                 if key is None or key in fields:
                     raise ProfileError(f"Sample {number}: unknown/duplicate field {name}")
                 fields[key] = metric(value, key)
+                if key == "maximum":
+                    coordinate = MAX_HOTSPOT.fullmatch(value)
+                    if coordinate is not None:
+                        hotspot = (f"{coordinate.group('world')} "
+                                   f"{int(coordinate.group('x'))},"
+                                   f"{int(coordinate.group('y'))},"
+                                   f"{int(coordinate.group('z'))}")
             elif initial is None:
                 initial = metric(component, "first")
             else:
@@ -116,7 +133,7 @@ def parse_profiles(content: str, item_id: str = "NTW_AUTO_CRAFTER") -> list[Samp
             raise ProfileError(f"Sample {number}: non-finite total callback work")
         result.append(Sample(
             machines, ticker_ticks, total_ms, average_ms, fields["p95"],
-            fields["maximum"], all_slimefun_ms,
+            fields["maximum"], all_slimefun_ms, hotspot,
         ))
     return result
 
@@ -163,6 +180,40 @@ def compare(
     }
 
 
+def summarize_hotspots(before: list[Sample], after: list[Sample], limit: int = 5) -> dict:
+    """Optional max-location frequency receipt; not a CPU call-stack profile.
+
+    Every sample must include parseable max-block coordinates. Repeated location
+    appearances are not proof that the same recipe, network or player load was
+    exercised; never silently compare only the subset with coordinates.
+    """
+    if limit < 1:
+        raise ProfileError("Hotspot summary limit must be positive")
+
+    def period(samples: list[Sample], label: str) -> list[dict]:
+        missing = [i for i, sample in enumerate(samples, 1) if sample.hotspot is None]
+        if missing:
+            raise ProfileError(
+                f"{label}: cannot summarize hotspot locations: "
+                f"missing/malformed max location in samples {missing}"
+            )
+        counts = Counter(s.hotspot for s in samples)
+        return [
+            {"location": location, "samples": count,
+             "share_percent": round(100 * count / len(samples), 2)}
+            for location, count in sorted(counts.items(), key=lambda row: (-row[1], row[0]))[:limit]
+        ]
+
+    if not before or not after:
+        raise ProfileError("Hotspot summary requires both periods")
+    return {
+        "before": period(before, "before"),
+        "after": period(after, "after"),
+        "warning": ("Max-location frequency is descriptive, NOT a spark CPU trace, "
+                    "full-server MSPT/TPS result or evidence of equivalent load."),
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--before", required=True, type=Path, help="3-5 prior /sf tick top samples")
@@ -171,12 +222,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--min-samples", type=int, default=3)
     parser.add_argument("--require-count", type=int)
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--include-hotspots", action="store_true",
+                        help="Opt in to exposing sampled world/block coordinates")
     args = parser.parse_args(argv)
     try:
         before = parse_profiles(args.before.read_text(encoding="utf-8"), args.item)
         after = parse_profiles(args.after.read_text(encoding="utf-8"), args.item)
         result = compare(before, after, args.min_samples, args.require_count)
         result["item"] = args.item
+        if args.include_hotspots:
+            result["hotspots"] = summarize_hotspots(before, after)
     except (OSError, ProfileError, UnicodeError) as exc:
         print(f"Refusing ungrounded profiler comparison: {exc}", file=sys.stderr)
         return 2
@@ -191,6 +246,13 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {key}: {row['before_median_ms']:.3f} -> "
                   f"{row['after_median_ms']:.3f} ms ({change})")
         print(result["warning"])
+        if args.include_hotspots:
+            print("Slowest block location frequency (opt-in; not a spark trace):")
+            for period in ("before", "after"):
+                for entry in result["hotspots"][period]:
+                    print(f"  {period}: {entry['location']} - "
+                          f"{entry['samples']}/{result[period + '_samples']} samples")
+            print(result["hotspots"]["warning"])
     return 0
 
 
