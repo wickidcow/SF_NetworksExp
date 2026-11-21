@@ -10,6 +10,14 @@ Example from a local Python 3 environment:
 python3 scripts/compare_slimefun_tick_profiles.py --before before.log --after after.log --item NTW_AUTO_CRAFTER --require-count 400
 ```
 
+Opt in to a **per-period slowest-block location frequency** when the actual `Max:` profiler fields include coordinates:
+
+```console
+python3 scripts/compare_slimefun_tick_profiles.py --before before.log --after after.log --require-count 400 --include-hotspots
+```
+
+This is useful for checking whether the reported `world -1300,63,801` Auto Crafter repeatedly appears as the slowest block across independent samples. The default text and JSON reports **do not expose world names or block coordinates**. The opt-in output lists at most five locations per period, each with sample counts and percentages; it refuses missing or malformed hotspot locations instead of silently discarding partial evidence. Hotspot frequency is **not** a CPU stack trace and does not explain whether `craftPreFlight`, `NetworkRoot.containsAll` or `getItemStack0` caused the cost. Capture a separate spark CPU sample before implementing performance changes.
+
 Add `--json` for a structured report. The tool supports the current total-first profiler, legacy `Total tick time`/`Ticker runtime` labels, and the average-ordered view. It refuses insufficient samples, missing timings, differing machine counts and different ticker intervals. It computes the median of each metric across samples, not the p95 over all individual machine timings.
 
 The baseline recorded in issue #111 is **400 Auto Crafters / 32.31ms accumulated callback time / 10 ticks**, observed once. Do not fabricate two extra baseline samples to satisfy the minimum. Obtain new real profiles and a separate spark report before considering a hot-path optimization.
