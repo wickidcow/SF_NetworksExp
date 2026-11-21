@@ -359,7 +359,11 @@ public final class QuantumRestartProbe extends JavaPlugin {
         final ItemMeta base = original.getItemMeta();
         require(base instanceof MapMeta, "Native filled map must expose MapMeta");
         final MapMeta map = (MapMeta) base;
-        map.setColor(Color.RED);
+        // The deprecated map-tint setter requires a MapView on Paper 26.3.
+        // Only the pinned 1.21.11 source fixture needs the legacy red tint.
+        if ("1.21.11".equals(Bukkit.getMinecraftVersion())) {
+            map.setColor(Color.RED);
+        }
         map.getPersistentDataContainer().set(ownerKey(), PersistentDataType.STRING, "native-map-tint");
         map.getPersistentDataContainer().set(new NamespacedKey("networkstest", "map_ledger"),
             PersistentDataType.LONG, 7311123456L);
