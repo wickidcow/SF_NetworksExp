@@ -365,7 +365,8 @@ public final class QuantumRestartProbe extends JavaPlugin {
             PersistentDataType.LONG, 7311123456L);
         map.getPersistentDataContainer().set(new NamespacedKey("networkstest", "map_payload"),
             PersistentDataType.BYTE_ARRAY, new byte[]{-1, 0, 42});
-        final boolean sourceHasTint = map.hasColor() && Color.RED.equals(map.getColor());
+        final boolean sourceHasTint = Bukkit.getMinecraftVersion().equals("1.21.11")
+            && map.hasColor() && Color.RED.equals(map.getColor());
         if (Bukkit.getMinecraftVersion().equals("1.21.11")) {
             require(sourceHasTint, "Paper/Purpur 1.21.11 source MapMeta lost explicit red tint");
         }
@@ -454,6 +455,9 @@ public final class QuantumRestartProbe extends JavaPlugin {
     @SuppressWarnings("deprecation")
     private static String nativeMapTint(ItemStack item) {
         final ItemMeta meta = item.getItemMeta();
+        // Paper 26.3 can throw when querying map color without an associated MapView.
+        // The deprecated tint accessor is not a cross-version compatibility oracle.
+        if ("26.3".equals(Bukkit.getMinecraftVersion())) return "unsupported-26.3";
         if (!(meta instanceof MapMeta map) || !map.hasColor() || map.getColor() == null) {
             return "absent";
         }
