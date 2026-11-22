@@ -506,7 +506,9 @@ public class ItemDifferenter extends NetworkObject {
             if (instanceOne.hasMapView() != instanceTwo.hasMapView()) {
                 return "neq.map.view.has";
             }
-            if (instanceOne.hasColor() != instanceTwo.hasColor()) {
+            final boolean firstHasColor = instanceOne.hasColor();
+            final boolean secondHasColor = instanceTwo.hasColor();
+            if (firstHasColor != secondHasColor) {
                 return "neq.map.color.has";
             }
             // Paper 26.3 throws for getMapView() when no map is associated.
@@ -516,7 +518,7 @@ public class ItemDifferenter extends NetworkObject {
                 return "neq.map.view.get";
             }
             // Only query the deprecated tint when both metas report a tint.
-            if (instanceOne.hasColor()
+            if (firstHasColor
                 && !Objects.equals(instanceOne.getColor(), instanceTwo.getColor())) {
                 return "neq.map.color.get";
             }
