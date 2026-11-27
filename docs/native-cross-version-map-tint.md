@@ -16,4 +16,4 @@ This is a **synthetic new test fixture generated on the pinned 1.21.11 server**,
 
 Before any production metadata API replacement or release: independently capture genuine backed-up old/fresh item pairs and real 1.21.11→26.3 world/item restoration where feasible, compare serialized field shape, typed PDC, strict `isSimilar`, producer source and no-loss/no-dupe counts, and document any irrecoverable old map-tint semantics. Keep #122 open until those gates pass.
 
-The test changes only CI workflows, probe source and documentation. No change is made to `ItemDifferenter`, `MapUtil`, production metadata constructors, old player/shop items, version numbers, tags, or the Slimefun Legacy 44-addon ZIP.
+The production `ItemDifferenter` now guards absent map associations and tint before reading those values. This is a comparison-safety fix, not a migration or a metadata constructor change. `MapUtil`, old player/shop items, version numbers, tags, and published Slimefun Legacy addon ZIPs remain unchanged.
