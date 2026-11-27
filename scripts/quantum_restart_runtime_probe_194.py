@@ -79,14 +79,20 @@ def start_server(java: str, server: Path, work: Path, phase: str) -> int:
 
 
 def main() -> None:
-    if len(sys.argv) not in (5, 6):
+    if len(sys.argv) not in (5, 6, 7):
         raise SystemExit(
             "Usage: quantum_restart_runtime_probe.py "
             "<core.jar> <networks.jar> <server.jar> <new-work-dir> "
-            "[paper-26.3-build-metadata.json]"
+            "[paper-26.3-build-metadata.json] [purpur-1.21.11-native-map.bin]"
         )
     core, networks, server, work = [Path(p).resolve() for p in sys.argv[1:5]]
-    metadata = Path(sys.argv[5]).resolve() if len(sys.argv) == 6 else None
+    metadata = Path(sys.argv[5]).resolve() if len(sys.argv) >= 6 else None
+    historical_map = Path(sys.argv[6]).resolve() if len(sys.argv) == 7 else None
+    if historical_map is not None:
+        if not historical_map.is_file() or not (0 < historical_map.stat().st_size <= 1_048_576):
+            raise SystemExit("Missing/invalid exact Purpur 1.21.11 native map fixture")
+        if not metadata:
+            raise SystemExit("Cross-version map input requires pinned Paper 26.3 metadata")
     version = check_inputs(server, metadata)
 
     work.mkdir(parents=True, exist_ok=False)
@@ -122,6 +128,10 @@ def main() -> None:
     (plugins / "bStats/config.yml").write_text("enabled: false\n", encoding="utf-8")
     shutil.copyfile(core, plugins / "Slimefun.jar")
     shutil.copyfile(networks, plugins / "Networks.jar")
+    if historical_map is not None:
+        # Read-only historical bytes supplied by the SAME CI run\x27s pinned Purpur job.
+        # Never mutate the source snapshot or claim the native tint persists.
+        shutil.copyfile(historical_map, plugins / "native-map-tint-from-1.21.11.bin")
 
     classes = work / "restart-probe-classes"
     classpath = os.pathsep.join(
@@ -158,6 +168,7 @@ def main() -> None:
             "server": digest(server),
             "mojang_input": expected,
             "two_separate_processes": True,
+            "historical_map_1_21_11_sha256": digest(historical_map) if historical_map else None,
         }, indent=2) + "\n",
         encoding="utf-8",
     )

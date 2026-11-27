@@ -65,6 +65,7 @@ public final class QuantumRestartProbe extends JavaPlugin {
                 verifyNativeFireResistance(phase);
                 verifyNativeNegativeDamageResistance(phase);
                 verifyNativeMapTint(phase);
+                verifyCrossVersionMapTint(phase);
                 verifyNativeVanillaCustomModels(phase);
                 verifyNativeHistoricalNameIdentity(phase);
                 if ("seed".equals(phase)) {
@@ -358,9 +359,18 @@ public final class QuantumRestartProbe extends JavaPlugin {
         final ItemMeta base = original.getItemMeta();
         require(base instanceof MapMeta, "Native filled map must expose MapMeta");
         final MapMeta map = (MapMeta) base;
-        map.setColor(Color.RED);
+        // The deprecated map-tint setter requires a MapView on Paper 26.3.
+        // Only the pinned 1.21.11 source fixture needs the legacy red tint.
+        if ("1.21.11".equals(Bukkit.getMinecraftVersion())) {
+            map.setColor(Color.RED);
+        }
         map.getPersistentDataContainer().set(ownerKey(), PersistentDataType.STRING, "native-map-tint");
-        final boolean sourceHasTint = map.hasColor() && Color.RED.equals(map.getColor());
+        map.getPersistentDataContainer().set(new NamespacedKey("networkstest", "map_ledger"),
+            PersistentDataType.LONG, 7311123456L);
+        map.getPersistentDataContainer().set(new NamespacedKey("networkstest", "map_payload"),
+            PersistentDataType.BYTE_ARRAY, new byte[]{-1, 0, 42});
+        final boolean sourceHasTint = Bukkit.getMinecraftVersion().equals("1.21.11")
+            && map.hasColor() && Color.RED.equals(map.getColor());
         if (Bukkit.getMinecraftVersion().equals("1.21.11")) {
             require(sourceHasTint, "Paper/Purpur 1.21.11 source MapMeta lost explicit red tint");
         }
@@ -396,9 +406,62 @@ public final class QuantumRestartProbe extends JavaPlugin {
             + " cloneBinaryRestartParity=true");
     }
 
+    /**
+     * Native cross-version diagnostic: load the REAL Purpur 1.21.11 source
+     * ItemStack bytes in a separate Paper 26.3 JVM. Never migrate the old
+     * source file or assume the removed map-tint API can preserve red color.
+     * Typed owner/ledger/payload and physical quantity MUST remain intact.
+     */
+    private void verifyCrossVersionMapTint(String phase) throws Exception {
+        if (!"26.3".equals(Bukkit.getMinecraftVersion())) return;
+        final Path directory = getDataFolder().toPath().getParent();
+        final Path historicalFile = directory.resolve("native-map-tint-from-1.21.11.bin");
+        require(Files.isRegularFile(historicalFile),
+            "Pinned Purpur 1.21.11 historical map bytes missing from native Paper 26.3 test");
+        final byte[] sourceBytes = Files.readAllBytes(historicalFile);
+        require(sourceBytes.length > 0 && sourceBytes.length <= 1_048_576,
+            "Historical map fixture is empty or unexpectedly large");
+
+        final ItemStack historical = ItemStack.deserializeBytes(sourceBytes);
+        require(historical.getType() == Material.FILLED_MAP && historical.getAmount() == 1,
+            "Paper 26.3 cross-version deserialize changed the saved map item type or quantity");
+        requireNativeMapSentinel(historical, "Purpur 1.21.11 -> Paper 26.3 deserialize");
+        final ItemStack copy = historical.clone();
+        requireNativeMapSentinel(copy, "cross-version native clone");
+        require(copy.isSimilar(historical), "Cross-version map no longer matches its own clone");
+        final byte[] upgradedSnapshot = historical.serializeAsBytes();
+        final String color = nativeMapTint(historical);
+        final String first = ItemDifferenter.calc(historical, copy);
+        final String second = ItemDifferenter.calc(copy, historical);
+        require(Objects.equals(first, second),
+            "Cross-version native Item Differenter is asymmetric");
+        require(Arrays.equals(sourceBytes, Files.readAllBytes(historicalFile))
+                    && Arrays.equals(upgradedSnapshot, historical.serializeAsBytes()),
+            "Read-only cross-version diagnostics changed saved bytes or decoded item");
+        final Path observation = directory.resolve("native-cross-version-map-tint-observed.txt");
+        if ("seed".equals(phase)) {
+            Files.writeString(observation, color, StandardCharsets.UTF_8);
+        } else if ("verify".equals(phase)) {
+            require(Files.isRegularFile(observation), "Cross-version tint seed receipt missing");
+            require(color.equals(Files.readString(observation, StandardCharsets.UTF_8).trim()),
+                "Cross-version map tint interpretation changed across Paper 26.3 JVM restart");
+        } else {
+            throw new AssertionError("Unknown cross-version map diagnostic phase " + phase);
+        }
+        getLogger().info("NATIVE CROSS-VERSION MAP TINT phase=" + phase
+            + " source=Purpur-1.21.11 destination=Paper-26.3"
+            + " observedTint=" + color
+            + " itemQuantity=1 typedOwnerLedgerPayloadPreserved=true"
+            + " sourceBytesUnchanged=true cloneAndSeparateJvmParity=true"
+            + " noHistoricalItemRewrite=true");
+    }
+
     @SuppressWarnings("deprecation")
     private static String nativeMapTint(ItemStack item) {
         final ItemMeta meta = item.getItemMeta();
+        // Paper 26.3 can throw when querying map color without an associated MapView.
+        // The deprecated tint accessor is not a cross-version compatibility oracle.
+        if ("26.3".equals(Bukkit.getMinecraftVersion())) return "unsupported-26.3";
         if (!(meta instanceof MapMeta map) || !map.hasColor() || map.getColor() == null) {
             return "absent";
         }
@@ -410,6 +473,12 @@ public final class QuantumRestartProbe extends JavaPlugin {
         require(meta != null && "native-map-tint".equals(meta.getPersistentDataContainer()
                 .get(ownerKey(), PersistentDataType.STRING)),
             "Native map PDC sentinel lost during " + stage);
+        require(Long.valueOf(7311123456L).equals(meta.getPersistentDataContainer()
+                .get(new NamespacedKey("networkstest", "map_ledger"), PersistentDataType.LONG)),
+            "Native map typed LONG ledger changed during " + stage);
+        require(Arrays.equals(new byte[]{-1, 0, 42}, meta.getPersistentDataContainer()
+                .get(new NamespacedKey("networkstest", "map_payload"), PersistentDataType.BYTE_ARRAY)),
+            "Native map typed BYTE_ARRAY payload changed during " + stage);
     }
 
     private void requireNativeSentinel(ItemStack item, String stage) {

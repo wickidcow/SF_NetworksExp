@@ -222,6 +222,7 @@ jobs:
             build/purpur-1.21.11-restart/verify-console.log
             build/purpur-1.21.11-restart/seed-result.txt
             build/purpur-1.21.11-restart/verify-result.txt
+            build/purpur-1.21.11-restart/plugins/native-map-tint-item.bin
           retention-days: 14
           if-no-files-found: warn
       - name: Stage public versioned JAR
@@ -257,6 +258,11 @@ jobs:
         with:
           name: ${{ env.OUTPUT_NAME }}
           path: .ci/networks-candidate
+      - name: Load historical native Purpur 1.21.11 map bytes from this same CI run
+        uses: actions/download-artifact@v8
+        with:
+          name: networks-purpur-1-21-11-quantum-restart
+          path: .ci/purpur-map-1.21.11
       - name: Use Java 25 for real Paper 26.3 runtime
         uses: actions/setup-java@v5
         with:
@@ -303,7 +309,8 @@ jobs:
             ".ci/networks-candidate/$OUTPUT_NAME" \
             .ci/paper-26.3-176.jar \
             build/paper-26.3-restart \
-            .ci/paper-26.3-176.json
+            .ci/paper-26.3-176.json \
+            .ci/purpur-map-1.21.11/plugins/native-map-tint-item.bin
       - name: Retain persisted Quantum restart evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -316,6 +323,7 @@ jobs:
             build/paper-26.3-restart/verify-console.log
             build/paper-26.3-restart/seed-result.txt
             build/paper-26.3-restart/verify-result.txt
+            build/paper-26.3-restart/plugins/native-cross-version-map-tint-observed.txt
           retention-days: 14
           if-no-files-found: warn
       - name: Retain native Paper 26.3 regression evidence
@@ -352,6 +360,11 @@ jobs:
         with:
           name: ${{ env.OUTPUT_NAME }}
           path: .ci/networks-candidate
+      - name: Load historical native Purpur 1.21.11 map bytes from this same CI run
+        uses: actions/download-artifact@v8
+        with:
+          name: networks-purpur-1-21-11-quantum-restart
+          path: .ci/purpur-map-1.21.11
       - name: Set up Java 25 for real Paper 26.3 runtime
         uses: actions/setup-java@v5
         with:
@@ -401,7 +414,8 @@ jobs:
             ".ci/networks-candidate/$OUTPUT_NAME" \
             .ci/paper-26.3-194.jar \
             build/paper-26.3-194-restart \
-            .ci/paper-26.3-194.json
+            .ci/paper-26.3-194.json \
+            .ci/purpur-map-1.21.11/plugins/native-map-tint-item.bin
       - name: Retain native Paper 194 restart and manager evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -419,6 +433,7 @@ jobs:
             build/paper-26.3-194-restart/verify-console.log
             build/paper-26.3-194-restart/seed-result.txt
             build/paper-26.3-194-restart/verify-result.txt
+            build/paper-26.3-194-restart/plugins/native-cross-version-map-tint-observed.txt
           retention-days: 14
           if-no-files-found: warn
 
